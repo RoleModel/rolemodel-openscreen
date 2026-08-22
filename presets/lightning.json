@@ -5,7 +5,7 @@
   "extends": "rolemodel",
   "wallpaperFile": "lcad-board.jpg",
   "signature": {
-    "$comment": "Resolved from brand/tokens.json \u2192 subBrands.lcad, which is generated from the Optics export. Do not hand-edit.",
+    "$comment": "Resolved from brand/tokens.json → subBrands.lcad, which is generated from the Optics export. Do not hand-edit.",
     "opticsScale": "lcad",
     "hex": "#2b84f7"
   },
@@ -17,7 +17,7 @@
   "rationale": {
     "webcamLayoutPreset": "CAD demos are about the drawing surface. A presenter PiP covers the corner of the canvas where the tool palettes live.",
     "padding": "Slightly tighter than the RoleModel default so a dense CAD viewport keeps its detail at 1080p.",
-    "wallpaperFile": "The tinted board over the deep wash \u2014 a CAD viewport is already busy, and the wash competes with it."
+    "wallpaperFile": "The tinted board — a CAD viewport is already busy, so the backdrop stays flat and quiet."
   },
   "open": [
     "LightningCAD's signature (H214 S93% L57%) is one point of saturation away from the app `primary` scale (H214 S91% L57%). Either LCAD is deliberately the flagship blue, or one was copied from the other and nobody meant them to be distinct. Worth confirming before these are used side by side.",

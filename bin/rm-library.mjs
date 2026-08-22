@@ -91,6 +91,18 @@ async function isMounted(id) {
 }
 
 switch (cmd) {
+	case "new": {
+		const name = argv.slice(1).filter((a) => !a.startsWith("--")).join(" ");
+		if (!name) die('name it: rm-library new "Feeney Hershey"');
+		const m = newManifest({ name, remote: "local", bucket: "", driver: "local" });
+		await writeManifest(projectDir(m.id), m);
+		await run("mkdir", ["-p", mountPoint(m.id)]);
+		console.log(`\n  ${m.name}`);
+		console.log(`  ${mountPoint(m.id)}`);
+		console.log(`\n  Drop footage in that folder, then:  rm-library view\n`);
+		break;
+	}
+
 	case "init": {
 		const name = argv[1];
 		if (!name || name.startsWith("--")) die('give the project a name, e.g. rm-library init "Feeney Hershey"');
@@ -215,6 +227,19 @@ switch (cmd) {
 		let indexed = 0;
 		for (const m of projects) {
 			try {
+				// Index on demand. Requiring a separate `index` run before anything
+				// was visible is what kept the library invisible.
+				const stale =
+					!m.catalog?.indexedAt ||
+					!(await readFile(catalogPath(m.id), "utf8").then(() => true).catch(() => false));
+				if (stale) {
+					process.stdout.write(`  indexing ${m.name}…`);
+					const built = await buildCatalog(mountPoint(m.id));
+					await writeFile(catalogPath(m.id), `${JSON.stringify(built, null, 2)}\n`, "utf8");
+					m.catalog = { indexedAt: built.indexedAt, files: built.files.length, bytes: built.bytes };
+					await writeManifest(projectDir(m.id), m);
+					process.stdout.write(` ${built.files.length} files\n`);
+				}
 				m.catalog = JSON.parse(await readFile(catalogPath(m.id), "utf8"));
 				// Link each card at the real file so the card can reveal it on disk.
 				const base = mountPoint(m.id);
@@ -224,7 +249,9 @@ switch (cmd) {
 				m.catalog = { files: [] };
 			}
 		}
-		if (!indexed) die("nothing indexed yet — run `rm-library index <id>` first");
+		if (!indexed) {
+			console.log("\n  nothing indexed — the page will show an empty library\n");
+		}
 
 		const html = renderCatalogHTML({ projects, generatedAt: new Date().toISOString() });
 		const dest = flag("out", join(ROOT, "library.html"));
@@ -266,12 +293,13 @@ switch (cmd) {
 				"",
 				"rm-library — mounted project libraries",
 				"",
-				"  init <name> --bucket <b>     create a project manifest",
+				"  new <name>                   create a LOCAL project — no bucket needed",
+				"  view [id]                    index it and open the library",
+				"  init <name> --bucket <b>     create a REMOTE (mounted) project",
 				"  mount <id>                   mount it (rclone + FUSE)",
 				"  unmount <id>                 eject",
 				"  index <id>                   ffprobe everything into a catalog",
 				"  find <query>                 search every catalog",
-				"  view [id]                    build a browsable HTML page and open it",
 				"  status                       what exists and what's connected",
 				"",
 				"Options",

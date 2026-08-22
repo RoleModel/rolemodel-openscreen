@@ -17,13 +17,16 @@ class RmVideo < Formula
   # downloaded — but OpenScreen itself comes along, because branding a project
   # you cannot record is useless.
   depends_on "node"
+  # Narration and muxing are ffmpeg work, and the poster frames in the library
+  # already were — it stops being optional the moment Voice exists.
+  depends_on "ffmpeg"
   depends_on cask: "rolemodel/tap/openscreen"
 
   def install
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
     # so the whole thing goes to libexec and only the entry point is linked.
     libexec.install Dir["*"]
-    %w[rm-video rm-library].each do |exe|
+    %w[rm-video rm-library rm-studio rm-voice rm-mux].each do |exe|
       (bin/exe).write_env_script libexec/"bin/#{exe}.mjs", {}
       chmod 0755, bin/exe
     end
@@ -43,6 +46,13 @@ class RmVideo < Formula
       Point the Claude skill at this install by adding to your shell profile:
 
         export RM_OPENSCREEN="$(rm-video root)"
+
+      Voice runs Kokoro locally through hyperframes — no API key, nothing leaves
+      the machine. The first run downloads ~27MB of voice data and needs Python
+      with kokoro-onnx:
+
+        pip install kokoro-onnx soundfile
+        rm-voice --voices
 
       For `rm-library mount` you also need rclone and a FUSE provider:
 

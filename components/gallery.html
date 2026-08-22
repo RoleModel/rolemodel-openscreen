@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RoleModel video components</title>
+<link rel="stylesheet" href="../brand/optics.css"/>
+<style>
+  :root { color-scheme: dark;
+    --bg: var(--op-color-neutral-plus-max);
+    --panel: var(--op-color-neutral-plus-eight);
+    --line: var(--op-color-neutral-plus-four);
+    --fg: var(--op-color-neutral-minus-max);
+    --muted: var(--op-color-neutral-minus-four);
+    --brand: var(--op-color-academy-primary-base);
+    --d: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --m: "Geist Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--d); padding:32px 36px 90px; }
+  h1 { font-size:24px; font-weight:800; letter-spacing:-.02em; margin:0 0 4px; }
+  .lede { color:var(--muted); font-size:14px; max-width:76ch; line-height:1.6; margin:0 0 24px; }
+  .bar { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 0 18px;
+         display:flex; gap:14px; align-items:center; border-bottom:1px solid var(--line); margin-bottom:26px; }
+  .bar input[type=range] { flex:1; accent-color:var(--brand); }
+  .bar .t { font-family:var(--m); font-size:12px; color:var(--muted); min-width:78px; }
+  button { background:var(--brand); color:var(--op-color-academy-primary-on-base); border:0;
+           border-radius:8px; padding:8px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  section { margin-bottom:34px; }
+  h2 { font-size:15px; font-weight:700; margin:0 0 3px; }
+  .sig { font-family:var(--m); font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .frame { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); }
+  pre { background:var(--op-color-neutral-plus-max); border:1px solid var(--line); border-radius:8px;
+        padding:12px 14px; font-family:var(--m); font-size:12px; line-height:1.6; overflow:auto; margin:10px 0 0;
+        color:var(--muted); }
+</style>
+<script type="module" src="./rm-video.js"></script>
+</head>
+<body>
+
+<h1>Video components</h1>
+<p class="lede">
+  Custom elements for HyperFrames scenes. Colour comes from Optics; nothing here
+  hard-codes a hex. Every component takes <code>at</code> (ms it appears) and
+  <code>for</code> (ms it stays). Drag the scrubber — the whole page is seeked to
+  that instant, which is exactly what the renderer does frame by frame.
+</p>
+
+<div class="bar">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="8000" step="16" value="0"/>
+  <span class="t" id="tv">0 ms</span>
+</div>
+
+<section>
+  <h2>rm-title</h2>
+  <div class="sig">eyebrow · title · sub · align</div>
+  <div class="frame">
+    <rm-scene wallpaper="../brand/wallpapers/rm-dark-dotgrid">
+      <rm-title at="200" eyebrow="Product tour" title="Estimating, in one pass"
+                sub="From takeoff to a signed proposal without leaving the browser."></rm-title>
+    </rm-scene>
+  </div>
+  <pre>&lt;rm-title at="200" eyebrow="Product tour" title="Estimating, in one pass"&gt;&lt;/rm-title&gt;</pre>
+</section>
+
+<section>
+  <h2>rm-browser</h2>
+  <div class="sig">url · image · src · w · at · for</div>
+  <div class="frame">
+    <rm-scene wallpaper="../brand/wallpapers/flow-board">
+      <rm-browser at="200" style="left:16%; top:16%" w="68" url="app.rolemodelsoftware.com/estimates"></rm-browser>
+      <rm-callout at="1200" x="66" y="42" text="Live pricing"></rm-callout>
+    </rm-scene>
+  </div>
+  <pre>&lt;rm-browser at="200" w="68" url="app.rolemodelsoftware.com" image="shot.png"&gt;&lt;/rm-browser&gt;</pre>
+</section>
+
+<section>
+  <h2>rm-lower-third</h2>
+  <div class="sig">name · sub · side · at · for</div>
+  <div class="frame">
+    <rm-scene wallpaper="../brand/wallpapers/rm-brand">
+      <rm-lower-third at="300" for="4200" name="Dallas Peters" sub="Senior Designer"></rm-lower-third>
+    </rm-scene>
+  </div>
+  <pre>&lt;rm-lower-third at="300" for="4200" name="Dallas Peters" sub="Senior Designer"&gt;&lt;/rm-lower-third&gt;</pre>
+</section>
+
+<section>
+  <h2>rm-stat</h2>
+  <div class="sig">value · unit · label · count</div>
+  <div class="frame">
+    <rm-scene wallpaper="../brand/wallpapers/rm-dark-dotgrid">
+      <rm-stat at="300" style="left:12%; top:34%" value="94" unit="%" label="Faster to first estimate" count></rm-stat>
+      <rm-stat at="800" style="left:52%; top:34%" value="12" unit="k" label="Line items priced" count></rm-stat>
+    </rm-scene>
+  </div>
+  <pre>&lt;rm-stat at="300" value="94" unit="%" label="Faster to first estimate" count&gt;&lt;/rm-stat&gt;</pre>
+</section>
+
+<section>
+  <h2>rm-bullets</h2>
+  <div class="sig">heading · stagger · at · for</div>
+  <div class="frame">
+    <rm-scene wallpaper="../brand/wallpapers/lcad-board">
+      <rm-bullets at="300" stagger="500" style="left:10%; top:24%; width:58%" heading="What changed">
+        <li>Takeoff and pricing in one pass</li>
+        <li>Proposals that update themselves</li>
+        <li>No spreadsheet round-trip</li>
+      </rm-bullets>
+    </rm-scene>
+  </div>
+  <pre>&lt;rm-bullets at="300" stagger="500" heading="What changed"&gt;&lt;li&gt;…&lt;/li&gt;&lt;/rm-bullets&gt;</pre>
+</section>
+
+<script type="module">
+  import { RM } from "./rm-video.js";
+  const scrub = document.getElementById("scrub");
+  const tv = document.getElementById("tv");
+  const play = document.getElementById("play");
+  await RM.ready();
+
+  const set = (ms) => { RM.seek(ms); scrub.value = ms; tv.textContent = ms + " ms"; };
+  scrub.oninput = () => set(Number(scrub.value));
+  set(0);
+
+  let raf = null, t0 = 0;
+  play.onclick = () => {
+    if (raf) { cancelAnimationFrame(raf); raf = null; play.textContent = "Play"; return; }
+    play.textContent = "Pause";
+    t0 = performance.now() - Number(scrub.value);
+    const tick = () => {
+      const ms = (performance.now() - t0) % Number(scrub.max);
+      set(Math.round(ms));
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+  };
+</script>
+
+</body>
+</html>

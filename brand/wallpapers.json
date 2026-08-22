@@ -1,0 +1,582 @@
+[
+  {
+    "name": "rm-dark-dotgrid",
+    "label": "RoleModel · dark dot-grid board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "rm-framed",
+    "label": "RoleModel · framed board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 6,
+      "color": "#00c278",
+      "inset": 28,
+      "radius": 18
+    }
+  },
+  {
+    "name": "rm-grid",
+    "label": "RoleModel · fine line grid",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "grid",
+      "color": "#f2f2f2",
+      "opacity": 0.05,
+      "size": 48,
+      "weight": 1
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "rm-ascii",
+    "label": "RoleModel · ascii gradient panel",
+    "base": "#00b871",
+    "gradient": {
+      "angle": 118,
+      "stops": [
+        {
+          "color": "#00b871",
+          "at": 0
+        },
+        {
+          "color": "#44bb7e",
+          "at": 0.46
+        },
+        {
+          "color": "#3e62b6",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "ascii",
+      "color": "#ffffff",
+      "opacity": 0.13,
+      "size": 16,
+      "weight": 2
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "rm-light",
+    "label": "RoleModel · near-white board",
+    "base": "#f2f2f2",
+    "gradient": {
+      "angle": 160,
+      "stops": [
+        {
+          "color": "#ffffff",
+          "at": 0
+        },
+        {
+          "color": "#e6e8ea",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#293747",
+      "opacity": 0.07,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "rm-brand",
+    "label": "RoleModel · brand-tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#00b871",
+      "alpha": 0.16,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "academy-ruby",
+    "label": "Academy · Ruby unit",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#3A70B3",
+      "alpha": 0.16,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "academy-design",
+    "label": "Academy · Design unit",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#A998C9",
+      "alpha": 0.16,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "academy-rails",
+    "label": "Academy · Rails unit",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#86C774",
+      "alpha": 0.16,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "lcad-board",
+    "label": "LightningCAD · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#2b84f7",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "docks-board",
+    "label": "Dock Designer · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#33d1a9",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "decks-board",
+    "label": "Deck Designer · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#ffad0a",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "railing-board",
+    "label": "Railing Designer · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#8c3be3",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "building-board",
+    "label": "Building · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#adbf08",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "airfield-board",
+    "label": "Airfield · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#46f5fb",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  },
+  {
+    "name": "flow-board",
+    "label": "Flow · tinted board",
+    "base": "#141d27",
+    "gradient": {
+      "angle": 152,
+      "stops": [
+        {
+          "color": "#233140",
+          "at": 0
+        },
+        {
+          "color": "#101821",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0.18,
+      "angle": 168
+    },
+    "texture": {
+      "type": "dots",
+      "color": "#f2f2f2",
+      "opacity": 0.055,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
+      "inset": 0,
+      "radius": 0
+    }
+  }
+]

@@ -6,14 +6,26 @@
   "description": "RoleModel brand layer for OpenScreen — presets, wallpapers, annotation builders, and an agent skill.",
   "bin": {
     "rm-video": "./bin/rm-video.mjs",
-    "rm-library": "./bin/rm-library.mjs"
+    "rm-library": "./bin/rm-library.mjs",
+    "rm-studio": "./bin/rm-studio.mjs",
+    "rm-voice": "./bin/rm-voice.mjs",
+    "rm-mux": "./bin/rm-mux.mjs"
   },
   "scripts": {
+    "build": "npm run sync-brand && npm run optics && npm run wallpapers",
+    "check": "npm run sync-brand:check && npm run optics:check && npm run verify",
+    "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
+    "studio": "node bin/rm-studio.mjs",
     "presets": "node bin/rm-video.mjs presets",
     "wallpapers": "node lib/make-wallpapers.mjs",
+    "wallpapers:reset": "node lib/make-wallpapers.mjs --reset",
     "verify": "node lib/verify.mjs",
     "sync-brand": "node lib/sync-brand.mjs",
-    "sync-brand:check": "node lib/sync-brand.mjs --check"
+    "sync-brand:check": "node lib/sync-brand.mjs --check",
+    "optics": "node lib/optics-css.mjs",
+    "optics:check": "node lib/optics-css.mjs --check",
+    "scene": "node components/render-scene.mjs components/scene.html -o scene.mp4",
+    "voice": "node bin/rm-voice.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1"
@@ -28,6 +40,7 @@
     "lib",
     "presets",
     "brand",
+    "components",
     "skill",
     "docs",
     "README.md",
@@ -35,5 +48,8 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "playwright-recast": "^0.19.2"
   }
 }
