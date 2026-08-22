@@ -1,0 +1,42 @@
+[
+  {
+    "name": "rm-dark-dotgrid",
+    "label": "RoleModel · dark dot-grid board",
+    "file": "rm-dark-dotgrid.png"
+  },
+  {
+    "name": "rm-ascii",
+    "label": "RoleModel · ascii gradient panel",
+    "file": "rm-ascii.png"
+  },
+  {
+    "name": "rm-light",
+    "label": "RoleModel · near-white board",
+    "file": "rm-light.png"
+  },
+  {
+    "name": "rm-wash",
+    "label": "RoleModel · deep brand wash",
+    "file": "rm-wash.png"
+  },
+  {
+    "name": "academy-ruby",
+    "label": "Academy · Ruby unit (RM Blue)",
+    "file": "academy-ruby.png"
+  },
+  {
+    "name": "academy-design",
+    "label": "Academy · Design unit (Light Purple)",
+    "file": "academy-design.png"
+  },
+  {
+    "name": "academy-rails",
+    "label": "Academy · Rails unit (Medium Green)",
+    "file": "academy-rails.png"
+  },
+  {
+    "name": "lightning-wash",
+    "label": "LightningCAD · deep blue wash (signature not yet set)",
+    "file": "lightning-wash.png"
+  }
+]

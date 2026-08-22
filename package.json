@@ -1,0 +1,35 @@
+{
+  "name": "rolemodel-openscreen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RoleModel brand layer for OpenScreen \u2014 presets, wallpapers, annotation builders, and an agent skill.",
+  "bin": {
+    "rm-video": "./bin/rm-video.mjs"
+  },
+  "scripts": {
+    "presets": "node bin/rm-video.mjs presets",
+    "wallpapers": "node lib/make-wallpapers.mjs",
+    "verify": "node lib/verify.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rolemodelsoftware/rolemodel-openscreen.git"
+  },
+  "license": "MIT",
+  "files": [
+    "bin",
+    "lib",
+    "presets",
+    "brand",
+    "skill",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

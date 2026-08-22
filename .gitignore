@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tgz
+*.zip
+.DS_Store
+.env
+.env.*
+
+# Working files from real recordings — never commit client footage or captures
+*.openscreen
+*.mp4
+*.gif
+*.m4a
+*.wav
+recordings/

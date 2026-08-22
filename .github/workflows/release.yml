@@ -1,0 +1,86 @@
+name: Release
+
+# Tag it, and the tap updates itself:
+#   npm version patch && git push --follow-tags
+#
+# Without this the formula's sha256 is hand-maintained, which is the step
+# everyone forgets — and a stale sha fails the install with a checksum
+# mismatch that reads like a security warning.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      # The presets are a patch onto OpenScreen's typed document. Check them
+      # against the real thing before shipping a tag — a drifted field name
+      # does not error, it silently renders stock.
+      - name: Check out OpenScreen for schema verification
+        run: git clone --depth 1 https://github.com/getopenscreen/openscreen.git /tmp/openscreen
+
+      - run: node lib/verify.mjs --openscreen /tmp/openscreen
+
+      - name: Smoke-test the CLI
+        run: |
+          node bin/rm-video.mjs presets
+          node bin/rm-video.mjs root
+          cat > /tmp/t.openscreen <<'JSON'
+          {"schemaVersion":7,"project":{"id":"p","title":"t","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"assets":[],"timeline":{"clips":[],"gaps":[],"trimRanges":[],"muteRanges":[],"speedRanges":[],"captionRanges":[]},"annotations":[],"zoomRanges":[],"legacyEditor":{}}
+          JSON
+          node bin/rm-video.mjs brand /tmp/t.openscreen --preset academy --unit rails --title "CI" --eyebrow "smoke"
+          node -e 'const d=require("/tmp/t.openscreen");if(!d.annotations.length)throw new Error("no annotations written");if(!d.legacyEditor.wallpaper)throw new Error("no wallpaper set");console.log("ok")'
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes
+
+      - name: Compute the tarball checksum
+        id: sum
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          # The tag archive is generated on demand; give it a moment to exist.
+          for i in 1 2 3 4 5; do
+            curl -fsSL "$URL" -o /tmp/src.tar.gz && break || sleep 5
+          done
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum /tmp/src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # Cross-repo push needs a PAT with `contents: write` on the tap.
+      # Store it as the TAP_TOKEN secret on this repo.
+      - name: Update the tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::TAP_TOKEN not set — formula not updated. Bump Formula/rm-video.rb in the tap by hand."
+            exit 0
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/rolemodelsoftware/homebrew-tap.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp Formula/rm-video.rb /tmp/tap/Formula/rm-video.rb
+          sed -i -E "s|^  url \".*\"|  url \"${{ steps.sum.outputs.url }}\"|" /tmp/tap/Formula/rm-video.rb
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"${{ steps.sum.outputs.sha }}\"|" /tmp/tap/Formula/rm-video.rb
+          cd /tmp/tap
+          git config user.name "rolemodel-bot"
+          git config user.email "bot@rolemodelsoftware.com"
+          git add Formula/rm-video.rb
+          git diff --staged --quiet && { echo "formula unchanged"; exit 0; }
+          git commit -m "rm-video ${GITHUB_REF_NAME}"
+          git push

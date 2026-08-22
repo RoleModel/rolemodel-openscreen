@@ -1,0 +1,43 @@
+{
+  "id": "academy",
+  "label": "Craftsmanship Academy",
+  "description": "Course and lesson recordings. Inherits the RoleModel base and swaps in the unit signature colour via the wallpaper.",
+  "extends": "rolemodel",
+  "wallpaperFile": "academy-ruby.png",
+  "editor": {
+    "padding": 56,
+    "webcamSizePreset": 26,
+    "webcamMaskShape": "circle",
+    "autoFocusAll": true
+  },
+  "rationale": {
+    "webcamMaskShape": "Circle over rounded — a teaching video wants the instructor to feel present, and a circular crop reads warmer than a rectangle.",
+    "webcamSizePreset": "Larger than the RoleModel default. In a lesson the person matters as much as the screen.",
+    "autoFocusAll": "Course content is dense; auto-focus on every region keeps the eye where the typing is."
+  },
+  "units": {
+    "$comment": "Curriculum wayfinding from DESIGN.md. Pick the unit and the wallpaper follows.",
+    "ruby": { "wallpaperFile": "academy-ruby.png", "signature": "#3A70B3", "covers": "Weeks 1–2" },
+    "design": {
+      "wallpaperFile": "academy-design.png",
+      "signature": "#A998C9",
+      "covers": "Week 3 (HTML/CSS)"
+    },
+    "rails": {
+      "wallpaperFile": "academy-rails.png",
+      "signature": "#86C774",
+      "covers": "Weeks 4–9"
+    },
+    "javascript": {
+      "wallpaperFile": null,
+      "signature": null,
+      "covers": "Phase 2",
+      "$comment": "Signature colour is still TBD in DESIGN.md — deep purple or teal. Falls back to the RoleModel board until someone decides."
+    }
+  },
+  "variants": {
+    "master": { "aspectRatio": "16:9", "exportQuality": "source" },
+    "vertical": { "aspectRatio": "9:16", "padding": 36, "webcamLayoutPreset": "vertical-stack" },
+    "gif": { "exportFormat": "gif", "gifSizePreset": "large", "gifFrameRate": 20 }
+  }
+}

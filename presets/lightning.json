@@ -1,0 +1,25 @@
+{
+  "id": "lightning",
+  "label": "LightningCAD",
+  "description": "Product demos for LightningCAD. Deliberately thin — the sub-brand's own signature has not been set, so this is the RoleModel base on a blue wash until it is.",
+  "extends": "rolemodel",
+  "wallpaperFile": "lightning-wash.png",
+  "editor": {
+    "padding": 58,
+    "webcamLayoutPreset": "no-webcam",
+    "autoZoomEnabled": true
+  },
+  "rationale": {
+    "webcamLayoutPreset": "CAD demos are about the drawing surface. A presenter PiP covers the corner of the canvas where the tool palettes live.",
+    "padding": "Slightly tighter than the RoleModel default so a dense CAD viewport keeps its detail at 1080p."
+  },
+  "open": [
+    "LightningCAD has no agreed colour signature or wallpaper of its own yet. `lightning-wash.png` is a placeholder in RM Blue.",
+    "Decide before this ships: does a sub-brand get its own motion language, or only its own colour/type signature over one shared system? This preset assumes the latter."
+  ],
+  "variants": {
+    "master": { "aspectRatio": "16:9", "exportQuality": "source" },
+    "vertical": { "aspectRatio": "9:16", "padding": 34 },
+    "gif": { "exportFormat": "gif", "gifSizePreset": "large", "gifFrameRate": 20 }
+  }
+}
