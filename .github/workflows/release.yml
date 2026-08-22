@@ -72,7 +72,7 @@ jobs:
             echo "::warning::TAP_TOKEN not set — formula not updated. Bump Formula/rm-video.rb in the tap by hand."
             exit 0
           fi
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/rolemodelsoftware/homebrew-tap.git" /tmp/tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/rolemodel/homebrew-tap.git" /tmp/tap
           mkdir -p /tmp/tap/Formula
           cp Formula/rm-video.rb /tmp/tap/Formula/rm-video.rb
           sed -i -E "s|^  url \".*\"|  url \"${{ steps.sum.outputs.url }}\"|" /tmp/tap/Formula/rm-video.rb

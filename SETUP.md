@@ -4,8 +4,8 @@ Two repos. One holds the code, one is the tap Homebrew installs from — Homebre
 requires the tap repo be named `homebrew-<something>`, so they can't be the same repo.
 
 ```
-rolemodelsoftware/rolemodel-openscreen   the toolkit
-rolemodelsoftware/homebrew-tap           Formula/rm-video.rb  (and every future RM formula)
+rolemodel/rolemodel-openscreen   the toolkit
+rolemodel/homebrew-tap           Formula/rm-video.rb  (and every future RM formula)
 ```
 
 ---
@@ -19,9 +19,9 @@ git init -b main
 git add .
 git commit -m "RoleModel brand layer for OpenScreen"
 
-gh repo create rolemodelsoftware/rolemodel-openscreen --private --source=. --push
+gh repo create rolemodel/rolemodel-openscreen --private --source=. --push
 # or, without gh:
-#   git remote add origin git@github.com:rolemodelsoftware/rolemodel-openscreen.git
+#   git remote add origin git@github.com:rolemodel/rolemodel-openscreen.git
 #   git push -u origin main
 ```
 
@@ -52,7 +52,7 @@ git init -b main
 mkdir Formula
 cp ../rolemodel-openscreen/Formula/rm-video.rb Formula/
 git add . && git commit -m "rm-video formula"
-gh repo create rolemodelsoftware/homebrew-tap --private --source=. --push
+gh repo create rolemodel/homebrew-tap --private --source=. --push
 ```
 
 The formula in this repo is the source of truth; CI copies it into the tap and
@@ -81,7 +81,7 @@ the formula by hand that once.
 ## 4. Install
 
 ```bash
-brew tap rolemodelsoftware/tap        # private tap: needs HOMEBREW_GITHUB_API_TOKEN set
+brew tap rolemodel/tap        # private tap: needs HOMEBREW_GITHUB_API_TOKEN set
 brew install rm-video
 
 rm-video presets
@@ -132,7 +132,7 @@ the step that makes this useful to more than three people.
 `npm i -g` skips the tap entirely and the formula maintenance with it:
 
 ```bash
-npm install -g github:rolemodelsoftware/rolemodel-openscreen
+npm install -g github:rolemodel/rolemodel-openscreen
 ```
 
 It works, it upgrades with `npm update -g`, and private repos just use your

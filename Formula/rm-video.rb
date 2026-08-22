@@ -1,14 +1,14 @@
 # Homebrew formula for the RoleModel OpenScreen brand layer.
 #
 # This file belongs in the TAP repo, not this one:
-#   github.com/rolemodelsoftware/homebrew-tap  ->  Formula/rm-video.rb
+#   github.com/rolemodel/homebrew-tap  ->  Formula/rm-video.rb
 # A copy lives here so the formula and the code it describes move together.
 # `.github/workflows/release.yml` copies it across and fills in url + sha256
 # on every tag, so the two never drift by hand.
 class RmVideo < Formula
-  desc "RoleModel brand layer for OpenScreen — presets, wallpapers, and demo tooling"
-  homepage "https://github.com/rolemodelsoftware/rolemodel-openscreen"
-  url "https://github.com/rolemodelsoftware/rolemodel-openscreen/archive/refs/tags/v0.1.0.tar.gz"
+  desc "RoleModel video tooling — OpenScreen brand presets and mounted project libraries"
+  homepage "https://github.com/rolemodel/rolemodel-openscreen"
+  url "https://github.com/rolemodel/rolemodel-openscreen/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
 
@@ -21,10 +21,15 @@ class RmVideo < Formula
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
     # so the whole thing goes to libexec and only the entry point is linked.
     libexec.install Dir["*"]
-    (bin/"rm-video").write_env_script libexec/"bin/rm-video.mjs", {}
-    chmod 0755, bin/"rm-video"
+    %w[rm-video rm-library].each do |exe|
+      (bin/exe).write_env_script libexec/"bin/#{exe}.mjs", {}
+      chmod 0755, bin/exe
+    end
   end
 
+  # rclone + a FUSE provider are only needed for `rm-library mount`; branding an
+  # OpenScreen project does not require them, so they stay optional rather than
+  # dragging a kernel extension into every install.
   def caveats
     <<~EOS
       rm-video brands OpenScreen projects; it does not record or export them.
@@ -36,6 +41,14 @@ class RmVideo < Formula
       Point the Claude skill at this install by adding to your shell profile:
 
         export RM_OPENSCREEN="$(rm-video root)"
+
+      For `rm-library mount` you also need rclone and a FUSE provider:
+
+        brew install rclone
+        brew install --cask macfuse   # approve in System Settings > Privacy & Security
+
+      On a managed Mac where kernel extensions are blocked, use Mountain Duck
+      instead and point --mount-point at the volume it creates.
     EOS
   end
 
