@@ -24,6 +24,14 @@ import {
 	readProject,
 	writeProject,
 } from "../lib/theme.mjs";
+// `rm-video presets | head` closes stdout early; without this Node raises an
+// unhandled EPIPE and exits 1, which looks like the tool broke rather than the
+// pipe ending normally.
+process.stdout.on("error", (err) => {
+	if (err.code === "EPIPE") process.exit(0);
+	throw err;
+});
+
 const argv = process.argv.slice(2);
 const cmd = argv[0];
 
