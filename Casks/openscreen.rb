@@ -5,27 +5,36 @@
 # installs four things by hand, and nothing gets committed to the repo.
 #
 # There is no OpenScreen cask in homebrew-cask (checked 2026-08-22), so this
-# one lives in our tap. If upstream ever publishes one, delete this file and
-# point `depends_on cask:` at theirs.
+# one lives in our tap. Upstream *has* an update-homebrew-cask.yml, but it has
+# never been configured — no HOMEBREW_TAP_OWNER, no tap repo, and the job it
+# guards has been skipping green on every release (their issue #335). So do not
+# read the existence of that workflow as a cask to depend on. If they ever wire
+# it up, delete this file and point `depends_on cask:` at theirs.
 #
-# Belongs in the TAP repo alongside rm-video.rb:
-#   github.com/rolemodel/homebrew-tap -> Casks/openscreen.rb
+# Lives in Casks/ here to mirror the tap exactly, because Homebrew resolves by
+# directory: this same file under Formula/ is a formula that fails to load, and
+# `depends_on cask: "rolemodel/tap/openscreen"` in rm-video.rb will not resolve
+# until it sits at github.com/rolemodel/homebrew-tap -> Casks/openscreen.rb.
 cask "openscreen" do
-  arch arm: "arm64", intel: "x64"
+  # Not "arm64"/"x64". electron-builder's artifactName produces those, but
+  # build.yml renames each DMG before attaching it to the release — deliberately,
+  # so the download is named after the machine About This Mac describes rather
+  # than the instruction set. Trusting artifactName here is a 404, and the first
+  # symptom is `brew install` failing on a download nobody can find.
+  arch arm: "Apple-Silicon", intel: "Intel"
 
   version "1.9.6"
 
-  # Placeholders. Fill them once with:
-  #   brew fetch --cask rolemodel/tap/openscreen
-  # Homebrew prints the real checksum on mismatch. Do it on both machines, or
-  # compute directly:
-  #   shasum -a 256 ~/Downloads/Openscreen-Mac-arm64-1.9.6-Installer.dmg
-  sha256 arm:   "0000000000000000000000000000000000000000000000000000000000000000",
-         intel: "0000000000000000000000000000000000000000000000000000000000000000"
+  # Verified against the v1.9.6 release assets on 2026-08-22. Both are computed
+  # from the published DMGs, so `brew fetch --cask` should be silent; if it
+  # reports a mismatch, upstream re-cut the release under the same tag.
+  sha256 arm:   "0152bf29ad315e7a56ea3a128c809cd326d03756adf5f6756393e596f1743369",
+         intel: "bca548c3661670cdf3ede27299c2354280e7bc8702efad348cf866080131474a"
 
-  # Filename comes from electron-builder.json5:
-  #   artifactName: "${productName}-Mac-${arch}-${version}-Installer.${ext}"
-  url "https://github.com/getopenscreen/openscreen/releases/download/v#{version}/Openscreen-Mac-#{arch}-#{version}-Installer.dmg",
+  # Releases before this naming change used `-Mac-arm64-` / `-Mac-x64-`, so this
+  # URL does not resolve for older versions. Bump both this and the checksums
+  # together, or not at all.
+  url "https://github.com/getopenscreen/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg",
       verified: "github.com/getopenscreen/openscreen/"
 
   name "OpenScreen"

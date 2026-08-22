@@ -30,9 +30,10 @@ jobs:
 
       - run: node lib/verify.mjs --openscreen /tmp/openscreen
 
+      # Both generated files are committed, so drift between the Figma export
+      # and what ships is a diff, not a mystery.
       - run: node lib/sync-brand.mjs --check
-      
-      - run: node lib/sync-brand.mjs --check
+      - run: node lib/optics-css.mjs --check
 
       - name: Smoke-test the CLI
         run: |
@@ -77,14 +78,19 @@ jobs:
             exit 0
           fi
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/rolemodel/homebrew-tap.git" /tmp/tap
-          mkdir -p /tmp/tap/Formula
+          mkdir -p /tmp/tap/Formula /tmp/tap/Casks
           cp Formula/rm-video.rb /tmp/tap/Formula/rm-video.rb
+          # The cask carries no url or sha of ours to rewrite — it tracks
+          # upstream's release — but it still has to land in the tap, and in
+          # Casks/, or rm-video's `depends_on cask:` cannot resolve. Copying it
+          # here is what keeps the two from drifting by hand.
+          cp Casks/openscreen.rb /tmp/tap/Casks/openscreen.rb
           sed -i -E "s|^  url \".*\"|  url \"${{ steps.sum.outputs.url }}\"|" /tmp/tap/Formula/rm-video.rb
           sed -i -E "s|^  sha256 \".*\"|  sha256 \"${{ steps.sum.outputs.sha }}\"|" /tmp/tap/Formula/rm-video.rb
           cd /tmp/tap
           git config user.name "rolemodel-bot"
           git config user.email "bot@rolemodelsoftware.com"
-          git add Formula/rm-video.rb
+          git add Formula/rm-video.rb Casks/openscreen.rb
           git diff --staged --quiet && { echo "formula unchanged"; exit 0; }
           git commit -m "rm-video ${GITHUB_REF_NAME}"
           git push

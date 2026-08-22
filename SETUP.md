@@ -5,8 +5,13 @@ requires the tap repo be named `homebrew-<something>`, so they can't be the same
 
 ```
 rolemodel/rolemodel-openscreen   the toolkit
-rolemodel/homebrew-tap           Formula/rm-video.rb  (and every future RM formula)
+rolemodel/homebrew-tap           Formula/rm-video.rb   (and every future RM formula)
+                                 Casks/openscreen.rb   (the OpenScreen app itself)
 ```
+
+Both directories matter: Homebrew resolves formulae from `Formula/` and casks from
+`Casks/`, and `rm-video` declares `depends_on cask: "rolemodel/tap/openscreen"`. Put
+the cask in `Formula/` and the install fails on a dependency that appears to exist.
 
 ---
 
@@ -49,14 +54,17 @@ internal and the brand assets shouldn't be the thing you have to think about.
 ```bash
 mkdir homebrew-tap && cd homebrew-tap
 git init -b main
-mkdir Formula
+mkdir Formula Casks
 cp ../rolemodel-openscreen/Formula/rm-video.rb Formula/
-git add . && git commit -m "rm-video formula"
+cp ../rolemodel-openscreen/Casks/openscreen.rb Casks/
+git add . && git commit -m "rm-video formula and openscreen cask"
 gh repo create rolemodel/homebrew-tap --private --source=. --push
 ```
 
-The formula in this repo is the source of truth; CI copies it into the tap and
-fills in `url` + `sha256` on every tag. Keep editing it here, not there.
+Both files in this repo are the source of truth; CI copies them into the tap and
+fills in the formula's `url` + `sha256` on every tag. Keep editing them here, not
+there. The cask tracks upstream's release rather than ours, so its version and
+checksums only move when OpenScreen ships — see the note at the top of the file.
 
 ---
 
