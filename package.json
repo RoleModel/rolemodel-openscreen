@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "RoleModel brand layer for OpenScreen \u2014 presets, wallpapers, annotation builders, and an agent skill.",
+  "description": "RoleModel brand layer for OpenScreen — presets, wallpapers, annotation builders, and an agent skill.",
   "bin": {
     "rm-video": "./bin/rm-video.mjs",
     "rm-library": "./bin/rm-library.mjs"
@@ -11,10 +11,12 @@
   "scripts": {
     "presets": "node bin/rm-video.mjs presets",
     "wallpapers": "node lib/make-wallpapers.mjs",
-    "verify": "node lib/verify.mjs"
+    "verify": "node lib/verify.mjs",
+    "sync-brand": "node lib/sync-brand.mjs",
+    "sync-brand:check": "node lib/sync-brand.mjs --check"
   },
   "devDependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.62.1"
   },
   "repository": {
     "type": "git",

@@ -2,7 +2,7 @@
   "id": "rolemodel",
   "label": "RoleModel Software",
   "description": "House style for product demos and client-facing walkthroughs. Dark dot-grid board, generous padding, restrained motion.",
-  "wallpaperFile": "rm-dark-dotgrid.png",
+  "wallpaperFile": "rm-dark-dotgrid.jpg",
   "editor": {
     "shadowIntensity": 0.38,
     "showBlur": false,
@@ -25,22 +25,28 @@
     "gifSizePreset": "large"
   },
   "rationale": {
-    "borderRadius": "28 rather than the stock 40 — it echoes the 28px scene border in the Academy HyperFrames spec, so an OpenScreen capture cut next to a HyperFrames scene reads as the same system.",
+    "borderRadius": "28 rather than the stock 40 \u2014 it echoes the 28px scene border in the Academy HyperFrames spec, so an OpenScreen capture cut next to a HyperFrames scene reads as the same system.",
     "padding": "62 over the stock 50. The backdrop is the only branded surface in a screen demo; too little padding and the brand disappears behind the app being demoed.",
     "shadowIntensity": "0.38 lifts the capture off a dark board. The stock 0.2 reads flat on #293747.",
     "motionBlurAmount": "Dialled down from 0.2. Motion blur on a UI recording smears text during pans, which is the opposite of what a demo needs.",
-    "cursorTheme": "Deliberately 'default'. Every bundled theme is a novelty cursor (Hello Kitty, Among Us, Pokemon) — none belong in client-facing work.",
+    "cursorTheme": "Deliberately 'default'. Every bundled theme is a novelty cursor (Hello Kitty, Among Us, Pokemon) \u2014 none belong in client-facing work.",
     "webcamMirrored": "Mirrored matches what the presenter saw while recording, which is what makes gestures read correctly."
   },
   "variants": {
-    "master": { "aspectRatio": "16:9", "exportQuality": "source" },
+    "master": {
+      "aspectRatio": "16:9",
+      "exportQuality": "source"
+    },
     "vertical": {
       "aspectRatio": "9:16",
       "padding": 40,
       "webcamLayoutPreset": "vertical-stack",
       "$comment": "vertical-stack is only honoured on portrait aspect ratios; on landscape it silently falls back to picture-in-picture."
     },
-    "square": { "aspectRatio": "1:1", "padding": 48 },
+    "square": {
+      "aspectRatio": "1:1",
+      "padding": 48
+    },
     "gif": {
       "exportFormat": "gif",
       "gifSizePreset": "large",

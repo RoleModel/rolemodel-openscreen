@@ -1,9 +1,14 @@
 {
   "id": "lightning",
   "label": "LightningCAD",
-  "description": "Product demos for LightningCAD. Deliberately thin — the sub-brand's own signature has not been set, so this is the RoleModel base on a blue wash until it is.",
+  "description": "Product demos for LightningCAD, on its own signature blue from the Optics palette.",
   "extends": "rolemodel",
-  "wallpaperFile": "lightning-wash.png",
+  "wallpaperFile": "lcad-board.jpg",
+  "signature": {
+    "$comment": "Resolved from brand/tokens.json \u2192 subBrands.lcad, which is generated from the Optics export. Do not hand-edit.",
+    "opticsScale": "lcad",
+    "hex": "#2b84f7"
+  },
   "editor": {
     "padding": 58,
     "webcamLayoutPreset": "no-webcam",
@@ -11,15 +16,26 @@
   },
   "rationale": {
     "webcamLayoutPreset": "CAD demos are about the drawing surface. A presenter PiP covers the corner of the canvas where the tool palettes live.",
-    "padding": "Slightly tighter than the RoleModel default so a dense CAD viewport keeps its detail at 1080p."
+    "padding": "Slightly tighter than the RoleModel default so a dense CAD viewport keeps its detail at 1080p.",
+    "wallpaperFile": "The tinted board over the deep wash \u2014 a CAD viewport is already busy, and the wash competes with it."
   },
   "open": [
-    "LightningCAD has no agreed colour signature or wallpaper of its own yet. `lightning-wash.png` is a placeholder in RM Blue.",
-    "Decide before this ships: does a sub-brand get its own motion language, or only its own colour/type signature over one shared system? This preset assumes the latter."
+    "LightningCAD's signature (H214 S93% L57%) is one point of saturation away from the app `primary` scale (H214 S91% L57%). Either LCAD is deliberately the flagship blue, or one was copied from the other and nobody meant them to be distinct. Worth confirming before these are used side by side.",
+    "Decide before this ships: does a sub-brand get its own motion language, or only its own colour/type/surface signature over one shared system? This preset assumes the latter."
   ],
   "variants": {
-    "master": { "aspectRatio": "16:9", "exportQuality": "source" },
-    "vertical": { "aspectRatio": "9:16", "padding": 34 },
-    "gif": { "exportFormat": "gif", "gifSizePreset": "large", "gifFrameRate": 20 }
+    "master": {
+      "aspectRatio": "16:9",
+      "exportQuality": "source"
+    },
+    "vertical": {
+      "aspectRatio": "9:16",
+      "padding": 34
+    },
+    "gif": {
+      "exportFormat": "gif",
+      "gifSizePreset": "large",
+      "gifFrameRate": 20
+    }
   }
 }

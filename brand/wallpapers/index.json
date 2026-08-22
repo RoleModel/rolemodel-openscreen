@@ -2,41 +2,106 @@
   {
     "name": "rm-dark-dotgrid",
     "label": "RoleModel · dark dot-grid board",
-    "file": "rm-dark-dotgrid.png"
+    "file": "rm-dark-dotgrid.jpg"
   },
   {
     "name": "rm-ascii",
     "label": "RoleModel · ascii gradient panel",
-    "file": "rm-ascii.png"
+    "file": "rm-ascii.jpg"
   },
   {
     "name": "rm-light",
     "label": "RoleModel · near-white board",
-    "file": "rm-light.png"
+    "file": "rm-light.jpg"
   },
   {
     "name": "rm-wash",
     "label": "RoleModel · deep brand wash",
-    "file": "rm-wash.png"
+    "file": "rm-wash.jpg"
   },
   {
     "name": "academy-ruby",
-    "label": "Academy · Ruby unit (RM Blue)",
-    "file": "academy-ruby.png"
+    "label": "Academy · Ruby unit",
+    "file": "academy-ruby.jpg"
   },
   {
     "name": "academy-design",
-    "label": "Academy · Design unit (Light Purple)",
-    "file": "academy-design.png"
+    "label": "Academy · Design unit",
+    "file": "academy-design.jpg"
   },
   {
     "name": "academy-rails",
-    "label": "Academy · Rails unit (Medium Green)",
-    "file": "academy-rails.png"
+    "label": "Academy · Rails unit",
+    "file": "academy-rails.jpg"
   },
   {
-    "name": "lightning-wash",
-    "label": "LightningCAD · deep blue wash (signature not yet set)",
-    "file": "lightning-wash.png"
+    "name": "lcad-board",
+    "label": "LightningCAD · tinted board",
+    "file": "lcad-board.jpg"
+  },
+  {
+    "name": "lcad-wash",
+    "label": "LightningCAD · deep wash",
+    "file": "lcad-wash.jpg"
+  },
+  {
+    "name": "docks-board",
+    "label": "Dock Designer · tinted board",
+    "file": "docks-board.jpg"
+  },
+  {
+    "name": "docks-wash",
+    "label": "Dock Designer · deep wash",
+    "file": "docks-wash.jpg"
+  },
+  {
+    "name": "decks-board",
+    "label": "Deck Designer · tinted board",
+    "file": "decks-board.jpg"
+  },
+  {
+    "name": "decks-wash",
+    "label": "Deck Designer · deep wash",
+    "file": "decks-wash.jpg"
+  },
+  {
+    "name": "railing-board",
+    "label": "Railing Designer · tinted board",
+    "file": "railing-board.jpg"
+  },
+  {
+    "name": "railing-wash",
+    "label": "Railing Designer · deep wash",
+    "file": "railing-wash.jpg"
+  },
+  {
+    "name": "building-board",
+    "label": "Building · tinted board",
+    "file": "building-board.jpg"
+  },
+  {
+    "name": "building-wash",
+    "label": "Building · deep wash",
+    "file": "building-wash.jpg"
+  },
+  {
+    "name": "airfield-board",
+    "label": "Airfield · tinted board",
+    "file": "airfield-board.jpg"
+  },
+  {
+    "name": "airfield-wash",
+    "label": "Airfield · deep wash",
+    "file": "airfield-wash.jpg"
+  },
+  {
+    "name": "flow-board",
+    "label": "Flow · tinted board",
+    "file": "flow-board.jpg"
+  },
+  {
+    "name": "flow-wash",
+    "label": "Flow · deep wash",
+    "file": "flow-wash.jpg"
   }
 ]
