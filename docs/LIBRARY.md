@@ -64,6 +64,7 @@ rclone config create feeney-hershey s3     # once, name must match the project i
 rm-library mount feeney-hershey
 rm-library index feeney-hershey
 rm-library find "runway"          --kind video
+rm-library view                   # browsable HTML page, opens in your browser
 rm-library status
 rm-library unmount feeney-hershey
 ```
@@ -88,9 +89,14 @@ that field, so the enrichment lands without touching the search path. Cost is
 roughly **$0.27–0.81 per hour of source** — about $80–250 one-time for 300 hours,
 versus ~$780 to index the same footage in a purpose-built service.
 
-Also missing, in rough priority order: proxy generation for scrubbing, a web
-shell over the catalog (the screenshot's UI), transcript indexing, and
-write-back conflict warnings when two people mount the same project.
+`rm-library view` is the browsable surface — one self-contained HTML file with
+the catalog inlined, so it opens from disk, works offline, and can be dropped in
+Slack. Cards link at the file on disk; it is a catalog, not a player. Building a
+scrub-and-comment surface is the Frame.io conversation, not this one.
+
+Also missing, in rough priority order: thumbnails (needs proxy generation),
+transcript indexing, and write-back conflict warnings when two people mount the
+same project.
 
 ## Why this composes
 

@@ -12,10 +12,12 @@ class RmVideo < Formula
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
 
-  # Node is the only runtime dependency. There is nothing to compile — the
-  # toolkit is plain ESM and the wallpapers ship pre-rendered, so no Playwright
-  # or Chromium download happens at install time.
+  # One command installs the whole stack. The toolkit is plain ESM and the
+  # wallpapers ship pre-rendered, so nothing compiles and no Chromium is
+  # downloaded — but OpenScreen itself comes along, because branding a project
+  # you cannot record is useless.
   depends_on "node"
+  depends_on cask: "rolemodel/tap/openscreen"
 
   def install
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
@@ -32,11 +34,11 @@ class RmVideo < Formula
   # dragging a kernel extension into every install.
   def caveats
     <<~EOS
-      rm-video brands OpenScreen projects; it does not record or export them.
-      Install OpenScreen itself for that:
+      OpenScreen was installed alongside this, and its CLI is on your PATH as
+      `openscreen` — the binary normally hides inside the .app bundle.
 
-        brew install --cask openscreen      # if a cask exists for your version
-        # or download from https://github.com/getopenscreen/openscreen/releases
+        openscreen info --json
+        openscreen sources -o /tmp/sources.json
 
       Point the Claude skill at this install by adding to your shell profile:
 

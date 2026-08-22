@@ -13,6 +13,8 @@
  */
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { renderCatalogHTML } from "../lib/library-view.mjs";
 import {
 	buildCatalog,
 	capture,
@@ -205,6 +207,38 @@ switch (cmd) {
 		break;
 	}
 
+	case "view": {
+		const wanted = argv[1] && !argv[1].startsWith("--") ? argv[1] : null;
+		const projects = (await listProjects()).filter((m) => !wanted || m.id === wanted);
+		if (!projects.length) die(wanted ? `no project "${wanted}"` : "no projects yet — try `rm-library init`");
+
+		let indexed = 0;
+		for (const m of projects) {
+			try {
+				m.catalog = JSON.parse(await readFile(catalogPath(m.id), "utf8"));
+				// Link each card at the real file so the card can reveal it on disk.
+				const base = mountPoint(m.id);
+				for (const f of m.catalog.files) f.href = pathToFileURL(join(base, f.rel)).href;
+				indexed++;
+			} catch {
+				m.catalog = { files: [] };
+			}
+		}
+		if (!indexed) die("nothing indexed yet — run `rm-library index <id>` first");
+
+		const html = renderCatalogHTML({ projects, generatedAt: new Date().toISOString() });
+		const dest = flag("out", join(ROOT, "library.html"));
+		await writeFile(dest, html, "utf8");
+		console.log(`\n  ${dest}`);
+		console.log(`  ${projects.reduce((n, p) => n + p.catalog.files.length, 0)} files from ${indexed} project${indexed === 1 ? "" : "s"}`);
+
+		if (!flag("no-open")) {
+			await run(process.platform === "darwin" ? "open" : "xdg-open", [dest]).catch(() => {});
+		}
+		console.log("");
+		break;
+	}
+
 	case "status": {
 		const projects = await listProjects();
 		if (!projects.length) {
@@ -237,6 +271,7 @@ switch (cmd) {
 				"  unmount <id>                 eject",
 				"  index <id>                   ffprobe everything into a catalog",
 				"  find <query>                 search every catalog",
+				"  view [id]                    build a browsable HTML page and open it",
 				"  status                       what exists and what's connected",
 				"",
 				"Options",
@@ -246,6 +281,8 @@ switch (cmd) {
 				"  --read-only                  mount read-only           (mount)",
 				"  --dir <path>                 index a folder directly   (index)",
 				"  --kind <video|audio|still>   filter results            (find)",
+				"  --out <path>                 where to write the page   (view)",
+				"  --no-open                    just write it, don't open (view)",
 				"",
 				`Library root: ${ROOT}   (override with RM_LIBRARY_ROOT)`,
 				"",
