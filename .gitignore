@@ -16,3 +16,4 @@ recordings/
 
 # CodeGraph index — machine-local, rebuilt with `codegraph index`
 .codegraph/
+.claude/skills/impeccable/
