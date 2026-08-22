@@ -1,3 +1,5 @@
+![Cover](https://assets.rolemodelsoftware.com/videos/OGTemplate-2x.png)
+
 # rolemodel-openscreen
 
 RoleModel brand layer for [OpenScreen](https://github.com/getopenscreen/openscreen).
@@ -34,21 +36,6 @@ bin/rm-video.mjs           CLI
 skill/SKILL.md             agent skill — record → brand → export, end to end
 ```
 
-## Why this shape
-
-OpenScreen turned out to be a much better foundation than its reputation
-suggests. Three things decided the approach:
-
-1. **It has a real headless CLI**, explicitly built for agents —
-   `record`, `sources`, `export`, `pack`, `captions`, `info`, all with NDJSON
-   output. The pipeline is `record → edit the project JSON → export`.
-2. **`.openscreen` is a Zod-typed JSON document** (`AxcutDocument`,
-   schemaVersion 7) with a forward-only migration chain. Every appearance
-   setting the editor exposes is a field in that document.
-3. **It is MIT**, actively developed, ~1,670 tests, with an `AGENTS.md` and real
-   architecture docs.
-
-So the missing piece was never the editor. It was the brand. That is what this is.
 
 ## Use
 
