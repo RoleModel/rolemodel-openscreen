@@ -29,6 +29,8 @@ jobs:
         run: git clone --depth 1 https://github.com/getopenscreen/openscreen.git /tmp/openscreen
 
       - run: node lib/verify.mjs --openscreen /tmp/openscreen
+
+      - run: node lib/sync-brand.mjs --check
       
       - run: node lib/sync-brand.mjs --check
 
