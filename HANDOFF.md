@@ -63,13 +63,13 @@ bin/rm-voice.mjs       script -> narration + SRT
 bin/rm-mux.mjs         put narration on a render, reconciling their clocks
 
 lib/jobs.mjs           spawn allowlisted binaries, stream output over SSE
-lib/optics-css.mjs     Optics export -> 1160 CSS custom properties
+lib/optics-css.mjs     vendor @rolemodel/optics; generate only what it lacks
 lib/wallpaper.mjs      recipe -> canvas. Shared by preview, export, batch build
 lib/narration.mjs      per-line TTS, measured, into audio + an exact SRT
 lib/script-parse.mjs   markdown -> speakable lines (served to the browser too)
 lib/verify.mjs         129 assertions, incl. against a real OpenScreen checkout
 components/            custom elements for HyperFrames scenes
-brand/optics-tokens.json  the Figma export — upstream source of truth for colour
+brand/optics/          Optics verbatim + the RoleModel-only scales, pinned by hash
 ```
 
 `lib/verify.mjs` reads OpenScreen's own TypeScript to check the presets still

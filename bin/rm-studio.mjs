@@ -740,18 +740,22 @@ const server = createServer(async (req, res) => {
       return createReadStream(file).pipe(res);
     }
 
-    // Optics. Generated from brand/optics-tokens.json by lib/optics-css.mjs, and
-    // served rather than inlined so the browser caches it across reloads — it is
-    // 1160 tokens and it does not change while the server is up.
+    // Optics, in two parts and in this order: the published package verbatim,
+    // then the RoleModel scales it does not carry. Order matters only as
+    // insurance — lib/optics-css.mjs guarantees the second defines nothing the
+    // first does, and `npm run check` fails if that ever stops being true.
+    //
+    // Served rather than inlined so the browser caches it across reloads; it is
+    // ~180KB and does not change while the server is up.
     if (p === "/optics.css") {
-      const css = await readFile(join(TOOLKIT, "brand/optics.css"), "utf8").catch(() => null);
-      if (css == null) {
-        // Better a Studio with no colour tokens than a blank page.
-        res.writeHead(200, { "content-type": "text/css" });
-        return res.end("/* brand/optics.css missing — run `npm run build` */\n");
+      const parts = [];
+      for (const f of ["brand/optics/optics.css", "brand/optics/rolemodel-scales.css"]) {
+        const css = await readFile(join(TOOLKIT, f), "utf8").catch(() => null);
+        if (css != null) parts.push(css);
+        else parts.push(`/* ${f} missing — run \`npm run optics\` */\n`);
       }
       res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
-      return res.end(css);
+      return res.end(parts.join("\n"));
     }
 
     // The wallpaper editor's drawing code, served straight to the browser as an

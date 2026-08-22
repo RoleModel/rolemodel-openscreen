@@ -21,7 +21,8 @@
  *
  * Usage in a HyperFrames scene:
  *
- *   <link rel="stylesheet" href="optics.css">
+ *   <link rel="stylesheet" href="optics/optics.css">
+ *   <link rel="stylesheet" href="optics/rolemodel-scales.css">
  *   <script type="module" src="rm-video.js"></script>
  *
  *   <rm-scene wallpaper="rm-dark-dotgrid">

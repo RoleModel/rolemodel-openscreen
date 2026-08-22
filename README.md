@@ -8,8 +8,10 @@ is `npm update`, not a merge.
 
 ```
 brand/tokens.json          palette, type, and scale — mirrors the Academy HyperFrames theme
-brand/optics-tokens.json   the Optics export — upstream source of truth for colour
-brand/optics.css           GENERATED — 1160 Optics tokens as CSS custom properties
+brand/optics/optics.css    @rolemodel/optics, VERBATIM — never edit, never hand-merge
+brand/optics/rolemodel-scales.css  GENERATED — only the scales Optics doesn't publish
+brand/optics/manifest.json GENERATED — the pinned Optics version + hashes
+brand/optics-tokens.json   the Figma export, now only for the RoleModel sub-brands
 brand/wallpapers.json      wallpaper recipes — the editable source of truth
 brand/wallpapers/          16 rendered backdrops + a contact sheet
 presets/*.json             rolemodel · academy · lightning
@@ -19,7 +21,7 @@ lib/wallpaper.mjs          recipe -> canvas. One implementation, shared by the
                            Studio preview, the Studio export, and the batch build
 lib/wallpaper-recipes.mjs  the default recipe set, derived from tokens
 lib/make-wallpapers.mjs    batch-render brand/wallpapers.json to JPEG
-lib/optics-css.mjs         turn the Optics export into CSS
+lib/optics-css.mjs         vendor Optics; generate only what it lacks
 lib/jobs.mjs               run the pipeline and stream it back to the browser
 lib/script-parse.mjs       markdown -> speakable lines (served to the browser too)
 lib/narration.mjs          per-line TTS, measured, into audio + an exact SRT
@@ -202,11 +204,29 @@ node lib/make-wallpapers.mjs            # render brand/wallpapers.json
 node lib/make-wallpapers.mjs --reset    # re-derive recipes from tokens first
 ```
 
-Colour comes from Optics. `brand/optics-tokens.json` is the Figma export;
-`lib/optics-css.mjs` turns it into `brand/optics.css` — every token as a custom
-property, both modes, resolved with `light-dark()`. The Studio and the wallpapers
-consume those tokens, and `npm run check` fails if the CSS is stale or if
-`lib/studio-ui.mjs` grows a hand-written hex.
+**Colour is Optics, imported — not a copy of Optics.** `brand/optics/optics.css`
+is `@rolemodel/optics` verbatim, vendored by `lib/optics-css.mjs` and pinned in
+`brand/optics/manifest.json` by version and hash. That matters because Optics
+does not ship hexes: every ramp is computed in CSS from `--op-color-primary-h/s/l`
+with `light-dark()`, so setting one hue re-tints all 486 tokens. An earlier
+version of this repo flattened the Figma export into 1160 static hexes, which
+looked identical and had lost exactly that — and drifted a little further with
+every Optics release.
+
+The Figma export still has one job: `brand/optics/rolemodel-scales.css` carries
+the scales the open-source release does not publish (academy, lcad, docks, decks,
+railing, building, airfield, flow, and the secondary/tertiary/accent families).
+That file is filtered against the vendored package, so it can never shadow a real
+Optics token, and it shrinks by itself if Optics ever publishes those scales.
+
+```bash
+npm run optics:latest    # is there a newer Optics?
+npm i -D @rolemodel/optics@latest && npm run optics
+```
+
+`npm run check` fails if the vendored copy was hand-edited, if the supplement is
+stale, if it shadows a published token, if a `--op-` token the UI spends resolves
+nowhere, or if `lib/studio-ui.mjs` grows a hand-written hex.
 
 **The edge is a solid border.** `border: { width, color, inset, radius }` — width in px at 1920, scaled with the export. A gradient edge was wrong twice over: as a radial it produced the dark band along the bottom, and as a linear scrim it was still a fade where the brand calls for a line. `rm-framed` is the example.
 
