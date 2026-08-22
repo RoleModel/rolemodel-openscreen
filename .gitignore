@@ -13,3 +13,6 @@ dist/
 *.m4a
 *.wav
 recordings/
+
+# CodeGraph index — machine-local, rebuilt with `codegraph index`
+.codegraph/
