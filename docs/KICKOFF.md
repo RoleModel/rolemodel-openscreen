@@ -103,7 +103,8 @@ panel says so with a link to the original.
 > 1. Open <https://github.com/RoleModel/openscreen/actions>
 > 2. Click **"I understand my workflows, go ahead and enable them"**
 > 3. The `v1.9.6-rm.1` tag is already pushed, so the build starts on its own
-> 4. Then, in the tap: `node scripts/update-cask.mjs rolemodel-openscreen v1.9.6-rm.1`
+> 4. Then, in the tap: `node scripts/update-cask.mjs rolemodel-openscreen <tag>`
+>    (same file as `packaging/update-cask.mjs` here — `npm run sync-tap` copies it)
 >
 > That last command reads the release's DMGs, hashes them, and writes the version
 > and checksums into the cask. Until it runs, the cask's version is

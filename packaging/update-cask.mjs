@@ -2,9 +2,15 @@
 /*
  * Point a cask at a release, with checksums computed from the real assets.
  *
- *   node scripts/update-cask.mjs rolemodel-openscreen v1.9.6-rm.1
- *   node scripts/update-cask.mjs rolemodel-openscreen --latest
- *   node scripts/update-cask.mjs rolemodel-openscreen v1.9.6-rm.1 --check
+ * This file has two paths, because it is one source copied to one build output:
+ * `packaging/update-cask.mjs` here, and `scripts/update-cask.mjs` in the tap, where
+ * `lib/sync-tap.mjs` puts it. Run it from whichever checkout you are standing in —
+ * it rewrites the cask beside it, so the tap is the usual one.
+ *
+ *   node packaging/update-cask.mjs rolemodel-openscreen v1.9.6-rm.1   # here
+ *   node scripts/update-cask.mjs   rolemodel-openscreen v1.9.6-rm.1   # in the tap
+ *   node scripts/update-cask.mjs   rolemodel-openscreen --latest
+ *   node scripts/update-cask.mjs   rolemodel-openscreen v1.9.6-rm.1 --check
  *
  * A cask is three facts — a version, a URL pattern and a checksum per arch — and
  * two of them change on every release. Hand-editing them is how a tap ends up
@@ -32,8 +38,10 @@ const ROOT = resolve(HERE, "..");
 
 /** Which repo each cask tracks. A cask that named the wrong repo would hash the wrong DMGs. */
 const REPOS = {
+	// One entry, and there used to be two. The second was upstream's own build,
+	// carried "for comparison" — nothing installed it, nothing depended on it, and
+	// pointing this script at it would now rewrite a cask the tap no longer has.
 	"rolemodel-openscreen": "RoleModel/openscreen",
-	openscreen: "getopenscreen/openscreen",
 };
 
 /** The arch labels build.yml renames its DMGs to, and the cask's `arch` keys. */
