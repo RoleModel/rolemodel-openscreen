@@ -124,6 +124,24 @@ const STEPS = [
 		fix: ["npx", ["--yes", "hyperframes", "skills", "update"]],
 	},
 	{
+		name: "Command Line Tools (for the voice venv)",
+		required: false,
+		why:
+			"Only the voice virtualenv needs a compiler, and only when pip has no wheel for your Python — " +
+			"kokoro-onnx and soundfile usually do. This is Command Line Tools, NOT full Xcode: " +
+			"nothing an installed pipeline runs needs Xcode, and only building the app from source does.",
+		check: async () => {
+			const dir = await capture("sh", ["-c", "xcode-select -p 2>/dev/null"]);
+			if (!dir.out.trim()) return false;
+			// A selected directory is not the same as a working compiler — a
+			// half-removed Xcode leaves the path set and clang gone.
+			const cc = await capture("sh", ["-c", "clang --version 2>/dev/null"]);
+			return /clang version|Apple clang/i.test(cc.out);
+		},
+		fix: ["sh", ["-c", "xcode-select --install"]],
+		heavy: "a few hundred MB, and macOS runs the installer in its own window",
+	},
+	{
 		name: "Voice (Kokoro virtualenv)",
 		required: false,
 		why: "Local narration. Builds its own venv under ~/.rolemodel-video; system Python is never touched.",

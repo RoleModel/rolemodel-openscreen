@@ -199,6 +199,26 @@ Teardown: `docker compose down` keeps the data, `down -v` deletes it.
 
 ---
 
+## Do I need Xcode?
+
+No — and this is worth being precise about, because it reads like a much bigger
+requirement than it is.
+
+| you are | you need |
+|---|---|
+| **installing and using the pipeline** | nothing. Homebrew fetches a prebuilt app. |
+| **using the voice narration** | Command Line Tools, and only if pip has no wheel for your Python. `xcode-select --install`, a few hundred MB. `rm-setup` checks for it. |
+| **building the app from source** | full Xcode. Only the ScreenCaptureKit capture helper needs it — Swift with SwiftPM, which Command Line Tools alone cannot build. |
+
+That last row is why the app is built in CI: GitHub's macOS runners ship full
+Xcode, so nobody on the team has to. A release comes out of `build.yml`, the cask
+points at it, and `brew install --cask` puts a signed app on disk with no
+compiler involved.
+
+If you *do* build locally without Xcode, you get a working app that cannot
+record. It brands, edits and exports fine — the capture helper is the only piece
+missing, and it fails loudly rather than producing empty video.
+
 ## The parts that are not finished
 
 Worth knowing before you promise any of it to anyone.
