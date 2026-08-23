@@ -1164,11 +1164,31 @@ const server = createServer(async (req, res) => {
           /* fall through to the static list */
         }
       }
+      /*
+       * The list Kokoro would have given us, from lib/narration.mjs.
+       *
+       * The note used to say "set voice up under Voice", which is the page this
+       * text is displayed on — advice to go where you already are. There are two
+       * distinct reasons the list is unavailable and they need different actions,
+       * so say which one happened:
+       *
+       *   - the Python environment is missing, and the button above this field
+       *     builds it;
+       *   - the environment is fine but `npx --no-install hyperframes` found
+       *     nothing cached, which is a network fetch on first use and nothing to
+       *     fix by hand.
+       *
+       * Either way the ids below are real and synthesising works, so this is a
+       * caveat and not an error.
+       */
       const { VOICES } = await import("../lib/narration.mjs");
+      const ready = await voiceReady();
       return json(res, 200, {
         from: "static",
         voices: VOICES.map((v) => ({ id: v.id, label: v.label })),
-        note: "Could not ask Kokoro for its voice list, so this is the built-in one. Set voice up under Voice if you have not yet.",
+        note: ready
+          ? "Kokoro is installed but would not list its voices — hyperframes is fetched with npx on first use and is not cached yet. These ids are the built-in list and they work; the first line you synthesise will do the fetch."
+          : "This is the built-in list, because Kokoro is not installed yet. Use “Set up voice” above — it builds a private Python environment, once, and then the list comes from Kokoro itself.",
       });
     }
 

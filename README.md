@@ -17,7 +17,7 @@ Then `rm-studio`, and open <http://localhost:4600>.
 
 ```sh
 brew install rolemodel/tap/rm-video                    # the eight commands
-brew install --cask rolemodel/tap/rolemodel-openscreen # the app
+brew install --cask rolemodel/tap/rolemodel-openscreen # the app, "RoleModel Studio"
 rm-setup                                               # the rest, idempotent
 ```
 

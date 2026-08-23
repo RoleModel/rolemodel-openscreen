@@ -12,6 +12,10 @@
 #     `open` both work.
 #   - The compositor build finds cargo without assuming rustup's layout, which is
 #     what stopped a Homebrew Rust from building it.
+#   - It is called RoleModel Studio, in the Dock, the menu bar, the About panel and
+#     every permission prompt, and carries the RoleModel palette, mark and typeface.
+#     The bundle on disk is still Openscreen.app — see the `app` stanza below, which
+#     depends on that, along with the shim and the DMG name.
 #
 # Upstream's build installs the same app name and cannot coexist with this one;
 # see conflicts_with. This tap used to carry a cask for that build too, "for
@@ -41,7 +45,11 @@ cask "rolemodel-openscreen" do
   url "https://github.com/RoleModel/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg",
       verified: "github.com/RoleModel/openscreen/"
 
-  name "OpenScreen (RoleModel)"
+  # Two `name` stanzas, because the app answers to two things: what it calls itself
+  # (CFBundleDisplayName, which is what the Dock and the menu bar show) and what it
+  # is a build of, which is how anyone who has heard of it will search.
+  name "RoleModel Studio"
+  name "OpenScreen (RoleModel build)"
   desc "Screen recorder and editor for product demos, with the RoleModel pipeline's CLI additions"
   homepage "https://github.com/RoleModel/openscreen"
 
@@ -90,7 +98,7 @@ cask "rolemodel-openscreen" do
       OpenScreen needs Screen Recording permission before it can capture, and
       macOS grants that to whatever binary hosts Electron:
 
-        - launching the app normally  -> grant it to Openscreen
+        - launching the app normally  -> grant it to RoleModel Studio
         - driving the CLI from a shell -> grant it to your TERMINAL
 
       System Settings > Privacy & Security > Screen & System Audio Recording.
@@ -102,11 +110,23 @@ cask "rolemodel-openscreen" do
     EOS
   end
 
+  # Both names, because the app was renamed and the paths follow the name rather than
+  # the bundle. Electron derives `app.getPath("userData")` and the log directory from
+  # `app.name`, which on macOS is CFBundleDisplayName — so a copy installed after the
+  # rename writes to "RoleModel Studio" and one installed before it wrote to
+  # "Openscreen". A zap that lists only the current name leaves the older directory
+  # behind on exactly the machines that have been running this the longest.
+  #
+  # The plist and saved state still carry the bundle id, which did NOT change: it is
+  # what macOS keys the Screen Recording grant to, and renaming it would silently
+  # revoke a permission the caveats above ask people to grant by hand.
   zap trash: [
+    "~/Library/Application Support/RoleModel Studio",
     "~/Library/Application Support/Openscreen",
     "~/Library/Application Support/openscreen",
     "~/Library/Preferences/com.etiennelescot.openscreen.plist",
     "~/Library/Saved Application State/com.etiennelescot.openscreen.savedState",
+    "~/Library/Logs/RoleModel Studio",
     "~/Library/Logs/Openscreen",
   ]
 end

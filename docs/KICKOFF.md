@@ -89,6 +89,14 @@ And the app:
 brew install --cask rolemodel/tap/rolemodel-openscreen
 ```
 
+It arrives called **RoleModel Studio** — that is the name in the Dock, the menu
+bar, the About panel and every macOS permission prompt. The bundle on disk is
+still `/Applications/Openscreen.app`, and deliberately so: the cask's `app`
+stanza, the `openscreen` shim that puts the CLI on your PATH, and the DMG name
+the release job writes all resolve that filename. So `ls /Applications` and the
+Dock disagree, on purpose. It is a RoleModel build of OpenScreen, and the About
+panel says so with a link to the original.
+
 > **Manual step, once.** The cask needs a release to point at, and GitHub
 > disables all workflows on a forked repo until someone acknowledges it:
 >
