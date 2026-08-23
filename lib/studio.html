@@ -6,7 +6,7 @@
    <meta name="viewport" content="width=device-width,initial-scale=1" />
    <title>RoleModel Studio</title>
    <link rel="icon"
-      href="data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cmask id='path-1-inside-1_8647_11782' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z' fill='%2300B871'/%3E%3Cpath d='M0 0H180H0M180 168C180 180.703 169.703 191 157 191H23C10.2975 191 0 180.703 0 168C0 168.552 5.37258 169 12 169H168C174.627 169 180 168.552 180 168ZM180 168M0 180V0V180M0 180M180 0V180V0' fill='%2300663F' mask='url(%23path-1-inside-1_8647_11782)'/%3E%3Cpath d='M59.2673 62.6584C59.2447 54.9604 67.5639 50.1248 74.2418 53.9543L126.694 84.0333C133.372 87.8627 133.4 97.4852 126.745 101.354L74.4695 131.739C67.8141 135.608 59.4667 130.821 59.4442 123.123L59.2673 62.6584Z' fill='white'/%3E%3C/svg%3E%0A" />
+      href="data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cmask id='path-1-inside-1_8652_12554' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z' fill='%23050505'/%3E%3Cpath d='M0 0H180H0M180 168C180 180.703 169.703 191 157 191H23C10.2975 191 0 180.703 0 168C0 168.552 5.37258 169 12 169H168C174.627 169 180 168.552 180 168ZM180 168M0 180V0V180M0 180M180 0V180V0' fill='%2300B871' mask='url(%23path-1-inside-1_8652_12554)'/%3E%3Cpath d='M59.2673 62.6584C59.2447 54.9604 67.5639 50.1248 74.2418 53.9543L126.694 84.0333C133.372 87.8627 133.4 97.4852 126.745 101.354L74.4695 131.739C67.8141 135.608 59.4667 130.821 59.4442 123.123L59.2673 62.6584Z' fill='%23CCCCCC'/%3E%3C/svg%3E%0A" />
    <link rel="stylesheet" href="/optics.css" />
    <style>
       /*
@@ -39,8 +39,8 @@
          --blue: var(--op-color-primary-base);
          --danger: var(--op-color-alerts-danger-base);
          --danger-fg: var(--op-color-alerts-danger-minus-two);
-         --info-bg: var(--op-color-alerts-info-base);
-         --info-fg: var(--op-color-alerts-info-on-base);
+         --info-bg: var(--op-color-academy-primary-plus-four);
+         --info-fg: var(--op-color-academy-primary-on-plus-four);
          --d: "DM Sans", ui-sans-serif, system-ui, sans-serif;
          --m: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
 
@@ -147,6 +147,14 @@
          min-height: 100vh
       }
 
+      .op-page {
+         & .op-page__main {
+            .op-page__main-content {
+               max-inline-size: var(--op-breakpoint-x-large);
+            }
+         }
+      }
+
       .op-page__sidebar {
          width: var(--nav-w);
          flex: 0 0 var(--nav-w);
@@ -168,9 +176,17 @@
          align-self: start;
       }
 
+      .container {
+         display: flex;
+         flex-direction: column;
+         align-items: stretch;
+         max-inline-size: var(--op-breakpoint-x-large);
+         gap: var(--op-space-medium);
+      }
+
 
       nav h1 {
-         font-size: var(--op-font-medium);
+         font-size: var(--op-font-x-large);
          font-weight: var(--op-font-weight-extra-bold);
          letter-spacing: var(--track-tight);
          margin: 0 0 var(--op-space-2x-small);
@@ -238,7 +254,6 @@
 
       main {
          flex: 1;
-         padding: var(--op-space-x-large) var(--op-space-2x-large) var(--op-space-4x-large);
          max-width: var(--op-breakpoint-x-large)
       }
 
@@ -251,9 +266,8 @@
 
       .lede {
          color: var(--muted);
-         font-size: var(--op-font-x-small);
+         font-size: var(--op-font-medium);
          margin: 0 0 var(--op-space-large);
-         max-width: var(--measure);
          line-height: var(--op-line-height-base)
       }
 
@@ -326,6 +340,26 @@
          font-weight: var(--op-font-weight-medium)
       }
 
+      select.form-control:not([multiple], [type='radio'], [type='checkbox']) {
+         --op-encoded-images-dropdown-arrow: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="9" viewBox="0 0 12 9" fill="none"%3E%3Cpath d="M6 8.37501L0 2.37501L1.4 0.975006L6 5.57501L10.6 0.975006L12 2.37501L6 8.37501Z" fill="%23FFFFFF"/%3E%3C/svg%3E');
+      }
+
+      /* A delete is quiet until it is armed. Danger is text, never a filled
+         alarm block — same rule the rest of the interface follows. */
+      button.btn.ghost.del {
+         color: var(--op-color-alerts-danger-minus-two);
+         /* The card body is a flex column, so `justify-self` does nothing here and
+            the button stretched the full width — which reads as the primary action
+            on the card rather than the quiet one it should be. */
+         align-self: start;
+         padding-inline: var(--op-space-x-small);
+      }
+
+      button.btn.ghost.del.armed {
+         border-color: var(--op-color-alerts-danger-minus-two);
+         color: var(--op-color-alerts-danger-minus-two);
+      }
+
       button.btn:disabled {
          opacity: var(--op-opacity-disabled);
          cursor: not-allowed
@@ -351,6 +385,7 @@
 
       .grid {
          display: grid;
+         width: 100%;
          grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
          gap: var(--op-space-small)
       }
@@ -399,7 +434,8 @@
          font-family: var(--m);
          font-size: var(--op-font-2x-small);
          color: var(--muted);
-         word-break: break-all
+         word-break: break-all;
+         grid-column: span 2;
       }
 
       .meta {
@@ -441,6 +477,228 @@
 
       .kind.still {
          color: var(--op-color-alerts-warning-minus-two)
+      }
+
+      /* The header strip that carries the breadcrumbs. Optics makes it sticky and
+         gives it the header z-index; the rule below only supplies the surface,
+         since a sticky bar with no background lets content slide under it. */
+      .op-page__main-header {
+         background: var(--bg);
+         border-bottom: var(--op-border-width) solid var(--line);
+         padding: var(--op-space-small) var(--op-space-large);
+      }
+
+      .breadcrumbs__link {
+         color: var(--muted);
+         cursor: pointer;
+         background: none;
+         border: 0;
+         font: inherit;
+         padding: 0;
+      }
+
+      .breadcrumbs__link:hover {
+         color: var(--fg);
+      }
+
+      .breadcrumbs__text {
+         color: var(--fg);
+      }
+
+      .breadcrumbs__sep {
+         color: var(--muted);
+      }
+
+      /* ── the library index ────────────────────────────────────
+         A project is a card with art, a caption and a footer — the thing you
+         navigate by. It used to be a heading above a wall of every file in every
+         project, which buries the projects themselves. */
+      .libbar {
+         display: flex;
+         gap: var(--op-space-medium);
+         align-items: center;
+         flex-wrap: wrap;
+         padding-bottom: var(--op-space-small);
+         margin-bottom: var(--op-space-large);
+         border-bottom: var(--op-border-width) solid var(--line);
+      }
+
+      .libbar input[type='search'] {
+         flex: 1 1 var(--search-min);
+         min-width: 0;
+      }
+
+      .seg {
+         display: flex;
+         gap: var(--op-space-3x-small);
+         padding: var(--op-space-3x-small);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         background: var(--sunk);
+      }
+
+      .segbtn {
+         border: 0;
+         background: none;
+         color: var(--muted);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         border-radius: var(--op-radius-medium);
+         cursor: pointer;
+      }
+
+      .segbtn[aria-pressed='true'] {
+         background: var(--panel2);
+         color: var(--fg);
+      }
+
+      .libpick {
+         display: flex;
+         gap: var(--op-space-2x-small);
+         align-items: baseline;
+      }
+
+      .libpicklabel {
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+      }
+
+      /* Reads as a label you can change, not a form control in a toolbar. */
+      .libselect {
+         border: 0;
+         background: none;
+         color: var(--fg);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         padding: 0;
+         cursor: pointer;
+         block-size: auto;
+      }
+
+      .projgrid {
+         display: grid;
+         grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+         gap: var(--op-space-medium);
+      }
+
+      .projlist {
+         display: grid;
+         gap: var(--op-space-x-small);
+      }
+
+      .projcard {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-x-large);
+         overflow: hidden;
+         display: flex;
+         flex-direction: column;
+      }
+
+      .projcard:hover {
+         border-color: var(--accent);
+      }
+
+      .projart {
+         aspect-ratio: var(--video-ar);
+         background: var(--sunk) center/cover no-repeat;
+      }
+
+      /* In list mode the art becomes a stripe: the row is the unit, not the image. */
+      .projlist .projcard {
+         flex-direction: row;
+         align-items: center;
+         gap: var(--op-space-small);
+         padding-inline-end: var(--op-space-small);
+      }
+
+      .projlist .projart {
+         aspect-ratio: auto;
+         inline-size: var(--op-space-4x-large);
+         block-size: var(--op-space-3x-large);
+         flex: 0 0 auto;
+      }
+
+      .projlist .projcap,
+      .projlist .projfoot {
+         padding: 0;
+         border: 0;
+         flex: 1 1 auto;
+      }
+
+      .projcap {
+         padding: var(--op-space-small) var(--op-space-small) var(--op-space-2x-small);
+      }
+
+      .projname {
+         font-size: var(--op-font-medium);
+         font-weight: var(--op-font-weight-semi-bold);
+         line-height: var(--op-line-height-dense);
+         word-break: break-word;
+      }
+
+      .projclient {
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+      }
+
+      .projfoot {
+         display: flex;
+         gap: var(--op-space-x-small);
+         justify-content: space-between;
+         align-items: baseline;
+         flex-wrap: wrap;
+         padding: var(--op-space-2x-small) var(--op-space-small) var(--op-space-small);
+         margin-top: auto;
+      }
+
+      .projwhen {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+      }
+
+      /* The tile that starts one, sized like the cards it sits among. */
+      .projnew {
+         align-items: center;
+         justify-content: center;
+         gap: var(--op-space-x-small);
+         min-block-size: var(--field-tall);
+         border-style: dashed;
+         color: var(--muted);
+      }
+
+      .projplus {
+         inline-size: var(--op-space-2x-large);
+         block-size: var(--op-space-2x-large);
+         border-radius: var(--op-radius-circle);
+         background: var(--panel2);
+         display: grid;
+         place-items: center;
+         font-size: var(--op-font-large);
+         color: var(--fg);
+      }
+
+      /* A project card is a summary you click, not a thumbnail. */
+      .projcard {
+         margin-bottom: var(--op-space-x-small);
+      }
+
+      .projcard:hover {
+         border-color: var(--accent);
+      }
+
+      .projhead {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: baseline;
+         justify-content: space-between;
+      }
+
+      .projhead .nm {
+         font-size: var(--op-font-medium);
       }
 
       .thumbwrap {
@@ -537,7 +795,7 @@
             text runs either side of it get laid out as separate columns. */
          display: block;
          background: var(--info-bg);
-         border-left: var(--op-border-width-large) solid var(--blue);
+         border-left: var(--op-border-width-large) solid var(--op-color-academy-primary-minus-three);
          padding: var(--op-space-small);
          border-radius: 0 var(--op-radius-large) var(--op-radius-large) 0;
          font-size: var(--op-font-x-small);
@@ -807,6 +1065,7 @@
          padding: var(--op-space-small);
          block-size: var(--op-space-2x-large);
          border-block-end: var(--op-border-width) solid var(--line);
+         background-color: var(--op-color-neutral-plus-max);
       }
 
       .log .e {
@@ -977,8 +1236,15 @@
          </div>
       </nav>
    </div>
-   <main class="op-page__main-content">
-      <div class="container" id="main"></div>
+   <!-- Optics' page grid, properly nested. main-header / main-content /
+        main-footer are defined *inside* .op-page__main, so without this wrapper
+        none of them applied — the header had nowhere to live and the content
+        never picked up its width or padding. -->
+   <main class="op-page__main">
+      <header class="op-page__main-header" id="crumbs"></header>
+      <div class="op-page__main-content">
+         <div class="container" id="main"></div>
+      </div>
    </main>
    <script src="/studio.js"></script>
 </body>

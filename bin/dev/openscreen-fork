@@ -1,0 +1,24 @@
+#!/bin/sh
+# The forked OpenScreen, run from its checkout as if it were installed.
+#
+# TEMPORARY. This exists only because the fork is not packaged yet: the Studio
+# resolves `openscreen` from PATH, which is the installed release, and that build
+# has no `open` verb — so clicking a video launches the app and reveals the file
+# instead of opening the editor.
+#
+#   RM_OPENSCREEN_BIN=bin/dev/openscreen-fork npm run dev
+#
+# Use it for `open` only. This build cannot record: the ScreenCaptureKit helper
+# needs full Xcode to compile, so a local build has no capture path. Recording
+# still wants the installed app.
+#
+# All of this goes away when the Studio moves inside the app — there is no PATH,
+# no probe and no shim when the editor is a window in the same process.
+set -e
+CHECKOUT="${RM_OPENSCREEN_CHECKOUT:-$(cd "$(dirname "$0")/../../../openscreen" 2>/dev/null && pwd)}"
+[ -n "$CHECKOUT" ] || { echo "openscreen-fork: no checkout found; set RM_OPENSCREEN_CHECKOUT" >&2; exit 1; }
+ELECTRON="$CHECKOUT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+[ -x "$ELECTRON" ] || { echo "openscreen-fork: $ELECTRON is not there — run npm ci in $CHECKOUT" >&2; exit 1; }
+cd "$CHECKOUT"
+unset ELECTRON_RUN_AS_NODE ELECTRON_NO_ATTACH_CONSOLE
+NODE_ENV=development exec "$ELECTRON" . "$@"

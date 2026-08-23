@@ -11,6 +11,7 @@
  * Then hand it back to OpenScreen:
  *   openscreen export demo.openscreen -o demo.mp4 --auto-zoom --json
  */
+import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { title, watermark } from "../lib/annotations.mjs";
@@ -19,6 +20,7 @@ import {
 	annotationList,
 	applyTheme,
 	buildEditorPatch,
+	detectPadding,
 	detectShape,
 	loadPreset,
 	readProject,
@@ -40,6 +42,17 @@ function flag(name, fallback = undefined) {
 	if (i === -1) return fallback;
 	const next = argv[i + 1];
 	return next && !next.startsWith("--") ? next : true;
+}
+
+/** Run something and keep stdout as bytes — pixels do not survive a string. */
+function captureBytes(cmd, args) {
+	return new Promise((done) => {
+		const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "ignore"] });
+		const chunks = [];
+		child.stdout?.on("data", (d) => chunks.push(d));
+		child.on("error", () => done(Buffer.alloc(0)));
+		child.on("close", () => done(Buffer.concat(chunks)));
+	});
 }
 
 function die(msg) {
@@ -81,9 +94,43 @@ async function themeCommand({ alsoBrand }) {
 		wallpaperDir,
 	});
 
-	const doc = await readProject(projectPath);
-	const shape = detectShape(doc);
+	// die() prints one line and exits; a stack here would bury the reason. Both of
+	// these fail on ordinary user input — a document that was never recorded, or
+	// one this tool does not recognise — so neither deserves a stack trace.
+	const doc = await readProject(projectPath).catch((err) => die(err.message));
+	let shape;
+	try {
+		shape = detectShape(doc);
+	} catch (err) {
+		die(`${err.message}\n  ${projectPath}`);
+	}
 	applyTheme(doc, patch);
+
+	// Trim a padded capture, if that is what this is.
+	//
+	// A window recorded on a HiDPI Mac can arrive drawn into a display-sized
+	// buffer with a black band below the content. Compositing that faithfully
+	// puts the band inside the framed window, where it reads as part of the
+	// recording. `cropRegion` is a clip field the exporter already applies, so
+	// this costs no re-encode. Skipped when there is nothing to trim, and never
+	// overrides a crop somebody already set.
+	// The identity region counts as "no crop", not as one somebody chose. The
+	// preset writes it as part of its editor patch, so testing for the key alone
+	// meant detection never ran once branding had been applied.
+	const existing = doc.editor?.cropRegion;
+	const hasRealCrop =
+		existing &&
+		!(existing.x === 0 && existing.y === 0 && existing.width === 1 && existing.height === 1);
+
+	const source = doc.media?.screenVideoPath ?? doc.assets?.[0]?.originalPath;
+	if (source && !flag("no-crop") && !hasRealCrop) {
+		const region = await detectPadding(source, { probe: captureBytes }).catch(() => null);
+		if (region) {
+			doc.editor = { ...(doc.editor ?? {}), cropRegion: region };
+			const pct = (1 - region.width * region.height) * 100;
+			console.log(`  cropped   ${pct.toFixed(1)}% of the frame was black padding`);
+		}
+	}
 
 	const added = [];
 	if (alsoBrand) {

@@ -2,5 +2,14 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": [
     "ultracite/biome/core"
-  ]
+  ],
+  "files": {
+    // brand/optics/ is vendored and generated, not authored here. optics.css is
+    // @rolemodel/optics byte for byte and rolemodel-scales.css is written by
+    // lib/optics-css.mjs; both are pinned by sha256 in manifest.json, so a
+    // formatter touching either fails `npm run check` with a hash mismatch that
+    // reads like a bad vendor step. Reformatting it once already cost a
+    // "stop the formatter fight" commit.
+    "includes": ["**", "!brand/optics/**"]
+  }
 }

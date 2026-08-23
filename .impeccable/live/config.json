@@ -1,0 +1,6 @@
+{
+  "files": ["lib/studio.html", "components/gallery.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

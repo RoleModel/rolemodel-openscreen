@@ -18,9 +18,12 @@
  *
  *   rm-studio            # serves on :4600 and opens a browser
  *   rm-studio --port 5000 --no-open
+ *   rm-studio --watch    # live-reloads an already-open tab; opens nothing
+ *   rm-studio --watch --open
  */
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -35,6 +38,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
+import { describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -42,6 +46,10 @@ import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
+// bin/shims ahead of PATH for everything we spawn. openscreen is the reason:
+// launched through the cask's symlink, Electron cannot find its helper apps and
+// every command that forks dies with "Unable to find helper app".
+jobs.addPath(join(TOOLKIT, "bin", "shims"));
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => {
@@ -57,6 +65,31 @@ const SHELL = argv.includes("--shell");
 // `npm run dev` sets this. See the watch block near the bottom.
 const WATCH = argv.includes("--watch");
 const LIB = defaultRoot();
+
+/**
+ * Re-read a project's media and write the catalog.
+ *
+ * Called by /api/index and, more importantly, automatically after a job that
+ * wrote into a project. Building a narration and not seeing it in the Library
+ * until you remember to press Re-index is the tool failing to notice its own
+ * output — the catalog was hours older than the file it was missing.
+ */
+async function reindex(id, { force = false } = {}) {
+  // Reuse what was probed last time so this is cheap enough to run on every
+  // load; only new or changed files cost an ffprobe.
+  const previous = await readFile(join(projectDir(id), "catalog.json"), "utf8")
+    .then(JSON.parse)
+    .catch(() => null);
+  const catalog = await buildCatalog(mediaDir(id), { previous, force });
+  await writeFile(join(projectDir(id), "catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
+  const m = await readManifest(projectDir(id));
+  m.catalog = { indexedAt: catalog.indexedAt, files: catalog.files.length, bytes: catalog.bytes };
+  await writeManifest(projectDir(id), m);
+  return catalog;
+}
+// Where job records live. Beside the library rather than in the repo: they
+// describe work done on that library, and they must outlive this process.
+jobs.setJournal(join(LIB, ".rm-studio", "jobs"));
 const SCRIPTS = join(LIB, "_scripts");
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
@@ -103,10 +136,144 @@ async function listProjects() {
  * Poster frame, cached. Seeks 1s in rather than frame 0 — the first frame of a
  * screen recording is usually a blank window before anything has painted.
  */
+/**
+ * The absolute path a request is talking about.
+ *
+ * Two shapes, because there are two kinds of caller. A media file is named by
+ * its project and its catalog-relative path — `Footage/demo.mp4` — and the
+ * client has no business knowing those live under `media/`. It guessed, built
+ * `<library>/<id>/Footage/demo.mp4`, and got "no such file" for something
+ * plainly on disk. Anything else — a script, a project root — arrives as an
+ * absolute path, because it is not inside the media tree.
+ *
+ * `join` normalises, so a `..` in `rel` cannot climb out unnoticed: the caller's
+ * containment check sees the resolved path.
+ */
+function requestedPath(body) {
+	if (body.projectId && body.rel) return join(mediaDir(String(body.projectId)), String(body.rel));
+	return resolve(String(body.path ?? body.file ?? ""));
+}
+
+/**
+ * Run something and keep its stdout as bytes.
+ *
+ * `capture()` accumulates into a string, which is right for JSON and NDJSON and
+ * wrong for pixels — every byte above 0x7f comes back as a replacement
+ * character, so a raw frame read through it is noise. Nothing else here needs
+ * binary output, which is why capture() is the way it is.
+ */
+function captureBinary(cmd, args) {
+	return new Promise((done) => {
+		const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "ignore"], env: jobs.childEnv() });
+		const chunks = [];
+		child.stdout?.on("data", (d) => chunks.push(d));
+		child.on("error", () => done(Buffer.alloc(0)));
+		child.on("close", () => done(Buffer.concat(chunks)));
+	});
+}
+
+/** Candidate offsets, as fractions of the duration, tried in this order. */
+const POSTER_CANDIDATES = [0.5, 0.75, 0.35, 0.9, 0.15];
+const POSTER_MIN_SEC = 0.5;
+/** The probe size for judging a candidate. Big enough to see a border, small enough to be free. */
+const POSTER_PROBE_W = 32;
+const POSTER_PROBE_H = 18;
+/** A border row this uniform, at this kind of level, is wallpaper rather than content. */
+const POSTER_BORDER_SPREAD = 26;
+const POSTER_BORDER_FLOOR = 26;
+
+/**
+ * Judge a candidate frame by its top and bottom rows.
+ *
+ * A composed frame has wallpaper along both edges: mid-level and fairly uniform,
+ * because the wallpaper is a texture rather than a picture. A frame taken inside
+ * an auto-zoom has screen content running to the edges instead — brighter,
+ * darker, or wildly varying. So a candidate scores by how much of its border
+ * looks like wallpaper, and the best one becomes the poster.
+ */
+function posterScore(grey) {
+	const rows = [0, POSTER_PROBE_H - 1].map((y) => grey.subarray(y * POSTER_PROBE_W, (y + 1) * POSTER_PROBE_W));
+	let score = 0;
+	for (const row of rows) {
+		let min = 255;
+		let max = 0;
+		let sum = 0;
+		for (const v of row) {
+			if (v < min) min = v;
+			if (v > max) max = v;
+			sum += v;
+		}
+		const mean = sum / row.length;
+		if (max - min <= POSTER_BORDER_SPREAD && mean >= POSTER_BORDER_FLOOR) score++;
+	}
+	return score;
+}
+
+/**
+ * A poster frame for a file.
+ *
+ * Two things here were wrong in ways that only showed up once the pipeline
+ * produced real video.
+ *
+ * The seek was a fixed `-ss 1`. Exports run with `--auto-zoom`, which puts a
+ * zoom at the head of the clip, so one second in is usually *inside* that zoom:
+ * the poster came out as a tight crop of the middle of the screen with the
+ * wallpaper and the window frame nowhere in it, which reads as a broken
+ * thumbnail rather than a zoomed one. A quarter of the way in clears the opening
+ * zoom and any title card, and is a fairer picture of the video besides.
+ *
+ * The cache key was the filename alone, so a re-export kept the old poster
+ * forever. Size and mtime are in the key now, which also means the stale ones
+ * age out on their own instead of needing a sweep.
+ */
+/**
+ * Hand a document to OpenScreen, the best way this install allows.
+ *
+ * Our fork adds `openscreen open <file>`, which loads the document straight into
+ * the editor. Upstream 1.9.x has no such verb: its bundle declares no document
+ * type, `open -a Openscreen <file>` launches the app and discards the argument,
+ * and a bare path is a silent no-op. So probe once for the verb and use it if it
+ * is there; otherwise bring the app up and reveal the file so it can be dragged
+ * in, and say so rather than claiming it opened.
+ *
+ * The probe is cached because it spawns a GUI binary, and the answer cannot
+ * change without the app being replaced underneath us.
+ */
+let openVerb = null;
+async function hasOpenVerb() {
+	if (openVerb !== null) return openVerb;
+	const help = await capture("openscreen", ["help"]);
+	openVerb = /openscreen\s+open\s+</.test(`${help.out}${help.err}`);
+	return openVerb;
+}
+
+async function openInOpenScreen(file) {
+	if (await hasOpenVerb()) {
+		const r = await capture("openscreen", ["open", file]);
+		if (r.ok) return { opened: true, via: "openscreen open", note: `Opened ${basename(file)} in OpenScreen.` };
+		return { opened: false, via: "openscreen open", error: r.err.trim().slice(0, 200) || "the open verb failed" };
+	}
+	const app = await capture("open", ["-a", "Openscreen"]);
+	const reveal = await capture("open", ["-R", file]);
+	return {
+		opened: false,
+		via: "launch and reveal",
+		launched: app.ok,
+		revealed: reveal.ok,
+		note:
+			`OpenScreen is open and ${basename(file)} is selected in Finder. Drag it onto the window to edit it — ` +
+			"this build has no `open` verb, so it cannot be handed a file. The fork adds one.",
+	};
+}
+
 async function thumbnail(projectId, rel) {
   const src = join(mediaDir(projectId), rel);
+  const st = await stat(src).catch(() => null);
+  if (!st) return null;
+
   const safe = rel.replace(/[^a-z0-9]+/gi, "_");
-  const dest = join(thumbDir(projectId), `${safe}.jpg`);
+  const stamp = `${st.size}-${Math.round(st.mtimeMs)}`;
+  const dest = join(thumbDir(projectId), `${safe}-${stamp}.jpg`);
   try {
     await stat(dest);
     return dest;
@@ -114,11 +281,51 @@ async function thumbnail(projectId, rel) {
     /* generate */
   }
   await mkdir(thumbDir(projectId), { recursive: true });
+
   const isStill = [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"].includes(extname(rel).toLowerCase());
-  const args = isStill
-    ? ["-y", "-i", src, "-vf", "scale=640:-2", "-q:v", "6", dest]
-    : ["-y", "-ss", "1", "-i", src, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "6", dest];
-  const { ok } = await capture("ffmpeg", args);
+  if (isStill) {
+    const { ok } = await capture("ffmpeg", ["-y", "-i", src, "-vf", "scale=640:-2", "-q:v", "6", dest]);
+    return ok ? dest : null;
+  }
+
+  // Pick the moment, rather than guessing it.
+  //
+  // A fixed offset does not work here: exports run with `--auto-zoom`, and the
+  // zoom follows the cursor for seconds at a time, so one second in, or a quarter
+  // of the way in, both landed inside it. The poster came out as a tight crop of
+  // mid-screen with no wallpaper and no window frame — which looks like a broken
+  // thumbnail rather than a zoomed one. So try a handful of offsets and keep the
+  // frame that shows the whole composition. First candidate that scores full
+  // marks wins; if none do, the best of them does.
+  const probe = await capture("ffprobe", [
+    "-v", "error", "-select_streams", "v:0",
+    "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", src,
+  ]);
+  const seconds = probe.ok ? Number.parseFloat(probe.out.trim()) : Number.NaN;
+  const known = Number.isFinite(seconds) && seconds > 0;
+
+  let at = POSTER_MIN_SEC;
+  if (known) {
+    let best = -1;
+    for (const fraction of POSTER_CANDIDATES) {
+      const when = Math.max(POSTER_MIN_SEC, seconds * fraction);
+      const shot = await captureBinary("ffmpeg", [
+        "-v", "error", "-ss", when.toFixed(2), "-i", src, "-frames:v", "1",
+        "-vf", `scale=${POSTER_PROBE_W}:${POSTER_PROBE_H}`, "-f", "rawvideo", "-pix_fmt", "gray", "-",
+      ]);
+      if (shot.length < POSTER_PROBE_W * POSTER_PROBE_H) continue;
+      const score = posterScore(shot);
+      if (score > best) {
+        best = score;
+        at = when;
+      }
+      if (best === 2) break; // both borders are wallpaper; nothing beats that
+    }
+  }
+
+  const { ok } = await capture("ffmpeg", [
+    "-y", "-ss", at.toFixed(2), "-i", src, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "6", dest,
+  ]);
   return ok ? dest : null;
 }
 
@@ -147,6 +354,20 @@ async function loadScripts(projects) {
 
 async function state() {
   const projects = await listProjects();
+  // Index before answering. The catalog used to be whatever was written the last
+  // time someone pressed Re-index, so a narration made an hour ago simply was not
+  // in the library — the tool not noticing its own output. Unchanged files are
+  // reused from the previous catalog, so this is a directory walk in the normal
+  // case. A project that fails to index must not take the whole page down.
+  await Promise.all(
+    projects.map(async (p) => {
+      // The whole catalog, not a summary: listProjects hands the Library the full
+      // file list and the panel iterates it. Replacing it with counts here left
+      // every project looking empty.
+      const catalog = await reindex(p.id).catch(() => null);
+      if (catalog) p.catalog = catalog;
+    }),
+  );
   const [wallpapers, scripts, tokens] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
@@ -163,7 +384,7 @@ async function state() {
   }
 
   const [os, rclone, hf, ff, voice, claude] = await Promise.all([
-    capture("openscreen", ["info", "--json"]),
+    capture("openscreen", ["--help"]),
     capture("rclone", ["version"]),
     capture("npx", ["--no-install", "hyperframes", "--version"]),
     capture("ffmpeg", ["-version"]),
@@ -286,13 +507,66 @@ const server = createServer(async (req, res) => {
     }
 
     if (p.startsWith("/api/index/") && req.method === "POST") {
-      const id = p.slice("/api/index/".length);
-      const catalog = await buildCatalog(mediaDir(id));
-      await writeFile(join(projectDir(id), "catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
-      const m = await readManifest(projectDir(id));
-      m.catalog = { indexedAt: catalog.indexedAt, files: catalog.files.length, bytes: catalog.bytes };
-      await writeManifest(projectDir(id), m);
-      return json(res, 200, { catalog });
+      // The button forces a full re-probe. The automatic pass on every /api/state
+      // already catches anything new, so the only reason to press it is a file
+      // that changed without its mtime moving.
+      return json(res, 200, { catalog: await reindex(p.slice("/api/index/".length), { force: true }) });
+    }
+
+    /**
+     * Delete something from the library.
+     *
+     * Moves to `<library>/.trash/<stamp>-<name>` rather than unlinking. Three
+     * reasons, in order of how much they matter: an unlink is unrecoverable and
+     * this is a button in a web page; the alternative recoverable option is
+     * Finder automation, which pops a TCC prompt in the middle of the one action
+     * a user least wants interrupted; and a trash we own means we decide the
+     * retention rather than inheriting whatever the desktop does. `.trash` is a
+     * dot directory, which `buildCatalog` already skips, so trashed files leave
+     * the Library on the next index without a special case.
+     *
+     * A project root is only deletable when the caller says `kind: "project"`.
+     * Without that, asking to delete `media/Footage` and mistyping the path
+     * takes the whole client's work with it.
+     */
+    if (p === "/api/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const target = requestedPath(body);
+      const inside = target === LIB || target.startsWith(LIB + sep);
+      if (!inside) return json(res, 403, { error: `outside ${LIB}` });
+      if (target === LIB) return json(res, 400, { error: "that is the library itself" });
+
+      const st = await stat(target).catch(() => null);
+      if (!st) return json(res, 404, { error: "no such file or folder" });
+
+      // Is this a project root? Compare against the project directory rather than
+      // counting path segments, which breaks the moment a library lives deeper.
+      const projects = await readdir(LIB, { withFileTypes: true }).catch(() => []);
+      const isProjectRoot = projects.some((e) => e.isDirectory() && join(LIB, e.name) === target);
+      if (isProjectRoot && body.kind !== "project") {
+        return json(res, 400, { error: "that is a whole project; pass kind:\"project\" to mean it" });
+      }
+
+      const trash = join(LIB, ".trash");
+      await mkdir(trash, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const dest = join(trash, `${stamp}-${basename(target)}`);
+      try {
+        await rename(target, dest);
+      } catch (err) {
+        // A rename across devices fails with EXDEV. Nothing in a library should
+        // straddle a mount, but say so plainly rather than reporting a mystery.
+        return json(res, 500, { error: `could not move it to the trash: ${err.code ?? err.message}` });
+      }
+
+      if (body.projectId) await reindex(body.projectId, { force: true }).catch(() => {});
+      return json(res, 200, {
+        ok: true,
+        moved: dest,
+        was: target,
+        kind: isProjectRoot ? "project" : st.isDirectory() ? "folder" : "file",
+        note: `Moved to ${dest}. Nothing is gone — drag it back out of .trash if that was wrong.`,
+      });
     }
 
     if (p === "/api/script" && req.method === "POST") {
@@ -400,6 +674,7 @@ const server = createServer(async (req, res) => {
         // prompt land where the brief says they will.
         step: {
           label: `make ${slug}`,
+          project: id,
           bin: "claude",
           // stream-json, not the default text output. `claude -p` in text mode
           // prints one blob when it finishes, so a long render showed an empty
@@ -419,6 +694,76 @@ const server = createServer(async (req, res) => {
      * decided here so the capture lands in the project rather than in the app's
      * private recordings folder where nothing can find it.
      */
+    /**
+     * Hand a finished document to the app for editing.
+     *
+     * There is no supported way to do this, and that is worth stating plainly
+     * rather than hiding behind a hopeful command. OpenScreen 's bundle declares
+     * no CFBundleDocumentTypes and no CFBundleURLTypes, so `open <file>` has
+     * nothing to route to; its CLI has no `open` verb (a bare document path
+     * exits 0 and does nothing); and `open -a Openscreen <file>` launches the
+     * app and discards the argument — it comes up on "No project open". Checked
+     * all four.
+     *
+     * So this does the two things that do work: brings the app up, and reveals
+     * the document in Finder so it can be dragged onto the window the app is
+     * already showing. The honest fix is upstream — a document type declaration
+     * is a few lines of plist — and until then the UI says what the last step is
+     * rather than pretending it happened.
+     */
+    /**
+     * Open a piece of media in OpenScreen.
+     *
+     * The editor opens documents, not videos, so a bare mp4 needs one wrapped
+     * around it. If the pipeline already made one — `driven-a.openscreen` beside
+     * `driven-a.mp4` — that is the document to use, because it carries the brand
+     * preset and whatever editing has been done since. Only when there is no
+     * sibling is a fresh one written, in the same legacy v2 shape `rm-video
+     * brand` reads, and branded on the way through so the wallpaper and framing
+     * are already right when it lands.
+     */
+    if (p === "/api/open-media" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const media = requestedPath(body);
+      if (!(media === LIB || media.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}` });
+      const st = await stat(media).catch(() => null);
+      if (!st?.isFile()) return json(res, 404, { error: "no such file" });
+
+      const sibling = join(dirname(media), `${basename(media, extname(media))}.openscreen`);
+      const already = await stat(sibling).catch(() => null);
+      let doc = sibling;
+      let made = false;
+
+      if (!already) {
+        // The shape `rm-video brand` expects: a v2 document naming its screen
+        // recording. Everything else the preset fills in.
+        await writeFile(
+          sibling,
+          `${JSON.stringify({ version: 2, media: { screenVideoPath: media }, editor: {} }, null, 2)}\n`,
+          "utf8",
+        );
+        made = true;
+        const m = await readManifest(projectDir(body.projectId ?? "")).catch(() => null);
+        const brand = await capture("rm-video", ["brand", sibling, "--preset", m?.brand || "rolemodel"]);
+        if (!brand.ok) return json(res, 500, { error: `could not brand it: ${brand.err.slice(0, 200)}` });
+        doc = sibling;
+      }
+
+      const opened = await openInOpenScreen(doc);
+      if (body.projectId) await reindex(body.projectId, { force: true }).catch(() => {});
+      return json(res, 200, { ...opened, document: doc, made });
+    }
+
+    if (p === "/api/open" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const file = resolve(String(body.file ?? ""));
+      if (!(file === LIB || file.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}` });
+      const st = await stat(file).catch(() => null);
+      if (!st?.isFile()) return json(res, 404, { error: "no such document" });
+
+      return json(res, 200, { file, ...(await openInOpenScreen(file)) });
+    }
+
     if (p === "/api/record" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = body.projectId;
@@ -440,7 +785,7 @@ const server = createServer(async (req, res) => {
           bin: "openscreen",
           args: [
             "record",
-            ...(body.window ? ["--window", String(body.window)] : []),
+            ...captureArgs(body.source),
             ...(body.seconds ? ["--duration", String(body.seconds)] : []),
             "--project", proj,
             "--json",
@@ -459,7 +804,7 @@ const server = createServer(async (req, res) => {
         },
       ];
 
-      return json(res, 200, { dest, project: proj, steps });
+      return json(res, 200, { dest, project: proj, steps, editable: proj });
     }
 
     /**
@@ -688,14 +1033,39 @@ const server = createServer(async (req, res) => {
 
       const os = await capture("openscreen", ["sources", "--json"]);
       if (os.ok) {
-        const raw = parse(os.out);
-        const windows = raw
-          .map((x) => ({
-            value: String(x.id ?? x.name ?? x.title ?? ""),
-            label: String(x.name ?? x.title ?? x.id ?? ""),
-          }))
-          .filter((x) => x.value);
-        if (windows.length) return json(res, 200, { from: "openscreen", windows });
+        // The CLI streams NDJSON events and finishes with
+        // {event:"done", sources:{displays:[…], windows:[…]}}. Screens first —
+        // "the whole screen" is the common capture and should not be buried
+        // under forty windows.
+        const done = parse(os.out).find((e) => e?.sources) ?? {};
+        const displays = done.sources?.displays ?? [];
+        const wins = done.sources?.windows ?? [];
+
+        // Each option carries the value `record` actually consumes, which is not
+        // the id `sources` reports. `openscreen record --help` is explicit:
+        //
+        //   --display <n>       Screen index to record (default 0)
+        //   --window <title>    Record the first window whose title contains <title>
+        //
+        // We were sending the id for both — `--window window:6952:0` — and
+        // record answered "No window title contains window:6952:0" and listed
+        // every open window, one of which was the one that had been picked. The
+        // list was right, the value was from the wrong field.
+        //
+        // A window with no title cannot be named to `--window` at all, so it is
+        // dropped rather than offered as something that will fail.
+        const windows = [
+          ...displays.map((d, i) => ({
+            kind: "display",
+            value: String(d.index ?? i),
+            label: `${d.name ?? "Screen"} (whole screen)`,
+          })),
+          ...wins
+            .filter((w) => String(w.name ?? "").trim())
+            .map((w) => ({ kind: "window", value: String(w.name), label: String(w.name) })),
+        ];
+        const untitled = wins.length - windows.filter((w) => w.kind === "window").length;
+        if (windows.length) return json(res, 200, { from: "openscreen", windows, untitled });
       }
 
       if (process.platform === "darwin") {
@@ -708,7 +1078,7 @@ const server = createServer(async (req, res) => {
           );
           return json(res, 200, {
             from: "system",
-            windows: names.map((n) => ({ value: n, label: n })),
+            windows: names.map((n) => ({ kind: "window", value: n, label: n })),
             note: "Application names from the system, not from OpenScreen — it matches on the window title, so a name may need adjusting. Type one instead if a pick does not take.",
           });
         }
@@ -828,6 +1198,79 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    /**
+     * Parse a demo script and say what it will do, without running it.
+     *
+     * The Studio's rule is that a button says what it will do with the real
+     * values before it is pressed, and a demo script is a lot of hidden
+     * behaviour behind one click — it drives a browser at a live URL. So the
+     * panel shows the step count, the URLs it visits and any problems while it
+     * is still being typed.
+     */
+    if (p === "/api/demo/check" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const parsed = parseDemo(String(body.body ?? ""));
+      return json(res, 200, { ...describeDemo(parsed), problems: parsed.problems });
+    }
+
+    /**
+     * Save a demo script and hand back the step that runs it.
+     *
+     * Deliberately does NOT run anything: it returns argv the way /api/record
+     * does, so the same run rows, the same Console streaming and the same
+     * exit-code handling apply. A browser opening on your screen is not
+     * something to trigger from a fetch nobody watched.
+     *
+     * The trace lands in the project's Renders folder beside where recast will
+     * put the video, and the script is saved into the project's scripts/ folder
+     * so it diffs with everything else.
+     */
+    if (p === "/api/demo" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      if (!m) return json(res, 404, { error: "pick a project" });
+
+      const safe = (body.name || "demo").replace(/[^a-z0-9 _-]/gi, "").trim() || "demo";
+      const slug = safe.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+      const parsed = parseDemo(String(body.body ?? ""));
+      if (parsed.problems.length) return json(res, 400, { error: parsed.problems.join("; "), problems: parsed.problems });
+      if (!parsed.steps.some((x) => x.kind === "do")) {
+        return json(res, 400, { error: "nothing to do — the script needs a ```do block" });
+      }
+
+      const scriptsDir = join(projectDir(id), "scripts");
+      await mkdir(scriptsDir, { recursive: true });
+      const script = join(scriptsDir, `${slug}.demo.md`);
+      await writeFile(script, String(body.body ?? ""), "utf8");
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const dir = join(mediaDir(id), "Renders", `${stamp}-${slug}`);
+      await mkdir(dir, { recursive: true });
+
+      const args = ["run", script, "--out", dir];
+      if (body.url) args.push("--url", String(body.url));
+      if (body.width) args.push("--width", String(body.width));
+      if (body.height) args.push("--height", String(body.height));
+
+      return json(res, 200, {
+        script,
+        dir,
+        // Where the trace will be, so the Trace field can be filled in without
+        // the user going to find it.
+        trace: join(dir, `${slug}.zip`),
+        plan: describeDemo(parsed),
+        steps: [
+          {
+            label: "demo",
+            bin: "rm-demo",
+            args,
+            note: "opens a real browser window and drives it — do not type while it runs",
+          },
+        ],
+      });
+    }
+
     if (p === "/api/recast" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = body.projectId;
@@ -891,6 +1334,7 @@ const server = createServer(async (req, res) => {
 
       const steps = [{
         label: `recast ${slug}`,
+        project: id,
         bin: haveLocal ? local : "npx",
         args: haveLocal ? args : ["--yes", "playwright-recast", ...args],
         cwd: outDir,
@@ -902,6 +1346,7 @@ const server = createServer(async (req, res) => {
       if (willMux) {
         steps.push({
           label: `narrate ${slug}`,
+          project: id,
           bin: "node",
           args: [
             join(TOOLKIT, "bin", "rm-mux.mjs"),
@@ -957,6 +1402,7 @@ const server = createServer(async (req, res) => {
         srt: join(mediaDir(id), "Audio", `${body.script}.srt`),
         step: {
           label: `voice ${body.script}`,
+          project: id,
           bin: onPath.ok ? "rm-voice" : "node",
           args: onPath.ok ? rest : [script, ...rest],
           cwd: projectDir(id),
@@ -1020,6 +1466,7 @@ const server = createServer(async (req, res) => {
         prompt,
         step: {
           label: `draft ${nm}`,
+          project: id,
           bin: "claude",
           // stream-json, not the default text output. `claude -p` in text mode
           // prints one blob when it finishes, so a long render showed an empty
@@ -1065,16 +1512,53 @@ const server = createServer(async (req, res) => {
           const j = jobs.run({ bin: String(b.shell), shell: true, label: String(b.shell), cwd: b.cwd || LIB });
           return json(res, 200, { job: jobs.summary(j) });
         }
+        // `project` is advisory and validated below — it only ever selects which
+        // project gets re-read, never what runs.
+        const project = typeof b.project === "string" ? b.project : null;
         const j = jobs.run({
           bin: String(b.bin),
           args: Array.isArray(b.args) ? b.args.map(String) : [],
           label: b.label,
           cwd: b.cwd,
+          onDone: project
+            ? async () => {
+                if (await readManifest(projectDir(project)).catch(() => null)) await reindex(project);
+              }
+            : undefined,
         });
         return json(res, 200, { job: jobs.summary(j) });
       } catch (e) {
         return json(res, 400, { error: String(e.message ?? e) });
       }
+    }
+
+    /*
+     * What a job produced.
+     *
+     * "It said done and I cannot find anything" was the complaint this answers:
+     * a job knows the directory it ran in, so list what is there and let the
+     * Console point at it. Newest first, because the thing just written is the
+     * thing being looked for.
+     */
+    if (p.startsWith("/api/jobs/") && p.endsWith("/artifacts")) {
+      const j = jobs.get(p.split("/")[3]);
+      if (!j) return json(res, 404, { error: "no such job" });
+      const walk = async (dir, depth = 0) => {
+        if (depth > 2) return [];
+        const out = [];
+        for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+          if (e.name.startsWith(".")) continue;
+          const full = join(dir, e.name);
+          if (e.isDirectory()) out.push(...(await walk(full, depth + 1)));
+          else {
+            const st = await stat(full).catch(() => null);
+            if (st) out.push({ path: full, name: e.name, bytes: st.size, at: st.mtime.toISOString() });
+          }
+        }
+        return out;
+      };
+      const files = (await walk(j.cwd)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 40);
+      return json(res, 200, { dir: j.cwd, files });
     }
 
     if (p.startsWith("/api/jobs/") && p.endsWith("/stop") && req.method === "POST") {
@@ -1288,7 +1772,27 @@ function text(req) {
   });
 }
 
+/**
+ * The capture flags for whatever the user picked.
+ *
+ * `record` takes a screen by *index* and a window by *title substring*, and
+ * nothing by id, so the choice has to say which kind it is. Empty means the
+ * whole screen, which is `record`'s own default and needs no flag at all.
+ */
+function captureArgs(source) {
+	const kind = source?.kind;
+	const value = String(source?.value ?? "").trim();
+	if (!value) return [];
+	if (kind === "display") return Number.isFinite(Number(value)) ? ["--display", value] : [];
+	if (kind === "window") return ["--window", value];
+	return [];
+}
+
 await mkdir(LIB, { recursive: true });
+// Put previous jobs back in the list before serving, so a restart does not look
+// like nothing ever happened.
+const restored = await jobs.restore();
+
 server.listen(PORT, () => {
   const at = `http://localhost:${PORT}`;
   console.log(`\n  RoleModel Studio  ${at}`);
@@ -1296,7 +1800,14 @@ server.listen(PORT, () => {
   if (SHELL) console.log("  shell             free-text commands ENABLED (--shell)");
   if (WATCH) console.log("  watch             reloading on changes to lib, presets, and brand\n");
   else console.log("");
-  if (!flag("no-open")) {
+  // A `node --watch` restart is not a new session.
+  //
+  // `npm run dev` restarts this whole process on every save, and every restart
+  // used to run the line below — so an afternoon of editing stacked up a wall of
+  // Chrome windows. Under --watch the browser is already where you left it and
+  // the open tab reloads itself over /live-reload.js, so there is nothing to
+  // open here. `--open` forces it for the first tab of a session.
+  if (!flag("no-open") && (!WATCH || flag("open"))) {
     run(process.platform === "darwin" ? "open" : "xdg-open", [at]).catch(() => {});
   }
 });
@@ -1308,6 +1819,9 @@ server.listen(PORT, () => {
  * under bin/ or lib/ changes — but it knows nothing about the browser, so you
  * still had to reach over and hit reload. This closes that loop, and also covers
  * the files node isn't watching: presets and brand.
+ *
+ * It is also why --watch opens no browser of its own: reloading the tab you are
+ * looking at is the whole point, and a fresh window on every save defeats it.
  *
  * Debounced, because an editor writing a file produces several events and a
  * generator writing 15 JPEGs produces dozens.

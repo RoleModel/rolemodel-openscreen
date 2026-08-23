@@ -1,0 +1,34 @@
+#!/bin/sh
+# openscreen, invoked the only way Electron tolerates: by its real path.
+#
+# The cask puts `openscreen` on PATH as a symlink to the binary inside
+# Openscreen.app. Electron resolves Contents/Frameworks/*Helper*.app relative to
+# the running executable, and through a symlink it computes the wrong base — so
+# anything that spawns a child process dies with
+#
+#   FATAL:electron_main_delegate_mac.mm:65] Unable to find helper app
+#
+# `--help` survives because it never forks; `sources` and `record` do not. Same
+# binary, same arguments, different path: via the symlink, five FATALs and no
+# output; via the bundle path, none.
+#
+# So this resolves the bundle and execs it directly. RM_OPENSCREEN_BIN wins if
+# set, for an install somewhere unusual.
+set -e
+
+if [ -n "$RM_OPENSCREEN_BIN" ] && [ -x "$RM_OPENSCREEN_BIN" ]; then
+  exec "$RM_OPENSCREEN_BIN" "$@"
+fi
+
+for app in \
+  "/Applications/Openscreen.app" \
+  "$HOME/Applications/Openscreen.app"
+do
+  bin="$app/Contents/MacOS/Openscreen"
+  if [ -x "$bin" ]; then
+    exec "$bin" "$@"
+  fi
+done
+
+echo "openscreen: no Openscreen.app found. brew install --cask rolemodel/tap/openscreen" >&2
+exit 127

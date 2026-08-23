@@ -1,0 +1,13 @@
+# brand/optics/ is vendored and generated. optics.css is @rolemodel/optics byte
+# for byte and rolemodel-scales.css is written by lib/optics-css.mjs; both are
+# pinned by sha256 in manifest.json, so any reformat fails `npm run check` with a
+# hash mismatch. biome.jsonc already excludes them — this covers editors that
+# format with something else.
+root = true
+
+[*]
+insert_final_newline = true
+
+[brand/optics/**]
+insert_final_newline = false
+trim_trailing_whitespace = false
