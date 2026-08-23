@@ -12,9 +12,18 @@ curl -fsSL https://raw.githubusercontent.com/RoleModel/rolemodel-openscreen/main
 
 Then `rm-studio`, and open <http://localhost:4600>.
 
-That is the whole thing: Homebrew tap, the eight commands, the app, the voice
-virtualenv and the skills. It checks every piece before touching it, so running it
-again only does what the first run could not. Setting this up used to be twenty
+**It is still Homebrew underneath** — the script taps `rolemodel/tap` and runs
+`brew install`, and you can do that by hand if you prefer:
+
+```sh
+brew install rolemodel/tap/rm-video                    # the eight commands
+brew install --cask rolemodel/tap/rolemodel-openscreen # the app
+rm-setup                                               # the rest, idempotent
+```
+
+What the one-liner adds is ordering and the parts Homebrew cannot do: the voice
+virtualenv, the HyperFrames skills, and checking each piece before touching it so
+a second run only does what the first could not. Setting this up used to be twenty
 commands in an order you had to know, which is not a setup, it is a quiz.
 
 **[docs/KICKOFF.md](docs/KICKOFF.md)** is the map: what exists, the four steps in

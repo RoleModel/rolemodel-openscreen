@@ -23,7 +23,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -40,6 +40,7 @@ import {
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
 import { describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
+import { openFrameSettings, setOpenFrameSettings } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -741,6 +742,66 @@ const server = createServer(async (req, res) => {
      * catalog said "no document yet" for every video in the library, including
      * the ones sitting next to a document.
      */
+    /**
+     * Bring an existing video into a project.
+     *
+     * Recording and scripting both produce footage; there was no way to use
+     * footage you already had. The library indexes whatever is on disk, so an
+     * import is a copy into the right folder and a re-index — but doing that by
+     * hand means knowing the folder, and "put it in media/Footage" is exactly the
+     * kind of thing a tool should know instead of a person.
+     *
+     * Copied, not moved. The file usually belongs to something else — a Slack
+     * download, a client's Dropbox — and moving somebody's original out from
+     * under them is not a thing to do without asking.
+     */
+    if (p === "/api/import" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      if (!m) return json(res, 404, { error: "pick a project" });
+
+      const src = resolve(String(body.file ?? ""));
+      const st = await stat(src).catch(() => null);
+      if (!st?.isFile()) return json(res, 404, { error: `no such file: ${src}` });
+
+      // Where it goes is decided by what it is, so the catalog and every panel
+      // that reads it stay right.
+      const ext = extname(src).toLowerCase();
+      const AUDIO = [".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"];
+      const VIDEO = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"];
+      const STILL = [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"];
+      const folder = VIDEO.includes(ext) ? "Footage" : AUDIO.includes(ext) ? "Audio" : STILL.includes(ext) ? "Stills" : null;
+      if (!folder) {
+        return json(res, 400, {
+          error: `${ext || "that"} is not media this pipeline handles — video, audio or a still image`,
+        });
+      }
+
+      const dir = join(mediaDir(id), folder);
+      await mkdir(dir, { recursive: true });
+
+      // Never silently replace something already there: two takes with the same
+      // name is normal, and losing the first one to an import is not.
+      const stem = basename(src, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "import";
+      let dest = join(dir, `${stem}${ext}`);
+      let n = 2;
+      while (await stat(dest).then(() => true).catch(() => false)) {
+        dest = join(dir, `${stem}-${n}${ext}`);
+        n++;
+      }
+
+      await copyFile(src, dest);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, {
+        ok: true,
+        into: folder,
+        file: dest,
+        renamed: basename(dest) !== `${stem}${ext}` ? basename(dest) : null,
+        bytes: st.size,
+      });
+    }
+
     if (p === "/api/documents") {
       const out = [];
       for (const proj of await listProjects()) {
@@ -762,12 +823,15 @@ const server = createServer(async (req, res) => {
     }
 
     if (p === "/api/review") {
-      const base = process.env.OPENFRAME_URL;
-      const token = process.env.OPENFRAME_TOKEN;
+      // Environment first, then the stored file — a GUI launched from Finder has
+      // no shell environment, so the environment alone made this unconfigurable
+      // from inside the app.
+      const { url: base, token, source } = await openFrameSettings();
       if (!base || !token) {
         return json(res, 200, {
           configured: false,
-          missing: [!base && "OPENFRAME_URL", !token && "OPENFRAME_TOKEN"].filter(Boolean),
+          missing: [!base && "url", !token && "token"].filter(Boolean),
+          source,
         });
       }
       try {
@@ -793,17 +857,37 @@ const server = createServer(async (req, res) => {
             });
           }
         }
-        return json(res, 200, { configured: true, base: api.base, workspaces: list.length, projects });
+        return json(res, 200, { configured: true, base: api.base, source, workspaces: list.length, projects });
       } catch (err) {
         return json(res, 200, { configured: true, base, error: err.message });
       }
     }
 
+    /**
+     * Store where OpenFrame is, from inside the app.
+     *
+     * Write-only, like the narration keys: a token goes in and never comes back
+     * out, because a settings panel that shows you your own credential is a
+     * settings panel that shows it to whoever is looking at your screen.
+     */
+    if (p === "/api/review/settings" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const file = await setOpenFrameSettings({
+          ...(body.url !== undefined ? { url: String(body.url) } : {}),
+          ...(body.token !== undefined ? { token: String(body.token) } : {}),
+        });
+        return json(res, 200, { ok: true, stored: file });
+      } catch (err) {
+        // settingProblem() validates; a bad url is the user's to see, not a 500.
+        return json(res, 400, { error: err.message });
+      }
+    }
+
     if (p === "/api/review/send" && req.method === "POST") {
       const body = JSON.parse(await text(req));
-      const base = process.env.OPENFRAME_URL;
-      const token = process.env.OPENFRAME_TOKEN;
-      if (!base || !token) return json(res, 400, { error: "set OPENFRAME_URL and OPENFRAME_TOKEN" });
+      const { url: base, token } = await openFrameSettings();
+      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
 
       const file = requestedPath(body);
       if (!(file === LIB || file.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}` });
