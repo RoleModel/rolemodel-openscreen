@@ -127,6 +127,40 @@ async function themeCommand({ alsoBrand }) {
 	console.log(`\n  next:  openscreen export ${projectPath} --auto-zoom --json\n`);
 }
 
+/**
+ * Install the HyperFrames skills.
+ *
+ * "Make a video" asks Claude to build the render `Using /hyperframes`, which
+ * only resolves if that skill is on the machine. It is not vendored here: the
+ * hyperframes CLI installs and versions its own skills, and a frozen copy in
+ * this repo would rot exactly the way a flattened Optics export did — and would
+ * not work anyway, because Claude looks in ~/.claude/skills or the project the
+ * render runs in, never in this toolkit.
+ *
+ * Homebrew cannot do this at install time. `~/.claude/skills` is per-user, brew
+ * may run as another user entirely, and a formula that reaches the network in
+ * post_install fails on a locked-down machine and makes the install
+ * non-deterministic. So it is one command, the same shape as `rm-voice --setup`.
+ */
+async function skillsCommand() {
+	const check = argv.includes("--check");
+	const args = ["--yes", "hyperframes", "skills", ...(check ? ["check"] : ["update"])];
+	console.log(`\n  ${check ? "Checking" : "Installing"} the HyperFrames skills\n`);
+	const { spawn } = await import("node:child_process");
+	const code = await new Promise((done) => {
+		// stdio inherit: this is a terminal command, and the installer is chatty
+		// on purpose. stdin is /dev/null for the reason lib/jobs.mjs explains.
+		const child = spawn("npx", args, { stdio: ["ignore", "inherit", "inherit"] });
+		child.on("error", (e) => {
+			console.error(`  could not run npx: ${e.message}`);
+			done(1);
+		});
+		child.on("close", done);
+	});
+	if (code !== 0) process.exitCode = code ?? 1;
+	else if (!check) console.log("\n  Installed into ~/.claude/skills — `Make a video` can find them now.\n");
+}
+
 switch (cmd) {
 	case "root":
 		// The skill needs an absolute path to the toolkit. Under Homebrew that is
@@ -136,6 +170,9 @@ switch (cmd) {
 		break;
 	case "presets":
 		await listPresets();
+		break;
+	case "skills":
+		await skillsCommand();
 		break;
 	case "theme":
 		await themeCommand({ alsoBrand: false });
@@ -151,6 +188,7 @@ switch (cmd) {
 				"",
 				"  root                         print the toolkit's install path",
 				"  presets                      list available brand presets",
+				"  skills                       install the HyperFrames skills Make a video needs",
 				"  theme <file.openscreen>      apply a preset's appearance settings",
 				"  brand <file.openscreen>      apply the preset, plus title / watermark",
 				"",

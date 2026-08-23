@@ -22,7 +22,8 @@
 import { createServer } from "node:http";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { homedir } from "node:os";
 import { renderStudioHTML } from "../lib/studio-ui.mjs";
 import {
 	buildCatalog,
@@ -37,6 +38,7 @@ import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
+import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -160,10 +162,16 @@ async function state() {
     }
   }
 
-  const [os, rclone, hf] = await Promise.all([
+  const [os, rclone, hf, ff, voice, claude] = await Promise.all([
     capture("openscreen", ["info", "--json"]),
     capture("rclone", ["version"]),
     capture("npx", ["--no-install", "hyperframes", "--version"]),
+    capture("ffmpeg", ["-version"]),
+    voiceReady(),
+    // Make a video and the Scripts draft both shell out to it, and it was the
+    // one tool the sidebar never mentioned — so a missing `claude` showed up as
+    // a failed job rather than an unlit dot.
+    capture("claude", ["--version"]),
   ]);
 
   let remotes = [];
@@ -179,7 +187,8 @@ async function state() {
     scripts,
     presets,
     tokens,
-    tools: { openscreen: os.ok, rclone: rclone.ok, hyperframes: hf.ok },
+    tools: { openscreen: os.ok, claude: claude.ok, ffmpeg: ff.ok, rclone: rclone.ok, hyperframes: hf.ok, voice },
+    voiceVenv: venvDir(),
     remotes,
   };
 }
@@ -189,17 +198,14 @@ const reloadClients = new Set();
 /**
  * Render the page.
  *
- * Under --watch the UI module is re-imported with a cache-busting query, so
- * editing lib/studio-ui.mjs shows up on the next reload without restarting.
- * ESM caches by URL, and there is no way to evict an entry — the query string
- * is the eviction. Not used in normal runs: it would leak a module per request.
+ * This used to re-import the UI module with a cache-busting query under --watch,
+ * because the whole document lived in a template literal inside it and ESM has
+ * no way to evict a cached module. The document is lib/studio.html now and the
+ * loader reads it on every call, so an edit is live on the next reload with no
+ * module leaked per request.
  */
 async function page() {
-  if (!WATCH) return renderStudioHTML({ watch: false });
-  const url = new URL("../lib/studio-ui.mjs", import.meta.url);
-  const { mtimeMs } = await stat(url);
-  const mod = await import(`${url.href}?v=${mtimeMs}`);
-  return mod.renderStudioHTML({ watch: true });
+  return renderStudioHTML({ watch: WATCH });
 }
 
 const server = createServer(async (req, res) => {
@@ -208,7 +214,15 @@ const server = createServer(async (req, res) => {
 
   try {
     if (p === "/") {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      // no-store, not max-age: the shell and lib/studio.js are two resources now
+      // and a browser holding a stale copy of either renders a page whose markup
+      // and code disagree — nav with an empty main, and no error to explain it.
+      // The client code used to ride inside this response, where that could not
+      // happen. It is a localhost tool; there is nothing to gain by caching it.
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      });
       return res.end(await page());
     }
 
@@ -326,9 +340,31 @@ const server = createServer(async (req, res) => {
       const outDir = join(mediaDir(id), "Renders", `${stamp}-${slug}`);
       await mkdir(outDir, { recursive: true });
 
+      // Direction, not decoration. Claude cannot see the Studio, so anything the
+      // panel offers has to arrive as a sentence in the prompt — and the two that
+      // change a render most are whether the content sits in browser chrome and
+      // what is behind it.
+      const wants = [];
+      if (body.browser) {
+        wants.push(
+          body.browserUrl
+            ? `Put the screen content inside browser chrome (the rm-browser component) showing the URL ${body.browserUrl}.`
+            : "Put the screen content inside browser chrome (the rm-browser component).",
+        );
+      } else {
+        wants.push("No browser chrome — the content fills the frame.");
+      }
+      if (body.wallpaper && body.wallpaper !== "none") {
+        wants.push(`Use brand/wallpapers/${body.wallpaper} as the scene background.`);
+      } else {
+        wants.push("No wallpaper behind the scene — a flat background from the brand palette.");
+      }
+      if (body.captions) wants.push("Burn captions in, synced to the narration.");
+      const direction = `\n\nDirection:\n${wants.map((w) => `- ${w}`).join("\n")}`;
+
       const prompt = isUrl
-        ? `Using /hyperframes, make a ${body.seconds || 20}-second ${brand}-branded promo for ${src}.\nRender the MP4 into ${outDir}.`
-        : `Using /hyperframes, build a ${brand}-branded video from the script below.\nRender the MP4 into ${outDir}.\n\n${src}`;
+        ? `Using /hyperframes, make a ${body.seconds || 20}-second ${brand}-branded promo for ${src}.\nRender the MP4 into ${outDir}.${direction}`
+        : `Using /hyperframes, build a ${brand}-branded video from the script below.\nRender the MP4 into ${outDir}.${direction}\n\n${src}`;
 
       const brief = [
         `# ${body.title || slug}`,
@@ -337,6 +373,9 @@ const server = createServer(async (req, res) => {
         `- brand: ${brand}`,
         `- source: ${isUrl ? src : "script (below)"}`,
         `- seconds: ${body.seconds || 20}`,
+        `- browser chrome: ${body.browser ? body.browserUrl || "yes" : "no"}`,
+        `- background: ${body.wallpaper && body.wallpaper !== "none" ? body.wallpaper : "none"}`,
+        `- captions: ${body.captions ? "yes" : "no"}`,
         `- created: ${new Date().toISOString()}`,
         "",
         "## Prompt",
@@ -362,7 +401,12 @@ const server = createServer(async (req, res) => {
         step: {
           label: `make ${slug}`,
           bin: "claude",
-          args: ["-p", prompt, "--permission-mode", "acceptEdits"],
+          // stream-json, not the default text output. `claude -p` in text mode
+          // prints one blob when it finishes, so a long render showed an empty
+          // Console for minutes and looked hung. stream-json emits an event per
+          // step; --verbose is required alongside it. The Studio renders those
+          // events rather than showing raw NDJSON.
+          args: ["-p", prompt, "--permission-mode", "acceptEdits", "--output-format", "stream-json", "--verbose"],
           cwd: outDir,
         },
       });
@@ -427,6 +471,363 @@ const server = createServer(async (req, res) => {
      * have — which means the demo stops rotting the moment the UI changes. It
      * runs via npx so it is not a hard dependency of this install.
      */
+    /*
+     * Browsing the filesystem, so nobody has to type a path.
+     *
+     * A trace lives wherever its repo lives, which is why this exists at all:
+     * the panel used to want `/path/to/test-results` typed by hand, and the
+     * person driving it is not necessarily someone who thinks in paths. The
+     * browser's own file input is no use — it hands back a File, and
+     * playwright-recast needs a path on disk.
+     *
+     * Deliberately narrow: listings only, rooted at the user's home, never file
+     * contents, dotfiles hidden. That is a far milder capability than the job
+     * runner next door, but it is still a filesystem read reached over HTTP, so
+     * it gets an explicit root and a symlink-resistant containment check rather
+     * than trust.
+     */
+    /*
+     * Capture sources, so nobody has to remember a window's exact title.
+     *
+     * `openscreen sources` is the right answer and is tried first: its ids are
+     * what `openscreen record --window` was built to take. It is not always
+     * reachable — the cask installs an app bundle, not a PATH entry — so on macOS
+     * this falls back to the visible application names, which needs no extra
+     * permission (window *titles* would need Accessibility, and asking for that
+     * to fill a dropdown is not a trade worth making).
+     *
+     * `from` says which of those happened, because a guessed name and an id
+     * straight out of OpenScreen are not equally trustworthy and the panel
+     * should not present them as if they were.
+     */
+    /*
+     * The voices Kokoro actually has, asked rather than assumed.
+     *
+     * The list used to be hardcoded in two places and had drifted: it offered
+     * two ids Kokoro has never shipped, and hid every non-English voice. Asking
+     * `hyperframes tts --list --json` cannot drift, and the static list in
+     * lib/narration.mjs is only the answer for a machine where voice is not set
+     * up yet.
+     */
+    /*
+     * The HyperFrames skills, which are what `/hyperframes` in the Make prompt
+     * resolves to.
+     *
+     * Not vendored, deliberately. Two reasons: `hyperframes skills` already
+     * installs and versions them upstream, so a copy here would rot the way the
+     * flattened Optics export did; and it would not even work — Claude resolves
+     * skills from the user directory or the cwd's project root, and the Make step
+     * runs inside the library, not inside this repo. A copy sitting here is never
+     * seen. So this reports what upstream says and offers its own installer.
+     */
+    /*
+     * Why `openscreen` is not on PATH, specifically.
+     *
+     * "openscreen: not found on PATH" is true and useless: the interesting cases
+     * all look identical from a failed spawn. The cask that puts the CLI there is
+     * ours (rolemodel/tap), and `openscreen` is a name a different project also
+     * claims on Homebrew — so the usual answer is not "install it" but "you have
+     * a different program of the same name".
+     */
+    if (p === "/api/openscreen") {
+      const onPath = await capture("sh", ["-c", "command -v openscreen"]);
+      const where = onPath.ok ? onPath.out.trim() : null;
+      const bundles = ["/Applications/Openscreen.app", join(homedir(), "Applications/Openscreen.app")];
+      let app = null;
+      for (const b of bundles) {
+        if (await stat(b).then(() => true).catch(() => false)) { app = b; break; }
+      }
+      let version = null;
+      if (app) {
+        const v = await capture("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleShortVersionString", join(app, "Contents/Info.plist")]);
+        if (v.ok) version = v.out.trim();
+      }
+      const caskInfo = await capture("sh", ["-c", "brew info --cask openscreen 2>/dev/null | head -4"]);
+      const fromRoleModel = /getopenscreen/i.test(caskInfo.out);
+
+      let why = null;
+      if (where) why = null;
+      else if (!app) why = "OpenScreen is not installed. `brew install rolemodel/tap/rm-video` pulls it in, or install the cask on its own.";
+      else if (!fromRoleModel)
+        why =
+          `An app is installed at ${app}${version ? ` (v${version})` : ""}, but it is not the getopenscreen build this toolkit drives — ` +
+          "`openscreen` is a name another project claims on Homebrew, and that cask ships no CLI. " +
+          "Install ours: brew install --cask rolemodel/tap/openscreen";
+      else why = `${app}${version ? ` (v${version})` : ""} is installed but nothing links it onto PATH. Reinstall the cask: brew reinstall --cask rolemodel/tap/openscreen`;
+
+      return json(res, 200, { ok: Boolean(where), path: where, app, version, why });
+    }
+
+    if (p === "/api/skills") {
+      const r = await capture("npx", ["--no-install", "hyperframes", "skills", "check"]);
+      // Strip the ANSI the CLI paints its counts with.
+      const text = `${r.out}${r.err}`.replace(/\x1b\[[0-9;]*m/g, "");
+      if (!r.ok && !text.includes("skills")) {
+        return json(res, 200, { ok: false, why: "hyperframes is not reachable — it is fetched with npx on first use" });
+      }
+      const num = (label) => {
+        const m = text.match(new RegExp(`(\\d+)\\s+${label}`));
+        return m ? Number(m[1]) : 0;
+      };
+      const loc = text.match(/Location\s+(\S+)\s+\(([^)]+)\)/);
+      const outdated = num("outdated");
+      const missing = num("core not installed");
+      return json(res, 200, {
+        ok: true,
+        location: loc?.[1] ?? null,
+        tool: loc?.[2] ?? null,
+        current: num("current"),
+        outdated,
+        missing,
+        installed: /↑\s*hyperframes\b/.test(text) || /✓\s*hyperframes\b/.test(text) || num("current") > 0,
+        ready: outdated === 0 && missing === 0,
+        step: {
+          label: "install hyperframes skills",
+          bin: "npx",
+          args: ["--yes", "hyperframes", "skills", "update"],
+          cwd: TOOLKIT,
+          note: "installs into ~/.claude/skills, where Claude looks for them no matter which folder a render runs in",
+        },
+      });
+    }
+
+    if (p === "/api/voices") {
+      const which = url.searchParams.get("provider") || "kokoro";
+      if (which === "elevenlabs") {
+        const { apiKeyFor, elevenLabsVoices } = await import("../lib/narration.mjs");
+        const apiKey = await apiKeyFor("elevenlabs");
+        if (!apiKey) {
+          return json(res, 200, {
+            from: "none",
+            needsKey: true,
+            voices: [],
+            note: "No ElevenLabs API key yet. Save one below, or set ELEVENLABS_API_KEY before starting the Studio.",
+          });
+        }
+        try {
+          const voices = await elevenLabsVoices(apiKey);
+          return json(res, 200, { from: "elevenlabs", voices });
+        } catch (e) {
+          return json(res, 200, { from: "none", voices: [], note: String(e.message ?? e) });
+        }
+      }
+
+      const r = await capture("npx", ["--no-install", "hyperframes", "tts", "--list", "--json"]);
+      if (r.ok) {
+        try {
+          const raw = JSON.parse(r.out.slice(r.out.indexOf("[")));
+          const voices = raw
+            .filter((v) => v?.id)
+            .map((v) => ({
+              id: String(v.id),
+              label: [v.label || v.id, v.gender, v.language].filter(Boolean).join(" · "),
+            }));
+          if (voices.length) return json(res, 200, { from: "kokoro", voices });
+        } catch {
+          /* fall through to the static list */
+        }
+      }
+      const { VOICES } = await import("../lib/narration.mjs");
+      return json(res, 200, {
+        from: "static",
+        voices: VOICES.map((v) => ({ id: v.id, label: v.label })),
+        note: "Could not ask Kokoro for its voice list, so this is the built-in one. Set voice up under Voice if you have not yet.",
+      });
+    }
+
+    /*
+     * Provider credentials. Write-only on purpose: a POST stores a key, a GET
+     * says only whether one exists. Nothing here ever returns a key to the
+     * browser, and it is never put in an argv — the synthesiser reads it from
+     * the config file itself, so it cannot show up in the Console transcript.
+     */
+    if (p === "/api/keys") {
+      const { PROVIDERS, hasApiKey, setApiKey } = await import("../lib/narration.mjs");
+      if (req.method === "POST") {
+        const body = JSON.parse(await text(req));
+        const which = body.provider;
+        if (!PROVIDERS[which] || PROVIDERS[which].local) return json(res, 400, { error: "that provider takes no key" });
+        const value = String(body.key ?? "").trim();
+        try {
+          const file = await setApiKey(which, value);
+          return json(res, 200, { ok: true, stored: file });
+        } catch (e) {
+          // setApiKey validates the shape; a wrong-looking key is the user's
+          // mistake to see, not a 500.
+          return json(res, 400, { error: String(e.message ?? e) });
+        }
+      }
+      const status = {};
+      for (const [id, cfg] of Object.entries(PROVIDERS)) {
+        if (!cfg.local) status[id] = await hasApiKey(id);
+      }
+      return json(res, 200, { status });
+    }
+
+    if (p === "/api/sources") {
+      const parse = (text) => {
+        // Documented as NDJSON, but a single JSON array is the friendlier shape
+        // and costs nothing to accept. Take whichever this build emits.
+        try {
+          const v = JSON.parse(text);
+          return Array.isArray(v) ? v : (v.sources ?? v.windows ?? []);
+        } catch {
+          return text
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .flatMap((l) => {
+              try {
+                return [JSON.parse(l)];
+              } catch {
+                return [];
+              }
+            });
+        }
+      };
+
+      const os = await capture("openscreen", ["sources", "--json"]);
+      if (os.ok) {
+        const raw = parse(os.out);
+        const windows = raw
+          .map((x) => ({
+            value: String(x.id ?? x.name ?? x.title ?? ""),
+            label: String(x.name ?? x.title ?? x.id ?? ""),
+          }))
+          .filter((x) => x.value);
+        if (windows.length) return json(res, 200, { from: "openscreen", windows });
+      }
+
+      if (process.platform === "darwin") {
+        const script = 'tell application "System Events" to get name of every application process whose visible is true';
+        const sys = await capture("osascript", ["-e", script]);
+        if (sys.ok) {
+          const skip = new Set(["app_mode_loader", "Finder", "osascript"]);
+          const names = [...new Set(sys.out.split(",").map((n) => n.trim()).filter((n) => n && !skip.has(n)))].sort((a, b) =>
+            a.localeCompare(b),
+          );
+          return json(res, 200, {
+            from: "system",
+            windows: names.map((n) => ({ value: n, label: n })),
+            note: "Application names from the system, not from OpenScreen — it matches on the window title, so a name may need adjusting. Type one instead if a pick does not take.",
+          });
+        }
+      }
+
+      return json(res, 200, {
+        from: "none",
+        windows: [],
+        note: "Could not list anything. Leave Window empty to capture the whole screen.",
+      });
+    }
+
+    if (p === "/api/browse") {
+      const root = homedir();
+      const asked = url.searchParams.get("path");
+      const abs = asked ? resolve(asked) : root;
+      const inside = abs === root || abs.startsWith(root + sep);
+      if (!inside) return json(res, 403, { error: `outside ${root}`, path: root });
+
+      const st = await stat(abs).catch(() => null);
+      if (!st) return json(res, 404, { error: "no such directory", path: root });
+      const dir = st.isDirectory() ? abs : dirname(abs);
+
+      const ents = await readdir(dir, { withFileTypes: true }).catch(() => null);
+      if (!ents) return json(res, 403, { error: "cannot read that directory", path: root });
+
+      const dirs = [];
+      const files = [];
+      for (const e of ents) {
+        if (e.name.startsWith(".")) continue; // dotfiles are noise here, not a secret
+        if (e.isDirectory()) dirs.push({ name: e.name, path: join(dir, e.name) });
+        else if (e.isFile()) {
+          const ext = extname(e.name).toLowerCase();
+          files.push({
+            name: e.name,
+            path: join(dir, e.name),
+            ext,
+            // What the trace picker is actually looking for.
+            trace: ext === ".zip",
+            video: ext === ".webm" || ext === ".mp4",
+            subs: ext === ".srt" || ext === ".vtt",
+          });
+        }
+      }
+      const cmp = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+      dirs.sort(cmp);
+      files.sort(cmp);
+      return json(res, 200, {
+        path: dir,
+        name: basename(dir) || dir,
+        parent: dir === root ? null : dirname(dir),
+        home: root,
+        dirs,
+        files,
+      });
+    }
+
+    /*
+     * What recast will actually see, answered before anything runs.
+     *
+     * This is the same reasoning /api/recast applies when it builds its steps —
+     * asked early so the panel can say it in advance instead of the user finding
+     * out from a slideshow. Trap: recast only gets smooth video when a file with
+     * the trace's basename sits beside it; otherwise it assembles from sparse
+     * screencast frames.
+     */
+    if (p === "/api/trace/probe") {
+      const root = homedir();
+      const asked = (url.searchParams.get("path") || "").trim();
+      if (!asked) return json(res, 200, { ok: false, why: "nothing chosen yet" });
+      const abs = resolve(asked);
+      if (abs !== root && !abs.startsWith(root + sep)) return json(res, 403, { error: `outside ${root}` });
+
+      const st = await stat(abs).catch(() => null);
+      if (!st) return json(res, 200, { ok: false, why: "that path does not exist" });
+
+      const zips = [];
+      if (st.isDirectory()) {
+        const walk = async (d, depth) => {
+          if (depth > 2 || zips.length >= 25) return;
+          for (const e of await readdir(d, { withFileTypes: true }).catch(() => [])) {
+            if (e.name.startsWith(".")) continue;
+            const full = join(d, e.name);
+            if (e.isDirectory()) await walk(full, depth + 1);
+            else if (extname(e.name).toLowerCase() === ".zip") zips.push(full);
+          }
+        };
+        await walk(abs, 0);
+      } else if (extname(abs).toLowerCase() === ".zip") {
+        zips.push(abs);
+      } else {
+        return json(res, 200, { ok: false, why: `${basename(abs)} is not a trace — pick a trace.zip or the folder holding one` });
+      }
+
+      if (!zips.length) {
+        return json(res, 200, { ok: false, why: "no trace.zip anywhere under that folder" });
+      }
+
+      // Smoothness is per-zip: a sibling video with the same basename.
+      const checked = [];
+      for (const z of zips.slice(0, 25)) {
+        let video = null;
+        for (const ext of [".webm", ".mp4"]) {
+          const cand = z.replace(/\.zip$/i, ext);
+          if (await stat(cand).then(() => true).catch(() => false)) { video = cand; break; }
+        }
+        checked.push({ zip: z, video });
+      }
+      const withVideo = checked.filter((c) => c.video).length;
+      return json(res, 200, {
+        ok: true,
+        kind: st.isDirectory() ? "dir" : "zip",
+        traces: checked.length,
+        withVideo,
+        sample: checked.slice(0, 6),
+        smooth: withVideo === checked.length,
+      });
+    }
+
     if (p === "/api/recast" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = body.projectId;
@@ -542,7 +943,14 @@ const server = createServer(async (req, res) => {
       // command that works on one machine and not the other.
       const onPath = await capture("sh", ["-c", "command -v rm-voice"]);
       const script = join(TOOLKIT, "bin", "rm-voice.mjs");
-      const rest = [id, "--script", body.script, "--voice", body.voice || "af_nova", "--gap", String(body.gap || 320)];
+      const provider = body.provider || "kokoro";
+      const rest = [
+        id,
+        "--script", body.script,
+        "--provider", provider,
+        "--voice", body.voice || (provider === "kokoro" ? "af_heart" : ""),
+        "--gap", String(body.gap || 320),
+      ];
 
       return json(res, 200, {
         out: join(mediaDir(id), "Audio", `${body.script}.wav`),
@@ -553,6 +961,26 @@ const server = createServer(async (req, res) => {
           args: onPath.ok ? rest : [script, ...rest],
           cwd: projectDir(id),
           note: "first run downloads ~27MB of Kokoro voice data; after that it is local and offline",
+        },
+      });
+    }
+
+    /**
+     * Build the voice environment. Same code path as `rm-voice --setup`, run as a
+     * job so the pip output streams into Console rather than disappearing.
+     */
+    if (p === "/api/voice/setup" && req.method === "POST") {
+      const onPath = await capture("sh", ["-c", "command -v rm-voice"]);
+      const script = join(TOOLKIT, "bin", "rm-voice.mjs");
+      const rest = ["--setup"];
+      return json(res, 200, {
+        venv: venvDir(),
+        step: {
+          label: "set up voice",
+          bin: onPath.ok ? "rm-voice" : "node",
+          args: onPath.ok ? rest : [script, ...rest],
+          cwd: TOOLKIT,
+          note: "creates a private Python virtualenv — nothing is installed into your system Python",
         },
       });
     }
@@ -593,7 +1021,12 @@ const server = createServer(async (req, res) => {
         step: {
           label: `draft ${nm}`,
           bin: "claude",
-          args: ["-p", prompt, "--permission-mode", "acceptEdits"],
+          // stream-json, not the default text output. `claude -p` in text mode
+          // prints one blob when it finishes, so a long render showed an empty
+          // Console for minutes and looked hung. stream-json emits an event per
+          // step; --verbose is required alongside it. The Studio renders those
+          // events rather than showing raw NDJSON.
+          args: ["-p", prompt, "--permission-mode", "acceptEdits", "--output-format", "stream-json", "--verbose"],
           cwd: dir,
         },
       });
@@ -740,13 +1173,12 @@ const server = createServer(async (req, res) => {
       return createReadStream(file).pipe(res);
     }
 
-    // Optics, in two parts and in this order: the published package verbatim,
-    // then the RoleModel scales it does not carry. Order matters only as
-    // insurance — lib/optics-css.mjs guarantees the second defines nothing the
-    // first does, and `npm run check` fails if that ever stops being true.
-    //
-    // Served rather than inlined so the browser caches it across reloads; it is
-    // ~180KB and does not change while the server is up.
+    // Optics. `brand/optics/optics.css` is @rolemodel/optics VERBATIM, vendored by
+    // lib/optics-css.mjs and pinned by hash in brand/optics/manifest.json;
+    // rolemodel-scales.css carries only the sub-brand scales the published
+    // package does not define. Both are needed: the Studio spends
+    // --op-color-academy-primary-*, which lives in the supplement. Served rather
+    // than inlined so the browser caches it across reloads.
     if (p === "/optics.css") {
       const parts = [];
       for (const f of ["brand/optics/optics.css", "brand/optics/rolemodel-scales.css"]) {
@@ -761,6 +1193,25 @@ const server = createServer(async (req, res) => {
     // The wallpaper editor's drawing code, served straight to the browser as an
     // ES module. Same file lib/render-wallpaper.mjs inlines for the batch build,
     // so the live preview and the exported JPEG cannot drift.
+    // The Studio client, and the live-reload shim that only exists under --watch.
+    // Both are real files on disk (lib/studio.js, lib/live-reload.js) rather than
+    // strings inside the page generator, so `node --check` covers them and a
+    // stray backtick can no longer serve the whole app as unstyled tags.
+    if (p === "/studio.js" || p === "/live-reload.js") {
+      const src = await readFile(join(TOOLKIT, "lib", p.slice(1)), "utf8").catch(() => null);
+      if (src == null) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end(`lib${p} is missing\n`);
+      }
+      // Always no-store — see the note on "/" above. This file must never be
+      // older than the markup that loads it.
+      res.writeHead(200, {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      return res.end(src);
+    }
+
     if (p === "/script-parse.mjs") {
       const src = await readFile(join(TOOLKIT, "lib/script-parse.mjs"), "utf8");
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });

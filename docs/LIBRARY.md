@@ -1,13 +1,3 @@
-# Mounted project libraries
-
-The screenshot you sent is a **mount-based** media library — files live remote,
-appear as a local volume, and an editor opens a 3.8GB `.mov` without downloading
-it first. That's LucidLink-shaped (Strada and Suite are the same idea). It's the
-right shape for video work, and it's genuinely better than Frame.io's
-upload-and-proxy model for the "open the raw footage" case.
-
-**You can have that. You should not build it.**
-
 ## What the mount actually is
 
 To make that volume appear you need: a per-OS filesystem driver, lazy block

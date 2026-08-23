@@ -185,8 +185,14 @@ What remains:
   page 404s. It is answered; the FigJam sticky has not been updated yet.
 - **OpenScreen is not GUI-only.** An early research pass said it was. It ships a
   full headless CLI designed for agents. That correction is on the FigJam board.
-- **Upstream does not publish a Homebrew cask**, so ours is not redundant. This
-  is easy to get wrong, because `getopenscreen/openscreen` *has* an
+- **Upstream does not publish a Homebrew cask**, so ours is not redundant — but
+  the name is taken. `brew install --cask openscreen` resolves to
+  `siddharthvaddem/homebrew-openscreen`, a different project at v1.5.0 whose app
+  ships no headless CLI. Installing that one and expecting `openscreen` on PATH
+  is the failure this note now exists to prevent; always name the tap:
+  `brew install --cask rolemodel/tap/openscreen`. The Studio diagnoses it at
+  `/api/openscreen` rather than reporting "not found on PATH".
+  This is also easy to get wrong because `getopenscreen/openscreen` *has* an
   `update-homebrew-cask.yml` that looks like one. It has never been configured —
   no `HOMEBREW_TAP_OWNER`, no tap repo — and the job it guards has been skipping
   green on every release, which their own issue #335 is about. There is also no

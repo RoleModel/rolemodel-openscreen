@@ -23,7 +23,7 @@ lib/wallpaper.mjs          recipe -> canvas. One implementation, shared by the
                            Studio preview, the Studio export, and the batch build
 lib/wallpaper-recipes.mjs  the default recipe set, derived from tokens
 lib/make-wallpapers.mjs    batch-render brand/wallpapers.json to JPEG
-lib/optics-css.mjs         vendor Optics; generate only what it lacks
+lib/optics-css.mjs         turn the Optics export into CSS
 lib/jobs.mjs               run the pipeline and stream it back to the browser
 lib/script-parse.mjs       markdown -> speakable lines (served to the browser too)
 lib/narration.mjs          per-line TTS, measured, into audio + an exact SRT
@@ -36,6 +36,21 @@ bin/rm-video.mjs           CLI
 skill/SKILL.md             agent skill — record → brand → export, end to end
 ```
 
+## Why this shape
+
+OpenScreen turned out to be a much better foundation than its reputation
+suggests. Three things decided the approach:
+
+1. **It has a real headless CLI**, explicitly built for agents —
+   `record`, `sources`, `export`, `pack`, `captions`, `info`, all with NDJSON
+   output. The pipeline is `record → edit the project JSON → export`.
+2. **`.openscreen` is a Zod-typed JSON document** (`AxcutDocument`,
+   schemaVersion 7) with a forward-only migration chain. Every appearance
+   setting the editor exposes is a field in that document.
+3. **It is MIT**, actively developed, ~1,670 tests, with an `AGENTS.md` and real
+   architecture docs.
+
+So the missing piece was never the editor. It was the brand. That is what this is.
 
 ## Use
 
@@ -102,7 +117,21 @@ a copy edit re-synthesises only the lines that changed.
 
 Voices are Kokoro via `hyperframes tts` — local, no API key, no per-character
 billing, and nothing about an unreleased client product leaves the machine.
-First run needs `pip install kokoro-onnx soundfile` and downloads ~27MB.
+
+**There is nothing to install by hand.** Kokoro needs two Python packages, and
+the documented `pip install kokoro-onnx soundfile` fails on a current Mac with
+PEP 668's `externally-managed-environment` — Homebrew and system Python both
+refuse it. So `rm-voice` builds its own virtualenv under `~/.rolemodel-video`
+and passes its path to the synthesiser as `HYPERFRAMES_PYTHON` on the child
+process. No system Python, no pip, no shell profile to edit. It runs on first
+use, or explicitly:
+
+```bash
+npm run voice -- --setup          # --force to rebuild
+```
+
+The Studio shows a **Set up voice** button on the Voice panel when it is missing,
+and the tool list in the sidebar tracks whether it is ready.
 
 ## Putting narration on a render
 
@@ -193,27 +222,14 @@ node lib/make-wallpapers.mjs --reset    # re-derive recipes from tokens first
 
 **Colour is Optics, imported — not a copy of Optics.** `brand/optics/optics.css`
 is `@rolemodel/optics` verbatim, vendored by `lib/optics-css.mjs` and pinned in
-`brand/optics/manifest.json` by version and hash. That matters because Optics
-does not ship hexes: every ramp is computed in CSS from `--op-color-primary-h/s/l`
-with `light-dark()`, so setting one hue re-tints all 486 tokens. An earlier
-version of this repo flattened the Figma export into 1160 static hexes, which
-looked identical and had lost exactly that — and drifted a little further with
-every Optics release.
-
-The Figma export still has one job: `brand/optics/rolemodel-scales.css` carries
-the scales the open-source release does not publish (academy, lcad, docks, decks,
-railing, building, airfield, flow, and the secondary/tertiary/accent families).
-That file is filtered against the vendored package, so it can never shadow a real
-Optics token, and it shrinks by itself if Optics ever publishes those scales.
-
-```bash
-npm run optics:latest    # is there a newer Optics?
-npm i -D @rolemodel/optics@latest && npm run optics
-```
-
-`npm run check` fails if the vendored copy was hand-edited, if the supplement is
-stale, if it shadows a published token, if a `--op-` token the UI spends resolves
-nowhere, or if `lib/studio-ui.mjs` grows a hand-written hex.
+`brand/optics/manifest.json` by version and hash. Optics does not ship hexes:
+every ramp is computed in CSS from `--op-color-primary-h/s/l` with
+`light-dark()`, so setting one hue re-tints all 486 tokens. `rolemodel-scales.css`
+carries only the sub-brand scales the open-source release does not publish. The
+Studio and the wallpapers consume those tokens, and `npm run check` fails if the
+vendored copy was hand-edited, if the supplement is stale or shadows a published
+token, if an `--op-` token the UI spends resolves nowhere, or if `lib/studio.html`
+or `lib/studio.js` grows a hand-written hex.
 
 **The edge is a solid border.** `border: { width, color, inset, radius }` — width in px at 1920, scaled with the export. A gradient edge was wrong twice over: as a radial it produced the dark band along the bottom, and as a linear scrim it was still a fade where the brand calls for a line. `rm-framed` is the example.
 

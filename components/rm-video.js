@@ -36,47 +36,45 @@
 
 /* ── deterministic time ──────────────────────────────────────────────────── */
 
-const root = document.documentElement;
+const root = document.documentElement
 
 export const RM = {
-	/** Put the whole scene at `ms`. Idempotent, and the only way time advances. */
-	seek(ms) {
-		root.style.setProperty("--t", `${ms}ms`);
-		root.dataset.t = String(ms);
-	},
-	get t() {
-		return Number(root.dataset.t ?? 0);
-	},
-	/**
-	 * Resolve once the scene is actually paintable. A frame grabbed before the
-	 * webfont swaps is a frame with the wrong metrics, and it is the single most
-	 * common way an HTML-rendered video ends up subtly broken.
-	 */
-	async ready() {
-		await document.fonts?.ready;
-		const imgs = [...document.querySelectorAll("img")].map((i) =>
-			i.complete ? null : new Promise((r) => i.addEventListener("load", r, { once: true }) || i.addEventListener("error", r, { once: true })),
-		);
-		await Promise.all(imgs.filter(Boolean));
-		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-	},
-	/** Every component on the page, with its window. Useful for building a timeline. */
-	beats() {
-		return [...document.querySelectorAll("[at]")].map((e) => ({
-			el: e,
-			tag: e.tagName.toLowerCase(),
-			at: Number(e.getAttribute("at") || 0),
-			for: e.hasAttribute("for") ? Number(e.getAttribute("for")) : null,
-		}));
-	},
-	/** Total runtime implied by the scene, so the render length isn't guesswork. */
-	duration(tailMs = 800) {
-		return RM.beats().reduce((n, b) => Math.max(n, b.at + (b.for ?? 2500)), 0) + tailMs;
-	},
-};
+  /** Put the whole scene at `ms`. Idempotent, and the only way time advances. */
+  seek(ms) {
+    root.style.setProperty('--t', `${ms}ms`)
+    root.dataset.t = String(ms)
+  },
+  get t() {
+    return Number(root.dataset.t ?? 0)
+  },
+  /**
+   * Resolve once the scene is actually paintable. A frame grabbed before the
+   * webfont swaps is a frame with the wrong metrics, and it is the single most
+   * common way an HTML-rendered video ends up subtly broken.
+   */
+  async ready() {
+    await document.fonts?.ready
+    const imgs = [...document.querySelectorAll('img')].map((i) => (i.complete ? null : new Promise((r) => i.addEventListener('load', r, { once: true }) || i.addEventListener('error', r, { once: true }))))
+    await Promise.all(imgs.filter(Boolean))
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  },
+  /** Every component on the page, with its window. Useful for building a timeline. */
+  beats() {
+    return [...document.querySelectorAll('[at]')].map((e) => ({
+      el: e,
+      tag: e.tagName.toLowerCase(),
+      at: Number(e.getAttribute('at') || 0),
+      for: e.hasAttribute('for') ? Number(e.getAttribute('for')) : null,
+    }))
+  },
+  /** Total runtime implied by the scene, so the render length isn't guesswork. */
+  duration(tailMs = 800) {
+    return RM.beats().reduce((n, b) => Math.max(n, b.at + (b.for ?? 2500)), 0) + tailMs
+  },
+}
 
-if (!root.style.getPropertyValue("--t")) RM.seek(0);
-globalThis.RM = RM;
+if (!root.style.getPropertyValue('--t')) RM.seek(0)
+globalThis.RM = RM
 
 /* ── shared style ────────────────────────────────────────────────────────── */
 
@@ -97,20 +95,20 @@ globalThis.RM = RM;
  * writer.
  */
 for (const [name, syntax, initial] of [
-	["--rm-in-o", "<number>", "0"],
-	["--rm-out-o", "<number>", "1"],
-	["--rm-in-y", "<length>", "0px"],
-	["--rm-out-y", "<length>", "0px"],
-	["--rm-in-s", "<number>", "1"],
+  ['--rm-in-o', '<number>', '0'],
+  ['--rm-out-o', '<number>', '1'],
+  ['--rm-in-y', '<length>', '0px'],
+  ['--rm-out-y', '<length>', '0px'],
+  ['--rm-in-s', '<number>', '1'],
 ]) {
-	// Registered so they interpolate as numbers rather than flipping at 50%.
-	// Registration is document-global, which is why it happens here once rather
-	// than inside every shadow root.
-	try {
-		CSS.registerProperty({ name, syntax, initialValue: initial, inherits: false });
-	} catch {
-		/* already registered, or an engine without @property — animation still runs, just stepped */
-	}
+  // Registered so they interpolate as numbers rather than flipping at 50%.
+  // Registration is document-global, which is why it happens here once rather
+  // than inside every shadow root.
+  try {
+    CSS.registerProperty({ name, syntax, initialValue: initial, inherits: false })
+  } catch {
+    /* already registered, or an engine without @property — animation still runs, just stepped */
+  }
 }
 
 const TIMING = `
@@ -134,63 +132,63 @@ const TIMING = `
   }
   @keyframes rm-in  { from { --rm-in-o: 0; --rm-in-y: var(--rise); } to { --rm-in-o: 1; --rm-in-y: 0px; } }
   @keyframes rm-out { from { --rm-out-o: 1; --rm-out-y: 0px; } to { --rm-out-o: 0; --rm-out-y: -8px; } }
-`;
+`
 
 const TYPE = `
   :host {
-    --font: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --fg: var(--op-color-neutral-minus-max, #fff);
     --muted: var(--op-color-neutral-minus-five, #a3a3a3);
     --brand: var(--op-color-academy-primary-base, #00c278);
     --on-brand: var(--op-color-academy-primary-on-base, #00472c);
-    --surface: var(--op-color-neutral-plus-eight, #242424);
+    --surface: var(--op-color-neutral-plus-max, #242424);
     --surface-2: var(--op-color-neutral-plus-six, #333);
     --line: var(--op-color-neutral-plus-four, #424242);
     font-family: var(--font);
   }
   * { box-sizing: border-box; }
-`;
+`
 
 /** Base class: attribute plumbing every component shares, and nothing else. */
 class RMElement extends HTMLElement {
-	static observed = ["at", "for"];
-	static get observedAttributes() {
-		return [...new Set([...RMElement.observed, ...(this.fields ?? [])])];
-	}
+  static observed = ['at', 'for']
+  static get observedAttributes() {
+    return [...new Set([...RMElement.observed, ...(this.fields ?? [])])]
+  }
 
-	connectedCallback() {
-		if (!this.shadowRoot) this.attachShadow({ mode: "open" });
-		this.render();
-		this.sync();
-	}
+  connectedCallback() {
+    if (!this.shadowRoot) this.attachShadow({ mode: 'open' })
+    this.render()
+    this.sync()
+  }
 
-	attributeChangedCallback() {
-		if (this.shadowRoot) {
-			this.render();
-			this.sync();
-		}
-	}
+  attributeChangedCallback() {
+    if (this.shadowRoot) {
+      this.render()
+      this.sync()
+    }
+  }
 
-	sync() {
-		this.style.setProperty("--at", `${Number(this.getAttribute("at") || 0)}ms`);
-		if (this.hasAttribute("for")) this.style.setProperty("--hold", `${Number(this.getAttribute("for"))}ms`);
-	}
+  sync() {
+    this.style.setProperty('--at', `${Number(this.getAttribute('at') || 0)}ms`)
+    if (this.hasAttribute('for')) this.style.setProperty('--hold', `${Number(this.getAttribute('for'))}ms`)
+  }
 
-	attr(name, fallback = "") {
-		const v = this.getAttribute(name);
-		return v === null || v === "" ? fallback : v;
-	}
+  attr(name, fallback = '') {
+    const v = this.getAttribute(name)
+    return v === null || v === '' ? fallback : v
+  }
 
-	/** Text from an attribute is untrusted by construction — always escape it. */
-	esc(s) {
-		return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-	}
+  /** Text from an attribute is untrusted by construction — always escape it. */
+  esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+  }
 }
 
 const define = (name, cls) => {
-	if (!customElements.get(name)) customElements.define(name, cls);
-};
+  if (!customElements.get(name)) customElements.define(name, cls)
+}
 
 /* ── rm-scene ────────────────────────────────────────────────────────────── */
 
@@ -201,26 +199,26 @@ const define = (name, cls) => {
  * every glyph. Type sizes below are in cqw, so they follow the scale exactly.
  */
 class RMScene extends RMElement {
-	static fields = ["wallpaper", "pad", "width", "height"];
-	render() {
-		const w = Number(this.attr("width", 1920));
-		const h = Number(this.attr("height", 1080));
-		const wp = this.attr("wallpaper");
-		const pad = this.attr("pad", "0");
-		this.shadowRoot.innerHTML = `
+  static fields = ['wallpaper', 'pad', 'width', 'height']
+  render() {
+    const w = Number(this.attr('width', 1920))
+    const h = Number(this.attr('height', 1080))
+    const wp = this.attr('wallpaper')
+    const pad = this.attr('pad', '0')
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}
         :host { display:block; width:100%; aspect-ratio:${w}/${h}; overflow:hidden; container-type:inline-size;
                 background: var(--op-color-neutral-plus-max, #1f1f1f); }
         .stage { position:relative; width:100%; height:100%; padding:${Number(pad)}cqw;
                  background-size:cover; background-position:center; }
-        ${wp ? `.stage { background-image:url("${this.esc(wp)}.jpg"); }` : ""}
+        ${wp ? `.stage { background-image:url("${this.esc(wp)}.jpg"); }` : ''}
         ::slotted(*) { position:absolute; }
       </style>
-      <div class="stage"><slot></slot></div>`;
-	}
+      <div class="stage"><slot></slot></div>`
+  }
 }
-define("rm-scene", RMScene);
+define('rm-scene', RMScene)
 
 /* ── rm-browser ──────────────────────────────────────────────────────────── */
 
@@ -237,20 +235,20 @@ define("rm-scene", RMScene);
  * at the top of this file about half-loaded frames.
  */
 class RMBrowser extends RMElement {
-	static fields = ["url", "image", "src", "at", "for", "w", "dark"];
-	render() {
-		const url = this.attr("url", "app.rolemodelsoftware.com");
-		const image = this.attr("image");
-		const src = this.attr("src");
-		const w = this.attr("w", "72");
-		this.shadowRoot.innerHTML = `
+  static fields = ['url', 'image', 'src', 'at', 'for', 'w', 'dark']
+  render() {
+    const url = this.attr('url', 'app.rolemodelsoftware.com')
+    const image = this.attr('image')
+    const src = this.attr('src')
+    const w = this.attr('w', '72')
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { display:block; width:${Number(w)}cqw; --rise:22px; }
-        .win { border-radius:1.1cqw; overflow:hidden; background:var(--surface);
+        .win { border-radius:0.8cqw; overflow:hidden; background:var(--surface);
                border:1px solid var(--line);
                box-shadow: 0 2.4cqw 5cqw rgba(0,0,0,.45), 0 .4cqw 1cqw rgba(0,0,0,.3); }
-        .bar { display:flex; align-items:center; gap:1.1cqw; padding:.85cqw 1.1cqw; background:var(--surface-2); }
+        .bar { display:flex; align-items:center; gap:1.1cqw; padding:.85cqw 1.1cqw; background:var(--surface); }
         .dots { display:flex; gap:.45cqw; flex:0 0 auto; }
         .dot { width:.62cqw; height:.62cqw; border-radius:50%; background:var(--line); }
         .addr { flex:1; display:flex; align-items:center; gap:.6cqw; min-width:0;
@@ -283,32 +281,26 @@ class RMBrowser extends RMElement {
             <span class="u">${this.esc(url)}</span>
           </div>
         </div>
-        ${
-					src
-						? `<iframe class="view" src="${this.esc(src)}" loading="eager" sandbox="allow-scripts allow-same-origin"></iframe>`
-						: image
-							? `<img class="view img" src="${this.esc(image)}" alt=""/>`
-							: `<div class="view empty">screenshot</div>`
-				}
-      </div>`;
-	}
+        ${src ? `<iframe class="view" src="${this.esc(src)}" loading="eager" sandbox="allow-scripts allow-same-origin"></iframe>` : image ? `<img class="view img" src="${this.esc(image)}" alt=""/>` : `<div class="view empty">screenshot</div>`}
+      </div>`
+  }
 }
-define("rm-browser", RMBrowser);
+define('rm-browser', RMBrowser)
 
 /* ── rm-title ────────────────────────────────────────────────────────────── */
 
 /** Opening card. Eyebrow, title, optional sub — the three lines that carry it. */
 class RMTitle extends RMElement {
-	static fields = ["eyebrow", "title", "sub", "align", "at", "for"];
-	render() {
-		const align = this.attr("align", "left");
-		this.shadowRoot.innerHTML = `
+  static fields = ['eyebrow', 'title', 'sub', 'align', 'at', 'for']
+  render() {
+    const align = this.attr('align', 'left')
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { display:block; inset:0; width:100%; height:100%; --rise:26px; }
         .wrap { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
-                align-items:${align === "center" ? "center" : "flex-start"};
-                text-align:${align === "center" ? "center" : "left"};
+                align-items:${align === 'center' ? 'center' : 'flex-start'};
+                text-align:${align === 'center' ? 'center' : 'left'};
                 padding:0 8cqw; gap:1cqw; }
         .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand); }
         h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
@@ -316,25 +308,25 @@ class RMTitle extends RMElement {
         .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand); margin-top:.6cqw; }
       </style>
       <div class="wrap anim">
-        ${this.attr("eyebrow") ? `<div class="eb">${this.esc(this.attr("eyebrow"))}</div>` : ""}
-        <h1>${this.esc(this.attr("title", "Title"))}</h1>
-        ${this.attr("sub") ? `<div class="sub">${this.esc(this.attr("sub"))}</div>` : ""}
+        ${this.attr('eyebrow') ? `<div class="eb">${this.esc(this.attr('eyebrow'))}</div>` : ''}
+        <h1>${this.esc(this.attr('title', 'Title'))}</h1>
+        ${this.attr('sub') ? `<div class="sub">${this.esc(this.attr('sub'))}</div>` : ''}
         <div class="rule"></div>
-      </div>`;
-	}
+      </div>`
+  }
 }
-define("rm-title", RMTitle);
+define('rm-title', RMTitle)
 
 /* ── rm-lower-third ──────────────────────────────────────────────────────── */
 
 class RMLowerThird extends RMElement {
-	static fields = ["name", "sub", "side", "at", "for"];
-	render() {
-		const side = this.attr("side", "left");
-		this.shadowRoot.innerHTML = `
+  static fields = ['name', 'sub', 'side', 'at', 'for']
+  render() {
+    const side = this.attr('side', 'left')
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; position:absolute; bottom:8cqw; ${side === "right" ? "right:6cqw" : "left:6cqw"};
+        :host { display:block; position:absolute; bottom:8cqw; ${side === 'right' ? 'right:6cqw' : 'left:6cqw'};
                 --rise:0px; --dur:460ms; }
         .card { display:flex; align-items:stretch; gap:1cqw;
                 background:color-mix(in srgb, var(--surface) 88%, transparent);
@@ -353,29 +345,29 @@ class RMLowerThird extends RMElement {
       <div class="card anim">
         <div class="bar"></div>
         <div>
-          <div class="n">${this.esc(this.attr("name", "Name"))}</div>
-          ${this.attr("sub") ? `<div class="s">${this.esc(this.attr("sub"))}</div>` : ""}
+          <div class="n">${this.esc(this.attr('name', 'Name'))}</div>
+          ${this.attr('sub') ? `<div class="s">${this.esc(this.attr('sub'))}</div>` : ''}
         </div>
-      </div>`;
-	}
+      </div>`
+  }
 }
-define("rm-lower-third", RMLowerThird);
+define('rm-lower-third', RMLowerThird)
 
 /* ── rm-callout ──────────────────────────────────────────────────────────── */
 
 /** A pointer at a spot in the frame. `x`/`y` are percentages of the stage. */
 class RMCallout extends RMElement {
-	static fields = ["text", "x", "y", "side", "at", "for"];
-	render() {
-		const x = Number(this.attr("x", 50));
-		const y = Number(this.attr("y", 50));
-		const side = this.attr("side", "right");
-		this.shadowRoot.innerHTML = `
+  static fields = ['text', 'x', 'y', 'side', 'at', 'for']
+  render() {
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
+    const side = this.attr('side', 'right')
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; --dur:420ms; }
         .row { display:flex; align-items:center; gap:.7cqw;
-               flex-direction:${side === "left" ? "row-reverse" : "row"}; }
+               flex-direction:${side === 'left' ? 'row-reverse' : 'row'}; }
         .pin { width:1.5cqw; height:1.5cqw; border-radius:50%; flex:0 0 auto;
                background:var(--brand); box-shadow:0 0 0 .45cqw color-mix(in srgb, var(--brand) 28%, transparent); }
         .txt { background:var(--brand); color:var(--on-brand); font-weight:650; font-size:1.15cqw;
@@ -383,13 +375,13 @@ class RMCallout extends RMElement {
         /* Pops rather than rises. --rm-in-s is registered as a number, so it
            interpolates smoothly instead of stepping. */
         :host { --rise: 0px; }
-        .anim { transform: translate(${side === "left" ? "-100%" : "0"}, -50%) scale(var(--rm-in-s)); }
+        .anim { transform: translate(${side === 'left' ? '-100%' : '0'}, -50%) scale(var(--rm-in-s)); }
         @keyframes rm-in { from { --rm-in-o: 0; --rm-in-s: .86; } to { --rm-in-o: 1; --rm-in-s: 1; } }
       </style>
-      <div class="row anim"><span class="pin"></span><span class="txt">${this.esc(this.attr("text", "Here"))}</span></div>`;
-	}
+      <div class="row anim"><span class="pin"></span><span class="txt">${this.esc(this.attr('text', 'Here'))}</span></div>`
+  }
 }
-define("rm-callout", RMCallout);
+define('rm-callout', RMCallout)
 
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
@@ -399,46 +391,46 @@ define("rm-callout", RMCallout);
  * frame on every render.
  */
 class RMStat extends RMElement {
-	static fields = ["value", "label", "unit", "count", "at", "for"];
-	render() {
-		const value = this.attr("value", "0");
-		const n = Number(String(value).replace(/[^0-9.-]/g, ""));
-		const counting = this.hasAttribute("count") && Number.isFinite(n);
-		this.shadowRoot.innerHTML = `
+  static fields = ['value', 'label', 'unit', 'count', 'at', 'for']
+  render() {
+    const value = this.attr('value', '0')
+    const n = Number(String(value).replace(/[^0-9.-]/g, ''))
+    const counting = this.hasAttribute('count') && Number.isFinite(n)
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { display:block; --rise:16px; }
         @property --n { syntax:"<integer>"; initial-value:0; inherits:false; }
         .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand); }
         ${
-					counting
-						? `.v { counter-reset: n var(--n);
+          counting
+            ? `.v { counter-reset: n var(--n);
                  animation: rm-count 1100ms var(--ease) both paused;
                  animation-delay: calc(var(--at) - var(--t)); }
-             .v::after { content: counter(n) "${this.esc(this.attr("unit", ""))}"; }
+             .v::after { content: counter(n) "${this.esc(this.attr('unit', ''))}"; }
              @keyframes rm-count { from { --n: 0; } to { --n: ${Math.round(n)}; } }`
-						: ""
-				}
+            : ''
+        }
         .l { font-family:var(--mono); font-size:1.05cqw; letter-spacing:.11em; text-transform:uppercase;
              color:var(--muted); margin-top:.7cqw; }
       </style>
       <div class="anim">
-        <div class="v">${counting ? "" : this.esc(value) + this.esc(this.attr("unit", ""))}</div>
-        <div class="l">${this.esc(this.attr("label", ""))}</div>
-      </div>`;
-	}
+        <div class="v">${counting ? '' : this.esc(value) + this.esc(this.attr('unit', ''))}</div>
+        <div class="l">${this.esc(this.attr('label', ''))}</div>
+      </div>`
+  }
 }
-define("rm-stat", RMStat);
+define('rm-stat', RMStat)
 
 /* ── rm-bullets ──────────────────────────────────────────────────────────── */
 
 /** A list that builds. Each `<li>` gets `stagger` ms after the one before it. */
 class RMBullets extends RMElement {
-	static fields = ["stagger", "at", "for", "heading"];
-	render() {
-		const items = [...this.querySelectorAll("li")].map((li) => li.textContent.trim());
-		const stagger = Number(this.attr("stagger", 420));
-		this.shadowRoot.innerHTML = `
+  static fields = ['stagger', 'at', 'for', 'heading']
+  render() {
+    const items = [...this.querySelectorAll('li')].map((li) => li.textContent.trim())
+    const stagger = Number(this.attr('stagger', 420))
+    this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { display:block; --rise:12px; }
@@ -450,15 +442,10 @@ class RMBullets extends RMElement {
         li::before { content:""; flex:0 0 auto; width:.72cqw; height:.72cqw; border-radius:.16cqw;
                      background:var(--brand); margin-top:.5cqw; }
       </style>
-      ${this.attr("heading") ? `<h3 class="anim">${this.esc(this.attr("heading"))}</h3>` : ""}
-      <ul>${items
-				.map(
-					(t, i) =>
-						`<li style="animation-delay:calc(var(--at) + ${i * stagger}ms - var(--t))">${this.esc(t)}</li>`,
-				)
-				.join("")}</ul>`;
-	}
+      ${this.attr('heading') ? `<h3 class="anim">${this.esc(this.attr('heading'))}</h3>` : ''}
+      <ul>${items.map((t, i) => `<li style="animation-delay:calc(var(--at) + ${i * stagger}ms - var(--t))">${this.esc(t)}</li>`).join('')}</ul>`
+  }
 }
-define("rm-bullets", RMBullets);
+define('rm-bullets', RMBullets)
 
-export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMStat, RMBullets };
+export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMStat, RMBullets }

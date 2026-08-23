@@ -24,20 +24,12 @@
     "sync-brand:check": "node lib/sync-brand.mjs --check",
     "optics": "node lib/optics-css.mjs",
     "optics:check": "node lib/optics-css.mjs --check",
-    "optics:latest": "node lib/optics-css.mjs --latest",
     "scene": "node components/render-scene.mjs components/scene.html -o scene.mp4",
     "voice": "node bin/rm-voice.mjs",
-    "lint": "ultracite check",
-    "lint:fix": "ultracite fix"
+    "voice:setup": "node bin/rm-voice.mjs --setup"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.9",
-    "@rolemodel/optics": "^2.4.0",
-    "playwright": "^1.62.1",
-    "ultracite": "^7.10.6"
-  },
-  "dependencies": {
-    "playwright-recast": "^0.19.2"
+    "playwright": "^1.62.1"
   },
   "repository": {
     "type": "git",
@@ -57,5 +49,8 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "playwright-recast": "^0.19.2"
   }
 }

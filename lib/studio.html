@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+   <meta charset="utf-8" />
+   <meta name="viewport" content="width=device-width,initial-scale=1" />
+   <title>RoleModel Studio</title>
+   <link rel="icon"
+      href="data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cmask id='path-1-inside-1_8647_11782' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z' fill='%2300B871'/%3E%3Cpath d='M0 0H180H0M180 168C180 180.703 169.703 191 157 191H23C10.2975 191 0 180.703 0 168C0 168.552 5.37258 169 12 169H168C174.627 169 180 168.552 180 168ZM180 168M0 180V0V180M0 180M180 0V180V0' fill='%2300663F' mask='url(%23path-1-inside-1_8647_11782)'/%3E%3Cpath d='M59.2673 62.6584C59.2447 54.9604 67.5639 50.1248 74.2418 53.9543L126.694 84.0333C133.372 87.8627 133.4 97.4852 126.745 101.354L74.4695 131.739C67.8141 135.608 59.4667 130.821 59.4442 123.123L59.2673 62.6584Z' fill='white'/%3E%3C/svg%3E%0A" />
+   <link rel="stylesheet" href="/optics.css" />
+   <style>
+      /*
+ * Every value below is a token. Nothing here invents a hex, a pixel, a weight
+ * or a radius.
+ *
+ * Optics ramps run "plus" toward the background and "minus" toward the
+ * foreground in BOTH modes, so this mapping is written once and is correct
+ * either way — flip color-scheme to light and the whole UI follows. It is
+ * pinned dark because this thing sits next to video all day.
+ *
+ * Spacing, radii, type and weight all come from Optics directly. Values that
+ * were off the scale were snapped to the nearest step (nearest wins, ties round
+ * down), so a handful of paddings moved by a pixel or two — that is the point
+ * of adopting a scale. The three things Optics does not publish get named
+ * blocks of their own below, with the reason each one exists.
+ */
+      :root {
+         color-scheme: dark;
+         --bg: var(--op-color-neutral-plus-max);
+         --panel: var(--op-color-neutral-plus-eight);
+         --panel2: var(--op-color-neutral-plus-six);
+         --line: var(--op-color-neutral-plus-four);
+         --sunk: var(--op-color-neutral-plus-max);
+         --fg: var(--op-color-neutral-minus-max);
+         --muted: var(--op-color-neutral-minus-four);
+         /* RoleModel green is the academy-primary scale; Optics "primary" is blue. */
+         --accent: var(--op-color-academy-primary-base);
+         --on-accent: var(--op-color-academy-primary-on-base);
+         --blue: var(--op-color-primary-base);
+         --danger: var(--op-color-alerts-danger-base);
+         --danger-fg: var(--op-color-alerts-danger-minus-two);
+         --info-bg: var(--op-color-alerts-info-base);
+         --info-fg: var(--op-color-alerts-info-on-base);
+         --d: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+         --m: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+
+         /* The scrim under the kind pill on a thumbnail. Optics has no scrim colour
+     and no 0.6 opacity step, so this is Optics black at the half-opacity
+     token — mixed into the background rather than applied as opacity, which
+     would fade the label with it. */
+         --scrim: color-mix(in srgb, var(--op-color-black) calc(var(--op-opacity-half) * 100%), transparent);
+
+         /* Tracking. Optics publishes exactly one letter-spacing token
+     (--op-letter-spacing-label, 0.04rem = 0.4px). Display type wants negative
+     tracking and small caps want two or three times that, and neither exists
+     upstream — so both are whole multiples of the one token rather than loose
+     em values. Retune the token and every heading and label moves together. */
+         --track-tight: calc(var(--op-letter-spacing-label) * -1);
+         --track-wide: calc(var(--op-letter-spacing-label) * 2);
+         --track-wider: calc(var(--op-letter-spacing-label) * 3);
+
+         /* Structure. Optics' space scale tops out at 80px and describes gaps, not the
+     width of a sidebar or the label column of a form. The layout dimensions
+     this page needs are named here as whole multiples of --op-size-unit (4px),
+     so they sit on the same grid the space scale is built from and there is no
+     loose pixel left in the rules below. */
+         --nav-w: calc(var(--op-size-unit) * 52);
+         /* 208px sidebar */
+         --dot: calc(var(--op-size-unit) * 2);
+         /* 8px tool status dot */
+         --badge-min: calc(var(--op-size-unit) * 4);
+         /* 16px job-count badge */
+         --search-min: calc(var(--op-size-unit) * 64);
+         /* 256px search field basis */
+         --card-min: calc(var(--op-size-unit) * 58);
+         /* 232px library card */
+         --preview-min: calc(var(--op-size-unit) * 105);
+         /* 420px title/lower-third */
+         --canvas-min: calc(var(--op-size-unit) * 90);
+         /* 360px wallpaper canvas */
+         --controls-min: calc(var(--op-size-unit) * 75);
+         /* 300px wallpaper controls */
+         --label-col: calc(var(--op-size-unit) * 32);
+         /* 128px form label column */
+         --form-max: calc(var(--op-size-unit) * 155);
+         /* 620px form measure */
+         --field-tall: calc(var(--op-size-unit) * 38);
+         /* 152px textarea */
+         --code-min: calc(var(--op-size-unit) * 50);
+         /* 200px argv readout */
+         --ctl-col: calc(var(--op-size-unit) * 24);
+         /* 96px editor label column */
+         --ctl-val: calc(var(--op-size-unit) * 11);
+         /* 44px numeric readout */
+         --stop-col: calc(var(--op-size-unit) * 14);
+         /* 56px gradient stop swatch */
+         --stop-x: calc(var(--op-size-unit) * 7);
+         /* 28px stop remove button */
+         --joblist-w: calc(var(--op-size-unit) * 62);
+         /* 248px console job list */
+         --preview-tall: calc(var(--op-size-unit) * 64);
+         /* 256px script preview */
+         --canvas-split: 1.35fr;
+         /* canvas : controls, in the wallpaper editor */
+         --measure: 70ch;
+         /* reading measure for lede copy */
+         --panel-h: 70vh;
+         /* console job list and log */
+         --frame-h: 78vh;
+         /* components gallery iframe */
+
+         /* Video geometry, not UI. Optics has nothing to say about a 16:9 frame, and
+     the title / lower-third preview scales with its container — so its type
+     sizes are cqw and its tracking is em, both of which follow the container
+     where a rem token cannot. These mirror the preview as it stands; they are
+     NOT the same numbers as rm-title/rm-lower-third in components/rm-video.js,
+     which is a drift worth closing separately. */
+         --video-ar: 16/9;
+         --swatch-ar: 16/6;
+         --lt-inset: 6%;
+         --lt-name: 18%;
+         --lt-sub: 10%;
+         --lt-eyebrow: 34%;
+         --lt-title: 42%;
+         --lt-title-max: 80%;
+         --lt-eyebrow-size: 1.35cqw;
+         --lt-title-size: 5cqw;
+         --lt-name-size: 2.3cqw;
+         --lt-sub-size: 1.25cqw;
+         --lt-track-tight: -.02em;
+         --lt-track-tighter: -.03em;
+         --lt-track-wide: .12em;
+         --thumb-track: .3em;
+         /* the AUDIO/no-poster watermark */
+      }
+
+      * {
+         box-sizing: border-box
+      }
+
+      body {
+         margin: 0;
+         background: var(--bg);
+         color: var(--fg);
+         font-family: var(--d);
+         display: flex;
+         min-height: 100vh
+      }
+
+      .op-page__sidebar {
+         width: var(--nav-w);
+         flex: 0 0 var(--nav-w);
+         background: var(--panel);
+         border-right: var(--op-border-width) solid var(--line);
+         padding: var(--op-space-large) 0;
+         position: sticky;
+         top: 0;
+         height: 100vh;
+         overflow: auto
+      }
+
+      .sidebar__brand.sidebar__brand--left {
+         --_op-sidebar-brand-spacing: 0;
+         --__op-sidebar-brand-width: calc(var(--op-space-large) * 2);
+         margin-block-end: var(--op-space-small);
+         margin-inline: var(--op-space-large) auto;
+         display: flex;
+         align-self: start;
+      }
+
+
+      nav h1 {
+         font-size: var(--op-font-medium);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--track-tight);
+         margin: 0 0 var(--op-space-2x-small);
+         padding: 0 var(--op-space-large)
+      }
+
+      nav .root {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         padding: 0 var(--op-space-large) var(--op-space-medium);
+         word-break: break-all
+      }
+
+      nav button {
+         display: block;
+         width: 100%;
+         text-align: left;
+         background: none;
+         border: 0;
+         color: var(--muted);
+         font: inherit;
+         font-size: var(--op-font-small);
+         padding: var(--op-space-x-small) var(--op-space-large);
+         cursor: pointer;
+         border-left: var(--op-border-width-large) solid transparent
+      }
+
+      nav button:hover {
+         color: var(--fg)
+      }
+
+      nav button[aria-current=true] {
+         color: var(--fg);
+         border-left-color: var(--accent);
+         background: var(--panel2);
+         font-weight: var(--op-font-weight-semi-bold)
+      }
+
+      nav .tools {
+         margin-top: var(--op-space-large);
+         padding: var(--op-space-small) var(--op-space-large) 0;
+         border-top: var(--op-border-width) solid var(--line);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         line-height: var(--op-line-height-loosest)
+      }
+
+      .dot {
+         display: inline-block;
+         width: var(--dot);
+         height: var(--dot);
+         border-radius: var(--op-radius-circle);
+         margin-right: var(--op-space-x-small)
+      }
+
+      .dot.on {
+         background: var(--accent)
+      }
+
+      .dot.off {
+         background: var(--op-color-neutral-plus-two)
+      }
+
+      main {
+         flex: 1;
+         padding: var(--op-space-x-large) var(--op-space-2x-large) var(--op-space-4x-large);
+         max-width: var(--op-breakpoint-x-large)
+      }
+
+      h2 {
+         font-size: var(--op-font-x-large);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--track-tight);
+         margin: 0 0 var(--op-space-3x-small)
+      }
+
+      .lede {
+         color: var(--muted);
+         font-size: var(--op-font-x-small);
+         margin: 0 0 var(--op-space-large);
+         max-width: var(--measure);
+         line-height: var(--op-line-height-base)
+      }
+
+      .row {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         flex-wrap: wrap;
+         margin-bottom: var(--op-space-medium)
+      }
+
+      .full.row {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         flex-wrap: wrap;
+         margin-bottom: var(--op-space-medium)
+      }
+
+      input,
+      select,
+      textarea {
+         background: var(--panel);
+         color: var(--fg);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-x-small) var(--op-space-small);
+         font: inherit;
+         font-size: var(--op-font-small)
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+         outline: var(--op-border-width-large) solid var(--accent);
+         outline-offset: calc(var(--op-border-width) * -1)
+      }
+
+      textarea.form-control,
+      textarea {
+         width: 100%;
+         block-size: var(--field-tall);
+         min-height: var(--field-tall);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         resize: vertical
+      }
+
+      input[type=search] {
+         flex: 1 1 var(--search-min)
+      }
+
+      button.btn {
+         background: var(--accent);
+         color: var(--on-accent);
+         border: 0;
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-x-small) var(--op-space-medium);
+         font: inherit;
+         font-size: var(--op-font-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         cursor: pointer
+      }
+
+      button.btn.ghost {
+         background: var(--panel);
+         color: var(--fg);
+         border: var(--op-border-width) solid var(--line);
+         font-weight: var(--op-font-weight-medium)
+      }
+
+      button.btn:disabled {
+         opacity: var(--op-opacity-disabled);
+         cursor: not-allowed
+      }
+
+      .chip {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         color: var(--muted);
+         border-radius: var(--op-radius-pill);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         cursor: pointer
+      }
+
+      .chip[aria-pressed=true] {
+         background: var(--accent);
+         border-color: var(--accent);
+         color: var(--on-accent);
+         font-weight: var(--op-font-weight-semi-bold)
+      }
+
+      .grid {
+         display: grid;
+         grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+         gap: var(--op-space-small)
+      }
+
+      .card {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         display: flex;
+         flex-direction: column
+      }
+
+      .card:hover {
+         border-color: var(--accent)
+      }
+
+      .thumb {
+         aspect-ratio: var(--video-ar);
+         background: var(--sunk) center/cover no-repeat;
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         color: var(--op-color-neutral-plus-two);
+         font-family: var(--m);
+         font-size: var(--op-font-x-large);
+         letter-spacing: var(--thumb-track)
+      }
+
+      .card .body {
+         padding: var(--op-space-small);
+         display: flex;
+         flex-direction: column;
+         gap: var(--op-space-2x-small)
+      }
+
+      .card .nm {
+         font-size: var(--op-font-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         line-height: var(--op-line-height-dense);
+         word-break: break-word
+      }
+
+      .path,
+      .card .path {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         word-break: break-all
+      }
+
+      .meta {
+         display: flex;
+         gap: var(--op-space-2x-small);
+         flex-wrap: wrap;
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted)
+      }
+
+      .meta span {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         padding: var(--op-space-3x-small) var(--op-space-2x-small)
+      }
+
+      .kind {
+         position: absolute;
+         top: var(--op-space-x-small);
+         left: var(--op-space-x-small);
+         font-size: var(--op-font-2x-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wide);
+         padding: var(--op-space-3x-small) var(--op-space-2x-small);
+         border-radius: var(--op-radius-pill);
+         font-family: var(--m);
+         background: var(--scrim)
+      }
+
+      .kind.video {
+         color: var(--op-color-academy-primary-minus-two)
+      }
+
+      .kind.audio {
+         color: var(--op-color-primary-minus-three)
+      }
+
+      .kind.still {
+         color: var(--op-color-alerts-warning-minus-two)
+      }
+
+      .thumbwrap {
+         position: relative
+      }
+
+      .client {
+         font-size: var(--op-font-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wider);
+         color: var(--muted);
+         font-family: var(--m);
+         margin: var(--op-space-x-large) 0 var(--op-space-x-small);
+         padding-bottom: var(--op-space-x-small);
+         border-bottom: var(--op-border-width) solid var(--line)
+      }
+
+      .proj {
+         margin: var(--op-space-medium) 0 var(--op-space-x-small);
+         display: flex;
+         align-items: baseline;
+         gap: var(--op-space-x-small)
+      }
+
+      .proj h3 {
+         margin: 0;
+         font-size: var(--op-font-medium);
+         font-weight: var(--op-font-weight-bold)
+      }
+
+      .proj .n {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted)
+      }
+
+      .form {
+         /* A stack of .form-group wrappers. The label/control pairing used to be
+            this element's job via a two-column grid with alternating children;
+            it belongs to Optics' .form-group now, so this is just the card. */
+         display: grid;
+         max-width: var(--op-breakpoint-medium);
+         gap: 0;
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-large)
+      }
+
+      /* Optics' .form-label sets colour and size. Only the muted tone is ours,
+         because the Studio's panel is darker than the surface Optics assumes. */
+      .form .form-label {
+         color: var(--muted)
+      }
+
+      /* Spanning only. This also set display:grid, which beat .full.row later in
+         the cascade and stacked the option chips one per line — .full says how wide
+         something is, never how it lays its own children out. */
+      .form .full {
+         grid-column: 1/-1;
+         display: grid;
+         place-content: start;
+         gap: var(--op-space-small);
+         margin-bottom: var(--op-space-medium);
+      }
+
+      pre {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-small);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         white-space: pre-wrap;
+         word-break: break-word;
+         margin: 0
+      }
+
+      .empty {
+         color: var(--muted);
+         font-size: var(--op-font-small);
+         padding: var(--op-space-3x-large) 0
+      }
+
+      .wp {
+         aspect-ratio: var(--video-ar);
+         border-radius: var(--op-radius-large);
+         background: var(--sunk) center/cover no-repeat
+      }
+
+      .note {
+         /* Not a flex container: these carry inline <code>, and as flex items the
+            text runs either side of it get laid out as separate columns. */
+         display: block;
+         background: var(--info-bg);
+         border-left: var(--op-border-width-large) solid var(--blue);
+         padding: var(--op-space-small);
+         border-radius: 0 var(--op-radius-large) var(--op-radius-large) 0;
+         font-size: var(--op-font-x-small);
+         color: var(--info-fg);
+         line-height: var(--op-line-height-loose);
+         margin-bottom: var(--op-space-medium);
+         width: fit-content;
+         max-width: var(--op-breakpoint-medium);
+      }
+
+      .lt {
+         position: relative;
+         aspect-ratio: var(--video-ar);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         background: var(--sunk) center/cover no-repeat;
+         border: var(--op-border-width) solid var(--line)
+      }
+
+      .lt .t {
+         position: absolute;
+         left: var(--lt-inset);
+         bottom: var(--lt-name);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--lt-track-tight)
+      }
+
+      .lt .s {
+         position: absolute;
+         left: var(--lt-inset);
+         bottom: var(--lt-sub);
+         font-family: var(--m)
+      }
+
+      .lt .eb {
+         position: absolute;
+         left: var(--lt-inset);
+         top: var(--lt-eyebrow);
+         font-family: var(--m);
+         text-transform: uppercase;
+         letter-spacing: var(--lt-track-wide)
+      }
+
+      .lt .ti {
+         position: absolute;
+         left: var(--lt-inset);
+         top: var(--lt-title);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--lt-track-tighter);
+         line-height: var(--op-line-height-densest);
+         max-width: var(--lt-title-max)
+      }
+
+      .wpe {
+         display: grid;
+         grid-template-columns: minmax(var(--canvas-min), var(--canvas-split)) minmax(var(--controls-min), 1fr);
+         gap: var(--op-space-large);
+         align-items: start
+      }
+
+      .wpe canvas {
+         width: 100%;
+         height: auto;
+         display: block;
+         border-radius: var(--op-radius-large);
+         border: var(--op-border-width) solid var(--line);
+         background: var(--sunk)
+      }
+
+      .wpe .panel2 {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-medium)
+      }
+
+      .ctl {
+         display: grid;
+         grid-template-columns: var(--ctl-col) 1fr auto;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         font-size: var(--op-font-x-small)
+      }
+
+      .ctl label {
+         color: var(--muted)
+      }
+
+      .ctl .v {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         min-width: var(--ctl-val);
+         text-align: right
+      }
+
+      .ctl .wide {
+         grid-column: 2/-1
+      }
+
+      .ctl input[type=color] {
+         width: 100%;
+         height: var(--op-input-height-small);
+         padding: 0;
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         background: none;
+         cursor: pointer
+      }
+
+      /* Optics gives .form-control a fixed 40px block-size, right for a text field
+         and wrong for a slider in a dense row. */
+      .ctl input[type=range].form-control {
+         block-size: auto;
+      }
+
+      .ctl input[type=range] {
+         width: 100%;
+         accent-color: var(--accent)
+      }
+
+      .sec {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wider);
+         color: var(--muted);
+         margin: var(--op-space-medium) 0 var(--op-space-x-small);
+         padding-bottom: var(--op-space-2x-small);
+         border-bottom: var(--op-border-width) solid var(--line)
+      }
+
+      .sec:first-child {
+         margin-top: 0
+      }
+
+      .stop {
+         display: grid;
+         grid-template-columns: var(--stop-col) 1fr var(--ctl-val) var(--stop-x);
+         gap: var(--op-space-x-small);
+         align-items: center;
+         margin-bottom: var(--op-space-x-small)
+      }
+
+      .stop button {
+         background: none;
+         border: var(--op-border-width) solid var(--line);
+         color: var(--muted);
+         border-radius: var(--op-radius-medium);
+         cursor: pointer;
+         font: inherit;
+         line-height: var(--op-line-height-densest);
+         padding: var(--op-space-2x-small) 0
+      }
+
+      .wpgrid .card {
+         cursor: pointer
+      }
+
+      .wpgrid .card[aria-selected=true] {
+         border-color: var(--accent);
+         box-shadow: 0 0 0 var(--op-border-width) var(--accent)
+      }
+
+      .badge {
+         display: inline-block;
+         margin-left: var(--op-space-x-small);
+         min-width: var(--badge-min);
+         padding: 0 var(--op-space-2x-small);
+         border-radius: var(--op-radius-pill);
+         background: var(--accent);
+         color: var(--on-accent);
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         font-weight: var(--op-font-weight-bold);
+         text-align: center;
+         vertical-align: middle
+      }
+
+      .badge:empty {
+         display: none
+      }
+
+      .con {
+         display: grid;
+         grid-template-columns: var(--joblist-w) 1fr;
+         gap: var(--op-space-medium);
+         align-items: start
+      }
+
+      .joblist {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         max-height: var(--panel-h);
+         overflow-y: auto
+      }
+
+      .joblist~div {
+         display: grid;
+         gap: var(--op-space-medium);
+      }
+
+      .job {
+         padding: var(--op-space-x-small) var(--op-space-small);
+         border-bottom: var(--op-border-width) solid var(--line);
+         cursor: pointer;
+         display: grid;
+         gap: var(--op-space-3x-small)
+      }
+
+      .job:last-child {
+         border-bottom: 0
+      }
+
+      .job[aria-selected=true] {
+         background: var(--panel2);
+         border-left: var(--op-border-width-large) solid var(--accent)
+      }
+
+      .job .jl {
+         font-size: var(--op-font-x-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         word-break: break-word
+      }
+
+      .job .js {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted)
+      }
+
+      .job .js.run {
+         color: var(--accent)
+      }
+
+      .job .js.bad {
+         color: var(--danger-fg)
+      }
+
+      .log {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: 0 var(--op-space-small);
+
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-base);
+         height: var(--panel-h);
+         overflow: auto;
+         white-space: pre-wrap;
+         word-break: break-word;
+         position: relative;
+      }
+
+      .log::before {
+         content: 'Console';
+         display: flex;
+         align-items: center;
+         position: sticky;
+         top: 0;
+         margin-inline: calc(var(--op-space-small) * -1);
+         margin-block-end: var(--op-space-small);
+         inset-block-start: 0;
+         padding: var(--op-space-small);
+         block-size: var(--op-space-2x-large);
+         border-block-end: var(--op-border-width) solid var(--line);
+      }
+
+      .log .e {
+         color: var(--danger-fg)
+      }
+
+      .log .m {
+         color: var(--muted)
+      }
+
+      .cmd {
+         display: flex;
+         gap: var(--op-space-x-small);
+         margin-top: var(--op-space-small)
+      }
+
+      .cmd input {
+         flex: 1;
+         font-family: var(--m);
+         font-size: var(--op-font-x-small)
+      }
+
+      .runrow {
+         display: grid;
+         gap: var(--op-space-x-small);
+         align-items: start;
+         grid-template-columns: 1fr auto;
+         margin: var(--op-space-x-small) 0
+      }
+
+      .runrow code {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         padding: var(--op-space-2x-small) var(--op-space-x-small);
+         flex: 1;
+         min-width: var(--code-min);
+         word-break: break-all
+      }
+
+      /* ── path picking ──────────────────────────────────────────
+   A trace lives wherever its repo lives, so these fields take a real path. The
+   file list reuses .joblist/.job rather than inventing a second scrollable
+   bordered box. */
+      /* A .form-group is `auto 1fr`, and Optics only spans its own parts across
+         both columns — an unrecognised child lands in the narrow auto column, which
+         is why the Trace input was 293px wide with empty space beside it. */
+      .form-group .pick,
+      .form-group .plan,
+      .form-group pre {
+         grid-column: 1 / 3;
+      }
+
+      .pick {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+      }
+
+      .pick input {
+         flex: 1;
+         min-width: 0;
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+      }
+
+      .crumb {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         border-bottom: var(--op-border-width) solid var(--line);
+         word-break: break-all;
+      }
+
+      .ent {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: baseline;
+      }
+
+      .ent .nm2 {
+         flex: 1;
+         min-width: 0;
+         word-break: break-all;
+      }
+
+      .ent .tag {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+      }
+
+      .hint {
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+      }
+
+      .hint.ok {
+         color: var(--accent);
+      }
+
+      .hint.warn {
+         color: var(--op-color-alerts-warning-minus-two);
+      }
+
+      .hint.bad {
+         color: var(--danger-fg);
+      }
+
+      /* An ordered account of what a Run button is about to do. */
+      .plan {
+         counter-reset: plan;
+         display: grid;
+         gap: var(--op-space-x-small);
+         margin: var(--op-space-small) 0 var(--op-space-medium);
+         padding-inline: 0;
+      }
+
+      .plan li {
+         counter-increment: plan;
+         display: grid;
+         grid-template-columns: var(--op-space-large) 1fr;
+         gap: var(--op-space-x-small);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         list-style: none;
+      }
+
+      .plan li::before {
+         content: counter(plan);
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         text-align: right;
+      }
+
+      .plan li .w {
+         color: var(--muted);
+      }
+   </style>
+</head>
+
+<body class="op-page">
+   <div class="op-page__sidebar">
+      <nav class="sidebar sidebar--drawer">
+         <a class="sidebar__brand sidebar__brand--left" href="/">
+            <img height="50" width="50"
+               src="data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cmask id='path-1-inside-1_8647_11782' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z' fill='%2300B871'/%3E%3Cpath d='M0 0H180H0M180 168C180 180.703 169.703 191 157 191H23C10.2975 191 0 180.703 0 168C0 168.552 5.37258 169 12 169H168C174.627 169 180 168.552 180 168ZM180 168M0 180V0V180M0 180M180 0V180V0' fill='%2300663F' mask='url(%23path-1-inside-1_8647_11782)'/%3E%3Cpath d='M59.2673 62.6584C59.2447 54.9604 67.5639 50.1248 74.2418 53.9543L126.694 84.0333C133.372 87.8627 133.4 97.4852 126.745 101.354L74.4695 131.739C67.8141 135.608 59.4667 130.821 59.4442 123.123L59.2673 62.6584Z' fill='white'/%3E%3C/svg%3E%0A" />
+         </a>
+         <div class="sidebar__content sidebar__content--start">
+            <h1>RoleModel Studio</h1>
+            <div class="root" id="root">…</div>
+            <button data-v="library" aria-current="true">Library</button>
+            <button data-v="new">New project</button>
+            <button data-v="create">New video</button>
+            <button data-v="scripts">Scripts</button>
+            <button data-v="voice">Voice</button>
+            <button data-v="brand">Brand</button>
+            <button data-v="wallpapers">Wallpapers</button>
+            <button data-v="components">Components</button>
+            <button data-v="storage">Storage</button>
+            <button data-v="console">Console<span class="badge" id="jobn"></span></button>
+            <div class="tools" id="tools"></div>
+         </div>
+      </nav>
+   </div>
+   <main class="op-page__main-content">
+      <div class="container" id="main"></div>
+   </main>
+   <script src="/studio.js"></script>
+</body>
+
+</html>

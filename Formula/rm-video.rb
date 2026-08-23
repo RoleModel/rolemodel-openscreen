@@ -20,6 +20,13 @@ class RmVideo < Formula
   # Narration and muxing are ffmpeg work, and the poster frames in the library
   # already were — it stops being optional the moment Voice exists.
   depends_on "ffmpeg"
+  # Voice builds its own virtualenv, but it needs an interpreter Kokoro supports
+  # to build it from: kokoro-onnx declares >=3.10,<3.14, and macOS ships 3.9.
+  # Without this, `rm-voice --setup` on a clean Mac fails with a wall of
+  # ResolutionImpossible that reads like a broken package rather than a wrong
+  # Python. 3.13 is the newest version inside that range — do not bump to 3.14
+  # until Kokoro publishes wheels for it.
+  depends_on "python@3.13"
   depends_on cask: "rolemodel/tap/openscreen"
 
   def install
@@ -48,11 +55,32 @@ class RmVideo < Formula
         export RM_OPENSCREEN="$(rm-video root)"
 
       Voice runs Kokoro locally through hyperframes — no API key, nothing leaves
-      the machine. The first run downloads ~27MB of voice data and needs Python
-      with kokoro-onnx:
+      the machine. There is nothing to install by hand: the first run builds its
+      own Python virtualenv under ~/.rolemodel-video and points the synthesiser
+      at it, so your system Python is never touched.
 
-        pip install kokoro-onnx soundfile
-        rm-voice --voices
+        rm-voice --setup      # or just run it; setup happens on first use
+
+      "Make a video" asks Claude to build the render `Using /hyperframes`, which
+      needs that skill on your machine. It is not bundled here — the hyperframes
+      CLI installs and versions its own skills, and they live in ~/.claude/skills
+      where Claude can find them from any folder:
+
+        rm-video skills           # install or update them
+        rm-video skills --check   # see what you have
+
+      This is not done during `brew install` on purpose: ~/.claude/skills is
+      per-user, brew may run as a different user, and a formula that reaches the
+      network at install time breaks on a locked-down machine. One command, once.
+
+      "Make a video" and "Draft it with Claude" shell out to Claude Code, which
+      Homebrew cannot install — Anthropic ships it through npm and its own
+      installer, and the `claude-*` formulae in Homebrew are unrelated projects:
+
+        npm install -g @anthropic-ai/claude-code
+
+      Everything else Voice needs is handled: Python 3.13 comes with this
+      formula, and the virtualenv is built on first use.
 
       For `rm-library mount` you also need rclone and a FUSE provider:
 
