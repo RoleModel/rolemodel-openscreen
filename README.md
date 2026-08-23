@@ -2,7 +2,25 @@
 
 # rolemodel-openscreen
 
-RoleModel brand layer for [OpenScreen](https://github.com/getopenscreen/openscreen).
+Screen capture in, branded video out, and a link a client can leave notes on.
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/RoleModel/rolemodel-openscreen/main/install.sh | sh
+```
+
+Then `rm-studio`, and open <http://localhost:4600>.
+
+That is the whole thing: Homebrew tap, the seven commands, the app, the voice
+virtualenv and the skills. It checks every piece before touching it, so running it
+again only does what the first run could not. Setting this up used to be twenty
+commands in an order you had to know, which is not a setup, it is a quiz.
+
+**[docs/KICKOFF.md](docs/KICKOFF.md)** is the map: what exists, the four steps in
+order, and what is not finished yet.
+
+---
 
 This repo is the brand layer and the surface you work in. It sits on top of the
 public `.openscreen` document format and the headless CLI, so most of it upgrades

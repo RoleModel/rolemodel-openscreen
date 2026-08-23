@@ -83,18 +83,24 @@ const STEPS = [
 		fix: ["brew", ["install", "node", "ffmpeg", "python@3.13"]],
 	},
 	{
-		name: "OpenScreen (the getopenscreen one)",
+		name: "OpenScreen (RoleModel's fork)",
 		required: true,
-		why: "`openscreen` is a name another project claims on Homebrew; that cask ships no CLI.",
+		why:
+			"The Studio hands documents to the editor with `openscreen open`, and no other build has that verb — " +
+			"upstream declares no document type, so there is no way in from outside at all. " +
+			"`openscreen` is also a name a third project claims on Homebrew, and that cask ships no CLI.",
 		check: async () => {
 			if (!(await onPath("openscreen"))) return false;
-			// Presence is not enough — check it is ours.
-			const info = await capture("sh", ["-c", "brew info --cask openscreen 2>/dev/null"]);
-			return /getopenscreen/i.test(info.out);
+			// Presence is not enough, and neither is being *an* OpenScreen: the verb
+			// is the thing the Studio needs, so ask the binary rather than the tap.
+			const help = await capture("sh", ["-c", "openscreen help 2>&1"]);
+			return /openscreen\s+open\s+</.test(help.out);
 		},
 		fix: ["sh", [
 			"-c",
-			"brew untap siddharthvaddem/openscreen 2>/dev/null; brew tap rolemodel/tap && brew install --cask rolemodel/tap/openscreen",
+			"brew untap siddharthvaddem/openscreen 2>/dev/null; " +
+				"brew uninstall --cask openscreen 2>/dev/null; " +
+				"brew tap rolemodel/tap && brew install --cask rolemodel/tap/rolemodel-openscreen",
 		]],
 		heavy: "downloads a ~900MB app",
 	},
@@ -127,6 +133,27 @@ const STEPS = [
 		},
 		fix: ["node", [join(ROOT, "bin", "rm-voice.mjs"), "--setup"]],
 		heavy: "downloads about 100MB",
+	},
+	{
+		name: "OpenFrame (optional — client review)",
+		required: false,
+		why:
+			"Sharing a finished video for review. Optional because it is infrastructure rather than a tool: " +
+			"it wants Docker, and a review link only resolves for whoever can reach the instance, " +
+			"so `localhost` proves the integration and is useless to a client.",
+		check: async () => {
+			if (!process.env.OPENFRAME_URL || !process.env.OPENFRAME_TOKEN) return false;
+			// Configured is not the same as reachable, and a token that no longer
+			// resolves is the failure worth catching here.
+			const probe = await capture("sh", [
+				"-c",
+				`curl -fsS -o /dev/null -w '%{http_code}' -H "authorization: Bearer $OPENFRAME_TOKEN" "$OPENFRAME_URL/api/workspaces" 2>/dev/null`,
+			]);
+			return probe.out.trim() === "200";
+		},
+		manual:
+			"Bring it up with `docker compose up -d --build` in the OpenFrame checkout, then set\n" +
+			"    OPENFRAME_URL and OPENFRAME_TOKEN in your shell profile. See docs/KICKOFF.md.",
 	},
 	{
 		name: "rclone (optional)",
