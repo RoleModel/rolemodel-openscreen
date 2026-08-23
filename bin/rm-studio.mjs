@@ -39,6 +39,7 @@ import {
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
 import { describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
+import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -722,6 +723,107 @@ const server = createServer(async (req, res) => {
      * brand` reads, and branded on the way through so the wallpaper and framing
      * are already right when it lands.
      */
+    /**
+     * Review: what OpenFrame knows about, and how to send it something.
+     *
+     * Sharing was a CLI-only capability, which meant the one step that puts a
+     * video in front of the person whose opinion decides whether it ships was
+     * the one step the Studio could not do. Configuration is reported rather
+     * than assumed: an unset token and an unreachable instance are different
+     * problems with different fixes, and "sharing does not work" is neither.
+     */
+    /**
+     * The `.openscreen` documents in each project.
+     *
+     * Not in the catalog, and should not be: `buildCatalog` indexes media, and a
+     * document is not media — it is the edit. But the Editor panel needs to know
+     * which videos already have one, and inferring it client-side from the
+     * catalog said "no document yet" for every video in the library, including
+     * the ones sitting next to a document.
+     */
+    if (p === "/api/documents") {
+      const out = [];
+      for (const proj of await listProjects()) {
+        const dir = mediaDir(proj.id);
+        const found = [];
+        const walk = async (rel) => {
+          const entries = await readdir(join(dir, rel), { withFileTypes: true }).catch(() => []);
+          for (const e of entries) {
+            if (e.name.startsWith(".")) continue;
+            const next = rel ? `${rel}/${e.name}` : e.name;
+            if (e.isDirectory()) await walk(next);
+            else if (e.name.endsWith(".openscreen")) found.push(next);
+          }
+        };
+        await walk("");
+        out.push({ id: proj.id, name: proj.name, documents: found.sort() });
+      }
+      return json(res, 200, { projects: out });
+    }
+
+    if (p === "/api/review") {
+      const base = process.env.OPENFRAME_URL;
+      const token = process.env.OPENFRAME_TOKEN;
+      if (!base || !token) {
+        return json(res, 200, {
+          configured: false,
+          missing: [!base && "OPENFRAME_URL", !token && "OPENFRAME_TOKEN"].filter(Boolean),
+        });
+      }
+      try {
+        const api = openFrame({ base, token });
+        const ws = await api.call("/api/workspaces");
+        const list = Array.isArray(ws) ? ws : (ws?.workspaces ?? []);
+        // Videos per project, so the panel can show what has already been sent
+        // rather than only offering to send more.
+        const projects = [];
+        for (const w of list.slice(0, 3)) {
+          const page = await api.call(`/api/projects?workspaceId=${encodeURIComponent(w.id)}`);
+          for (const proj of page?.projects ?? []) {
+            const videos = await api.call(`/api/projects/${proj.id}/videos`).catch(() => null);
+            projects.push({
+              id: proj.id,
+              name: proj.name,
+              workspace: w.name,
+              videos: (videos?.videos ?? videos ?? []).map((v) => ({
+                id: v.id,
+                title: v.title,
+                watch: `${api.base}/watch/${v.id}`,
+              })),
+            });
+          }
+        }
+        return json(res, 200, { configured: true, base: api.base, workspaces: list.length, projects });
+      } catch (err) {
+        return json(res, 200, { configured: true, base, error: err.message });
+      }
+    }
+
+    if (p === "/api/review/send" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const base = process.env.OPENFRAME_URL;
+      const token = process.env.OPENFRAME_TOKEN;
+      if (!base || !token) return json(res, 400, { error: "set OPENFRAME_URL and OPENFRAME_TOKEN" });
+
+      const file = requestedPath(body);
+      if (!(file === LIB || file.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}` });
+      const st = await stat(file).catch(() => null);
+      if (!st?.isFile()) return json(res, 404, { error: "no such file" });
+
+      try {
+        const out = await shareVideo({
+          base,
+          token,
+          file,
+          project: String(body.project || "Untitled"),
+          title: body.title ? String(body.title) : undefined,
+        });
+        return json(res, 200, out);
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+
     if (p === "/api/open-media" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const media = requestedPath(body);

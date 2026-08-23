@@ -110,6 +110,14 @@ Open the app, or run `rm-studio` and go to <http://localhost:4600>.
 **Library** is the index — one card per project, indexed automatically from
 whatever is on disk. Clicking a video opens it in the editor.
 
+**Editor** lists every document in the library and opens one in the editor —
+which is a window in this same app, so nothing is exported until you say so. A
+video with no document yet gets one made and branded on the way in.
+
+**Review** sends a finished video to OpenFrame and shows what is already out.
+It reports its own configuration rather than assuming: an unset token and an
+unreachable instance are different problems, and "sharing is broken" is neither.
+
 **New video** has three tabs:
 
 - **Record a screen** — pick a window by its title, name the output, run it. The
