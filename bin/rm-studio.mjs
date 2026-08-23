@@ -749,7 +749,12 @@ const server = createServer(async (req, res) => {
         doc = sibling;
       }
 
-      const opened = await openInOpenScreen(doc);
+      // When the Studio is a window in the app, the app opens the document —
+      // it is the same call the `open` verb makes, minus the process boundary,
+      // and it needs no PATH lookup, no probe for whether this build has the
+      // verb, and no launch-and-reveal fallback for when it does not. In a
+      // browser there is nobody to ask, so the CLI path stays.
+      const opened = body.hosted ? { opened: false, via: "host" } : await openInOpenScreen(doc);
       if (body.projectId) await reindex(body.projectId, { force: true }).catch(() => {});
       return json(res, 200, { ...opened, document: doc, made });
     }
@@ -761,6 +766,7 @@ const server = createServer(async (req, res) => {
       const st = await stat(file).catch(() => null);
       if (!st?.isFile()) return json(res, 404, { error: "no such document" });
 
+      if (body.hosted) return json(res, 200, { file, opened: false, via: "host" });
       return json(res, 200, { file, ...(await openInOpenScreen(file)) });
     }
 
