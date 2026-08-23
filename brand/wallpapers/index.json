@@ -3,7 +3,7 @@
     "name": "rm-dark-dotgrid",
     "label": "RoleModel · dark dot-grid board",
     "file": "rm-dark-dotgrid.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
+    "css": "background-color:#141d27;background-image:linear-gradient(152deg, #233140 15.0%, #101821 100.0%)"
   },
   {
     "name": "rm-framed",

@@ -16,7 +16,7 @@
 	},
 	"scripts": {
 		"build": "npm run sync-brand && npm run optics && npm run wallpapers",
-		"check": "npm run sync-brand:check && npm run optics:check && npm run verify && npm run sync-tap:check",
+		"check": "npm run sync-brand:check && npm run optics:check && npm run verify && npm run sync-tap:check && npm run sync-docs:check",
 		"dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
 		"studio": "node bin/rm-studio.mjs",
 		"presets": "node bin/rm-video.mjs presets",
@@ -35,7 +35,9 @@
 		"sync-tap:check": "node lib/sync-tap.mjs --check",
 		"forks": "node lib/forks.mjs",
 		"forks:check": "node lib/forks.mjs --check",
-		"icon": "node lib/make-icon.mjs"
+		"icon": "node lib/make-icon.mjs",
+		"sync-docs": "node lib/sync-docs.mjs",
+		"sync-docs:check": "node lib/sync-docs.mjs --check"
 	},
 	"devDependencies": {
 		"playwright": "^1.62.1"

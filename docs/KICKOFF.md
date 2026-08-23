@@ -5,6 +5,9 @@ Start here. This is the whole system in order, with the manual steps marked.
 A shareable version of this page, for anyone who needs the map without the
 repository: <https://claude.ai/code/artifact/ce8c8c27-cc27-48be-aeb2-a19d482a7c95>
 
+Changing any of it rather than using it? **[DEVELOPMENT.md](DEVELOPMENT.md)** —
+languages, tools, how to run each piece, and what will bite you.
+
 If you read one thing: **the pipeline is record → brand → edit → share.** Four
 steps, four tools, and every one of them can be driven from the Studio.
 
