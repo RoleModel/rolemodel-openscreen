@@ -22,7 +22,12 @@ class RmVideo < Formula
   # `rm-video` was the only entry point linked, which meant `rm-studio` — the
   # thing you actually open — was reachable only by typing a path into libexec.
   # `rm-demo` is newer than that and had never been linked at all.
-  ENTRIES = %w[rm-video rm-studio rm-voice rm-mux rm-library rm-demo].freeze
+  # Every entry point in bin/, and `npm run check` asserts this list matches both
+  # the directory and package.json's bin map. It drifted twice: `rm-setup` was in
+  # neither, so `install.sh` — whose last step hands off to it — died at the
+  # finish line on a clean machine, and `rm-share` was in the bin map but not
+  # here, so brew shipped six of eight commands while the docs promised seven.
+  ENTRIES = %w[rm-video rm-studio rm-voice rm-mux rm-library rm-demo rm-share rm-setup].freeze
 
   def install
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,

@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/RoleModel/rolemodel-openscreen/main
 
 Then `rm-studio`, and open <http://localhost:4600>.
 
-That is the whole thing: Homebrew tap, the seven commands, the app, the voice
+That is the whole thing: Homebrew tap, the eight commands, the app, the voice
 virtualenv and the skills. It checks every piece before touching it, so running it
 again only does what the first run could not. Setting this up used to be twenty
 commands in an order you had to know, which is not a setup, it is a quiz.

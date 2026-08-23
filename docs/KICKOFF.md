@@ -60,7 +60,7 @@ call site, which is what keeps rebasing on upstream cheap. What they add:
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and seven commands:
+That installs Node and eight commands:
 
 | command | does |
 |---|---|
@@ -71,6 +71,14 @@ That installs Node and seven commands:
 | `rm-mux` | reconciles narration timing against a recast render |
 | `rm-library` | builds the library index |
 | `rm-share` | sends a finished video for review |
+| `rm-setup` | checks every piece of the install and repairs what it can |
+
+`npm run check` asserts that this table, `bin/`, `package.json` and the formula
+all name the same set. They drifted three times before it did: `rm-setup` was in
+neither list even though `install.sh` ends by handing off to it — so the
+one-command install died at the finish line on a clean machine — and `rm-share`
+was in the package but not the formula, so brew shipped six while this table
+promised seven.
 
 And the app:
 
