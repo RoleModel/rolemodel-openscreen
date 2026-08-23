@@ -10,7 +10,8 @@
 		"rm-studio": "./bin/rm-studio.mjs",
 		"rm-voice": "./bin/rm-voice.mjs",
 		"rm-mux": "./bin/rm-mux.mjs",
-		"rm-demo": "./bin/rm-demo.mjs"
+		"rm-demo": "./bin/rm-demo.mjs",
+		"rm-share": "./bin/rm-share.mjs"
 	},
 	"scripts": {
 		"build": "npm run sync-brand && npm run optics && npm run wallpapers",
