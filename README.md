@@ -10,7 +10,15 @@ Screen capture in, branded video out, and a link a client can leave notes on.
 curl -fsSL https://raw.githubusercontent.com/RoleModel/rolemodel-openscreen/main/install.sh | sh
 ```
 
-Then `rm-studio`, and open <http://localhost:4600>.
+Then open **RoleModel Studio** the way you open any Mac app — Spotlight, or
+Applications. The Studio comes up as a window in it; there is nothing to type and
+no localhost address to visit.
+
+Do not launch it from a terminal. macOS grants Screen Recording to whatever binary
+hosts Electron, so a shell launch grants it to your terminal and the recorder then
+fails in a way that reads like a bug. (`rm-studio` still serves the Studio to a
+browser on :4600 — that is the developer path, and it is in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).)
 
 **It is still Homebrew underneath** — the script taps `rolemodel/tap` and runs
 `brew install`, and you can do that by hand if you prefer:

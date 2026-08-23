@@ -70,7 +70,7 @@
       "color": "#dea7fb",
       "inset": 0,
       "radius": 36,
-      "sides": "bottom"
+      "sides": "all"
     }
   },
   {

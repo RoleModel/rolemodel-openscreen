@@ -67,7 +67,7 @@ That installs Node and eight commands:
 
 | command | does |
 |---|---|
-| `rm-studio` | **serves the Studio on :4600 — this is the one to run** |
+| `rm-studio` | serves the Studio to a browser on :4600 — the developer path, not the one to run day to day |
 | `rm-video` | applies a brand preset to a document |
 | `rm-demo` | drives a browser from a script, or records one |
 | `rm-voice` | narration → audio + an exact SRT |
@@ -116,7 +116,14 @@ Use the fork, not upstream. The Studio hands documents to the editor with
 
 ## 2. Make a video
 
-Open the app, or run `rm-studio` and go to <http://localhost:4600>.
+Open **RoleModel Studio** from Spotlight or Applications. The Studio is a window
+in it — `main.ts` opens it right after the first window, so there is nothing to
+start and no address to type. The port it uses is whatever was free, not 4600.
+
+Not from a terminal: macOS gives Screen Recording to whatever hosts Electron, so
+a shell launch grants it to the terminal and the recorder fails looking like a
+bug. `rm-studio` and :4600 are for working on the Studio itself — see
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 **Library** is the index — one card per project, indexed automatically from
 whatever is on disk. Clicking a video opens it in the editor.
@@ -271,7 +278,7 @@ Worth knowing before you promise any of it to anyone.
 | symptom | it is almost always |
 |---|---|
 | `openscreen: not found on PATH` | the formula installs a shim; the upstream cask's symlink breaks Electron's helper resolution. Uninstall the upstream cask. |
-| The Studio opens OpenScreen but not the editor | you are on upstream's build, which has no `open` verb. Use the fork's cask, or `RM_OPENSCREEN_BIN=bin/dev/openscreen-fork`. |
+| The Studio opens OpenScreen but not the editor | you are on upstream's build, which has no `open` verb. Install the fork: `brew install --cask rolemodel/tap/rolemodel-openscreen`. From a checkout, `npm run app` in the fork does the same thing. |
 | `npm install` installs no dev dependencies | `NODE_ENV=production` is set in your shell. npm omits them silently. |
 | Electron dies on `Cannot find module …/record` | `ELECTRON_RUN_AS_NODE` leaked from an editor terminal. The toolkit strips it for children; a shell you ran it in yourself will not. |
 | A capture has a black band under it | the recorder padded a window into a display-sized buffer. `rm-video brand` detects it and writes a crop; no re-encode. |

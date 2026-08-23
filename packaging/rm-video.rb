@@ -62,7 +62,12 @@ class RmVideo < Formula
   def caveats
     <<~EOS
       This installs the toolkit CLIs: #{ENTRIES.join(", ")}.
-      `rm-studio` is the one to open — it serves the Studio on :4600.
+
+      None of them is the thing you open day to day: that is the RoleModel Studio
+      app, which hosts the same Studio as a window. `rm-studio` serves it to a
+      browser on :4600 instead, which is the developer path — and launching the
+      recorder from a shell gives macOS's Screen Recording grant to your terminal
+      rather than to the app.
 
       It brands, narrates and scripts OpenScreen projects; it does not record or
       export them. Install the app for that:

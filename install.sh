@@ -117,9 +117,15 @@ else
 fi
 
 say ""
-say "${G}Done.${R} Start it with:"
+say "${G}Done.${R} Start it the way you start any Mac app:"
 say ""
-say "    ${B}rm-studio${R}      ${D}# the Studio, on :4600${R}"
+say "    open ${B}RoleModel Studio${R}   ${D}# Spotlight, or Applications${R}"
+say ""
+# Not `rm-studio` here, which is what this said and which sent people down the one
+# path that breaks recording: macOS grants Screen Recording to the binary hosting
+# Electron, so launching from a shell grants it to the terminal. rm-studio is the
+# developer path and is documented as one.
+say "${D}Not from a terminal — macOS would give Screen Recording to the terminal.${R}"
 say ""
 say "${D}The map, the sequence and what is not finished yet:${R}"
 say "${D}  https://github.com/RoleModel/rolemodel-openscreen/blob/main/docs/KICKOFF.md${R}"
