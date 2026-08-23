@@ -31,7 +31,9 @@
 		"voice:setup": "node bin/rm-voice.mjs --setup",
 		"demo": "node bin/rm-demo.mjs",
 		"sync-tap": "node lib/sync-tap.mjs",
-		"sync-tap:check": "node lib/sync-tap.mjs --check"
+		"sync-tap:check": "node lib/sync-tap.mjs --check",
+		"forks": "node lib/forks.mjs",
+		"forks:check": "node lib/forks.mjs --check"
 	},
 	"devDependencies": {
 		"playwright": "^1.62.1"

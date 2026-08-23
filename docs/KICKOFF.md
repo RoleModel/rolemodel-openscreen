@@ -10,6 +10,29 @@ steps, four tools, and every one of them can be driven from the Studio.
 
 ---
 
+## One repo, not four
+
+Clone this one. It is the only one you edit.
+
+```sh
+git clone https://github.com/RoleModel/rolemodel-openscreen.git
+cd rolemodel-openscreen
+npm run forks          # only if you need to build the app or run the review instance
+```
+
+The other three are not places to work:
+
+- **`homebrew-tap`** is a publish target. Homebrew resolves `rolemodel/tap` to a
+  repository named `homebrew-tap` and nothing else, which is the whole reason it
+  exists. The formula and casks live in `packaging/` here; `npm run sync-tap`
+  copies them across, and `npm run check` fails if the two drift.
+- **the two forks** stay forks, deliberately. Our diff on OpenScreen is 661 lines
+  on top of 2260 upstream commits, and it is small on purpose — that is what makes
+  `git pull upstream main` a non-event. Folding them into a monorepo would turn
+  every upstream release into a manual merge of somebody else's project, which is
+  a bill you pay forever to save a clone you do once. `npm run forks` fetches them
+  as siblings when you need them, with the upstream remote already set up.
+
 ## What exists, and why there are three repos
 
 | repo | what it is | you touch it when |
