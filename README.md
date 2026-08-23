@@ -4,9 +4,23 @@
 
 RoleModel brand layer for [OpenScreen](https://github.com/getopenscreen/openscreen).
 
-**No fork.** Everything here sits on top of the public `.openscreen` document
-format and the headless CLI. Nothing patches OpenScreen's source, so an upgrade
-is `npm update`, not a merge.
+This repo is the brand layer and the surface you work in. It sits on top of the
+public `.openscreen` document format and the headless CLI, so most of it upgrades
+with `npm update` rather than a merge.
+
+**Two forks exist, and this file used to say otherwise.** It read "No fork.
+Nothing patches OpenScreen's source" — that was true and is not any more, so if
+you are looking for where the extra pieces live:
+
+| repo | why it is forked |
+|---|---|
+| [RoleModel/openscreen](https://github.com/RoleModel/openscreen) | `openscreen open <doc>` so a document can be handed to the editor, `.openscreen` file associations, and hosting this Studio as a window in the app. Upstream has no way in from outside at all. |
+| [RoleModel/OpenFrame](https://github.com/RoleModel/OpenFrame) | API-token auth, so a pipeline can deliver a video for review without a browser session. |
+
+Both are small, deliberately: one new file plus a one-line change per call site.
+That is what keeps rebasing on upstream cheap. **[docs/KICKOFF.md](docs/KICKOFF.md)
+is where to start** — it is the whole thing in order, including the parts that
+are still manual.
 
 ```
 brand/tokens.json          palette, type, and scale — mirrors the Academy HyperFrames theme
@@ -26,6 +40,9 @@ lib/make-wallpapers.mjs    batch-render brand/wallpapers.json to JPEG
 lib/optics-css.mjs         turn the Optics export into CSS
 lib/jobs.mjs               run the pipeline and stream it back to the browser
 lib/script-parse.mjs       markdown -> speakable lines (served to the browser too)
+lib/demo-script.mjs        a demo script: prose is narration, ```do blocks are actions
+lib/demo-record.mjs        capture a demo by doing it — clicks become the script
+lib/openframe.mjs          hand a finished video to OpenFrame, get a review link
 lib/narration.mjs          per-line TTS, measured, into audio + an exact SRT
 components/rm-video.js     custom elements for scenes — seekable, Optics-coloured
 components/gallery.html    live gallery with a scrubber
