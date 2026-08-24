@@ -38,9 +38,9 @@ cask "rolemodel-openscreen" do
   # artifactName here is a 404 whose first symptom is a failed install.
   arch arm: "Apple-Silicon", intel: "Intel"
 
-  version "0.0.0-unreleased"
-  sha256 arm: "0000000000000000000000000000000000000000000000000000000000000000",
-         intel: "0000000000000000000000000000000000000000000000000000000000000000"
+  version "0.0.1"
+  sha256 arm: "76d41df494e7b04bce33271278be239426e67d60c93c80716d87672ab5fae4ff",
+         intel: "797d7541d25c4510c4b6301de41f43415a279af1415d583f481cbcb733886075"
 
   url "https://github.com/RoleModel/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg",
       verified: "github.com/RoleModel/openscreen/"

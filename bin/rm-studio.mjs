@@ -370,10 +370,14 @@ async function state() {
       if (catalog) p.catalog = catalog;
     }),
   );
-  const [wallpapers, scripts, tokens] = await Promise.all([
+  const [wallpapers, scripts, tokens, motion] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
     readFile(join(TOOLKIT, "brand/tokens.json"), "utf8").then(JSON.parse).catch(() => ({})),
+    // Motion direction for the Recast panel. Falls back to an empty spec rather
+    // than throwing: a missing file should cost the render its motion sentences,
+    // not the whole Studio.
+    readFile(join(TOOLKIT, "brand/motion.json"), "utf8").then(JSON.parse).catch(() => ({ presets: {} })),
   ]);
 
   const presets = [];
@@ -410,6 +414,12 @@ async function state() {
     scripts,
     presets,
     tokens,
+    // Label and hint only. The direction sentences stay server-side: the panel's
+    // job is to name a motion preset, /api/make's job is to turn it into prompt.
+    motion: {
+      default: motion.default || "brand",
+      presets: Object.entries(motion.presets || {}).map(([id, m]) => ({ id, label: m.label, hint: m.hint })),
+    },
     tools: { openscreen: os.ok, claude: claude.ok, ffmpeg: ff.ok, rclone: rclone.ok, hyperframes: hf.ok, voice },
     voiceVenv: venvDir(),
     remotes,
@@ -636,6 +646,19 @@ const server = createServer(async (req, res) => {
         wants.push("No wallpaper behind the scene — a flat background from the brand palette.");
       }
       if (body.captions) wants.push("Burn captions in, synced to the narration.");
+
+      // Motion. Claude writes the render's GSAP timeline itself, so without these
+      // sentences it picks an easing and a travel distance per run — which is why
+      // two decks from the same brand never moved the same way. brand/motion.json
+      // carries the sentences; an unknown id falls back to the spec's default
+      // rather than sending nothing, because "no direction" is the bug this fixes.
+      const motionSpec = await readFile(join(TOOLKIT, "brand/motion.json"), "utf8")
+        .then(JSON.parse)
+        .catch(() => ({ presets: {} }));
+      const motionPick =
+        motionSpec.presets?.[body.motion || motionSpec.default || "brand"] ||
+        motionSpec.presets?.[motionSpec.default];
+      if (motionPick?.direction) wants.push(...motionPick.direction);
       const direction = `\n\nDirection:\n${wants.map((w) => `- ${w}`).join("\n")}`;
 
       const prompt = isUrl
@@ -652,6 +675,7 @@ const server = createServer(async (req, res) => {
         `- browser chrome: ${body.browser ? body.browserUrl || "yes" : "no"}`,
         `- background: ${body.wallpaper && body.wallpaper !== "none" ? body.wallpaper : "none"}`,
         `- captions: ${body.captions ? "yes" : "no"}`,
+        `- motion: ${motionPick ? motionPick.label : "none"}`,
         `- created: ${new Date().toISOString()}`,
         "",
         "## Prompt",
