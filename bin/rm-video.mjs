@@ -16,6 +16,7 @@ import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { title, watermark } from "../lib/annotations.mjs";
+import { stageRenderAssets } from "../lib/render-assets.mjs";
 import {
 	ROOT,
 	annotationList,
@@ -341,6 +342,23 @@ switch (cmd) {
 	case "brand":
 		await themeCommand({ alsoBrand: true });
 		break;
+	case "assets": {
+		// Stage the brand next to a composition. See lib/render-assets.mjs for why
+		// the files are copied rather than referenced.
+		const dir = argv[1];
+		if (!dir || dir.startsWith("--")) {
+			console.error("\n  rm-video assets <dir> [--brand <id>]\n");
+			process.exitCode = 1;
+			break;
+		}
+		try {
+			await stageRenderAssets(dir, { brand: flag("brand", "rolemodel") });
+		} catch (e) {
+			console.error(`\n  ${e.message}\n`);
+			process.exitCode = 1;
+		}
+		break;
+	}
 	default:
 		console.log(
 			[
@@ -350,6 +368,7 @@ switch (cmd) {
 				"  root                         print the toolkit's install path",
 				"  presets                      list available brand presets",
 				"  skills                       install the HyperFrames skills Make a video needs",
+				"  assets <dir>                 stage logos, fonts, theme.css and a title card for a render",
 				"  theme <file.openscreen>      apply a preset's appearance settings",
 				"  brand <file.openscreen>      apply the preset, plus title / watermark",
 				"",

@@ -45,6 +45,7 @@ import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
+import { stageRenderAssets } from "../lib/render-assets.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -680,11 +681,68 @@ const server = createServer(async (req, res) => {
       // Narration voice. `hyperframes tts` is the synthesiser either way; naming
       // the voice is the only part this panel can decide, and until now it did not,
       // so the render came back in whichever voice the skill defaults to.
+      /*
+       * The brand, staged into the render directory.
+       *
+       * Vendoring the logos was not enough: a render runs in the project's Renders
+       * folder, not inside the toolkit and not behind this server, so a composition
+       * that referenced brand/ resolved to nothing and a title came out in system
+       * type with no mark. So the marks, the faces, a theme.css built from
+       * tokens.json and a working title card are copied in first, and the prompt
+       * points at them by name.
+       */
+      await stageRenderAssets(outDir, { brand, quiet: true }).catch((e) => {
+        console.error(`  could not stage brand assets: ${e.message}`);
+      });
+      wants.push(
+        "The brand is already staged in the render directory: assets/brand/ holds the logo SVGs, " +
+          "assets/brand/fonts/ holds DM Sans and Geist Mono as woff2, and theme.css defines the " +
+          "palette and type scale as custom properties. Import theme.css and use those variables " +
+          "and those fonts — do not link Google Fonts and do not pick your own colours.",
+      );
+
+      const titleCard = String(body.titleCard || "").trim();
+      if (titleCard) {
+        const eyebrow = String(body.eyebrow || "").trim();
+        wants.push(
+          `Open with the title card in title.html, which is already staged and already uses the ` +
+            `brand mark, the vendored faces and theme.css. Change only the words: the title reads ` +
+            `"${titleCard}"${eyebrow ? `, and the eyebrow above it reads "${eyebrow}"` : `, and remove the eyebrow`}.`,
+        );
+      } else {
+        wants.push("No title card — open on the content.");
+      }
+
+      const webcam = String(body.webcam || "").trim();
+      if (webcam) {
+        wants.push(
+          `Composite ${webcam} from this project as a circular picture-in-picture in the lower ` +
+            "right, about 22% of frame height, with a soft edge — the same treatment a recording " +
+            "gets. It is a real clip: use it, do not draw a placeholder.",
+        );
+      }
+
+      const audio = String(body.audio || "").trim();
+      if (audio) {
+        const asMusic = String(body.audioRole || "narration") === "music";
+        wants.push(
+          asMusic
+            ? `Use ${audio} from this project as a music bed under the whole render, ducked well ` +
+                "below any speech, and fade it out at the end."
+            : `Use ${audio} from this project as the narration track. Cut the visuals to it, and ` +
+                "do not synthesise a voice — the spoken audio already exists.",
+        );
+      }
+
       const voiceId = String(body.voice || "").trim();
-      if (voiceId) {
+      const audioIsNarration = audio && String(body.audioRole || "narration") !== "music";
+      if (voiceId && !audioIsNarration) {
         wants.push(
           `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
         );
+      } else if (audioIsNarration) {
+        // Recorded narration wins. Saying both would ask for two spoken tracks.
+        wants.push("Do not synthesise narration — the recorded track above is the voice.");
       } else {
         wants.push("No voiceover. Render silent; do not synthesise narration.");
       }
@@ -705,7 +763,10 @@ const server = createServer(async (req, res) => {
         `- background: ${body.wallpaper && body.wallpaper !== "none" ? body.wallpaper : "none"}`,
         `- captions: ${body.captions ? "yes" : "no"}`,
         `- motion: ${motionPick ? motionPick.label : "none"}`,
-        `- voice: ${voiceId || "none (silent)"}`,
+        `- voice: ${audioIsNarration ? "recorded track" : voiceId || "none (silent)"}`,
+        `- title card: ${titleCard || "none"}`,
+        `- webcam: ${webcam || "none"}`,
+        `- audio: ${audio ? `${audio} (${body.audioRole || "narration"})` : "none"}`,
         `- created: ${new Date().toISOString()}`,
         "",
         "## Prompt",
