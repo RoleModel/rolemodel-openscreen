@@ -861,11 +861,30 @@ const server = createServer(async (req, res) => {
                * costs one call per project, to fill in a button most sessions never
                * press. So the ids go out and /api/review/link resolves one on click.
                */
-              videos: (videos?.videos ?? videos ?? []).map((v) => ({
-                id: v.id,
-                title: v.title,
-                projectId: proj.id,
-              })),
+              /*
+               * What the listing already told us, kept.
+               *
+               * This used to map every video down to id and title, which is why the
+               * Review page read as a list of names that "just sit there" — nothing
+               * on it could tell you a client had been in. OpenFrame's videos
+               * endpoint already returns the active version with
+               * `_count: { comments }`, its number, its duration and a thumbnail, in
+               * the same call. It cost nothing to ask for and was thrown away.
+               */
+              videos: (videos?.videos ?? videos ?? []).map((v) => {
+                const version = (v.versions ?? [])[0] ?? null;
+                return {
+                  id: v.id,
+                  title: v.title,
+                  projectId: proj.id,
+                  versionId: version?.id ?? null,
+                  version: version?.versionNumber ?? null,
+                  versions: v._count?.versions ?? null,
+                  comments: version?._count?.comments ?? 0,
+                  duration: version?.duration ?? null,
+                  thumbnail: version?.thumbnailUrl ?? null,
+                };
+              }),
             });
           }
         }
@@ -904,6 +923,66 @@ const server = createServer(async (req, res) => {
      * already sent for that video. No link yet means no link — this does not make
      * one, because creating a share link is a thing the person should choose.
      */
+    /**
+     * How a review is actually going, for one video.
+     *
+     * Two things the listing cannot carry. The comment count it does carry is every
+     * comment ever left, so a video whose notes are all dealt with looks identical to
+     * one nobody has touched — the unresolved count is the number that means anything.
+     * And approvals are per version, so they need the version, not the video.
+     *
+     * On demand rather than in the listing: both are a call each, and the listing
+     * already costs one per project.
+     */
+    if (p === "/api/review/status") {
+      const { url: base, token } = await openFrameSettings();
+      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
+      const versionId = url.searchParams.get("version");
+      if (!versionId) return json(res, 400, { error: "need a version" });
+      const api = openFrame({ base, token });
+      const out = { unresolved: null, total: null, approval: null, error: null };
+      try {
+        // includeResolved, so resolved and open can be told apart. Without it the
+        // reply is already filtered and there is nothing to count.
+        const page = await api.call(`/api/versions/${versionId}/comments?includeResolved=true&limit=200&offset=0`);
+        const all = page?.comments ?? [];
+        const count = (list) => list.reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0);
+        out.total = count(all);
+        out.unresolved = count(all.filter((c) => !c.isResolved));
+      } catch (err) {
+        /*
+         * The 403 here is not a permissions problem to fix on the OpenFrame side —
+         * it is that the comments route authenticates with `auth()` alone, so it only
+         * ever sees a browser session. Six of OpenFrame's sixty-six routes use the
+         * token-aware `authFromRequest`, and they are all on the upload-and-share
+         * path. So this toolkit can create a project, upload a video and mint a share
+         * link, and cannot read one comment back.
+         *
+         * Said plainly, because "403: Access denied" reads as a misconfigured token
+         * and no amount of fiddling with the token will change it.
+         */
+        out.error = /\b403\b/.test(err.message)
+          ? "OpenFrame will not answer an API token here — its comments route only accepts a browser session. The notes exist; nothing can fetch them until that route accepts a token."
+          : err.message;
+      }
+      try {
+        const approvals = await api.call(`/api/versions/${versionId}/approvals`);
+        const requests = approvals?.requests ?? approvals?.approvals ?? (Array.isArray(approvals) ? approvals : []);
+        // The newest request is the live one; the rest are history.
+        const latest = requests[0] ?? null;
+        if (latest) {
+          out.approval = {
+            status: latest.status ?? null,
+            decisions: (latest.decisions ?? []).map((d) => d.status).filter(Boolean),
+          };
+        }
+      } catch {
+        // Approvals are a feature of the fork, not a guarantee. A instance without
+        // them should report comments and stay quiet about the rest.
+      }
+      return json(res, 200, out);
+    }
+
     if (p === "/api/review/link") {
       const { url: base, token } = await openFrameSettings();
       if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
