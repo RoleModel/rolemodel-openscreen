@@ -85,10 +85,60 @@ const STEPS = [
 	{
 		name: "OpenScreen (RoleModel's fork)",
 		required: true,
-		why:
-			"The Studio hands documents to the editor with `openscreen open`, and no other build has that verb — " +
-			"upstream declares no document type, so there is no way in from outside at all. " +
-			"`openscreen` is also a name a third project claims on Homebrew, and that cask ships no CLI.",
+		/*
+		 * Three different failures used to print the same sentence.
+		 *
+		 * The check asks the binary for its `open` verb, which is right — but a
+		 * bundle that is installed and refuses to launch answers exactly like one
+		 * that was never installed, and the advice for those two is opposite. The
+		 * ad-hoc signing case in particular sends you to reinstall an app that is
+		 * already sitting in /Applications, which is how an afternoon goes.
+		 */
+		why: async () => {
+			const installed = await access("/Applications/Openscreen.app").then(
+				() => true,
+				() => false,
+			);
+			if (!installed) {
+				return (
+					"The Studio hands documents to the editor with `openscreen open`, and no other build has that verb — " +
+					"upstream declares no document type, so there is no way in from outside at all. " +
+					"`openscreen` is also a name a third project claims on Homebrew, and that cask ships no CLI."
+				);
+			}
+			// It is there. So either the shim is missing or the app will not start,
+			// and the signature tells us which.
+			const sig = await capture("sh", [
+				"-c",
+				"codesign -d --verbose=2 /Applications/Openscreen.app 2>&1 | grep -E 'Signature|TeamIdentifier'",
+			]);
+			if (/Signature=adhoc/.test(sig.out)) {
+				return (
+					"The app IS installed — do not reinstall it. It is ad-hoc signed (no Developer ID), and " +
+					"Electron refuses to start when it cannot validate its helper processes' signature, so it " +
+					"exits before a window appears: codesign_util.cc `task_name_for_pid: (os/kern) failure`. " +
+					"The fix is a notarized build: set MAC_CERTIFICATE_P12, MAC_CERTIFICATE_PASSWORD, MAC_CSC_NAME, " +
+					"APPLE_ID, APPLE_TEAM_ID and APPLE_APP_SPECIFIC_PASSWORD as repo secrets and cut a new tag. " +
+					"build.yml already signs, notarizes and staples when those six are present."
+				);
+			}
+			return (
+				"The app is installed but `openscreen help` does not answer with the `open` verb. Either the " +
+				"shim is not on PATH (it comes from the rm-video formula, not the cask) or the bundle is a " +
+				"different OpenScreen than this fork."
+			);
+		},
+		/*
+		 * Reinstalling cannot help an ad-hoc signed bundle: the download is fine and
+		 * the signature is the problem, so the cask would hand back the same app.
+		 */
+		noFix: async () => {
+			const sig = await capture("sh", [
+				"-c",
+				"codesign -d --verbose=2 /Applications/Openscreen.app 2>&1 | grep -c 'Signature=adhoc'",
+			]);
+			return sig.out.trim() === "1";
+		},
 		check: async () => {
 			if (!(await onPath("openscreen"))) return false;
 			// Presence is not enough, and neither is being *an* OpenScreen: the verb
@@ -114,14 +164,32 @@ const STEPS = [
 	{
 		name: "HyperFrames skills",
 		required: true,
-		why: "`/hyperframes` in the Make prompt only resolves if the skill is in ~/.claude/skills.",
+		why: "`/hyperframes` in the Make prompt only resolves if the skill is readable in ~/.claude/skills.",
+		/*
+		 * Ask the filesystem, not the installer.
+		 *
+		 * This used to run `hyperframes skills check` and read its counts. Two
+		 * problems. That tool reports on skills it fetches from a registry and
+		 * cannot deliver from the package, so the count is never zero and the
+		 * check could never pass. And it is the same tool whose install is
+		 * broken — 0.8.12 links each skill over the copy it just made, so it
+		 * reports its own work missing.
+		 *
+		 * What actually matters is whether a render can read the skill, so that
+		 * is the question. The fix is our own command, which repairs the link
+		 * loop; handing it back to raw npx would recreate it.
+		 */
 		check: async () => {
-			const r = await capture("npx", ["--no-install", "hyperframes", "skills", "check"]);
-			const text = r.out.replace(/\x1b\[[0-9;]*m/g, "");
-			const n = (label) => Number(text.match(new RegExp(`(\\d+)\\s+${label}`))?.[1] ?? 0);
-			return r.ok && n("outdated") === 0 && n("core not installed") === 0;
+			for (const name of ["hyperframes", "hyperframes-cli"]) {
+				try {
+					await access(join(homedir(), ".claude", "skills", name, "SKILL.md"));
+				} catch {
+					return false;
+				}
+			}
+			return true;
 		},
-		fix: ["npx", ["--yes", "hyperframes", "skills", "update"]],
+		fix: ["node", [join(ROOT, "bin", "rm-video.mjs"), "skills"]],
 	},
 	{
 		name: "Command Line Tools (for the voice venv)",
@@ -206,8 +274,16 @@ for (const step of STEPS) {
 	const mark = done ? "✓" : step.required ? "✗" : "◦";
 	console.log(`  ${mark} ${step.name}`);
 	if (done) continue;
-	if (step.why) console.log(`      ${step.why}`);
+	// `why` may be a function: two of these failures have more than one cause, and
+	// "not installed" printed over "installed but refuses to launch" sends you to
+	// reinstall something that is already there.
+	const why = typeof step.why === "function" ? await step.why().catch(() => null) : step.why;
+	if (why) console.log(`      ${why}`);
 	missing.push(step);
+	// Some failures have no fix this script can run, and offering one anyway is
+	// worse than offering nothing: the app-is-ad-hoc-signed case would have you
+	// reinstall a bundle already sitting in /Applications.
+	if (step.noFix && (await step.noFix().catch(() => false))) continue;
 	if (step.manual) {
 		console.log(`      ${step.manual}`);
 		continue;
