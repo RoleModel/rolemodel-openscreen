@@ -1,17 +1,5 @@
-<!-- THE brand mark. One file, and the only place it is defined.
-     It was a percent-encoded data: URI inlined twice in lib/studio.html and scraped
-     back out with a regex by lib/make-icon.mjs, with a third hand-copied version in
-     the fork. Three copies of one drawing, none of them editable.
-     Everything downstream is generated from this: the Studio's favicon and sidebar
-     (served at /brand-mark.svg), the app's .icns and PNG set, and the editor's top
-     bar. Change it here and run `npm run icon`.
-     No width/height on purpose: every caller sizes it. -->
-<svg viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <mask id="path-1-inside-1_8647_11782" fill="white">
-  <path d="M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z"/>
-  </mask>
-  <path d="M0 12C0 5.37258 5.37258 0 12 0H168C174.627 0 180 5.37258 180 12V168C180 174.627 174.627 180 168 180H12C5.37258 180 0 174.627 0 168V12Z" fill="#00B871"/>
-  <path d="M0 0H180H0M180 168C180 180.703 169.703 191 157 191H23C10.2975 191 0 180.703 0 168C0 168.552 5.37258 169 12 169H168C174.627 169 180 168.552 180 168ZM180 168M0 180V0V180M0 180M180 0V180V0" fill="#00663F" mask="url(#path-1-inside-1_8647_11782)"/>
-  <path d="M59.2673 62.6584C59.2447 54.9604 67.5639 50.1248 74.2418 53.9543L126.694 84.0333C133.372 87.8627 133.4 97.4852 126.745 101.354L74.4695 131.739C67.8141 135.608 59.4667 130.821 59.4442 123.123L59.2673 62.6584Z" fill="white"/>
-  </svg>
-
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0 64C0 41.5979 0 30.3968 4.35974 21.8404C8.19467 14.3139 14.3139 8.19467 21.8404 4.35974C30.3968 0 41.5979 0 64 0H116C138.402 0 149.603 0 158.16 4.35974C165.686 8.19467 171.805 14.3139 175.64 21.8404C180 30.3968 180 41.5979 180 64V116C180 138.402 180 149.603 175.64 158.16C171.805 165.686 165.686 171.805 158.16 175.64C149.603 180 138.402 180 116 180H64C41.5979 180 30.3968 180 21.8404 175.64C14.3139 171.805 8.19467 165.686 4.35974 158.16C0 149.603 0 138.402 0 116V64Z" fill="#1F1F1F"/>
+<path d="M0 39C0 17.4609 17.4609 0 39 0H141C162.539 0 180 17.4609 180 39V141C180 162.539 162.539 180 141 180H39C17.4609 180 0 162.539 0 141V39Z" fill="black" fill-opacity="0.01"/>
+<path d="M56 60.0442C55.9775 52.3463 64.2967 47.5106 70.9746 51.3401L123.427 81.4191C130.105 85.2485 130.133 94.871 123.477 98.7395L71.2023 129.125C64.5469 132.993 56.1995 128.207 56.177 120.509L56 60.0442Z" fill="#CCCCCC"/>
+</svg>
