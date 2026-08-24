@@ -86,6 +86,31 @@ cask "rolemodel-openscreen" do
   # rm-video formula instead, which installs a shim that execs the real bundle
   # path — see bin/shims/openscreen in the toolkit.
 
+  # Clear the quarantine flag, but only from a build that needs it.
+  #
+  # An ad-hoc signed bundle cannot be opened while quarantined: macOS says "Apple
+  # could not verify Openscreen is free of malware" and offers only Move to Trash
+  # or Done — and Move to Trash deletes it. Homebrew 6 removed --no-quarantine, so
+  # there is no flag to pass; it has to come off afterwards.
+  #
+  # Guarded on the signature rather than done unconditionally. Once the release is
+  # signed with a Developer ID and notarized, macOS has no objection and stripping
+  # quarantine would be throwing away a check for nothing. So this heals the
+  # unsigned builds and becomes a no-op the moment there is a real identity.
+  postflight do
+    app_path = "#{appdir}/Openscreen.app"
+    next unless File.directory?(app_path)
+
+    signature = Utils.popen_read("/usr/bin/codesign", "-d", "--verbose=2", app_path, err: :out)
+    next unless signature.include?("Signature=adhoc")
+
+    opoo "This build is ad-hoc signed, not notarized: clearing its quarantine flag so macOS will open it."
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", app_path],
+                   sudo: false,
+                   print_stderr: false
+  end
+
   caveats do
     <<~EOS
       `openscreen` is put on PATH by the rm-video formula, not by this cask:
