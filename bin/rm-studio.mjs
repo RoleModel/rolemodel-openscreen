@@ -115,6 +115,9 @@ const MIME = {
   ".mp4": "video/mp4", ".mov": "video/quicktime", ".m4v": "video/mp4",
   ".webm": "video/webm", ".mkv": "video/x-matroska",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+  // svg belongs here as much as png does: a logo served as octet-stream is a
+  // logo a browser refuses to draw in an <img>, which reads as a missing asset.
+  ".svg": "image/svg+xml",
   ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
 };
 

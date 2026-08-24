@@ -1,0 +1,129 @@
+[
+  {
+    "id": "rolemodel",
+    "label": "RoleModel Software",
+    "variants": {
+      "logo": {
+        "file": "rolemodel-logo.svg",
+        "bytes": 12132,
+        "sha256": "e968248f3577df46"
+      },
+      "logo-color-on-dark": {
+        "file": "rolemodel-logo-color-on-dark.svg",
+        "bytes": 13263,
+        "sha256": "3b6507b50348b615"
+      },
+      "logo-white": {
+        "file": "rolemodel-logo-white.svg",
+        "bytes": 12139,
+        "sha256": "45756ffeeec9fc90"
+      },
+      "logo-black": null,
+      "icon": {
+        "file": "rolemodel-icon.svg",
+        "bytes": 1028,
+        "sha256": "f1c53561daba4f3c"
+      }
+    }
+  },
+  {
+    "id": "academy",
+    "label": "Craftsmanship Academy",
+    "variants": {
+      "logo": {
+        "file": "academy-logo.svg",
+        "bytes": 20871,
+        "sha256": "c0a83a9b384f5110"
+      },
+      "logo-color-on-dark": null,
+      "logo-white": {
+        "file": "academy-logo-white.svg",
+        "bytes": 20904,
+        "sha256": "a2d57c844ece136f"
+      },
+      "logo-black": {
+        "file": "academy-logo-black.svg",
+        "bytes": 20904,
+        "sha256": "376b7072b474929c"
+      },
+      "icon": {
+        "file": "academy-icon.svg",
+        "bytes": 1588,
+        "sha256": "015c23010842c3d7"
+      }
+    }
+  },
+  {
+    "id": "lcad",
+    "label": "LightningCAD",
+    "variants": {
+      "logo": null,
+      "logo-color-on-dark": null,
+      "logo-white": {
+        "file": "lcad-logo-white.svg",
+        "bytes": 13777,
+        "sha256": "fde57effa293fea0"
+      },
+      "logo-black": {
+        "file": "lcad-logo-black.svg",
+        "bytes": 13777,
+        "sha256": "ead5b3d160b3a377"
+      },
+      "icon": {
+        "file": "lcad-icon.svg",
+        "bytes": 2505,
+        "sha256": "c49737ef7c61404e"
+      }
+    }
+  },
+  {
+    "id": "docks",
+    "label": "Dock Designer",
+    "variants": {
+      "logo": {
+        "file": "docks-logo.svg",
+        "bytes": 6174,
+        "sha256": "469ffd82a930f20d"
+      },
+      "logo-color-on-dark": null,
+      "logo-white": {
+        "file": "docks-logo-white.svg",
+        "bytes": 5848,
+        "sha256": "6950871770c9cd32"
+      },
+      "logo-black": {
+        "file": "docks-logo-black.svg",
+        "bytes": 5848,
+        "sha256": "e7594a09fd58dd1f"
+      },
+      "icon": {
+        "file": "docks-icon.svg",
+        "bytes": 1516,
+        "sha256": "0a7f6e7aedf63dce"
+      }
+    }
+  },
+  {
+    "id": "railing",
+    "label": "Railing Designer",
+    "variants": {
+      "logo": null,
+      "logo-color-on-dark": null,
+      "logo-white": {
+        "file": "railing-logo-white.svg",
+        "bytes": 7205,
+        "sha256": "d701c0ae62962e1b"
+      },
+      "logo-black": {
+        "file": "railing-logo-black.svg",
+        "bytes": 7205,
+        "sha256": "90666fb91a016766"
+      },
+      "icon": {
+        "file": "railing-icon.svg",
+        "bytes": 1103,
+        "sha256": "1e133a51ca834980"
+      }
+    }
+  }
+]
