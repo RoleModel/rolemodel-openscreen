@@ -34,6 +34,7 @@ import { actions, describe as describeDemo, narration, parseDemo } from "../lib/
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
+const has = (n) => argv.includes(`--${n}`);
 const flag = (n, d) => {
 	const i = argv.indexOf(`--${n}`);
 	if (i === -1) return d;
@@ -291,18 +292,21 @@ async function captureCommand() {
 	if (!steps.length) die("nothing to do — the script has no ```do block");
 
 	/*
-	 * A capture that cannot possibly work, refused before it costs a take.
+	 * Attach to the browser already on screen, or launch one.
 	 *
-	 * `capture` launches its own browser. A script that never navigates leaves it on
-	 * about:blank, so the first selector fails and everything after it is dead — and
-	 * the recorder happily films thirty seconds of nothing while that plays out.
-	 * Observed exactly once, at the cost of a 16-second capture and the take: "stopped
-	 * at line 4 (click): nothing matched \"Level Selection\" on about:blank".
+	 * `--attach` is the one that matters for a real demo: the app under demonstration is
+	 * usually already open, signed in, with data in it. Launching a fresh Chromium gets
+	 * you a blank window that is signed into nothing — "run with the user's window, not
+	 * a new chrome", which is exactly right.
 	 *
-	 * `run` is different and stays permissive: it can act on a page that is already
-	 * open, which is why parseDemo does not treat this as an error on its own.
+	 * Attaching changes three rules, and all three follow from the page already existing:
+	 * a `goto` is no longer required, `--window` is how you name that browser's window
+	 * for the recorder rather than a contradiction, and no sentinel title is needed.
 	 */
-	if (!steps.some((st) => st.verb === "goto")) {
+	const attach = has("attach") || typeof flag("cdp") === "string";
+	const cdpUrl = typeof flag("cdp") === "string" ? String(flag("cdp")) : "http://127.0.0.1:9222";
+
+	if (!attach && !steps.some((st) => st.verb === "goto")) {
 		die(
 			[
 				"this script never navigates, so there would be nothing to act on.",
@@ -329,21 +333,24 @@ async function captureCommand() {
 	 * connected, which is what happened: the Feeney window was filmed while a blank
 	 * Chromium got the clicks.
 	 */
-	if (typeof flag("window") === "string") {
+	if (!attach && typeof flag("window") === "string") {
 		die(
 			[
-				`--window "${flag("window")}" cannot be recorded by a scripted capture.`,
+				`--window "${flag("window")}" cannot be recorded by a launched capture.`,
 				"",
-				"  The script drives a browser this command launches, so that is the window",
-				"  worth recording — naming another one films something nothing is driving.",
+				"  Without --attach the script drives a browser this command opens, so that is",
+				"  the window worth recording — naming another one films something nothing is",
+				"  driving. That is what --attach is for:",
 				"",
-				"  Record the app the script drives: point the first `goto` at it.",
-				"  Record a window something else is driving: `openscreen record --window ...`",
+				`  rm-demo capture <script> --project <doc> --attach --window ${JSON.stringify(String(flag("window")))}`,
+				"",
+				"  Or record a window something else is driving: `openscreen record --window ...`",
 				"  on its own, with no script.",
 			].join("\n"),
 		);
 	}
-	const ownWindow = false;
+	// When attaching, --window names the browser already on screen and is the point.
+	const ownWindow = attach && typeof flag("window") === "string";
 	const title = ownWindow ? String(flag("window")) : sentinelTitle(process.pid);
 	let recArgs;
 	try {
@@ -363,15 +370,82 @@ async function captureCommand() {
 
 	const width = Number(flag("width", DEFAULT_W));
 	const height = Number(flag("height", DEFAULT_H));
-	const browser = await chromium.launch({ headless: flag("headless") === true });
-	const context = await browser.newContext({
-		viewport: { width, height },
-		baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
-	});
-	const page = await context.newPage();
 
-	// The sentinel has to be on a page the OS can see before the recorder looks.
-	if (!ownWindow) {
+	let browser;
+	let context;
+	let page;
+
+	if (attach) {
+		/*
+		 * The browser already on screen, over CDP.
+		 *
+		 * Chrome cannot be given a debugging port while it is running, so a refusal here
+		 * says how to start one — "could not connect" on its own sends people to the wrong
+		 * problem. Chrome 111 and later also want --remote-allow-origins for a non-browser
+		 * client, and omitting it fails at the WebSocket rather than the HTTP probe, which
+		 * looks like a different fault again.
+		 */
+		try {
+			browser = await chromium.connectOverCDP(cdpUrl);
+		} catch (err) {
+			die(
+				[
+					`could not attach to a browser at ${cdpUrl} (${String(err.message).split("\n")[0]})`,
+					"",
+					"  Chrome cannot be given a debugging port while it is running, so it has to be",
+					"  started with one. Quit Chrome completely, then:",
+					"",
+					'    open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-allow-origins=*',
+					"",
+					"  That keeps your normal profile, so you stay signed in. Then run this again",
+					"  with --attach.",
+				].join("\n"),
+			);
+		}
+		context = browser.contexts()[0];
+		if (!context) die(`attached to ${cdpUrl} but it has no browser context open`);
+
+		/*
+		 * Which page. `--page` matches a substring of the title or the URL, because a real
+		 * browser has a dozen tabs open and the demo is one of them. Without it, the first
+		 * page that is not blank or internal.
+		 */
+		const wanted = typeof flag("page") === "string" ? String(flag("page")).toLowerCase() : null;
+		const usable = [];
+		for (const candidate of context.pages()) {
+			const url = candidate.url();
+			if (!url || url === "about:blank" || url.startsWith("chrome://") || url.startsWith("devtools://")) continue;
+			usable.push({ page: candidate, url, title: await candidate.title().catch(() => "") });
+		}
+		if (!usable.length) die(`attached to ${cdpUrl} but found no ordinary page open — only blank or internal tabs`);
+		const hit = wanted
+			? usable.find((c) => c.title.toLowerCase().includes(wanted) || c.url.toLowerCase().includes(wanted))
+			: usable[0];
+		if (!hit) {
+			die(
+				[
+					`no open page matches --page ${JSON.stringify(String(flag("page")))}. Open tabs:`,
+					"",
+					...usable.map((c) => `    ${c.title.slice(0, 60)}  —  ${c.url.slice(0, 70)}`),
+				].join("\n"),
+			);
+		}
+		page = hit.page;
+		await page.bringToFront().catch(() => {
+			/* not fatal — the recorder captures the window, not the focused tab */
+		});
+		console.log("");
+		console.log(`  attached  ${cdpUrl}`);
+		console.log(`  page      ${(hit.title || hit.url).slice(0, 70)}`);
+	} else {
+		browser = await chromium.launch({ headless: flag("headless") === true });
+		context = await browser.newContext({
+			viewport: { width, height },
+			baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
+		});
+		page = await context.newPage();
+
+		// The sentinel has to be on a page the OS can see before the recorder looks.
 		await page.goto("about:blank");
 		await page.evaluate((t) => {
 			document.title = t;
@@ -422,8 +496,17 @@ async function captureCommand() {
 		await browser.close();
 		die(err.message);
 	}
-	await context.close();
-	await browser.close();
+	/*
+	 * Never close a browser we did not open.
+	 *
+	 * In attach mode this is the person's own Chrome with their tabs in it. Closing the
+	 * context would take their session with it; disconnecting just lets go.
+	 */
+	if (attach) await browser.close();
+	else {
+		await context.close();
+		await browser.close();
+	}
 
 	// The narration goes beside the document under the same basename, which is how
 	// rm-voice and rm-mux find it without being told.

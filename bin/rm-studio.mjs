@@ -1175,10 +1175,12 @@ const server = createServer(async (req, res) => {
         if (!acts.length) {
           return json(res, 400, { error: "the script has no ```do block, so nothing would drive the capture" });
         }
-        // A scripted capture drives a browser that starts blank, so a script that
-        // never navigates has nothing to act on. Said here rather than discovered
-        // sixteen seconds into a take.
-        if (!acts.some((a) => a.verb === "goto")) {
+        /*
+         * Only a launched capture needs a goto. Attaching starts on a page that is
+         * already open, which is the entire point of it — requiring navigation there
+         * would defeat it.
+         */
+        if (!body.attach && !acts.some((a) => a.verb === "goto")) {
           return json(res, 400, {
             error:
               "this script never navigates, so there would be nothing to act on — add a first step that goes to a page.",
@@ -1199,15 +1201,17 @@ const server = createServer(async (req, res) => {
               "capture", scriptPath,
               "--project", proj,
               /*
-               * No captureArgs here, deliberately.
+               * The picked window goes through only when attaching.
                *
-               * The Capture picker names a window that already exists. A scripted
-               * capture drives a browser it launches itself, and that browser is the
-               * thing worth recording — so passing the picked window recorded one
-               * thing while the script drove another. That is exactly what happened:
-               * thirty seconds of the Feeney window while a blank Chromium got the
-               * clicks. rm-demo refuses --window now; this stops sending it.
+               * The Capture list names windows that already exist. A *launched* capture
+               * drives a browser it opens itself, so passing the picked window recorded
+               * one thing while the script drove another — thirty seconds of the Feeney
+               * window while a blank Chromium got the clicks. Attaching is the opposite
+               * case: the picked window IS the browser being driven, so it is exactly
+               * what the recorder should film.
                */
+              ...(body.attach ? captureArgs(body.source) : []),
+              ...attachArgs(body),
               ...recorderArgs(body),
               ...driverArgs(body),
               ...(body.seconds ? ["--duration", String(body.seconds)] : []),
@@ -2494,6 +2498,25 @@ function recorderArgs(body) {
 	if (body?.systemAudio) out.push("--system-audio");
 	const cursor = String(body?.cursor ?? "").trim();
 	if (cursor && CURSOR_MODES.includes(cursor)) out.push("--cursor", cursor);
+	return out;
+}
+
+/*
+ * Attaching to a browser already on screen, rather than launching one.
+ *
+ * The reason this exists: a real demo is of an app that is already open and signed
+ * in. A launched Chromium is blank and signed into nothing, so a script that clicks
+ * anything real fails on its first step. Attaching drives the window the person is
+ * already looking at — and then `--window` is how you name that window for the
+ * recorder rather than a contradiction.
+ */
+function attachArgs(body) {
+	if (!body?.attach) return [];
+	const out = ["--attach"];
+	const cdp = String(body.cdp ?? "").trim();
+	if (cdp) out.push("--cdp", cdp);
+	const page = String(body.page ?? "").trim();
+	if (page) out.push("--page", page);
 	return out;
 }
 
