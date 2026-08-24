@@ -2233,6 +2233,15 @@ const server = createServer(async (req, res) => {
       return res.end(src);
     }
 
+    // The step builder needs the same speech estimate the compiler uses. Served,
+    // not reimplemented in the page: two estimators would drift and the whole point
+    // is that one number decides both the hold and what the UI promises.
+    if (p === "/demo-script.mjs") {
+      const src = await readFile(join(TOOLKIT, "lib/demo-script.mjs"), "utf8");
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+      return res.end(src);
+    }
+
     if (p === "/script-parse.mjs") {
       const src = await readFile(join(TOOLKIT, "lib/script-parse.mjs"), "utf8");
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
