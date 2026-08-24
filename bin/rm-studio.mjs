@@ -388,7 +388,7 @@ async function state() {
       if (catalog) p.catalog = catalog;
     }),
   );
-  const [wallpapers, scripts, tokens, motion] = await Promise.all([
+  const [wallpapers, scripts, tokens, motion, logos] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
     readFile(join(TOOLKIT, "brand/tokens.json"), "utf8").then(JSON.parse).catch(() => ({})),
@@ -396,6 +396,10 @@ async function state() {
     // than throwing: a missing file should cost the render its motion sentences,
     // not the whole Studio.
     readFile(join(TOOLKIT, "brand/motion.json"), "utf8").then(JSON.parse).catch(() => ({ presets: {} })),
+    // The marks, so the Brand page can show what a title card will actually draw.
+    // Vendored and staged into renders since, but until now not visible anywhere —
+    // which made "we have brand assets" a claim you had to take on trust.
+    readFile(join(TOOLKIT, "brand/logos/index.json"), "utf8").then(JSON.parse).catch(() => []),
   ]);
 
   const presets = [];
@@ -434,6 +438,7 @@ async function state() {
     tokens,
     // Label and hint only. The direction sentences stay server-side: the panel's
     // job is to name a motion preset, /api/make's job is to turn it into prompt.
+    logos,
     motion: {
       default: motion.default || "brand",
       presets: Object.entries(motion.presets || {}).map(([id, m]) => ({ id, label: m.label, hint: m.hint })),
@@ -2581,6 +2586,32 @@ function text(req) {
       b += d;
     });
     req.on("end", () => res2(b));
+    req.on("error", rej);
+  });
+}
+
+/**
+ * The request body as bytes.
+ *
+ * text() concatenates onto a string, which corrupts anything that is not UTF-8 —
+ * dictated audio arrives as opus in a webm container and has to survive intact.
+ * Capped, because an unbounded upload into memory is a way to take the Studio down
+ * from a page it is serving.
+ */
+function bytes(req, limit = 64 * 1024 * 1024) {
+  return new Promise((res2, rej) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (d) => {
+      size += d.length;
+      if (size > limit) {
+        rej(new Error(`upload is larger than ${Math.round(limit / 1024 / 1024)}MB`));
+        req.destroy();
+        return;
+      }
+      chunks.push(d);
+    });
+    req.on("end", () => res2(Buffer.concat(chunks)));
     req.on("error", rej);
   });
 }
