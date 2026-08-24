@@ -13,7 +13,7 @@
     "autoZoomEnabled": true,
     "autoFocusAll": false,
     "webcamLayoutPreset": "picture-in-picture",
-    "webcamMaskShape": "rounded",
+    "webcamMaskShape": "circle",
     "webcamMirrored": true,
     "webcamReactiveZoom": false,
     "webcamSizePreset": 22,
@@ -30,7 +30,8 @@
     "shadowIntensity": "0.38 lifts the capture off a dark board. The stock 0.2 reads flat on #293747.",
     "motionBlurAmount": "Dialled down from 0.2. Motion blur on a UI recording smears text during pans, which is the opposite of what a demo needs.",
     "cursorTheme": "Deliberately 'default'. Every bundled theme is a novelty cursor (Hello Kitty, Among Us, Pokemon) \u2014 none belong in client-facing work.",
-    "webcamMirrored": "Mirrored matches what the presenter saw while recording, which is what makes gestures read correctly."
+    "webcamMaskShape": "A circle in the corner, which is the shape a talking head wants: a 16:9 rectangle spends its width on the room either side of the presenter. The circle's diameter is the rectangle's height, so the face stays the same size and only the empty sides are cropped. No position is set — picture-in-picture with no explicit position already sits bottom-right, inset by 2% of the frame's short axis, and leaving it unset means re-theming a project does not undo a deliberate reposition.",
+  "webcamMirrored": "Mirrored matches what the presenter saw while recording, which is what makes gestures read correctly."
   },
   "variants": {
     "master": {
