@@ -38,7 +38,12 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
-import { actions as demoActions, describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
+import {
+  actions as demoActions,
+  describe as describeDemo,
+  parseDemo,
+  settings as demoSettings,
+} from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import { openFrameSettings, setOpenFrameSettings, STATE_DIR } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
@@ -636,11 +641,31 @@ const server = createServer(async (req, res) => {
       const m = await readManifest(projectDir(id)).catch(() => null);
       if (!m) return json(res, 404, { error: `no project "${id}"` });
 
-      const brand = body.brand || m.brand || "rolemodel";
+      let brand = body.brand || m.brand || "rolemodel";
       const src = (body.source || "").trim();
       if (!src) return json(res, 400, { error: "give it a script or a URL" });
 
       const isUrl = /^https?:\/\//i.test(src);
+
+      /*
+       * Settings written in the script beat the panel.
+       *
+       * The document is the more specific statement: it travels with the words it
+       * applies to, it is what you read back later, and it is what somebody else
+       * receives when you hand them the script. The panel is a convenience for the
+       * things you have not written down, so it fills the gaps rather than
+       * overriding them.
+       *
+       * Only for a pasted script. A URL has no directives in it, and running the
+       * parser over one would report every line of a web address as a problem.
+       */
+      const fromDoc = isUrl ? {} : demoSettings(parseDemo(src));
+      // Re-resolved from the document, which was parsed after `brand` was chosen.
+      if (fromDoc.brand) brand = fromDoc.brand;
+      const pick = (key, fallback) => {
+        const v = fromDoc[key];
+        return v === undefined || v === "" ? fallback : v;
+      };
       const slug =
         (body.title || (isUrl ? new URL(src).hostname.replace(/^www\./, "") : src.split("\n")[0]))
           .slice(0, 60).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "untitled";
@@ -663,12 +688,14 @@ const server = createServer(async (req, res) => {
       } else {
         wants.push("No browser chrome — the content fills the frame.");
       }
-      if (body.wallpaper && body.wallpaper !== "none") {
-        wants.push(`Use brand/wallpapers/${body.wallpaper} as the scene background.`);
+      const wallpaper = pick("wallpaper", body.wallpaper);
+      if (wallpaper && wallpaper !== "none") {
+        wants.push(`Use brand/wallpapers/${wallpaper} as the scene background.`);
       } else {
         wants.push("No wallpaper behind the scene — a flat background from the brand palette.");
       }
-      if (body.captions) wants.push("Burn captions in, synced to the narration.");
+      const captions = pick("captions", body.captions ? "on" : "off");
+      if (captions === "on" || captions === true) wants.push("Burn captions in, synced to the narration.");
 
       // Motion. Claude writes the render's GSAP timeline itself, so without these
       // sentences it picks an easing and a travel distance per run — which is why
@@ -679,7 +706,7 @@ const server = createServer(async (req, res) => {
         .then(JSON.parse)
         .catch(() => ({ presets: {} }));
       const motionPick =
-        motionSpec.presets?.[body.motion || motionSpec.default || "brand"] ||
+        motionSpec.presets?.[pick("motion", body.motion) || motionSpec.default || "brand"] ||
         motionSpec.presets?.[motionSpec.default];
       if (motionPick?.direction) wants.push(...motionPick.direction);
 
@@ -706,9 +733,9 @@ const server = createServer(async (req, res) => {
           "and those fonts — do not link Google Fonts and do not pick your own colours.",
       );
 
-      const titleCard = String(body.titleCard || "").trim();
+      const titleCard = String(pick("title", body.titleCard) || "").trim();
       if (titleCard) {
-        const eyebrow = String(body.eyebrow || "").trim();
+        const eyebrow = String(pick("eyebrow", body.eyebrow) || "").trim();
         wants.push(
           `Open with the title card in title.html, which is already staged and already uses the ` +
             `brand mark, the vendored faces and theme.css. Change only the words: the title reads ` +
@@ -718,7 +745,7 @@ const server = createServer(async (req, res) => {
         wants.push("No title card — open on the content.");
       }
 
-      const webcam = String(body.webcam || "").trim();
+      const webcam = String(pick("webcam", body.webcam) || "").trim();
       if (webcam) {
         wants.push(
           `Composite ${webcam} from this project as a circular picture-in-picture in the lower ` +
@@ -727,9 +754,10 @@ const server = createServer(async (req, res) => {
         );
       }
 
-      const audio = String(body.audio || "").trim();
+      // /music is the same track in a different role, so either directive supplies it.
+      const audio = String(fromDoc.music || pick("audio", body.audio) || "").trim();
       if (audio) {
-        const asMusic = String(body.audioRole || "narration") === "music";
+        const asMusic = fromDoc.music ? true : String(pick("audioRole", body.audioRole) || "narration") === "music";
         wants.push(
           asMusic
             ? `Use ${audio} from this project as a music bed under the whole render, ducked well ` +
@@ -739,8 +767,9 @@ const server = createServer(async (req, res) => {
         );
       }
 
-      const voiceId = String(body.voice || "").trim();
-      const audioIsNarration = audio && String(body.audioRole || "narration") !== "music";
+      const docVoice = fromDoc.voice === "none" ? "" : fromDoc.voice;
+      const voiceId = String(docVoice ?? body.voice ?? "").trim();
+      const audioIsNarration = audio && !(fromDoc.music || String(pick("audioRole", body.audioRole) || "narration") === "music");
       if (voiceId && !audioIsNarration) {
         wants.push(
           `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
@@ -753,9 +782,24 @@ const server = createServer(async (req, res) => {
       }
       const direction = `\n\nDirection:\n${wants.map((w) => `- ${w}`).join("\n")}`;
 
+      /*
+       * The script in the prompt is the words only.
+       *
+       * Directive lines are already sentences in `wants`, and leaving them in the
+       * script as well would ask Claude to interpret `/voice af_heart` as narration
+       * to speak — which is the same mistake the parsers were changed to avoid.
+       */
+      const spokenSrc = isUrl
+        ? src
+        : src
+            .split("\n")
+            .filter((line) => !/^\s*\/[a-z][a-z-]*(\s|$)/i.test(line))
+            .join("\n")
+            .trim();
+
       const prompt = isUrl
         ? `Using /hyperframes, make a ${body.seconds || 20}-second ${brand}-branded promo for ${src}.\nRender the MP4 into ${outDir}.${direction}`
-        : `Using /hyperframes, build a ${brand}-branded video from the script below.\nRender the MP4 into ${outDir}.${direction}\n\n${src}`;
+        : `Using /hyperframes, build a ${brand}-branded video from the script below.\nRender the MP4 into ${outDir}.${direction}\n\n${spokenSrc}`;
 
       const brief = [
         `# ${body.title || slug}`,
