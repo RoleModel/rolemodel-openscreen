@@ -1282,6 +1282,50 @@ const server = createServer(async (req, res) => {
       });
     }
 
+/**
+ * What to say when the voice list could not be read.
+ *
+ * A version number in a cache path is a fact about npm, not something anyone can do
+ * anything about. When it is the cache, say what it costs and let the button do the
+ * rest; when it is something else, the real error is still the most useful sentence
+ * available.
+ */
+function cacheMiss(why) {
+	if (why?.startsWith("hyperframes") && why.includes("npx cache")) {
+		return "Kokoro is ready. Reading its voice list needs a one-off download first — the built-in ids below work meanwhile.";
+	}
+	return `${why ?? "Kokoro would not list its voices"}. The built-in ids below work.`;
+}
+
+/**
+ * Do the download the voice list needs, on request.
+ *
+ * `--yes` rather than `--no-install`: this is the one place a fetch is what was
+ * asked for. Everything else here probes with --no-install so that loading a page
+ * can never pull from the network.
+ *
+ * It returns the voices as well, so one click both fixes the cause and fills the
+ * field — a button that succeeds and leaves the list still wrong is a button that
+ * looks broken.
+ */
+async function fetchVoiceList() {
+	const r = await capture("npx", ["--yes", "hyperframes", "tts", "--list", "--json"]);
+	if (!r.ok) return { ok: false, error: npxWhy(r) };
+	try {
+		const raw = JSON.parse(r.out.slice(r.out.indexOf("[")));
+		const voices = raw
+			.filter((v) => v?.id)
+			.map((v) => ({
+				id: String(v.id),
+				label: [v.label || v.id, v.gender, v.language].filter(Boolean).join(" · "),
+			}));
+		if (!voices.length) return { ok: false, error: "hyperframes answered with an empty voice list" };
+		return { ok: true, voices };
+	} catch (err) {
+		return { ok: false, error: `hyperframes answered, but not with a voice list (${err.message})` };
+	}
+}
+
     if (p === "/api/voices") {
       const which = url.searchParams.get("provider") || "kokoro";
       if (which === "elevenlabs") {
@@ -1345,10 +1389,25 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         from: "static",
         voices: VOICES.map((v) => ({ id: v.id, label: v.label })),
+        /*
+         * A cache miss is the one failure with a fix, so it gets a button instead of
+         * an explanation. "hyperframes 0.8.12 is not in the npx cache — a newer
+         * release than the copy on this machine" is true, actionable by nobody, and
+         * was the entire answer the page had.
+         *
+         * `fetchable` is the flag rather than the prose, so the page never has to
+         * pattern-match a sentence to decide whether to offer the button.
+         */
+        fetchable: ready && Boolean(why?.startsWith("hyperframes") && why.includes("npx cache")),
         note: ready
-          ? `${why ?? "Kokoro would not list its voices"}. These ids are the built-in list and they work — synthesising runs npx with --yes, so the first line you make does the fetch.`
+          ? cacheMiss(why)
           : "This is the built-in list, because Kokoro is not installed yet. Use “Set up voice” above — it builds a private Python environment, once, and then the list comes from Kokoro itself.",
       });
+    }
+
+    if (p === "/api/voices/fetch" && req.method === "POST") {
+      const got = await fetchVoiceList();
+      return json(res, 200, got.ok ? { ok: true, from: "kokoro", voices: got.voices } : { ok: false, error: got.error });
     }
 
     /*
