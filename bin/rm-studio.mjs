@@ -1495,7 +1495,11 @@ const server = createServer(async (req, res) => {
       const stamp = new Date().toISOString().slice(0, 10);
       const outDir = join(mediaDir(id), "Renders", `${stamp}-${slug}`);
       await mkdir(outDir, { recursive: true });
-      const out = join(outDir, `${slug}.mp4`);
+      // The container follows the format flag. Writing an mp4 extension onto a
+      // webm stream produces a file that most things refuse and ffprobe reports
+      // as mp4, which is a bad hour.
+      const format = body.format === "webm" ? "webm" : "mp4";
+      const out = join(outDir, `${slug}.${format}`);
 
       // Prefer the version we pinned. npx is the fallback for a checkout that
       // has not run `npm install` yet, but a pinned local binary is the point of
@@ -1503,16 +1507,76 @@ const server = createServer(async (req, res) => {
       const local = join(TOOLKIT, "node_modules", ".bin", "playwright-recast");
       const haveLocal = await stat(local).then(() => true).catch(() => false);
 
-      const args = [
-        "-i", trace,
-        "-o", out,
-        "--speed-idle", String(body.speedIdle || 3),
-        "--speed-action", String(body.speedAction || 1),
-        "--resolution", body.resolution === "720p" ? "720p" : "1080p",
-      ];
-      if (body.cursor !== false) args.push("--cursor-overlay");
-      if (body.click !== false) args.push("--click-effect");
-      if (body.interpolate) args.push("--interpolate");
+      /*
+       * Every flag playwright-recast takes, and a few refusals.
+       *
+       * The panel used to expose five of its twenty-odd options, which meant the
+       * interesting half — what the cursor looks like, how the interpolation is
+       * done, which TTS model speaks, whether idle compression happens at all —
+       * was reachable only by typing the command out by hand. That is the same
+       * failure the run rows exist to avoid.
+       *
+       * A number that arrives as a string, or as nonsense, is normalised here
+       * rather than passed on: recast's own error for `--speed-idle abc` is an
+       * ffmpeg filter graph complaint several hundred lines down its output.
+       */
+      const num = (v, fallback, lo, hi) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.min(hi, Math.max(lo, n));
+      };
+      const pathArg = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+      const args = ["-i", trace, "-o", out, "--format", format];
+
+      // Speed. `--no-speed` turns the whole stage off, so sending the three
+      // multipliers alongside it would be describing a stage that is not running.
+      if (body.noSpeed) {
+        args.push("--no-speed");
+      } else {
+        args.push("--speed-idle", String(num(body.speedIdle, 3, 0.25, 20)));
+        args.push("--speed-action", String(num(body.speedAction, 1, 0.25, 20)));
+        args.push("--speed-network", String(num(body.speedNetwork, 2, 0.25, 20)));
+      }
+
+      args.push("--resolution", body.resolution === "720p" ? "720p" : "1080p");
+
+      // Cursor and clicks. The config files are recast's own JSON shapes; a path
+      // is offered rather than a form because the shape is theirs and will change
+      // with their releases, and a stale form is worse than a file picker.
+      if (body.cursor !== false) {
+        args.push("--cursor-overlay");
+        const cfg = pathArg(body.cursorConfig);
+        if (cfg) args.push("--cursor-overlay-config", cfg);
+      }
+      if (body.click !== false) {
+        args.push("--click-effect");
+        const cfg = pathArg(body.clickConfig);
+        if (cfg) args.push("--click-effect-config", cfg);
+        const sound = pathArg(body.clickSound);
+        if (sound) args.push("--click-sound", sound);
+      }
+
+      // Interpolation, and its four dependent settings. Sending any of them
+      // without --interpolate is a silent no-op, which reads as the setting not
+      // working rather than as the stage being off.
+      if (body.interpolate) {
+        args.push("--interpolate");
+        args.push("--interpolate-fps", String(num(body.interpolateFps, 60, 24, 240)));
+        const mode = ["dup", "blend", "mci"].includes(body.interpolateMode) ? body.interpolateMode : "mci";
+        args.push("--interpolate-mode", mode);
+        const quality = ["fast", "balanced", "quality"].includes(body.interpolateQuality) ? body.interpolateQuality : "balanced";
+        args.push("--interpolate-quality", quality);
+        args.push("--interpolate-passes", String(num(body.interpolatePasses, 1, 1, 4)));
+      }
+
+      // Text sanitisation for TTS. recast's own, and only meaningful when
+      // something is being spoken.
+      if (body.textProcessing) {
+        args.push("--text-processing");
+        const cfg = pathArg(body.textProcessingConfig);
+        if (cfg) args.push("--text-processing-config", cfg);
+      }
 
       // Narration for this name, if rm-voice has already produced some.
       const audioDir = join(mediaDir(id), "Audio");
@@ -1528,11 +1592,25 @@ const server = createServer(async (req, res) => {
       // render shows cue 1 for the whole clip and drops the rest. It looks like
       // it worked. rm-mux reconciles the two clocks and burns the subtitles onto
       // the final timeline instead.
-      const willMux = haveWav && haveSrt;
+      // Only for mp4: rm-mux writes an mp4 and its whole job is reconciling the
+      // render's clock with the narration's. A webm render skips the mux and gets
+      // the subtitles burned by recast instead, which is the lesser of the two —
+      // the clocks are still unreconciled — so the response says so.
+      const willMux = haveWav && haveSrt && format === "mp4";
       if (!willMux && haveSrt) args.push("--srt", srtGuess, "--burn-subs");
       if (body.provider && body.provider !== "none") {
+        // Qwen is configured entirely by file and recast exits without one, so
+        // refuse here where the message can say what to do about it.
+        if (body.provider === "qwen" && !pathArg(body.qwenConfig)) {
+          return json(res, 400, { error: "the Qwen provider needs a --qwen-config JSON file; point the Qwen config field at one" });
+        }
         args.push("--provider", body.provider);
         if (body.voice) args.push("--voice", body.voice);
+        if (pathArg(body.model)) args.push("--model", body.model.trim());
+        if (body.ttsSpeed !== undefined && body.ttsSpeed !== null && body.ttsSpeed !== "") {
+          args.push("--tts-speed", String(num(body.ttsSpeed, 1, 0.25, 4)));
+        }
+        if (body.provider === "qwen") args.push("--qwen-config", pathArg(body.qwenConfig));
       }
 
       // recast assembles from the trace's screencast frames unless a video file
@@ -1575,9 +1653,12 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         dir: outDir,
         out,
+        format,
         narrated: willMux ? join(outDir, `${slug}-narrated.mp4`) : null,
         srt: haveSrt ? srtGuess : null,
         wav: haveWav ? wav : null,
+        // The one combination that quietly does less than you asked for.
+        muxSkipped: haveWav && haveSrt && format !== "mp4" ? format : null,
         smooth,
         steps,
       });
