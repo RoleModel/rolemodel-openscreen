@@ -7,7 +7,12 @@
    <title>RoleModel Studio</title>
    <link rel="icon"
       href="/brand-mark.svg" />
+   <!-- Vendored, not linked to a CDN: this page is hosted by a desktop app that has
+        to start with no network. fonts.css binds the two families the styles below
+        already name; hugeicons.css is the icon set. -->
+   <link rel="stylesheet" href="/fonts.css" />
    <link rel="stylesheet" href="/optics.css" />
+   <link rel="stylesheet" href="/hugeicons.css" />
    <style>
       /*
  * Every value below is a token. Nothing here invents a hex, a pixel, a weight
@@ -336,6 +341,35 @@
          align-items: center;
          flex-wrap: wrap;
          margin-bottom: var(--op-space-medium)
+      }
+
+      /* Icons sit with the text, not on it. The set is a ligature font, so a glyph
+         is a ::before on an inline element and inherits font-size — 1.15em keeps it
+         a touch larger than the label without changing the row's height. */
+      .hgi-stroke {
+         font-size: 1.15em;
+         line-height: 1;
+         vertical-align: -0.09em
+      }
+
+      nav button[data-v] {
+         display: flex;
+         align-items: center;
+         gap: var(--op-space-x-small)
+      }
+
+      .navicon {
+         flex: 0 0 auto;
+         opacity: .8
+      }
+
+      nav button[data-v][aria-current=true] .navicon {
+         opacity: 1
+      }
+
+      /* A button whose whole label is a glyph still needs a square hit area. */
+      .btn.ghost:has(> .hgi-stroke:only-child) {
+         padding-inline: var(--op-space-x-small)
       }
 
       .full.row {

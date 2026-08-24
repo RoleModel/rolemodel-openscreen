@@ -2069,6 +2069,53 @@ const server = createServer(async (req, res) => {
       return res.end(svg);
     }
 
+    /*
+     * The icon set and the two faces studio.html names, served from this repo.
+     *
+     * Both are vendored rather than linked. The Studio is hosted by a desktop app
+     * that has to start with no network, and an icon set fetched over HTTP renders
+     * as empty boxes on a plane. The faces were the same bug already shipped:
+     * studio.html has asked for "DM Sans" and "Geist Mono" all along and nothing
+     * ever served them, so the Studio has been falling back to system-ui on any
+     * machine that did not happen to have DM Sans installed.
+     */
+    if (p === "/hugeicons.css") {
+      const css = await readFile(join(TOOLKIT, "brand/icons/hugeicons.css"), "utf8").catch(() => null);
+      if (css == null) return json(res, 404, { error: "no icon set — run `npm run icons`" });
+      res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
+      return res.end(css);
+    }
+
+    if (p === "/fonts.css") {
+      res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
+      return res.end(FONT_CSS);
+    }
+
+    /*
+     * One route for every vendored font file, icon set included.
+     *
+     * Name-checked against a fixed list rather than joined onto a directory: this
+     * takes a path from the network, and `/fonts/../../.ssh/id_rsa` is the shape of
+     * bug that turns a static file server into a file server.
+     */
+    {
+      const font = /^\/(?:fonts|icons)\/([A-Za-z0-9._-]+\.woff2)$/.exec(p);
+      if (font) {
+        const name = font[1];
+        const dir = p.startsWith("/icons/") ? "brand/icons" : "brand/fonts";
+        if (!FONT_FILES.has(name)) return json(res, 404, { error: "no such font" });
+        const bytes = await readFile(join(TOOLKIT, dir, name)).catch(() => null);
+        if (!bytes) return json(res, 404, { error: `${name} is missing — run \`npm run icons\`` });
+        res.writeHead(200, {
+          "content-type": "font/woff2",
+          // Immutable: the filename changes when the file does, because both are
+          // regenerated together by their build script.
+          "cache-control": "max-age=604800, immutable",
+        });
+        return res.end(bytes);
+      }
+    }
+
     if (p === "/optics.css") {
       const parts = [];
       for (const f of ["brand/optics/optics.css", "brand/optics/rolemodel-scales.css"]) {
@@ -2225,6 +2272,52 @@ function driverArgs(body) {
 	if (body?.headless) out.push("--headless");
 	return out;
 }
+
+/*
+ * The vendored faces, and the @font-face that binds them to the names
+ * studio.html has been asking for since it was written.
+ *
+ * DM Sans arrives as the two subsets Google publishes rather than one file, and the
+ * unicode-range on each is Google's own — so a page of plain English never fetches
+ * the second. Same set the fork self-hosts, for the same reason.
+ */
+const FONT_FILES = new Set([
+	"DMSans-Variable-latin.woff2",
+	"DMSans-Variable-latin-ext.woff2",
+	"GeistMono-Variable.woff2",
+	"hgi-stroke-rounded.woff2",
+]);
+
+const FONT_CSS = `/* Served by bin/rm-studio.mjs from brand/fonts/. Vendored, not linked:
+ * the Studio is hosted by a desktop app that has to start with no network. */
+@font-face {
+	font-family: "DM Sans";
+	src: url("/fonts/DMSans-Variable-latin.woff2") format("woff2");
+	font-weight: 100 1000;
+	font-style: normal;
+	font-display: swap;
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+		U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+		U+FEFF, U+FFFD;
+}
+@font-face {
+	font-family: "DM Sans";
+	src: url("/fonts/DMSans-Variable-latin-ext.woff2") format("woff2");
+	font-weight: 100 1000;
+	font-style: normal;
+	font-display: swap;
+	unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+		U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+		U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+	font-family: "Geist Mono";
+	src: url("/fonts/GeistMono-Variable.woff2") format("woff2");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+`;
 
 /*
  * What each picker means by a file it can take.
