@@ -64,8 +64,22 @@ const flag = (n, d) => {
 const PORT = Number(flag("port", 4600));
 // Free-text commands are opt-in. See lib/jobs.mjs.
 const SHELL = argv.includes("--shell");
-// `npm run dev` sets this. See the watch block near the bottom.
-const WATCH = argv.includes("--watch");
+/*
+ * Reload the page when the toolkit's own files change.
+ *
+ * `npm run dev` passes --watch. It is also on by default whenever the toolkit is
+ * a git checkout, which is the case this exists for: the app launches the Studio
+ * with neither --watch nor a terminal, so editing lib/studio.js changed the file
+ * the server hands out and nothing told the page — the tab kept running the JS it
+ * loaded at startup. Every symptom of that reads as a broken fix rather than a
+ * stale page, and it cost real time more than once.
+ *
+ * An installed copy (brew, or an npm global) has no .git and never changes under
+ * itself, so it gets no watcher and no cost. Pass --no-watch to opt out.
+ */
+const WATCH =
+  argv.includes("--watch") ||
+  (!argv.includes("--no-watch") && existsSync(join(TOOLKIT, ".git")));
 const LIB = defaultRoot();
 
 /**
@@ -659,6 +673,18 @@ const server = createServer(async (req, res) => {
         motionSpec.presets?.[body.motion || motionSpec.default || "brand"] ||
         motionSpec.presets?.[motionSpec.default];
       if (motionPick?.direction) wants.push(...motionPick.direction);
+
+      // Narration voice. `hyperframes tts` is the synthesiser either way; naming
+      // the voice is the only part this panel can decide, and until now it did not,
+      // so the render came back in whichever voice the skill defaults to.
+      const voiceId = String(body.voice || "").trim();
+      if (voiceId) {
+        wants.push(
+          `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
+        );
+      } else {
+        wants.push("No voiceover. Render silent; do not synthesise narration.");
+      }
       const direction = `\n\nDirection:\n${wants.map((w) => `- ${w}`).join("\n")}`;
 
       const prompt = isUrl
@@ -676,6 +702,7 @@ const server = createServer(async (req, res) => {
         `- background: ${body.wallpaper && body.wallpaper !== "none" ? body.wallpaper : "none"}`,
         `- captions: ${body.captions ? "yes" : "no"}`,
         `- motion: ${motionPick ? motionPick.label : "none"}`,
+        `- voice: ${voiceId || "none (silent)"}`,
         `- created: ${new Date().toISOString()}`,
         "",
         "## Prompt",
