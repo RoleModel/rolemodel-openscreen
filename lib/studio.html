@@ -72,6 +72,17 @@
          /* 208px sidebar */
          --dot: calc(var(--op-size-unit) * 2);
          /* 8px tool status dot */
+         /* The graph-paper pitch. A separate token from --line on purpose: --line is
+            the border colour, used in 26 rules in this file, and naming the grid
+            size --line as well redefined it to a length — which silently invalidated
+            every `solid var(--line)` border AND the gradients below, because a
+            length where a colour belongs makes the whole declaration invalid rather
+            than raising anything. */
+         --grid: calc(var(--op-size-unit) * 4);
+         /* One step brighter than --line. The border colour is right for a 1px edge
+            against a panel and too dark for a 1px line on the page ground, which is
+            why the grid was technically painting and effectively invisible. */
+         --grid-line: var(--op-color-neutral-plus-three);
          --badge-min: calc(var(--op-size-unit) * 4);
          /* 16px job-count badge */
          --search-min: calc(var(--op-size-unit) * 64);
@@ -142,13 +153,41 @@
          box-sizing: border-box
       }
 
-      body {
+      /* body.op-page, not .op-page.
+       *
+       * Optics styles the element we are also styling — `body { background:
+       * var(--op-color-background) }` — and that is a SHORTHAND, so whenever it wins
+       * it does not merely change the colour, it resets background-image and
+       * background-size with it. All three of ours go at once, which reads as the
+       * grid being "cancelled out" rather than as one property losing.
+       *
+       * .op-page (0,1,0) already beat body (0,0,1), so this changed nothing today.
+       * It is here because the margin was one point: any body rule with !important,
+       * or any selector more specific than a bare tag, would have taken the whole
+       * background with it. body.op-page is (0,1,1) and cannot lose to a tag. */
+      /* The graph paper.
+       *
+       * On body.op-page, not .op-page: Optics also styles this element with
+       * `body { background: var(--op-color-background) }`, and that is a SHORTHAND —
+       * whenever it wins it does not recolour, it resets background-image and
+       * background-size with it. All three go at once, which is what "cancelled out"
+       * looked like. .op-page (0,1,0) already beat body (0,0,1); body.op-page (0,1,1)
+       * cannot lose to a bare tag at all.
+       *
+       * A fixed ::before at z-index -1 was tried and is worse: it sits behind body's
+       * own background, so anything opaque on body hides it. Straight on the element
+       * is both simpler and harder to break. */
+      body.op-page {
          margin: 0;
-         background: var(--bg);
+         background-color: var(--bg);
          color: var(--fg);
          font-family: var(--d);
          display: flex;
-         min-height: 100vh
+         min-height: 100vh;
+         background-size: var(--grid) var(--grid);
+         background-image:
+            linear-gradient(to right, var(--grid-line) var(--op-border-width), transparent var(--op-border-width)),
+            linear-gradient(to bottom, var(--grid-line) var(--op-border-width), transparent var(--op-border-width));
       }
 
       .op-page {
