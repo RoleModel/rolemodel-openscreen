@@ -38,7 +38,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
-import { describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
+import { actions as demoActions, describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import { openFrameSettings, setOpenFrameSettings } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
@@ -1001,23 +1001,64 @@ const server = createServer(async (req, res) => {
       const slug = (body.title || "capture").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
       const proj = join(dest, `${slug}.openscreen`);
 
+      /*
+       * A script turns this from "capture whatever happens" into a demo.
+       *
+       * Without one the recorder runs for --duration and hopes somebody is driving,
+       * which is what made this panel unusable for the thing it exists for. With one,
+       * `rm-demo capture` drives a browser through the steps while the recorder
+       * captures that window — and because it still writes a .openscreen document,
+       * the brand step and the editor below are unchanged.
+       *
+       * The script is written to disk beside the document rather than passed inline:
+       * it is the part worth keeping and re-running, and rm-demo takes a file.
+       */
+      const script = String(body.script ?? "").trim();
+      let scriptPath = null;
+      if (script) {
+        const parsed = parseDemo(script);
+        if (parsed.problems.length) return json(res, 400, { error: parsed.problems.join(" · ") });
+        if (!demoActions(parsed).length) {
+          return json(res, 400, { error: "the script has no ```do block, so nothing would drive the capture" });
+        }
+        scriptPath = join(dest, `${slug}.demo.md`);
+        await writeFile(scriptPath, script.endsWith("\n") ? script : `${script}\n`, "utf8");
+      }
+
       // argv arrays, not command strings. The UI needs to *run* these, and a
       // string would have to be re-parsed by a shell to get back to this — which
       // is where quoting bugs and injection both live. The display string is
       // derived from the array, never the other way round.
+      const recordStep = scriptPath
+        ? {
+            label: "record",
+            bin: "rm-demo",
+            args: [
+              "capture", scriptPath,
+              "--project", proj,
+              ...captureArgs(body.source),
+              ...recorderArgs(body),
+              ...driverArgs(body),
+              ...(body.seconds ? ["--duration", String(body.seconds)] : []),
+            ],
+            note: "drives the browser and records it — Screen Recording permission still applies",
+          }
+        : {
+            label: "record",
+            bin: "openscreen",
+            args: [
+              "record",
+              ...captureArgs(body.source),
+              ...recorderArgs(body),
+              ...(body.seconds ? ["--duration", String(body.seconds)] : []),
+              "--project", proj,
+              "--json",
+            ],
+            note: "needs Screen Recording permission for whatever hosts Electron",
+          };
+
       const steps = [
-        {
-          label: "record",
-          bin: "openscreen",
-          args: [
-            "record",
-            ...captureArgs(body.source),
-            ...(body.seconds ? ["--duration", String(body.seconds)] : []),
-            "--project", proj,
-            "--json",
-          ],
-          note: "needs Screen Recording permission for whatever hosts Electron",
-        },
+        recordStep,
         {
           label: "brand",
           bin: "rm-video",
@@ -1030,7 +1071,7 @@ const server = createServer(async (req, res) => {
         },
       ];
 
-      return json(res, 200, { dest, project: proj, steps, editable: proj });
+      return json(res, 200, { dest, project: proj, steps, editable: proj, script: scriptPath });
     }
 
     /**
@@ -2122,6 +2163,47 @@ function text(req) {
  * nothing by id, so the choice has to say which kind it is. Empty means the
  * whole screen, which is `record`'s own default and needs no flag at all.
  */
+/*
+ * The recorder's audio and cursor flags, from whatever the panel sent.
+ *
+ * Shared by both record paths because both end up at `openscreen record` — the
+ * scripted one goes through `rm-demo capture`, which forwards these verbatim. The
+ * panel used to offer three of the recorder's nine options, so a capture that
+ * needed a microphone or the system cursor meant abandoning the UI and typing the
+ * command out.
+ */
+const CURSOR_MODES = ["editable-overlay", "system"];
+
+function recorderArgs(body) {
+	const out = [];
+	// --mic-device implies --mic, so passing both is redundant, and passing the
+	// device without the flag reads as a mistake rather than a shorthand.
+	const device = String(body?.micDevice ?? "").trim();
+	if (device) out.push("--mic-device", device);
+	else if (body?.mic) out.push("--mic");
+	if (body?.systemAudio) out.push("--system-audio");
+	const cursor = String(body?.cursor ?? "").trim();
+	if (cursor && CURSOR_MODES.includes(cursor)) out.push("--cursor", cursor);
+	return out;
+}
+
+/** The browser half, which only means anything when a script is driving. */
+function driverArgs(body) {
+	const out = [];
+	const url = String(body?.url ?? "").trim();
+	if (url) out.push("--url", url);
+	const num = (v, lo, hi) => {
+		const n = Number(v);
+		return Number.isFinite(n) && n >= lo && n <= hi ? String(Math.round(n)) : null;
+	};
+	const w = num(body?.width, 320, 7680);
+	const h = num(body?.height, 240, 4320);
+	if (w) out.push("--width", w);
+	if (h) out.push("--height", h);
+	if (body?.headless) out.push("--headless");
+	return out;
+}
+
 function captureArgs(source) {
 	const kind = source?.kind;
 	const value = String(source?.value ?? "").trim();
