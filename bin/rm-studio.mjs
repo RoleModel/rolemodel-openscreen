@@ -1399,14 +1399,25 @@ const server = createServer(async (req, res) => {
         if (e.isDirectory()) dirs.push({ name: e.name, path: join(dir, e.name) });
         else if (e.isFile()) {
           const ext = extname(e.name).toLowerCase();
+          const video = VIDEO_EXT.has(ext);
+          const audio = AUDIO_EXT.has(ext);
+          const image = IMAGE_EXT.has(ext);
           files.push({
             name: e.name,
             path: join(dir, e.name),
             ext,
-            // What the trace picker is actually looking for.
+            // Every flag a picker's `accept` asks for. Two were missing and both
+            // failed silently in opposite directions: the click-sound picker tested
+            // `x.audio`, which was never sent, so it hid every file in every folder
+            // and looked like an empty disk; and `Add footage` tested
+            // `x.media ?? true`, so the `?? true` took over and it offered shell
+            // scripts as footage.
             trace: ext === ".zip",
-            video: ext === ".webm" || ext === ".mp4",
-            subs: ext === ".srt" || ext === ".vtt",
+            video,
+            audio,
+            image,
+            media: video || audio || image,
+            subs: SUBS_EXT.has(ext),
           });
         }
       }
@@ -1418,6 +1429,17 @@ const server = createServer(async (req, res) => {
         name: basename(dir) || dir,
         parent: dir === root ? null : dirname(dir),
         home: root,
+        // The path, split into the pieces a breadcrumb can jump to. Walking back up
+        // with `..` one level at a time is what made this feel like a dead end.
+        crumbs: (dir === root ? [] : dir.slice(root.length + 1).split(sep)).reduce(
+          (acc, part) => {
+            const prev = acc.length ? acc[acc.length - 1].path : root;
+            acc.push({ name: part, path: join(prev, part) });
+            return acc;
+          },
+          [],
+        ),
+        places: await browsePlaces(root),
         dirs,
         files,
       });
@@ -2201,6 +2223,45 @@ function driverArgs(body) {
 	if (w) out.push("--width", w);
 	if (h) out.push("--height", h);
 	if (body?.headless) out.push("--headless");
+	return out;
+}
+
+/*
+ * What each picker means by a file it can take.
+ *
+ * Lists rather than a regex so adding a container is one word, and the knowledge of
+ * which extension is a video lives here rather than in each picker.
+ */
+const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v", ".mkv", ".avi"]);
+const AUDIO_EXT = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".aiff"]);
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".tiff", ".bmp", ".svg"]);
+const SUBS_EXT = new Set([".srt", ".vtt"]);
+
+/*
+ * The places footage actually lives, so nobody walks there from $HOME one click at
+ * a time.
+ *
+ * Resolved here and filtered to what exists, because a chip for a Movies folder
+ * that was never created is a chip that 404s. Anything outside $HOME is dropped —
+ * /api/browse refuses to read there, so offering it would be offering a dead end.
+ */
+async function browsePlaces(root) {
+	const candidates = [
+		["Home", root],
+		["Desktop", join(root, "Desktop")],
+		["Downloads", join(root, "Downloads")],
+		["Movies", join(root, "Movies")],
+		["Pictures", join(root, "Pictures")],
+		["Documents", join(root, "Documents")],
+		["Library", LIB],
+	];
+	const out = [];
+	for (const [name, path] of candidates) {
+		if (!path) continue;
+		if (path !== root && !path.startsWith(root + sep)) continue;
+		const st = await stat(path).catch(() => null);
+		if (st?.isDirectory()) out.push({ name, path });
+	}
 	return out;
 }
 
