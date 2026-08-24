@@ -7,8 +7,8 @@
  * `lib/sync-tap.mjs` puts it. Run it from whichever checkout you are standing in —
  * it rewrites the cask beside it, so the tap is the usual one.
  *
- *   node packaging/update-cask.mjs rolemodel-openscreen v1.9.6-rm.1   # here
- *   node scripts/update-cask.mjs   rolemodel-openscreen v1.9.6-rm.1   # in the tap
+ *   node packaging/update-cask.mjs rolemodel-openscreen v0.0.1   # here, then sync-tap
+ *   node scripts/update-cask.mjs   rolemodel-openscreen v0.0.1   # in the tap
  *   node scripts/update-cask.mjs   rolemodel-openscreen --latest
  *   node scripts/update-cask.mjs   rolemodel-openscreen v1.9.6-rm.1 --check
  *
@@ -67,8 +67,26 @@ if (!name || !REPOS[name]) {
 if (!wanted && !latest) die("give a tag (v1.2.3) or --latest");
 
 const repo = REPOS[name];
-const caskPath = join(ROOT, "Casks", `${name}.rb`);
-if (!existsSync(caskPath)) die(`no cask at ${caskPath}`);
+/*
+ * The cask, wherever this copy of the script is standing.
+ *
+ * Two layouts, because this file is one source copied to one build output: the tap
+ * keeps casks in `Casks/`, and this toolkit keeps the source of truth in
+ * `packaging/`. Only `Casks/` was ever looked for, so the usage this file documents
+ * — running it from the toolkit — died with "no cask at .../Casks/…" and the only
+ * working path was the tap copy.
+ *
+ * Which mattered more than a bad error message: `lib/sync-tap.mjs` publishes
+ * packaging/ over the tap, so a version written straight into the tap's cask is
+ * overwritten by the next sync and `sync-tap:check` reports the drift. The source of
+ * truth has to be the thing that gets updated.
+ */
+const caskPath = [join(ROOT, "Casks", `${name}.rb`), join(ROOT, "packaging", `${name}.rb`)].find(
+	(candidate) => existsSync(candidate),
+);
+if (!caskPath) {
+	die(`no cask for "${name}" — looked in ${join(ROOT, "Casks")} and ${join(ROOT, "packaging")}`);
+}
 
 const api = async (path) => {
 	const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
@@ -129,5 +147,10 @@ if (check) {
 }
 
 await writeFile(caskPath, after, "utf8");
-console.log(`\n  wrote Casks/${name}.rb at ${version}`);
+console.log(`\n  wrote ${caskPath.replace(`${ROOT}/`, "")} at ${version}`);
+if (caskPath.includes("/packaging/")) {
+	// packaging/ is the source; the tap is a build output. Saying so here is cheaper
+	// than finding out from sync-tap:check on the next run.
+	console.log("  now run `npm run sync-tap` to publish it\n");
+}
 console.log(`  check it: brew audit --cask --online ${name}\n`);
