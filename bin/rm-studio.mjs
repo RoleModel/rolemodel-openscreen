@@ -1956,6 +1956,22 @@ const server = createServer(async (req, res) => {
     // package does not define. Both are needed: the Studio spends
     // --op-color-academy-primary-*, which lives in the supplement. Served rather
     // than inlined so the browser caches it across reloads.
+    /*
+     * The brand mark, from the one file that defines it.
+     *
+     * It used to be a percent-encoded data: URI written twice into studio.html —
+     * once for the favicon, once for the sidebar — which meant the drawing could
+     * not be edited without hand-encoding it, and `lib/make-icon.mjs` scraped it
+     * back out with a regex to build the app icon. Served as a file instead, so
+     * there is one copy and it is legible.
+     */
+    if (p === "/brand-mark.svg") {
+      const svg = await readFile(join(TOOLKIT, "brand", "icon", "mark.svg"), "utf8").catch(() => null);
+      if (svg == null) return json(res, 404, { error: "brand/icon/mark.svg is missing" });
+      res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
+      return res.end(svg);
+    }
+
     if (p === "/optics.css") {
       const parts = [];
       for (const f of ["brand/optics/optics.css", "brand/optics/rolemodel-scales.css"]) {
