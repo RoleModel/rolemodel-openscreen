@@ -395,7 +395,9 @@ async function captureCommand() {
 					"  Chrome cannot be given a debugging port while it is running, so it has to be",
 					"  started with one. Quit Chrome completely, then:",
 					"",
-					'    open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-allow-origins=*',
+					// Quoted, because zsh globs a bare * and the command it printed failed
+					// with "no matches found" — a copy-pasteable line that does not paste.
+					`    open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-allow-origins='*'`,
 					"",
 					"  That keeps your normal profile, so you stay signed in. Then run this again",
 					"  with --attach.",
