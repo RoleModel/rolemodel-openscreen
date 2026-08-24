@@ -23,7 +23,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -40,7 +40,7 @@ import {
 import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
 import { actions as demoActions, describe as describeDemo, parseDemo } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
-import { openFrameSettings, setOpenFrameSettings } from "../lib/settings.mjs";
+import { openFrameSettings, setOpenFrameSettings, STATE_DIR } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -946,6 +946,37 @@ const server = createServer(async (req, res) => {
      * query string: accepting an arbitrary path here would turn this into an open
      * proxy for anything on that host, signed with our token.
      */
+    /*
+     * A half-built script, kept where a restart cannot reach it.
+     *
+     * The first version of this used localStorage, which was wrong in a way that only
+     * showed up on the second launch: the app asks the OS for a free port every time
+     * (electron/studio/server.ts), so the page's origin is http://127.0.0.1:<new port>
+     * on every start — and localStorage is keyed by origin. Same session it worked.
+     * Restart the app and the draft was in a store nothing would ever read again.
+     *
+     * So the server keeps it, next to the config it already owns. A real path, on
+     * disk, that survives a restart and that you can go and look at.
+     */
+    if (p === "/api/record/draft" && req.method === "GET") {
+      const id = url.searchParams.get("project");
+      if (!id) return json(res, 400, { error: "need a project" });
+      const rows = await readDraft(id);
+      return json(res, 200, { rows });
+    }
+
+    if (p === "/api/record/draft" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!id) return json(res, 400, { error: "need a project" });
+      try {
+        const file = await writeDraft(id, body.rows);
+        return json(res, 200, { ok: true, saved: file });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+
     if (p === "/api/review/thumb") {
       const { url: base, token } = await openFrameSettings();
       if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured" });
@@ -2533,6 +2564,44 @@ function npxWhy(r) {
 	if (/command not found|ENOENT/i.test(err)) return "npx is not on PATH";
 	const first = err.split("\n").map((l) => l.trim()).filter((l) => l && !/^\(node:\d+\)|^\(Use `node/.test(l))[0];
 	return first ? `hyperframes could not be run: ${first.slice(0, 160)}` : "hyperframes could not be run";
+}
+
+/*
+ * Where a draft lives: beside the config, keyed by project.
+ *
+ * A project id is used as a filename, so it is checked rather than trusted — the
+ * ids this server mints are slugs, and anything else is a request trying to write
+ * somewhere it should not.
+ */
+const DRAFT_DIR = join(STATE_DIR, "drafts");
+const draftPath = (id) => (/^[a-z0-9][a-z0-9._-]*$/i.test(id) ? join(DRAFT_DIR, `${id}.json`) : null);
+
+async function readDraft(id) {
+	const file = draftPath(id);
+	if (!file) return [];
+	const raw = await readFile(file, "utf8").catch(() => null);
+	if (!raw) return [];
+	try {
+		const rows = JSON.parse(raw);
+		return Array.isArray(rows) ? rows.filter((r) => r && typeof r.verb === "string") : [];
+	} catch {
+		// A draft that will not parse is a draft nobody can use. Say nothing and
+		// start clean rather than failing the page that asked for it.
+		return [];
+	}
+}
+
+async function writeDraft(id, rows) {
+	const file = draftPath(id);
+	if (!file) throw new Error("that is not a project id");
+	await mkdir(DRAFT_DIR, { recursive: true });
+	// An empty list means "there is no draft", not "write an empty one".
+	if (!Array.isArray(rows) || !rows.length) {
+		await rm(file, { force: true });
+		return null;
+	}
+	await writeFile(file, `${JSON.stringify(rows, null, 2)}\n`, "utf8");
+	return file;
 }
 
 /**
