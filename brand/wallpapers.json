@@ -7,7 +7,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#0d141c",
           "at": 0.15
         },
         {
@@ -44,7 +44,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#10171e",
           "at": 0
         },
         {
@@ -61,16 +61,16 @@
     "texture": {
       "type": "dots",
       "color": "#f2f2f2",
-      "opacity": 0.34,
-      "size": 30,
+      "opacity": 0.14,
+      "size": 35,
       "weight": 2
     },
     "border": {
       "width": 19,
       "color": "#dea7fb",
       "inset": 0,
-      "radius": 36,
-      "sides": "all"
+      "radius": 0,
+      "sides": "bottom"
     }
   },
   {
@@ -81,7 +81,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#0c1218",
           "at": 0
         },
         {
@@ -97,14 +97,14 @@
     },
     "texture": {
       "type": "grid",
-      "color": "#f2f2f2",
-      "opacity": 0.05,
+      "color": "#688eac",
+      "opacity": 0.235,
       "size": 48,
       "weight": 1
     },
     "border": {
-      "width": 0,
-      "color": "#00c278",
+      "width": 25,
+      "color": "#0054c2",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"
@@ -196,7 +196,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#10171e",
           "at": 0
         },
         {
@@ -206,15 +206,15 @@
       ]
     },
     "tint": {
-      "color": "#00b871",
+      "color": "#011028",
       "alpha": 0.16,
       "angle": 168
     },
     "texture": {
       "type": "dots",
       "color": "#f2f2f2",
-      "opacity": 0.055,
-      "size": 16,
+      "opacity": 0.235,
+      "size": 33,
       "weight": 1.4
     },
     "border": {
@@ -243,8 +243,8 @@
       ]
     },
     "tint": {
-      "color": "#3A70B3",
-      "alpha": 0.16,
+      "color": "#610505",
+      "alpha": 0.25,
       "angle": 168
     },
     "texture": {
@@ -255,8 +255,8 @@
       "weight": 1.4
     },
     "border": {
-      "width": 0,
-      "color": "#00c278",
+      "width": 26,
+      "color": "#800000",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"
@@ -307,7 +307,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#0c1217",
           "at": 0
         },
         {
@@ -318,14 +318,14 @@
     },
     "tint": {
       "color": "#86C774",
-      "alpha": 0.16,
+      "alpha": 0,
       "angle": 168
     },
     "texture": {
       "type": "dots",
       "color": "#f2f2f2",
-      "opacity": 0.055,
-      "size": 16,
+      "opacity": 0.245,
+      "size": 32,
       "weight": 1.4
     },
     "border": {
@@ -339,12 +339,12 @@
   {
     "name": "lcad-board",
     "label": "LightningCAD · tinted board",
-    "base": "#141d27",
+    "base": "#090c11",
     "gradient": {
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#000000",
           "at": 0
         },
         {
@@ -354,15 +354,15 @@
       ]
     },
     "tint": {
-      "color": "#2b84f7",
-      "alpha": 0.18,
-      "angle": 168
+      "color": "#006cfa",
+      "alpha": 0.32,
+      "angle": 188
     },
     "texture": {
       "type": "dots",
-      "color": "#f2f2f2",
-      "opacity": 0.055,
-      "size": 16,
+      "color": "#ffffff",
+      "opacity": 0.325,
+      "size": 36,
       "weight": 1.4
     },
     "border": {
@@ -418,7 +418,7 @@
       "angle": 152,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#10171e",
           "at": 0
         },
         {
@@ -429,19 +429,19 @@
     },
     "tint": {
       "color": "#8c3be3",
-      "alpha": 0.18,
-      "angle": 168
+      "alpha": 0,
+      "angle": 180
     },
     "texture": {
       "type": "dots",
       "color": "#f2f2f2",
-      "opacity": 0.055,
-      "size": 16,
+      "opacity": 0.39,
+      "size": 29,
       "weight": 1.4
     },
     "border": {
-      "width": 0,
-      "color": "#00c278",
+      "width": 21,
+      "color": "#7e00c2",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"

@@ -64,7 +64,8 @@ brand/optics/rolemodel-scales.css  GENERATED — only the scales Optics doesn't 
 brand/optics/manifest.json GENERATED — the pinned Optics version + hashes
 brand/optics-tokens.json   the Figma export, now only for the RoleModel sub-brands
 brand/wallpapers.json      wallpaper recipes — the editable source of truth
-brand/wallpapers/          16 rendered backdrops + a contact sheet
+brand/wallpapers/          13 rendered backdrops + a contact sheet. Installed into
+                           the fork too, so the editor's picker offers them
 presets/*.json             rolemodel · academy · lightning
 lib/theme.mjs              load a preset, patch a project document
 lib/annotations.mjs        branded title / lower-third / callout / watermark / zoom builders
@@ -125,10 +126,17 @@ openscreen export demo.openscreen -o demo.mp4 --auto-zoom --json
 
 ```bash
 npm run build     # sync-brand -> optics.css -> wallpapers
-npm run check     # the same three, as assertions — this is what CI runs
+npm run check     # every one-way copy as an assertion — this is what CI runs
+npm run icons     # re-fetch the HugeIcons set into brand/icons
+npm run icon      # rebuild the app icon from brand/icon/source
+npm run app       # launch the app from the fork beside this repo
 npm run dev       # Studio with live reload
 npm run studio    # Studio, plain
 ```
+
+`check` is the gate: it fails on a hand-edited generated file, a stale one-way copy,
+an icon name the UI asks for that the set does not have, a picker asking for a file
+flag the server never sends, and a few hundred other things. 649 assertions.
 
 `npm run dev` is `node --watch` over `bin/` and `lib/` plus a live-reload stream
 to the browser, so editing a panel and seeing it are the same motion. Changes to
@@ -210,13 +218,26 @@ burn-in.
 
 | | input | tool | stays current? |
 |---|---|---|---|
-| **Record** | your screen | `openscreen` | no — re-record by hand |
+| **Record** | your screen | `openscreen` | only if you script it |
+| **Record, scripted** | steps you build in the UI | `rm-demo capture` | **yes** — re-run the script |
 | **Make** | a script or a URL | HyperFrames, via Claude | re-run the brief |
 | **From a test** | a Playwright trace | `playwright-recast` | **yes** — re-run the test |
 
-The third one is the interesting one. A trace already contains actions,
+The two that stay current are the point. A Playwright trace already contains actions,
 screenshots, network waits and cursor positions, so a demo cut from it can be
 regenerated on every deploy and can never drift from the UI it documents.
+
+A scripted capture gets there from the other end: you build the steps as rows on the
+Record page — "Go to a page", "Wait until something appears", "Click something", each
+with an optional line to say while it happens — and `rm-demo capture` drives a browser
+through them while `openscreen record` captures that window. What lands is a
+`.openscreen` document, so the brand preset, auto-zoom and the camera bubble all still
+apply, and the run is repeatable. A step that carries a line holds long enough to say
+it, so the narration and the picture stay on one clock rather than drifting apart.
+
+Nothing is lost in the meantime: a half-built script is saved per project to
+`~/.config/rolemodel-openscreen/drafts/` on every edit, and any script on disk can be
+read back into rows.
 
 ## Components
 

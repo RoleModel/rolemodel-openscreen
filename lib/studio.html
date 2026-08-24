@@ -5,8 +5,7 @@
    <meta charset="utf-8" />
    <meta name="viewport" content="width=device-width,initial-scale=1" />
    <title>RoleModel Studio</title>
-   <link rel="icon"
-      href="/brand-mark.svg" />
+   <link rel="icon" href="/brand-mark.svg" />
    <!-- Vendored, not linked to a CDN: this page is hosted by a desktop app that has
         to start with no network. fonts.css binds the two families the styles below
         already name; hugeicons.css is the icon set. -->
@@ -710,13 +709,13 @@
       .projlist .projart {
          aspect-ratio: auto;
          inline-size: var(--op-space-4x-large);
-         block-size: var(--op-space-3x-large);
+         block-size: var(--op-space-4x-large);
          flex: 0 0 auto;
       }
 
       .projlist .projcap,
       .projlist .projfoot {
-         padding: 0;
+         padding: var(--op-space-x-large);
          border: 0;
          flex: 1 1 auto;
       }
@@ -853,7 +852,7 @@
       .form .full {
          grid-column: 1/-1;
          display: grid;
-         place-content: start;
+         place-content: stretch;
          gap: var(--op-space-small);
          margin-bottom: var(--op-space-medium);
       }
@@ -1309,8 +1308,7 @@
    <div class="op-page__sidebar">
       <nav class="sidebar sidebar--drawer">
          <a class="sidebar__brand sidebar__brand--left" href="/">
-            <img height="50" width="50"
-               src="/brand-mark.svg" />
+            <img height="50" width="50" src="/brand-mark.svg" />
          </a>
          <div class="sidebar__content sidebar__content--start">
             <h1>RoleModel Studio</h1>
