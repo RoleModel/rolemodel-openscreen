@@ -104,6 +104,11 @@ cask "rolemodel-openscreen" do
       System Settings > Privacy & Security > Screen & System Audio Recording.
       A permission failure is a settings toggle, not something to retry.
 
+      0.0.1 changed the bundle id from upstream's to rolemodel.studio, so this is
+      now a separate app rather than one installed over theirs. macOS keys the
+      Screen Recording grant to that id, so if you had already granted it to an
+      earlier build you will be asked once more.
+
       This build is ad-hoc signed, not notarized: the release job signs with a
       certificate only when one is configured, and this fork configures none. On
       first launch macOS will need you to approve it under Privacy & Security.
@@ -117,14 +122,27 @@ cask "rolemodel-openscreen" do
   # "Openscreen". A zap that lists only the current name leaves the older directory
   # behind on exactly the machines that have been running this the longest.
   #
-  # The plist and saved state still carry the bundle id, which did NOT change: it is
-  # what macOS keys the Screen Recording grant to, and renaming it would silently
-  # revoke a permission the caveats above ask people to grant by hand.
+  # Both bundle ids, because it changed at 0.0.1.
+  #
+  # It used to be com.etiennelescot.openscreen — upstream's — which meant this
+  # installed as upstream's app and the two could not coexist. rolemodel.studio makes
+  # it a separate app.
+  #
+  # The cost is a real one and the caveats above say it out loud: macOS keys the
+  # Screen Recording grant to the bundle id, so a machine that had already granted it
+  # to the old id has to grant it again to the new one. There is no way to carry a
+  # TCC grant across identities, and the alternative was shipping for ever under
+  # someone else's identifier.
+  #
+  # The old paths stay listed so `brew zap` still cleans up after a build that
+  # predates the change.
   zap trash: [
     "~/Library/Application Support/RoleModel Studio",
     "~/Library/Application Support/Openscreen",
     "~/Library/Application Support/openscreen",
+    "~/Library/Preferences/rolemodel.studio.plist",
     "~/Library/Preferences/com.etiennelescot.openscreen.plist",
+    "~/Library/Saved Application State/rolemodel.studio.savedState",
     "~/Library/Saved Application State/com.etiennelescot.openscreen.savedState",
     "~/Library/Logs/RoleModel Studio",
     "~/Library/Logs/Openscreen",
