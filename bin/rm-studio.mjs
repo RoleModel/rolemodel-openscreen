@@ -1225,6 +1225,7 @@ const server = createServer(async (req, res) => {
       }
 
       const r = await capture("npx", ["--no-install", "hyperframes", "tts", "--list", "--json"]);
+      let why = null;
       if (r.ok) {
         try {
           const raw = JSON.parse(r.out.slice(r.out.indexOf("[")));
@@ -1235,8 +1236,11 @@ const server = createServer(async (req, res) => {
               label: [v.label || v.id, v.gender, v.language].filter(Boolean).join(" · "),
             }));
           if (voices.length) return json(res, 200, { from: "kokoro", voices });
-        } catch {
-          /* fall through to the static list */
+        } catch (err) {
+          // It answered, but not with the list. Keep the reason: "hyperframes ran
+          // and its output was not JSON" is a different problem from "hyperframes
+          // did not run", and the note used to report both as the latter.
+          why = `hyperframes answered, but not with a voice list (${err.message})`;
         }
       }
       /*
@@ -1258,11 +1262,12 @@ const server = createServer(async (req, res) => {
        */
       const { VOICES } = await import("../lib/narration.mjs");
       const ready = await voiceReady();
+      if (!why && !r.ok) why = npxWhy(r);
       return json(res, 200, {
         from: "static",
         voices: VOICES.map((v) => ({ id: v.id, label: v.label })),
         note: ready
-          ? "Kokoro is installed but would not list its voices — hyperframes is fetched with npx on first use and is not cached yet. These ids are the built-in list and they work; the first line you synthesise will do the fetch."
+          ? `${why ?? "Kokoro would not list its voices"}. These ids are the built-in list and they work — synthesising runs npx with --yes, so the first line you make does the fetch.`
           : "This is the built-in list, because Kokoro is not installed yet. Use “Set up voice” above — it builds a private Python environment, once, and then the list comes from Kokoro itself.",
       });
     }
@@ -2318,6 +2323,31 @@ const FONT_CSS = `/* Served by bin/rm-studio.mjs from brand/fonts/. Vendored, no
 	font-display: swap;
 }
 `;
+
+/**
+ * Why an `npx --no-install hyperframes …` probe failed, in words that are true.
+ *
+ * Every probe here runs with `--no-install` so a page load can never trigger a
+ * download. The failure that actually happens is not the one the notes used to
+ * claim. npx resolves `hyperframes` to whatever the registry calls latest and then
+ * asks the cache for that exact version — so the day upstream publishes a release,
+ * every probe starts failing even though a perfectly good copy is cached. Observed:
+ * 0.8.10 cached, 0.8.12 resolved, and the Voice page reporting "not cached yet".
+ *
+ * So this reads what npm said rather than guessing. The version-mismatch case is
+ * worth naming on its own because it is the common one and it resolves itself:
+ * synthesising uses `--yes`, which fetches.
+ */
+function npxWhy(r) {
+	const err = `${r.err ?? ""}${r.out ?? ""}`;
+	const missing = /missing packages and no YES option:\s*\["([^"]+)"\]/.exec(err);
+	if (missing) {
+		return `hyperframes ${missing[1].split("@").pop()} is not in the npx cache — a newer release than the copy on this machine`;
+	}
+	if (/command not found|ENOENT/i.test(err)) return "npx is not on PATH";
+	const first = err.split("\n").map((l) => l.trim()).filter((l) => l && !/^\(node:\d+\)|^\(Use `node/.test(l))[0];
+	return first ? `hyperframes could not be run: ${first.slice(0, 160)}` : "hyperframes could not be run";
+}
 
 /*
  * What each picker means by a file it can take.
