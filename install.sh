@@ -34,6 +34,23 @@ warn() { printf '  %s!%s %s\n' "$Y" "$R" "$1"; }
 die()  { printf '\n%sinstall failed:%s %s\n\n' "$Y" "$R" "$1" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Take the quarantine attribute off the installed app.
+#
+# Without this an ad-hoc signed bundle cannot be opened at all — see the note on
+# the app step. Quiet about a bundle that is not there, because the app step is
+# allowed to fail and this must not turn that into a second error.
+unquarantine() {
+	app="/Applications/Openscreen.app"
+	[ -d "$app" ] || return 0
+	if xattr -dr com.apple.quarantine "$app" 2>/dev/null; then
+		say "  ${D}cleared the quarantine flag (the build is ad-hoc signed, not notarised)${R}"
+	else
+		warn "could not clear the quarantine flag on $app"
+		say  "  ${D}macOS will refuse to open it. Run this by hand:${R}"
+		say  "    xattr -dr com.apple.quarantine '$app'"
+	fi
+}
+
 case "$(uname -s)" in
 	Darwin) ;;
 	*) die "this is macOS only for now — the capture path is ScreenCaptureKit" ;;
@@ -67,6 +84,28 @@ else
 	brew tap "$TAP"
 fi
 
+# ── trusting the tap ────────────────────────────────────────────────────────
+# Homebrew 6 refuses to read a formula or cask from a third-party tap until the
+# tap is trusted, and the refusal is an error rather than a prompt:
+#
+#   Error: Refusing to load formula rolemodel/tap/rm-video from untrusted tap
+#
+# A tap is code that runs on your machine, so the gate is right — but tapping
+# without trusting leaves the install dead in the water one line later, which is
+# what happened before this step existed. `brew trust` is only available from
+# Homebrew 6, so older versions skip it rather than fail on an unknown command.
+step "Trust $TAP"
+if ! brew trust --help >/dev/null 2>&1; then
+	skip "not needed on $(brew --version | head -1)"
+elif grep -q "\"$TAP\"" "${XDG_CONFIG_HOME:-$HOME/.homebrew}/trust.json" 2>/dev/null \
+	|| grep -q "\"$TAP\"" "$HOME/.homebrew/trust.json" 2>/dev/null; then
+	skip "already trusted"
+else
+	# --tap, not a bare name: the bare form is ambiguous once a tap and a formula
+	# share a prefix, and brew asks for the kind.
+	brew trust --tap "$TAP"
+fi
+
 # ── the toolkit ─────────────────────────────────────────────────────────────
 # Seven commands and the openscreen shim. The shim matters: a cask's `binary`
 # stanza is a symlink, and Electron resolves its helper apps relative to the
@@ -80,6 +119,20 @@ else
 fi
 
 # ── the app ─────────────────────────────────────────────────────────────────
+# The app is ad-hoc signed, so its quarantine flag has to come off.
+#
+# electron-builder signs with no Developer ID: the bundle carries
+# `Signature=adhoc`, `TeamIdentifier=not set`, and `spctl -a` rejects it.
+# Quarantined, macOS will not open it — "Apple could not verify Openscreen is free
+# of malware", with only Move to Trash or Done, and Move to Trash really does
+# delete the app. Homebrew 6 removed `--no-quarantine`, so the attribute is
+# stripped afterwards instead (see unquarantine below).
+#
+# This trades a real check for a working install. The honest fix is a Developer ID
+# certificate plus notarization in build.yml; until that exists every machine that
+# installs this hits the same wall, so it is handled here and written down rather
+# than discovered one Mac at a time.
+#
 # Not a formula dependency on purpose. Until the fork has cut a release the cask
 # points at a version that does not exist, and making the toolkit depend on it
 # would mean neither installs. So it is attempted, and a failure here leaves you
@@ -89,6 +142,7 @@ if brew list --cask 2>/dev/null | grep -qx "rolemodel-openscreen"; then
 	skip "rolemodel-openscreen"
 elif brew install --cask "$CASK" 2>/dev/null; then
 	say "  installed"
+	unquarantine
 else
 	warn "the cask is not installable yet."
 	say  "  ${D}It needs a release of the fork to point at. Someone has to enable Actions once:${R}"
