@@ -448,6 +448,97 @@
          resize: vertical
       }
 
+      /* Coloured directive tags, without giving up plain text.
+       *
+       * A textarea cannot contain elements, so the choice looked like "chips or a
+       * greppable file". It is not: the tags are a RENDERING of the text, not a
+       * format. A <pre> sits behind the field carrying a highlighted copy, and the
+       * textarea on top has transparent text and a visible caret. What is stored,
+       * saved and diffed is still `/voice af_heart`.
+       *
+       * The two layers must agree on every metric that affects where a glyph lands —
+       * font, size, line-height, padding, border, wrapping. Any disagreement shows up
+       * as text drifting away from its own highlight, which is worse than no
+       * highlight, so the shared properties live in one rule below rather than being
+       * repeated. */
+      .hl-wrap {
+         position: relative;
+         inline-size: 100%;
+      }
+
+      /* `textarea.form-control`, not `textarea`.
+       *
+       * Optics styles the field through
+       * `.form-control:not([type="radio"], [type="checkbox"])`, and :not() carries its
+       * argument's specificity — so that selector is (0,2,0) and beats a plain
+       * `.hl-wrap > textarea` at (0,1,1). The layer, having no form-control class,
+       * took these values while the textarea took Optics': different font size,
+       * different padding, and text that was never made transparent. The result was
+       * every glyph drawn twice, slightly apart.
+       *
+       * (0,2,1) wins for the field without needing !important. */
+      .hl-wrap > textarea.form-control,
+      .hl-wrap > .hl-layer {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         padding: var(--op-space-x-small) var(--op-space-small);
+         border: var(--op-border-width) solid transparent;
+         border-radius: var(--op-radius-large);
+         white-space: pre-wrap;
+         overflow-wrap: break-word;
+         word-break: normal;
+         tab-size: 2;
+         margin: 0;
+      }
+
+      .hl-wrap > .hl-layer {
+         position: absolute;
+         inset: 0;
+         overflow: hidden;
+         pointer-events: none;
+         background: var(--panel);
+         border-color: var(--line);
+         color: var(--fg);
+      }
+
+      /* Transparent text, real caret. The layer behind supplies every visible glyph.
+         Same specificity story as above — Optics sets the field's colour at (0,2,0). */
+      .hl-wrap > textarea.form-control {
+         position: relative;
+         background: transparent;
+         color: transparent;
+         caret-color: var(--fg);
+         border-color: var(--line);
+      }
+
+      /* The key reads as syntax, the value as data — which is why only the value is
+         chipped. One accent for every setting rather than a colour per directive: a
+         palette invented here would say things about the brand that the brand does
+         not say. */
+      .hl-key {
+         color: var(--muted);
+      }
+
+      /* The brand green, not Optics' primary — that one is blue, as the note beside
+         --accent at the top of this file says. A blue chip in a green product reads
+         as a different application's widget. */
+      .hl-val {
+         color: var(--op-color-academy-primary-plus-two);
+         background: var(--op-color-academy-primary-minus-six);
+         border-radius: var(--op-radius-medium);
+         padding-inline: var(--op-space-3x-small);
+      }
+
+      /* --bad is what the rest of this UI already uses for a wrong thing, so an
+         invalid directive looks like every other error here rather than like a new
+         kind of problem. */
+      .hl-bad {
+         color: var(--bad);
+         text-decoration: underline wavy;
+         text-underline-offset: var(--op-space-3x-small);
+      }
+
       input[type=search] {
          flex: 1 1 var(--search-min)
       }
