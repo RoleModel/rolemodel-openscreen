@@ -1,15 +1,15 @@
 # Homebrew formula for the RoleModel OpenScreen brand layer.
 #
 # This file belongs in the TAP repo, not this one:
-#   github.com/rolemodelsoftware/homebrew-tap  ->  Formula/rm-video.rb
+#   github.com/RoleModel/homebrew-tap  ->  Formula/rm-video.rb
 # A copy lives here so the formula and the code it describes move together.
 # `.github/workflows/release.yml` copies it across and fills in url + sha256
 # on every tag, so the two never drift by hand.
 class RmVideo < Formula
   desc "RoleModel brand layer for OpenScreen — presets, wallpapers, and demo tooling"
-  homepage "https://github.com/rolemodelsoftware/rolemodel-openscreen"
-  url "https://github.com/rolemodelsoftware/rolemodel-openscreen/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  homepage "https://github.com/RoleModel/rolemodel-openscreen"
+  url "https://github.com/RoleModel/rolemodel-openscreen/archive/refs/tags/v0.0.1.tar.gz"
+  sha256 "7242e8bace3ce0254b2b7b9aa5ec092cdcaa30d9a7e2383a1b28d91dde48ca76"
   license "MIT"
 
   # Node is the only runtime dependency. There is nothing to compile — the
