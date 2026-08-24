@@ -849,10 +849,22 @@ const server = createServer(async (req, res) => {
               id: proj.id,
               name: proj.name,
               workspace: w.name,
+              /*
+               * No link composed here.
+               *
+               * This used to carry `watch: `${api.base}/watch/${v.id}``, which is a
+               * URL with no share token in it — OpenFrame answers 403 and the page
+               * says "Video not found or access denied". Only ?shareToken= gets a
+               * viewer in, and the token is not in this listing.
+               *
+               * Reading it per video would be a GET each, on a listing that already
+               * costs one call per project, to fill in a button most sessions never
+               * press. So the ids go out and /api/review/link resolves one on click.
+               */
               videos: (videos?.videos ?? videos ?? []).map((v) => ({
                 id: v.id,
                 title: v.title,
-                watch: `${api.base}/watch/${v.id}`,
+                projectId: proj.id,
               })),
             });
           }
@@ -881,6 +893,28 @@ const server = createServer(async (req, res) => {
       } catch (err) {
         // settingProblem() validates; a bad url is the user's to see, not a 500.
         return json(res, 400, { error: err.message });
+      }
+    }
+
+    /**
+     * The share link for one video, resolved when someone asks to open it.
+     *
+     * A GET against OpenFrame, never a POST: POST rotates the token on an existing
+     * link, so a button that said "open this" would quietly break every link
+     * already sent for that video. No link yet means no link — this does not make
+     * one, because creating a share link is a thing the person should choose.
+     */
+    if (p === "/api/review/link") {
+      const { url: base, token } = await openFrameSettings();
+      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
+      const projectId = url.searchParams.get("project");
+      const videoId = url.searchParams.get("video");
+      if (!projectId || !videoId) return json(res, 400, { error: "need project and video" });
+      try {
+        const shareUrl = await openFrame({ base, token }).shareLink(projectId, videoId);
+        return json(res, 200, { shareUrl });
+      } catch (err) {
+        return json(res, 200, { shareUrl: null, error: err.message });
       }
     }
 
