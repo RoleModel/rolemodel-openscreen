@@ -1,0 +1,59 @@
+{
+  "$schema": "./motion.schema.md",
+  "$comment": [
+    "Motion direction for a Recast render. Hand-maintained — not a generated file.",
+    "",
+    "Claude authors the render's GSAP timeline itself and cannot see the Studio, so",
+    "motion only reaches it as sentences in the prompt (see the `wants` array in",
+    "bin/rm-studio.mjs). Before this file existed there were no such sentences, which",
+    "is why every deck moved differently: the panel sent chrome, background and",
+    "captions, and left motion to whatever the model felt like that run.",
+    "",
+    "The `brand` preset is not invented. It is read off the eight transition tokens",
+    "in brand/optics/optics.css, which are the only motion the design system ships:",
+    "  --op-transition-accordion        rotate 120ms ease-in",
+    "  --op-transition-input            all 120ms ease-in",
+    "  --op-transition-sidebar          all 200ms ease-in-out",
+    "  --op-transition-accordion-content height 300ms ease",
+    "  --op-transition-modal            all 300ms ease-in",
+    "  --op-transition-tooltip          all 300ms ease-in 300ms",
+    "  --op-transition-panel            right 400ms ease-in",
+    "That is a narrow, consistent signature: 120-400ms, ease-in or ease-in-out, one",
+    "or two properties at a time, and no bounce, elastic or back easing anywhere in",
+    "the system. The sentences below say exactly that, in the vocabulary the",
+    "hyperframes skill uses to write a timeline."
+  ],
+  "default": "brand",
+  "presets": {
+    "brand": {
+      "label": "Brand — Optics motion",
+      "hint": "The system's own signature: short, eased, nothing bouncy.",
+      "direction": [
+        "Motion follows Optics: every transition runs 120-400ms with ease-in or ease-in-out (GSAP `power2.in` / `power2.inOut`).",
+        "Never use bounce, elastic, back, or spring easing, and never spin, flip or rotate an element more than 2 degrees — the design system contains no such motion.",
+        "Animate opacity and transform only. Nothing travels more than 40px, and nothing scales past 1.04.",
+        "Reveal a group as a group: stagger its items 60-80ms rather than animating them one at a time.",
+        "Once a slide has arrived it holds still. No looping, drifting, pulsing or ambient movement under the narration."
+      ]
+    },
+    "minimal": {
+      "label": "Minimal — cuts and fades",
+      "hint": "Nothing moves. Use when the content is dense or the narration is fast.",
+      "direction": [
+        "Motion is cuts and cross-fades only: 150ms opacity transitions, ease-in.",
+        "Nothing translates, scales, rotates or staggers. No element moves position at any point.",
+        "Slides cut between each other on the beat of the narration."
+      ]
+    },
+    "energetic": {
+      "label": "Energetic — quicker, more travel",
+      "hint": "Same easing family, shorter and larger. For promos, not walkthroughs.",
+      "direction": [
+        "Motion is quick: 90-200ms transitions with ease-out (GSAP `power3.out`).",
+        "Still no bounce, elastic, back or spring easing, and still no spinning or flipping.",
+        "Elements may travel up to 80px and scale to 1.08. Stagger a group's items 40ms.",
+        "Movement stops once a slide is in place — the energy is in the arrival, not in ambient drift."
+      ]
+    }
+  }
+}
