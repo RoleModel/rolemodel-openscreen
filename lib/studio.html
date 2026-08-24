@@ -257,6 +257,65 @@
          max-width: var(--op-breakpoint-x-large)
       }
 
+      /*
+       * The Editor view, when the app is hosting us.
+       *
+       * The editor is a native view the host positions over this page, so the
+       * region it occupies must not scroll with the document — a scrolled page
+       * would slide the layout out from under a view that stayed exactly where it
+       * was put. On this one view the page stops scrolling and the frame takes
+       * whatever height is left, which also means the rect only changes when the
+       * window does.
+       *
+       * The width cap comes off for the same reason it exists elsewhere: a reading
+       * measure is right for a form and wrong for a timeline.
+       */
+      body.has-editor {
+         height: 100vh;
+         overflow: hidden
+      }
+
+      body.has-editor main {
+         display: flex;
+         flex-direction: column;
+         flex: 1;
+         min-height: 0;
+         max-width: none
+      }
+
+      /*
+       * The editor's slot: flush, and deliberately unlike every other panel here.
+       *
+       * The first version put the frame inside .op-page__main-content and .container
+       * and then cancelled their padding and width from underneath — a frame and
+       * about forty pixels of nothing around an application that has its own chrome,
+       * with the editor's top bar reading as a card header. It renders in its own
+       * sibling element now, so there is nothing to cancel. The only inset left is
+       * the breadcrumb row above it, which is the window's drag region: cover that
+       * and the window stops being movable.
+       */
+      .editor-host {
+         display: none
+      }
+
+      body.has-editor .op-page__main-content {
+         display: none
+      }
+
+      body.has-editor .editor-host {
+         display: flex;
+         flex-direction: column;
+         flex: 1;
+         min-height: 0
+      }
+
+      .editor-frame {
+         flex: 1;
+         min-height: 240px;
+         background: var(--op-color-neutral-plus-two);
+         overflow: hidden
+      }
+
       h2 {
          font-size: var(--op-font-x-large);
          font-weight: var(--op-font-weight-extra-bold);
@@ -1247,6 +1306,16 @@
       <div class="op-page__main-content">
          <div class="container" id="main"></div>
       </div>
+      <!-- The editor's own slot, a sibling of the content wrapper rather than a
+           child of it.
+           Optics' .op-page__main-content and .container are a reading measure and a
+           page gutter — right for every other panel here and wrong for an
+           application, which wants the whole area. Overriding their padding and
+           max-width from inside worked and left the editor sitting in two wrappers
+           whose whole job was to inset it, so the next person to touch either
+           stylesheet would put the inset back. Bypassed instead: on the Editor view
+           the content wrapper is hidden and this takes the space. -->
+      <div id="editor-host" class="editor-host"></div>
    </main>
    <script src="/studio.js"></script>
 </body>
