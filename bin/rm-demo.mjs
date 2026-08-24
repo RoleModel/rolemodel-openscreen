@@ -27,8 +27,9 @@
  */
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { attachRecorder, CURSOR_MODES, recordArgs, sentinelTitle } from "../lib/demo-capture.mjs";
+import { attach as watchClicks, serialize as serializeDemo } from "../lib/demo-record.mjs";
 import { actions, describe as describeDemo, narration, parseDemo } from "../lib/demo-script.mjs";
 
 const argv = process.argv.slice(2);
@@ -197,6 +198,83 @@ async function checkCommand() {
  * `--window` is still accepted, for capturing an app that is already open rather
  * than the browser this drives. Then no sentinel is involved.
  */
+/**
+ * Write the script by doing the demo.
+ *
+ * The other two commands need a script, and writing one means knowing a DSL and
+ * guessing what a button is called — `expect "REQUEST QUOTE"` is a reasonable line
+ * to read and an unreasonable one to be asked to author. Most people making these
+ * videos are not developers, and a form with dropdowns is the same problem wearing
+ * a hat: you would still have to know the button is "REQUEST QUOTE" and not
+ * "Request quote".
+ *
+ * So this watches instead of driving. Open the app, click through it, close the
+ * window, and lib/demo-record.mjs turns what happened into the same markdown the
+ * other commands read — coalescing keystrokes into one `type`, wheel ticks into
+ * one `scroll`, and real pauses into explicit `wait`s, because the pauses are part
+ * of what makes a demo watchable and the first thing lost when re-authoring by hand.
+ *
+ * Nothing is recorded to video here. This produces the script; `capture` is what
+ * records, and it can now be handed something nobody had to write.
+ */
+async function recordCommand() {
+	const out = flag("out");
+	if (typeof out !== "string") die("--out <script.md> is required");
+
+	let chromium;
+	try {
+		({ chromium } = await import("playwright"));
+	} catch {
+		die("playwright is not installed here — npm install");
+	}
+
+	const width = Number(flag("width", DEFAULT_W));
+	const height = Number(flag("height", DEFAULT_H));
+	// Headed is not a choice here: the whole command is a person using the app.
+	const browser = await chromium.launch({ headless: false });
+	const context = await browser.newContext({ viewport: { width, height } });
+	const watcher = await watchClicks(context);
+
+	const page = await context.newPage();
+	const start = typeof flag("url") === "string" ? String(flag("url")) : null;
+	if (start) await page.goto(start).catch((err) => console.error(`  could not open ${start}: ${err.message}`));
+
+	console.log("");
+	console.log("  Click through the demo in the window that just opened.");
+	console.log("  Close it when you are done, and the script is written.");
+	console.log("");
+
+	// The browser closing is the stop signal, because "close the window" is the
+	// instruction a person is already following. Waiting on `close` rather than
+	// polling: a context that is gone cannot be asked anything.
+	await new Promise((resolve) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			resolve();
+		};
+		context.on("close", finish);
+		browser.on("disconnected", finish);
+	});
+
+	const steps = watcher.finish();
+	if (!steps.length) {
+		die("nothing was recorded — no clicks, no typing, no navigation");
+	}
+
+	const title = typeof flag("title") === "string" ? String(flag("title")) : "Recorded demo";
+	const file = resolve(out);
+	await mkdir(dirname(file), { recursive: true });
+	await writeFile(file, serializeDemo(steps, { title }), "utf8");
+
+	console.log(`  script    ${file}`);
+	console.log(`  steps     ${steps.length}`);
+	console.log("");
+	console.log(`  next      rm-demo capture ${JSON.stringify(file)} --project <out.openscreen>`);
+	console.log("");
+}
+
 async function captureCommand() {
 	const file = argv[1];
 	if (!file) die("give me a script: rm-demo capture <script.md> --project <out.openscreen>");
@@ -436,6 +514,9 @@ switch (cmd) {
 	case "capture":
 		await captureCommand();
 		break;
+	case "record":
+		await recordCommand();
+		break;
 	default:
 		console.log(
 			[
@@ -445,6 +526,7 @@ switch (cmd) {
 				"  check <script.md>                  parse it and say what it will do",
 				"  run <script.md> --out <dir>        run it, leaving trace.zip and a screencast",
 				"  capture <script.md> --project <p>  record the screen while it runs",
+				"  record --out <script.md>           click through the app; the clicks are the script",
 				"",
 				"Options for run and capture",
 				"  --url <base>      base URL for relative gotos",
@@ -462,6 +544,15 @@ switch (cmd) {
 				`  --cursor <mode>             ${CURSOR_MODES.join(" | ")} (default editable-overlay)`,
 				"  --duration <seconds>        a hard stop, on top of the script ending",
 				"  --openscreen <path>         the CLI to drive (default: openscreen on PATH)",
+				"",
+				"Options for record",
+				"  --out <script.md>  where to write it (required)",
+				"  --url <page>       open here first, so you start where the demo starts",
+				"  --title <text>     the heading on the script it writes",
+				"",
+				"`record` is for anyone who does not want to learn a DSL: open the app, click",
+				"through it, close the window. What comes out is the same markdown `run` and",
+				"`capture` read, so it stays editable by whoever does want to.",
 				"",
 				"`run` gives recast a trace. `capture` gives the editor a document — the",
 				"brand preset, auto-zoom and the camera bubble only apply to the latter.",
