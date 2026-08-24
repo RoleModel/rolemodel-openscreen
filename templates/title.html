@@ -1,0 +1,123 @@
+<!--
+  RoleModel title card for a HyperFrames render.
+
+  Staged by `rm-video assets`. Copy it, rename the id, and change the words — the
+  structure is the part worth keeping.
+
+  Three things it gets right that a hand-rolled card usually does not:
+
+    - it says whose video this is. A brand mark, from brand/logos, in the variant
+      that suits the ground it sits on. That is the one job a title card has.
+    - it uses the vendored faces, so it renders identically with no network.
+    - its motion is the house signature: short, eased, nothing bouncy. See
+      brand/motion.json — that file is the authority, this is one use of it.
+
+  The contract HyperFrames expects: a <template> wrapper, a data-composition-id
+  that every selector is scoped to, and data-start / data-duration on the root.
+  Sizes are against 1920x1080.
+-->
+<template id="rm-title-template">
+  <div
+    id="rm-title"
+    data-composition-id="rm-title"
+    data-start="0"
+    data-duration="4"
+    data-width="1920"
+    data-height="1080"
+  >
+    <div class="scene">
+      <div class="bg"></div>
+      <div class="overlay"></div>
+
+      <div class="content">
+        <!-- Eyebrow: mono, spaced, quiet. Say the series or the client here, not
+             a second headline. -->
+        <div class="eyebrow">EYEBROW</div>
+        <h1 class="title">Your title
+goes here</h1>
+      </div>
+
+      <!-- The mark. `-logo-color-on-dark` keeps the brand colour on a dark ground
+           and is preferred where it exists; `-logo-white` is the fallback, and
+           `-logo` is for light grounds. crossorigin is required by HyperFrames. -->
+      <img
+        class="brand-logo"
+        src="assets/brand/rolemodel-logo-color-on-dark.svg"
+        alt="RoleModel Software"
+        crossorigin="anonymous"
+      />
+    </div>
+
+    <style>
+      [data-composition-id="rm-title"] { position: absolute; inset: 0; overflow: hidden; }
+      [data-composition-id="rm-title"] .scene { position: absolute; inset: 0; box-sizing: border-box; }
+
+      [data-composition-id="rm-title"] .bg {
+        position: absolute; inset: 0;
+        background-color: var(--color-dark);
+        background-image: var(--dot-grid);
+        background-size: var(--grid-size) var(--grid-size);
+      }
+      [data-composition-id="rm-title"] .overlay {
+        position: absolute; inset: 0;
+        background: var(--overlay-hero);
+        pointer-events: none;
+      }
+
+      [data-composition-id="rm-title"] .content {
+        position: absolute; left: 120px; top: 340px; width: 1200px; z-index: 3;
+      }
+      [data-composition-id="rm-title"] .eyebrow {
+        font-family: var(--font-mono);
+        font-size: var(--size-eyebrow);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        margin-bottom: 28px;
+      }
+      [data-composition-id="rm-title"] .title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--size-title);
+        font-weight: 700;
+        line-height: 1.06;
+        letter-spacing: -0.015em;
+        color: var(--color-light);
+        white-space: pre-line;
+      }
+      [data-composition-id="rm-title"] .brand-logo {
+        position: absolute; left: 120px; bottom: 110px;
+        height: 44px; width: auto; z-index: 3;
+      }
+
+      /*
+       * Motion, from brand/motion.json's `brand` preset: 120-400ms, ease-in or
+       * ease-in-out, opacity and transform only, nothing travelling far, and a
+       * group revealed as a group. Held still once it has arrived — a title card
+       * that keeps moving under narration is the thing that reads as amateur.
+       *
+       * Declared in CSS rather than as a GSAP timeline so the card works when it
+       * is dropped in on its own. Drive it from the timeline instead if the
+       * composition needs to sync to a beat.
+       */
+      @keyframes rm-rise {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: none; }
+      }
+      [data-composition-id="rm-title"] .eyebrow,
+      [data-composition-id="rm-title"] .title,
+      [data-composition-id="rm-title"] .brand-logo {
+        animation: rm-rise 300ms cubic-bezier(0.4, 0, 1, 1) both;
+      }
+      [data-composition-id="rm-title"] .eyebrow    { animation-delay: 0ms; }
+      [data-composition-id="rm-title"] .title      { animation-delay: 70ms; }
+      [data-composition-id="rm-title"] .brand-logo { animation-delay: 140ms; }
+
+      @media (prefers-reduced-motion: reduce) {
+        [data-composition-id="rm-title"] .eyebrow,
+        [data-composition-id="rm-title"] .title,
+        [data-composition-id="rm-title"] .brand-logo { animation: none; }
+      }
+    </style>
+  </div>
+</template>
