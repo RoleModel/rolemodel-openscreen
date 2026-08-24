@@ -44,6 +44,8 @@
     "icons:check": "node lib/make-icons.mjs --check",
     "logos": "node lib/make-logos.mjs",
     "logos:check": "node lib/make-logos.mjs --check",
+    "motion": "node lib/make-motion.mjs",
+    "motion:check": "node lib/make-motion.mjs --check",
     "app": "node lib/launch-app.mjs"
   },
   "devDependencies": {
