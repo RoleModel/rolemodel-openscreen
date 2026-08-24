@@ -28,6 +28,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import { attachRecorder, CURSOR_MODES, recordArgs, sentinelTitle } from "../lib/demo-capture.mjs";
 import { actions, describe as describeDemo, narration, parseDemo } from "../lib/demo-script.mjs";
 
 const argv = process.argv.slice(2);
@@ -50,6 +51,12 @@ const DEFAULT_H = 900;
 const STEP_TIMEOUT_MS = 15_000;
 /** Breathing room after a click, so the trace has frames showing the result. */
 const SETTLE_MS = 350;
+/** How long the sentinel title needs to reach the window manager. */
+const TITLE_SETTLE_MS = 400;
+/** How long to let the recorder fail before trusting it. */
+const RECORDER_SETTLE_MS = 2500;
+/** Held frames after the last step, so the cut is not on the click. */
+const TAIL_HOLD_MS = 900;
 
 /**
  * Resolve a target to a Playwright locator.
@@ -178,6 +185,149 @@ async function checkCommand() {
 	console.log("\n  looks runnable\n");
 }
 
+/**
+ * Record the screen while the script drives the browser.
+ *
+ * The order matters and is the whole trick. A browser's window title is whatever
+ * page it shows, so there is nothing for `--window` to match before the first
+ * `goto`. The driver therefore opens a blank page, stamps a sentinel title on it,
+ * and only then starts the recorder — which resolves its source once and keeps it,
+ * so the title reverting to the real page a moment later is fine.
+ *
+ * `--window` is still accepted, for capturing an app that is already open rather
+ * than the browser this drives. Then no sentinel is involved.
+ */
+async function captureCommand() {
+	const file = argv[1];
+	if (!file) die("give me a script: rm-demo capture <script.md> --project <out.openscreen>");
+	const project = flag("project");
+	if (typeof project !== "string") die("--project <out.openscreen> is required");
+
+	const md = await readFile(resolve(file), "utf8").catch(() => die(`cannot read ${file}`));
+	const parsed = parseDemo(md);
+	if (parsed.problems.length) {
+		for (const p of parsed.problems) console.error(`rm-demo: ${p}`);
+		die(`${parsed.problems.length} problem(s) — nothing ran`);
+	}
+	const steps = actions(parsed);
+	if (!steps.length) die("nothing to do — the script has no ```do block");
+
+	let chromium;
+	try {
+		({ chromium } = await import("playwright"));
+	} catch {
+		die("playwright is not installed here — npm install");
+	}
+
+	// Every record knob, assembled and validated before anything is launched: a
+	// typo in --cursor should cost nothing, not a browser and a failed capture.
+	const ownWindow = typeof flag("window") === "string";
+	const title = ownWindow ? String(flag("window")) : sentinelTitle(process.pid);
+	let recArgs;
+	try {
+		recArgs = recordArgs({
+			project: resolve(project),
+			window: title,
+			...(flag("display") !== undefined ? { display: flag("display") } : {}),
+			...(flag("mic") === true ? { mic: true } : {}),
+			...(typeof flag("mic-device") === "string" ? { micDevice: flag("mic-device") } : {}),
+			...(flag("system-audio") === true ? { systemAudio: true } : {}),
+			...(typeof flag("cursor") === "string" ? { cursor: flag("cursor") } : {}),
+			...(flag("duration") !== undefined ? { duration: flag("duration") } : {}),
+		});
+	} catch (err) {
+		die(err.message);
+	}
+
+	const width = Number(flag("width", DEFAULT_W));
+	const height = Number(flag("height", DEFAULT_H));
+	const browser = await chromium.launch({ headless: flag("headless") === true });
+	const context = await browser.newContext({
+		viewport: { width, height },
+		baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
+	});
+	const page = await context.newPage();
+
+	// The sentinel has to be on a page the OS can see before the recorder looks.
+	if (!ownWindow) {
+		await page.goto("about:blank");
+		await page.evaluate((t) => {
+			document.title = t;
+		}, title);
+		await page.waitForTimeout(TITLE_SETTLE_MS);
+	}
+
+	const bin = typeof flag("openscreen") === "string" ? String(flag("openscreen")) : "openscreen";
+	console.log("");
+	console.log(`  recorder  ${bin} ${recArgs.join(" ")}`);
+	const child = spawn(bin, recArgs, { stdio: ["pipe", "pipe", "pipe"] });
+	const rec = attachRecorder(child, {
+		onLog: (line) => console.error(`  [record] ${line}`),
+	});
+
+	/*
+	 * A settle window rather than a "recording started" event, because the CLI does
+	 * not emit one — its `started` fires when the runner window is created, before
+	 * the capture exists. What it does do is fail loudly and early when no window
+	 * matches, listing the ones that are open, so waiting a beat and then checking
+	 * for a problem catches the failure that actually happens.
+	 */
+	await new Promise((r) => setTimeout(r, RECORDER_SETTLE_MS));
+	const early = rec.problem();
+	if (early) {
+		await browser.close();
+		die(early);
+	}
+
+	let failed = null;
+	const started = Date.now();
+	for (const step of steps) {
+		try {
+			await runStep(page, step, (msg) => console.log(`  ${msg}`));
+		} catch (err) {
+			failed = { step, message: err instanceof Error ? err.message : String(err) };
+			break;
+		}
+	}
+	// A held tail, so the capture does not cut on the same frame as the last click.
+	await page.waitForTimeout(TAIL_HOLD_MS);
+
+	rec.stop();
+	let result = null;
+	try {
+		result = await rec.finished();
+	} catch (err) {
+		await browser.close();
+		die(err.message);
+	}
+	await context.close();
+	await browser.close();
+
+	// The narration goes beside the document under the same basename, which is how
+	// rm-voice and rm-mux find it without being told.
+	const lines = narration(parsed);
+	const docPath = result?.projectPath ?? resolve(project);
+	let scriptOut = null;
+	if (lines.length) {
+		scriptOut = docPath.replace(/\.openscreen$/i, "") + ".narration.md";
+		await writeFile(scriptOut, `${lines.join("\n\n")}\n`, "utf8");
+	}
+
+	const secs = ((Date.now() - started) / 1000).toFixed(1);
+	console.log("");
+	console.log(`  document  ${docPath}`);
+	if (result?.screenVideoPath) console.log(`  video     ${result.screenVideoPath}`);
+	if (scriptOut) console.log(`  narration ${scriptOut}  (${lines.length} lines)`);
+	console.log(`  ran       ${steps.length} steps in ${secs}s`);
+	console.log("");
+	console.log("  next      rm-video brand <document> --preset rolemodel, then open it");
+	if (failed) {
+		console.error(`\nrm-demo: stopped at line ${failed.step.line} (${failed.step.verb}): ${failed.message}`);
+		console.error("  the capture above covers everything up to that point.");
+		process.exit(1);
+	}
+}
+
 async function runCommand() {
 	const file = argv[1];
 	if (!file) die("give me a script: rm-demo run <script.md> --out <dir>");
@@ -283,6 +433,9 @@ switch (cmd) {
 	case "run":
 		await runCommand();
 		break;
+	case "capture":
+		await captureCommand();
+		break;
 	default:
 		console.log(
 			[
@@ -291,12 +444,27 @@ switch (cmd) {
 				"",
 				"  check <script.md>                  parse it and say what it will do",
 				"  run <script.md> --out <dir>        run it, leaving trace.zip and a screencast",
+				"  capture <script.md> --project <p>  record the screen while it runs",
 				"",
-				"Options for run",
+				"Options for run and capture",
 				"  --url <base>      base URL for relative gotos",
 				"  --width <px>      viewport width (default 1440)",
 				"  --height <px>     viewport height (default 900)",
 				"  --headless        run without a visible window (worse cursor overlay)",
+				"",
+				"Options for capture — every one is an `openscreen record` flag",
+				"  --project <out.openscreen>  where the document lands (required)",
+				"  --display <n>               screen index, when recording a display",
+				"  --window <title>            record this window instead of the browser",
+				"  --mic                       capture the default microphone",
+				"  --mic-device <name>         a named microphone (implies --mic)",
+				"  --system-audio              capture system audio",
+				`  --cursor <mode>             ${CURSOR_MODES.join(" | ")} (default editable-overlay)`,
+				"  --duration <seconds>        a hard stop, on top of the script ending",
+				"  --openscreen <path>         the CLI to drive (default: openscreen on PATH)",
+				"",
+				"`run` gives recast a trace. `capture` gives the editor a document — the",
+				"brand preset, auto-zoom and the camera bubble only apply to the latter.",
 				"",
 				"A script is markdown: prose is narration, ```do blocks are actions.",
 				"The same file feeds rm-voice unchanged — it ignores fenced blocks.",
