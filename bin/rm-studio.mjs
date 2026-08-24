@@ -1171,8 +1171,18 @@ const server = createServer(async (req, res) => {
       if (script) {
         const parsed = parseDemo(script);
         if (parsed.problems.length) return json(res, 400, { error: parsed.problems.join(" · ") });
-        if (!demoActions(parsed).length) {
+        const acts = demoActions(parsed);
+        if (!acts.length) {
           return json(res, 400, { error: "the script has no ```do block, so nothing would drive the capture" });
+        }
+        // A scripted capture drives a browser that starts blank, so a script that
+        // never navigates has nothing to act on. Said here rather than discovered
+        // sixteen seconds into a take.
+        if (!acts.some((a) => a.verb === "goto")) {
+          return json(res, 400, {
+            error:
+              "this script never navigates, so there would be nothing to act on — add a first step that goes to a page.",
+          });
         }
         scriptPath = join(dest, `${slug}.demo.md`);
         await writeFile(scriptPath, script.endsWith("\n") ? script : `${script}\n`, "utf8");
@@ -1188,7 +1198,16 @@ const server = createServer(async (req, res) => {
             [
               "capture", scriptPath,
               "--project", proj,
-              ...captureArgs(body.source),
+              /*
+               * No captureArgs here, deliberately.
+               *
+               * The Capture picker names a window that already exists. A scripted
+               * capture drives a browser it launches itself, and that browser is the
+               * thing worth recording — so passing the picked window recorded one
+               * thing while the script drove another. That is exactly what happened:
+               * thirty seconds of the Feeney window while a blank Chromium got the
+               * clicks. rm-demo refuses --window now; this stops sending it.
+               */
               ...recorderArgs(body),
               ...driverArgs(body),
               ...(body.seconds ? ["--duration", String(body.seconds)] : []),

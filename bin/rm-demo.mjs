@@ -290,6 +290,30 @@ async function captureCommand() {
 	const steps = actions(parsed);
 	if (!steps.length) die("nothing to do — the script has no ```do block");
 
+	/*
+	 * A capture that cannot possibly work, refused before it costs a take.
+	 *
+	 * `capture` launches its own browser. A script that never navigates leaves it on
+	 * about:blank, so the first selector fails and everything after it is dead — and
+	 * the recorder happily films thirty seconds of nothing while that plays out.
+	 * Observed exactly once, at the cost of a 16-second capture and the take: "stopped
+	 * at line 4 (click): nothing matched \"Level Selection\" on about:blank".
+	 *
+	 * `run` is different and stays permissive: it can act on a page that is already
+	 * open, which is why parseDemo does not treat this as an error on its own.
+	 */
+	if (!steps.some((st) => st.verb === "goto")) {
+		die(
+			[
+				"this script never navigates, so there would be nothing to act on.",
+				"",
+				"  `capture` drives its own browser, which starts blank. Add a first step that",
+				"  goes somewhere — `goto https://your-app.example.com/...`, or `goto /path` with",
+				"  --url set — and the rest of the script has a page to work on.",
+			].join("\n"),
+		);
+	}
+
 	let chromium;
 	try {
 		({ chromium } = await import("playwright"));
@@ -297,9 +321,29 @@ async function captureCommand() {
 		die("playwright is not installed here — npm install");
 	}
 
-	// Every record knob, assembled and validated before anything is launched: a
-	// typo in --cursor should cost nothing, not a browser and a failed capture.
-	const ownWindow = typeof flag("window") === "string";
+	/*
+	 * --window and a script are contradictory, and silently doing both is worse.
+	 *
+	 * The script drives a browser this command launches. Naming another window means
+	 * recording that one while the script drives the browser — two things, neither
+	 * connected, which is what happened: the Feeney window was filmed while a blank
+	 * Chromium got the clicks.
+	 */
+	if (typeof flag("window") === "string") {
+		die(
+			[
+				`--window "${flag("window")}" cannot be recorded by a scripted capture.`,
+				"",
+				"  The script drives a browser this command launches, so that is the window",
+				"  worth recording — naming another one films something nothing is driving.",
+				"",
+				"  Record the app the script drives: point the first `goto` at it.",
+				"  Record a window something else is driving: `openscreen record --window ...`",
+				"  on its own, with no script.",
+			].join("\n"),
+		);
+	}
+	const ownWindow = false;
 	const title = ownWindow ? String(flag("window")) : sentinelTitle(process.pid);
 	let recArgs;
 	try {
