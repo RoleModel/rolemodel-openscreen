@@ -66,34 +66,10 @@
     "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(51, 209, 169, 0.18) 0%, rgba(51, 209, 169, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
   },
   {
-    "name": "decks-board",
-    "label": "Deck Designer · tinted board",
-    "file": "decks-board.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(255, 173, 10, 0.18) 0%, rgba(255, 173, 10, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
-  },
-  {
     "name": "railing-board",
     "label": "Railing Designer · tinted board",
     "file": "railing-board.jpg",
     "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(140, 59, 227, 0.18) 0%, rgba(140, 59, 227, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
-  },
-  {
-    "name": "building-board",
-    "label": "Building · tinted board",
-    "file": "building-board.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(173, 191, 8, 0.18) 0%, rgba(173, 191, 8, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
-  },
-  {
-    "name": "airfield-board",
-    "label": "Airfield · tinted board",
-    "file": "airfield-board.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(70, 245, 251, 0.18) 0%, rgba(70, 245, 251, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
-  },
-  {
-    "name": "flow-board",
-    "label": "Flow · tinted board",
-    "file": "flow-board.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(11, 201, 239, 0.18) 0%, rgba(11, 201, 239, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
   },
   {
     "name": "rolemodel-blue",

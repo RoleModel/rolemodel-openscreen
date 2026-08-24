@@ -109,9 +109,11 @@ three named as load-bearing:
   token, an unresolvable `--op-` token, or a hand-written hex in the Studio.
   *(Enforced in CI today, but not named load-bearing — treat it as a live
   engineering constraint rather than a fixed principle.)*
-- Eight sub-brands, each a real Optics scale: Craftsmanship Academy,
-  LightningCAD, Dock Designer, Deck Designer, Railing Designer, Building,
-  Airfield, Flow.
+- Four sub-brands, each a real Optics scale: Craftsmanship Academy,
+  LightningCAD, Dock Designer, Railing Designer. Optics carries scales for Deck
+  Designer, Building, Airfield and Flow too, and they stay in the Figma export
+  because they are real products — this toolkit just does not offer them as
+  choices. `SUB_BRANDS` in `lib/sync-brand.mjs` is the list that decides.
 - CSS and JS are built inside tagged template literals, which is load-bearing
   and fragile: a backtick in a CSS comment silently terminates the literal and
   the page renders as unstyled tags. `npm run check` runs `node --check` over
