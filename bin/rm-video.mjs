@@ -13,7 +13,8 @@
  */
 import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { title, watermark } from "../lib/annotations.mjs";
 import {
 	ROOT,
@@ -204,8 +205,121 @@ async function skillsCommand() {
 		});
 		child.on("close", done);
 	});
-	if (code !== 0) process.exitCode = code ?? 1;
+	// Repair the self-clobber before deciding whether this worked.
+	//
+	// hyperframes 0.8.12 copies each skill into ~/.claude/skills/<name> and then
+	// "links skills into 6 other agent directories" using one relative target,
+	// ../../.claude/skills/<name>. That is correct from ~/.agents/skills and
+	// ~/.codex/skills, and inside ~/.claude/skills it points at itself — so the
+	// link replaces the copy that was just made with a loop, and the installer
+	// then reports "Skill(s) still missing after install" about its own work.
+	//
+	// The loop is silent afterwards: the skill simply is not there, and a render
+	// that asks for /hyperframes fails with nothing to read. So the links are
+	// checked every time and restored from the package, which is where the copy
+	// came from in the first place.
+	if (!check) await repairClobberedSkills();
+
+	if (code !== 0 && !(await skillsPresent())) process.exitCode = code ?? 1;
 	else if (!check) console.log("\n  Installed into ~/.claude/skills — `Make a video` can find them now.\n");
+}
+
+/** The skills this toolkit actually needs present to render. */
+const NEEDED_SKILLS = ["hyperframes", "hyperframes-cli"];
+
+/** Whether every needed skill resolves to a readable SKILL.md. */
+async function skillsPresent() {
+	const { access } = await import("node:fs/promises");
+	const dir = join(homedir(), ".claude", "skills");
+	for (const name of NEEDED_SKILLS) {
+		try {
+			await access(join(dir, name, "SKILL.md"));
+		} catch {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Replace any self-referential skill symlink with the package's real copy.
+ *
+ * Only touches a name that is a symlink which does not resolve — a real
+ * directory, or a working link someone set up deliberately, is left alone.
+ */
+async function repairClobberedSkills() {
+	const { access, lstat, readlink, rm, cp } = await import("node:fs/promises");
+	const dir = join(homedir(), ".claude", "skills");
+	const source = await packagedSkillsDir();
+	const fixed = [];
+
+	for (const name of NEEDED_SKILLS) {
+		const target = join(dir, name);
+		let broken = false;
+		try {
+			const st = await lstat(target);
+			if (!st.isSymbolicLink()) continue;
+			await access(target).then(
+				() => {},
+				() => {
+					broken = true;
+				},
+			);
+			// access() on a loop throws ELOOP, which the catch above turns into broken.
+			if (!broken) {
+				try {
+					await access(join(target, "SKILL.md"));
+					continue;
+				} catch {
+					broken = true;
+				}
+			}
+			console.log(`  repairing ${name} — it is a link to ${await readlink(target)}`);
+		} catch {
+			// Absent entirely: still worth restoring if the package has it.
+		}
+		if (!source) continue;
+		try {
+			await rm(target, { force: true, recursive: true });
+			await cp(join(source, name), target, { recursive: true });
+			fixed.push(name);
+		} catch (e) {
+			console.error(`  could not restore ${name}: ${e.message}`);
+		}
+	}
+
+	if (fixed.length) {
+		console.log(`\n  restored ${fixed.join(", ")} from the hyperframes package.`);
+		console.log("  (upstream links a skill over itself; this undoes that.)");
+	}
+}
+
+/**
+ * Where the hyperframes package keeps the skills it installs.
+ *
+ * Read out of the npx cache rather than downloaded again: `skills update` has
+ * just run, so the package is on disk, and re-fetching it to repair the thing it
+ * broke would be both slower and less predictable.
+ */
+async function packagedSkillsDir() {
+	const { readdir, access } = await import("node:fs/promises");
+	const root = join(homedir(), ".npm", "_npx");
+	let entries = [];
+	try {
+		entries = await readdir(root);
+	} catch {
+		return null;
+	}
+	for (const e of entries) {
+		const candidate = join(root, e, "node_modules", "hyperframes", "dist", "skills");
+		try {
+			await access(join(candidate, "hyperframes", "SKILL.md"));
+			return candidate;
+		} catch {
+			/* not this one */
+		}
+	}
+	return null;
 }
 
 switch (cmd) {
