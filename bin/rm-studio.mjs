@@ -24,7 +24,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { renderStudioHTML } from "../lib/studio-ui.mjs";
@@ -934,6 +934,49 @@ const server = createServer(async (req, res) => {
      * On demand rather than in the listing: both are a call each, and the listing
      * already costs one per project.
      */
+    /**
+     * A review thumbnail, fetched with the token and passed through.
+     *
+     * The page cannot load these itself. OpenFrame serves them from
+     * /api/upload/image/<file>, which resolves which video the image belongs to and
+     * then checks project access — so an anonymous <img> gets 403, and the Studio
+     * page has no OpenFrame session and should never be given the token.
+     *
+     * So the server does it. The path is taken from the listing rather than the
+     * query string: accepting an arbitrary path here would turn this into an open
+     * proxy for anything on that host, signed with our token.
+     */
+    if (p === "/api/review/thumb") {
+      const { url: base, token } = await openFrameSettings();
+      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured" });
+      const videoId = url.searchParams.get("video");
+      const projectId = url.searchParams.get("project");
+      if (!videoId || !projectId) return json(res, 400, { error: "need project and video" });
+      try {
+        const api = openFrame({ base, token });
+        const listing = await api.call(`/api/projects/${projectId}/videos`);
+        const video = (listing?.videos ?? []).find((v) => v.id === videoId);
+        const thumb = (video?.versions ?? [])[0]?.thumbnailUrl;
+        // Only a path this instance told us about, and only an image path.
+        if (!thumb || !/^\/api\/upload\/image\/[A-Za-z0-9._-]+$/.test(thumb)) {
+          return json(res, 404, { error: "no thumbnail" });
+        }
+        const upstream = await fetch(base.replace(/\/$/, "") + thumb, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!upstream.ok) return json(res, 502, { error: `OpenFrame answered ${upstream.status}` });
+        const bytes = Buffer.from(await upstream.arrayBuffer());
+        res.writeHead(200, {
+          "content-type": upstream.headers.get("content-type") ?? "image/jpeg",
+          // Short: a new version replaces the thumbnail under the same video id.
+          "cache-control": "private, max-age=60",
+        });
+        return res.end(bytes);
+      } catch (err) {
+        return json(res, 502, { error: err.message });
+      }
+    }
+
     if (p === "/api/review/status") {
       const { url: base, token } = await openFrameSettings();
       if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
@@ -1109,10 +1152,9 @@ const server = createServer(async (req, res) => {
       // is where quoting bugs and injection both live. The display string is
       // derived from the array, never the other way round.
       const recordStep = scriptPath
-        ? {
-            label: "record",
-            bin: "rm-demo",
-            args: [
+        ? ownStep(
+            "rm-demo",
+            [
               "capture", scriptPath,
               "--project", proj,
               ...captureArgs(body.source),
@@ -1120,8 +1162,11 @@ const server = createServer(async (req, res) => {
               ...driverArgs(body),
               ...(body.seconds ? ["--duration", String(body.seconds)] : []),
             ],
-            note: "drives the browser and records it — Screen Recording permission still applies",
-          }
+            {
+              label: "record",
+              note: "drives the browser and records it — Screen Recording permission still applies",
+            },
+          )
         : {
             label: "record",
             bin: "openscreen",
@@ -1138,11 +1183,7 @@ const server = createServer(async (req, res) => {
 
       const steps = [
         recordStep,
-        {
-          label: "brand",
-          bin: "rm-video",
-          args: ["brand", proj, "--preset", m.brand || "rolemodel"],
-        },
+        ownStep("rm-video", ["brand", proj, "--preset", m.brand || "rolemodel"], { label: "brand" }),
         {
           label: "export",
           bin: "openscreen",
@@ -1713,12 +1754,10 @@ async function fetchVoiceList() {
         trace: join(dir, `${slug}.zip`),
         plan: describeDemo(parsed),
         steps: [
-          {
+          ownStep("rm-demo", args, {
             label: "demo",
-            bin: "rm-demo",
-            args,
             note: "opens a real browser window and drives it — do not type while it runs",
-          },
+          }),
         ],
       });
     }
@@ -2494,6 +2533,28 @@ function npxWhy(r) {
 	if (/command not found|ENOENT/i.test(err)) return "npx is not on PATH";
 	const first = err.split("\n").map((l) => l.trim()).filter((l) => l && !/^\(node:\d+\)|^\(Use `node/.test(l))[0];
 	return first ? `hyperframes could not be run: ${first.slice(0, 160)}` : "hyperframes could not be run";
+}
+
+/**
+ * A step that runs one of this toolkit's own binaries.
+ *
+ * Never by bare name. `rm-demo` is newer than some installs, so on a machine whose
+ * Homebrew copy predates it the name is simply not on PATH and every scripted
+ * capture died with "rm-demo: not found on PATH" — a real break, reported as one,
+ * and nothing about the request was wrong.
+ *
+ * We are the toolkit, so we know where our scripts are: `node <toolkit>/bin/x.mjs`
+ * works from a checkout and from libexec, needs nothing linked, and cannot be
+ * shadowed by something else called rm-demo. The job runner allows `node` for
+ * exactly this and resolves the path itself, so nothing from a request reaches argv.
+ *
+ * PATH is still the fallback, for a binary that is not ours to ship.
+ */
+function ownStep(name, args, extra = {}) {
+	const script = join(TOOLKIT, "bin", `${name}.mjs`);
+	return existsSync(script)
+		? { bin: "node", args: [script, ...args], ...extra }
+		: { bin: name, args, ...extra };
 }
 
 /*
