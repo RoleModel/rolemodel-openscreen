@@ -1,5 +1,5 @@
 ---
-name: rm-screen-demo
+name: skill
 description: Record a branded RoleModel product demo or Academy lesson with OpenScreen — capture, apply the brand preset, add a title and callouts, and render an MP4 or GIF. Use when someone says "record a demo", "make a screen recording of this feature", "capture a walkthrough", "record an Academy lesson", or wants a branded screen recording for a case study, docs page, PR, or social post. Also use to re-brand or re-export an existing .openscreen project.
 ---
 

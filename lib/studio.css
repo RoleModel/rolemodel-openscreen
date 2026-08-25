@@ -1,0 +1,2002 @@
+/*
+ * The Studio's stylesheet.
+ *
+ * Lifted out of a 1,988-line <style> block in studio.html, where every rule sat
+ * inside the markup that used it — so the file was mostly CSS with a page at the
+ * bottom, no editor could fold or jump around it as a stylesheet, and a change to
+ * one selector meant scrolling past two thousand lines of unrelated ones.
+ *
+ * Loaded from bin/rm-studio.mjs at /studio.css, no-store like /studio.js, for the
+ * same reason: it must never be older than the markup that links it.
+ *
+ * A note on units, because it costs an hour otherwise: Optics sets the root to
+ * 62.5%, so 1rem is 10px here. `34rem` is 340px.
+ */
+
+      /*
+ * Every value below is a token. Nothing here invents a hex, a pixel, a weight
+ * or a radius.
+ *
+ * Optics ramps run "plus" toward the background and "minus" toward the
+ * foreground in BOTH modes, so this mapping is written once and is correct
+ * either way — flip color-scheme to light and the whole UI follows. It is
+ * pinned dark because this thing sits next to video all day.
+ *
+ * Spacing, radii, type and weight all come from Optics directly. Values that
+ * were off the scale were snapped to the nearest step (nearest wins, ties round
+ * down), so a handful of paddings moved by a pixel or two — that is the point
+ * of adopting a scale. The three things Optics does not publish get named
+ * blocks of their own below, with the reason each one exists.
+ */
+      :root {
+         color-scheme: dark;
+         --op-color-primary-h: 147;
+         --op-color-primary-s: 50%;
+         --op-color-primary-l: 56%;
+         --bg: var(--op-color-neutral-plus-max);
+         --panel: var(--op-color-neutral-plus-eight);
+         --panel2: var(--op-color-neutral-plus-six);
+         --line: var(--op-color-neutral-plus-four);
+         --sunk: var(--op-color-neutral-plus-max);
+         --fg: var(--op-color-neutral-minus-max);
+         --muted: var(--op-color-neutral-minus-four);
+         /* RoleModel green is the academy-primary scale; Optics "primary" is blue. */
+         --accent: var(--op-color-academy-primary-base);
+         --on-accent: var(--op-color-academy-primary-on-base);
+         --blue: var(--op-color-primary-base);
+         --danger: var(--op-color-alerts-danger-base);
+         --danger-fg: var(--op-color-alerts-danger-minus-two);
+         --info-bg: var(--op-color-academy-primary-plus-four);
+         --info-fg: var(--op-color-academy-primary-on-plus-four);
+         --d: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+         --m: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+         /* The scrim under the kind pill on a thumbnail. Optics has no scrim colour
+     and no 0.6 opacity step, so this is Optics black at the half-opacity
+     token — mixed into the background rather than applied as opacity, which
+     would fade the label with it. */
+         --scrim: color-mix(in srgb, var(--op-color-black) calc(var(--op-opacity-half) * 100%), transparent);
+
+         /* Tracking. Optics publishes exactly one letter-spacing token
+     (--op-letter-spacing-label, 0.04rem = 0.4px). Display type wants negative
+     tracking and small caps want two or three times that, and neither exists
+     upstream — so both are whole multiples of the one token rather than loose
+     em values. Retune the token and every heading and label moves together. */
+         --track-tight: calc(var(--op-letter-spacing-label) * -1);
+         --track-wide: calc(var(--op-letter-spacing-label) * 2);
+         --track-wider: calc(var(--op-letter-spacing-label) * 3);
+
+         /* Structure. Optics' space scale tops out at 80px and describes gaps, not the
+     width of a sidebar or the label column of a form. The layout dimensions
+     this page needs are named here as whole multiples of --op-size-unit (4px),
+     so they sit on the same grid the space scale is built from and there is no
+     loose pixel left in the rules below. */
+         --nav-w: calc(var(--op-size-unit) * 52);
+         /* 208px sidebar */
+         --dot: calc(var(--op-size-unit) * 2);
+         /* 8px tool status dot */
+         /* The graph-paper pitch. A separate token from --line on purpose: --line is
+            the border colour, used in 26 rules in this file, and naming the grid
+            size --line as well redefined it to a length — which silently invalidated
+            every `solid var(--line)` border AND the gradients below, because a
+            length where a colour belongs makes the whole declaration invalid rather
+            than raising anything. */
+         --grid: calc(var(--op-size-unit) * 4);
+         /* 240px. The narrowest a labelled control reads well at; below it the form
+            drops to one column on its own rather than at a breakpoint. */
+         --field-col: calc(var(--op-size-unit) * 60);
+         /* One step brighter than --line. The border colour is right for a 1px edge
+            against a panel and too dark for a 1px line on the page ground, which is
+            why the grid was technically painting and effectively invisible. */
+         --grid-line: oklch(from var(--op-color-neutral-plus-three) l c h / 0.2);
+         --badge-min: calc(var(--op-size-unit) * 4);
+         /* 16px job-count badge */
+         --search-min: calc(var(--op-size-unit) * 64);
+         /* 256px search field basis */
+         --card-min: calc(var(--op-size-unit) * 58);
+         /* 232px library card */
+         --preview-min: calc(var(--op-size-unit) * 105);
+         /* 420px title/lower-third */
+         --canvas-min: calc(var(--op-size-unit) * 90);
+         /* 360px wallpaper canvas */
+         --controls-min: calc(var(--op-size-unit) * 75);
+         /* 300px wallpaper controls */
+         --label-col: calc(var(--op-size-unit) * 32);
+         /* 128px form label column */
+         --form-max: calc(var(--op-size-unit) * 155);
+         /* 620px form measure */
+         /* 256px. Was 152px, which is four lines of a script — enough to prove the
+            field works and not enough to write in. */
+         --field-tall: calc(var(--op-size-unit) * 64);
+         /* 152px textarea */
+         --code-min: calc(var(--op-size-unit) * 50);
+         /* 200px argv readout */
+         --ctl-col: calc(var(--op-size-unit) * 24);
+         /* 96px editor label column */
+         --ctl-val: calc(var(--op-size-unit) * 11);
+         /* 44px numeric readout */
+         --stop-col: calc(var(--op-size-unit) * 14);
+         /* 56px gradient stop swatch */
+         --stop-x: calc(var(--op-size-unit) * 7);
+         /* 28px stop remove button */
+         --joblist-w: calc(var(--op-size-unit) * 62);
+         /* 248px console job list */
+         --preview-tall: calc(var(--op-size-unit) * 64);
+         /* 256px script preview */
+         --canvas-split: 1.35fr;
+         /* canvas : controls, in the wallpaper editor */
+         --measure: 70ch;
+         /* reading measure for lede copy */
+         --panel-h: 70vh;
+         /* console job list and log */
+         --frame-h: 78vh;
+         /* components gallery iframe */
+
+         /* Video geometry, not UI. Optics has nothing to say about a 16:9 frame, and
+     the title / lower-third preview scales with its container — so its type
+     sizes are cqw and its tracking is em, both of which follow the container
+     where a rem token cannot. These mirror the preview as it stands; they are
+     NOT the same numbers as rm-title/rm-lower-third in components/rm-video.js,
+     which is a drift worth closing separately. */
+         --video-ar: 16/9;
+         --swatch-ar: 16/6;
+         --lt-inset: 6%;
+         --lt-name: 18%;
+         --lt-sub: 15%;
+         --lt-eyebrow: 40%;
+         --lt-title: 48%;
+         --lt-title-max: 80%;
+         --lt-eyebrow-size: 1.35cqw;
+         --lt-title-size: 8cqw;
+         --lt-name-size: 2.3cqw;
+         --lt-sub-size: 1.25cqw;
+         --lt-track-tight: -.02em;
+         --lt-track-tighter: -.03em;
+         --lt-track-wide: .12em;
+         --thumb-track: .3em;
+
+         --duration-slow: 300ms;
+         --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+         --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
+         /* the AUDIO/no-poster watermark */
+      }
+
+      * {
+         box-sizing: border-box
+      }
+
+      @view-transition {
+         navigation: auto;
+      }
+
+      .op-page__main {
+         /* Give the element its own isolated transition layer */
+         view-transition-name: main-content;
+      }
+
+      /* 2. Define custom animations for your isolated content layer */
+      @keyframes fade-out {
+         to {
+            opacity: 0;
+         }
+      }
+
+      @keyframes fade-in {
+         from {
+            opacity: 0;
+         }
+      }
+
+      /* 3. Target the custom transition layer name instead of (root) */
+      ::view-transition-old(main-content) {
+         animation: var(--duration-slow) var(--ease-enter) both fade-out;
+      }
+
+      ::view-transition-new(main-content) {
+         animation: var(--duration-slow) var(--ease-exit) both fade-in;
+      }
+
+      /* body.op-page, not .op-page.
+       *
+       * Optics styles the element we are also styling — `body { background:
+       * var(--op-color-background) }` — and that is a SHORTHAND, so whenever it wins
+       * it does not merely change the colour, it resets background-image and
+       * background-size with it. All three of ours go at once, which reads as the
+       * grid being "cancelled out" rather than as one property losing.
+       *
+       * .op-page (0,1,0) already beat body (0,0,1), so this changed nothing today.
+       * It is here because the margin was one point: any body rule with !important,
+       * or any selector more specific than a bare tag, would have taken the whole
+       * background with it. body.op-page is (0,1,1) and cannot lose to a tag. */
+      /* The graph paper.
+       *
+       * On body.op-page, not .op-page: Optics also styles this element with
+       * `body { background: var(--op-color-background) }`, and that is a SHORTHAND —
+       * whenever it wins it does not recolour, it resets background-image and
+       * background-size with it. All three go at once, which is what "cancelled out"
+       * looked like. .op-page (0,1,0) already beat body (0,0,1); body.op-page (0,1,1)
+       * cannot lose to a bare tag at all.
+       *
+       * A fixed ::before at z-index -1 was tried and is worse: it sits behind body's
+       * own background, so anything opaque on body hides it. Straight on the element
+       * is both simpler and harder to break. */
+      body.op-page {
+         margin: 0;
+         background-color: var(--bg);
+         color: var(--fg);
+         font-family: var(--d);
+         min-height: 100vh;
+         background-size: var(--grid) var(--grid);
+         background-image:
+            linear-gradient(to right, var(--grid-line) var(--op-border-width), transparent var(--op-border-width)),
+            linear-gradient(to bottom, var(--grid-line) var(--op-border-width), transparent var(--op-border-width));
+         place-items: stretch;
+      }
+
+      .op-page {
+         & .op-page__main {
+            .op-page__main-content {
+               /* Optics sets --op-breakpoint-medium here; see `main` above. */
+               max-inline-size: none;
+               min-height: 100vh;
+            }
+         }
+      }
+
+
+
+      .sidebar__brand.sidebar__brand--left {
+         --_op-sidebar-brand-spacing: 0;
+         --__op-sidebar-brand-width: calc(var(--op-space-large) * 2);
+         margin-block-end: var(--op-space-small);
+         margin-inline: var(--op-space-large) auto;
+         display: flex;
+         align-self: start;
+      }
+
+      .container {
+         display: flex;
+         flex-direction: column;
+         align-items: stretch;
+         max-inline-size: none;
+         gap: var(--op-space-medium);
+      }
+
+
+      nav h1 {
+         font-size: var(--op-font-x-large);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--track-tight);
+         margin: 0 0 var(--op-space-2x-small);
+         padding: 0 var(--op-space-large)
+      }
+
+      nav .root {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         padding: 0 var(--op-space-large) var(--op-space-medium);
+         word-break: break-all
+      }
+
+      nav .btn.btn--no-border {
+         display: inline-flex;
+         width: 100%;
+         text-align: left;
+         background: none;
+         border: 0;
+         color: var(--muted);
+         font: inherit;
+         font-size: var(--op-font-small);
+         padding: var(--op-space-x-small) var(--op-space-large);
+         cursor: pointer;
+         border-left: var(--op-border-width-large) solid transparent
+      }
+
+      nav button:hover {
+         color: var(--fg)
+      }
+
+      nav button[aria-current=true] {
+         color: var(--fg);
+         border-left-color: var(--accent);
+         background: var(--panel2);
+         font-weight: var(--op-font-weight-semi-bold)
+      }
+
+      nav .tools {
+         margin-top: var(--op-space-large);
+         padding: var(--op-space-small) var(--op-space-large) 0;
+         border-top: var(--op-border-width) solid var(--line);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         line-height: var(--op-line-height-loosest)
+      }
+
+      .dot {
+         display: inline-block;
+         width: var(--dot);
+         height: var(--dot);
+         border-radius: var(--op-radius-circle);
+         margin-right: var(--op-space-x-small)
+      }
+
+      .dot.on {
+         background: var(--accent)
+      }
+
+      .dot.off {
+         background: var(--op-color-neutral-plus-two)
+      }
+
+      main {
+         flex: 1;
+         /*
+          * No width cap here, and none on .op-page__main-content or .container
+          * below — all three had one, so lifting any single one changed nothing
+          * and looked like the override had not applied.
+          *
+          * Optics caps main-content at --op-breakpoint-medium because its page
+          * shell is built for documents, where a measure is the point. This is a
+          * tool: the Library is a grid, Compose is a segment list, the Console is
+          * a log. Those want the window. Prose is capped where prose lives
+          * instead — see .lede and .hint — so the reading rule is kept by the
+          * elements it is actually about.
+          */
+         max-width: none
+      }
+
+      /*
+       * The Editor view, when the app is hosting us.
+       *
+       * The editor is a native view the host positions over this page, so the
+       * region it occupies must not scroll with the document — a scrolled page
+       * would slide the layout out from under a view that stayed exactly where it
+       * was put. On this one view the page stops scrolling and the frame takes
+       * whatever height is left, which also means the rect only changes when the
+       * window does.
+       *
+       * The width cap comes off for the same reason it exists elsewhere: a reading
+       * measure is right for a form and wrong for a timeline.
+       */
+      body.has-editor {
+         height: 100vh;
+         overflow: hidden
+      }
+
+      body.has-editor main {
+         display: flex;
+         flex-direction: column;
+         flex: 1;
+         min-height: 0;
+         max-width: none
+      }
+
+      /*
+       * The editor's slot: flush, and deliberately unlike every other panel here.
+       *
+       * The first version put the frame inside .op-page__main-content and .container
+       * and then cancelled their padding and width from underneath — a frame and
+       * about forty pixels of nothing around an application that has its own chrome,
+       * with the editor's top bar reading as a card header. It renders in its own
+       * sibling element now, so there is nothing to cancel. The only inset left is
+       * the breadcrumb row above it, which is the window's drag region: cover that
+       * and the window stops being movable.
+       */
+      .editor-host {
+         display: none
+      }
+
+      body.has-editor .op-page__main-content {
+         display: none
+      }
+
+      body.has-editor .editor-host {
+         display: flex;
+         flex-direction: column;
+         flex: 1;
+         min-height: 0
+      }
+
+      .editor-frame {
+         flex: 1;
+         min-height: 240px;
+         background: var(--op-color-neutral-plus-two);
+         overflow: hidden
+      }
+
+      h2 {
+         font-size: var(--op-font-x-large);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--track-tight);
+         margin: 0 0 var(--op-space-3x-small)
+      }
+
+      .lede {
+         color: var(--muted);
+         font-size: var(--op-font-medium);
+         margin: 0 0 var(--op-space-large);
+         line-height: var(--op-line-height-base);
+         /*
+          * The measure lives here, not on the page.
+          *
+          * With the page's width caps lifted, a lede ran the full window — on a
+          * wide monitor that is a 200-character line, and the eye loses its place
+          * returning to the left edge. Capping the paragraph instead of the shell
+          * keeps grids and lists full-bleed while sentences stay readable.
+          */
+         max-inline-size: 72ch
+      }
+
+      .row {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         flex-wrap: wrap;
+         margin-bottom: var(--op-space-medium)
+      }
+
+      /* Icons sit with the text, not on it. The set is a ligature font, so a glyph
+         is a ::before on an inline element and inherits font-size — 1.15em keeps it
+         a touch larger than the label without changing the row's height. */
+      .hgi-stroke {
+         font-size: 1.15em;
+         line-height: 1;
+         vertical-align: -0.09em
+      }
+
+      nav button[data-v] {
+         display: flex;
+         align-items: center;
+         gap: var(--op-space-x-small)
+      }
+
+      .navicon {
+         flex: 0 0 auto;
+         opacity: .8
+      }
+
+      nav button[data-v][aria-current=true] .navicon {
+         opacity: 1
+      }
+
+      /* A button whose whole label is a glyph still needs a square hit area. */
+      .btn.ghost:has(> .hgi-stroke:only-child) {
+         padding-inline: var(--op-space-x-small)
+      }
+
+      .full.row {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         flex-wrap: wrap;
+         margin-bottom: var(--op-space-medium)
+      }
+
+      input,
+      select,
+      textarea {
+         background: var(--panel);
+         color: var(--fg);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-x-small) var(--op-space-small);
+         font: inherit;
+         font-size: var(--op-font-small)
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+         outline: var(--op-border-width-large) solid var(--accent);
+         outline-offset: calc(var(--op-border-width) * -1)
+      }
+
+      textarea.form-control,
+      textarea {
+         width: 100%;
+         block-size: var(--field-tall);
+         min-height: var(--field-tall);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         resize: vertical
+      }
+
+      /* Coloured directive tags, without giving up plain text.
+       *
+       * A textarea cannot contain elements, so the choice looked like "chips or a
+       * greppable file". It is not: the tags are a RENDERING of the text, not a
+       * format. A <pre> sits behind the field carrying a highlighted copy, and the
+       * textarea on top has transparent text and a visible caret. What is stored,
+       * saved and diffed is still `/voice af_heart`.
+       *
+       * The two layers must agree on every metric that affects where a glyph lands —
+       * font, size, line-height, padding, border, wrapping. Any disagreement shows up
+       * as text drifting away from its own highlight, which is worse than no
+       * highlight, so the shared properties live in one rule below rather than being
+       * repeated. */
+      .hl-wrap {
+         position: relative;
+         inline-size: 100%;
+         /* Optics' .form-group is itself a two-column grid, and it spans the control
+          * across both by matching .form-control. The wrapper is not one, so it took
+          * the narrow first track and the field came out 186px wide inside a 982px
+          * group — the width the wrapping introduced, not one anybody chose. */
+         grid-column: 1 / -1;
+      }
+
+      /* `textarea.form-control`, not `textarea`.
+       *
+       * Optics styles the field through
+       * `.form-control:not([type="radio"], [type="checkbox"])`, and :not() carries its
+       * argument's specificity — so that selector is (0,2,0) and beats a plain
+       * `.hl-wrap > textarea` at (0,1,1). The layer, having no form-control class,
+       * took these values while the textarea took Optics': different font size,
+       * different padding, and text that was never made transparent. The result was
+       * every glyph drawn twice, slightly apart.
+       *
+       * (0,2,1) wins for the field without needing !important. */
+      .hl-wrap>textarea.form-control,
+      .hl-wrap>.hl-layer {
+         /* The wrapper is 100% of the group; the textarea inside it is not, and a
+          * textarea with no width falls back to its `cols` default — 186px of a
+          * 982px card. It only looked right before because an unwrapped field took
+          * its width from the block it sat in. The layer is inset:0 and would not
+          * need this, but it shares the rule so the two cannot drift apart. */
+         inline-size: 100%;
+         box-sizing: border-box;
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         padding: var(--op-space-x-small) var(--op-space-small);
+         border: var(--op-border-width) solid transparent;
+         border-radius: var(--op-radius-large);
+         white-space: pre-wrap;
+         overflow-wrap: break-word;
+         word-break: normal;
+         tab-size: 2;
+         margin: 0;
+      }
+
+      .hl-wrap>.hl-layer {
+         position: absolute;
+         inset: 0;
+         overflow: hidden;
+         pointer-events: none;
+         background: var(--panel);
+         border-color: var(--line);
+         color: var(--fg);
+      }
+
+      /* Transparent text, real caret. The layer behind supplies every visible glyph.
+         Same specificity story as above — Optics sets the field's colour at (0,2,0). */
+      .hl-wrap>textarea.form-control {
+         position: relative;
+         background: transparent;
+         color: transparent;
+         caret-color: var(--fg);
+         border-color: var(--line);
+      }
+
+      /* The key reads as syntax, the value as data — which is why only the value is
+         chipped. One accent for every setting rather than a colour per directive: a
+         palette invented here would say things about the brand that the brand does
+         not say. */
+      .hl-key {
+         color: var(--muted);
+      }
+
+      /* The brand green, not Optics' primary — that one is blue, as the note beside
+         --accent at the top of this file says. A blue chip in a green product reads
+         as a different application's widget. */
+      .hl-val {
+         color: var(--op-color-academy-primary-on-plus-six);
+         background: var(--op-color-academy-primary-plus-six);
+         border-radius: var(--op-radius-medium);
+         padding-inline: var(--op-space-3x-small);
+      }
+
+      /* --bad is what the rest of this UI already uses for a wrong thing, so an
+         invalid directive looks like every other error here rather than like a new
+         kind of problem. */
+      .hl-bad {
+         color: var(--bad);
+         text-decoration: underline wavy;
+         text-underline-offset: var(--op-space-3x-small);
+      }
+
+      input[type=search] {
+         flex: 1 1 var(--search-min)
+      }
+
+      button.btn {
+         background: var(--accent);
+         color: var(--on-accent);
+         border: 0;
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-x-small) var(--op-space-medium);
+         font: inherit;
+         font-size: var(--op-font-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         cursor: pointer
+      }
+
+      button.btn.ghost {
+         background: var(--panel);
+         color: var(--fg);
+         border: var(--op-border-width) solid var(--line);
+         font-weight: var(--op-font-weight-medium)
+      }
+
+      select.form-control:not([multiple], [type='radio'], [type='checkbox']) {
+         --op-encoded-images-dropdown-arrow: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="9" viewBox="0 0 12 9" fill="none"%3E%3Cpath d="M6 8.37501L0 2.37501L1.4 0.975006L6 5.57501L10.6 0.975006L12 2.37501L6 8.37501Z" fill="%23FFFFFF"/%3E%3C/svg%3E');
+      }
+
+      /* A delete is quiet until it is armed. Danger is text, never a filled
+         alarm block — same rule the rest of the interface follows. */
+      button.btn.ghost.del {
+         color: var(--op-color-alerts-danger-minus-two);
+         /* The card body is a flex column, so `justify-self` does nothing here and
+            the button stretched the full width — which reads as the primary action
+            on the card rather than the quiet one it should be. */
+         align-self: start;
+         padding-inline: var(--op-space-x-small);
+      }
+
+      button.btn.ghost.del.armed {
+         border-color: var(--op-color-alerts-danger-minus-two);
+         color: var(--op-color-alerts-danger-minus-two);
+      }
+
+      button.btn:disabled {
+         opacity: var(--op-opacity-disabled);
+         cursor: not-allowed
+      }
+
+      .chip {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         color: var(--muted);
+         border-radius: var(--op-radius-pill);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         cursor: pointer
+      }
+
+      /*
+       * A chosen swatch has to look chosen.
+       *
+       * `.btn` carries no pressed state, so picking a colour changed the markup and
+       * nothing on screen — and with an empty stage there is no part to take the
+       * colour either, so the whole interaction read as a dead control. The ring is
+       * drawn outside the button so it does not shift the swatch by a pixel.
+       */
+      .swatch[aria-pressed='true'] {
+         outline: 2px solid var(--accent);
+         outline-offset: 2px;
+      }
+
+      /*
+       * One colour, chosen from the brand.
+       *
+       * Closed it is a chip and a name; open it is the whole palette as a grid.
+       * Twenty swatches laid out permanently is a band of colour across a form
+       * that is mostly about something else — but a colour cannot be chosen from
+       * a list of names, so it opens to the pictures rather than shrinking them.
+       */
+      .colormenu {
+         position: relative;
+         display: block;
+      }
+
+      .colormenu__trigger {
+         display: inline-flex;
+         align-items: center;
+         gap: var(--op-space-x-small);
+         inline-size: 100%;
+         /* Sized like the selects it sits beside. A control that is visibly shorter
+            than its neighbours reads as a different kind of thing. */
+         min-block-size: var(--op-input-height-large);
+         padding: var(--op-space-x-small);
+         padding-inline-end: var(--op-space-3x-large);
+         background: var(--op-color-neutral-plus-six);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         color: var(--op-color-neutral-on-plus-six);
+         font-size: var(--op-font-x-small);
+         cursor: pointer;
+         text-align: start;
+         background-image: var(--op-encoded-images-dropdown-arrow);
+         background-position: center right;
+         background-position-x: calc(100% - ((var(--op-space-3x-large) / 2) - (var(--op-encoded-images-dropdown-arrow-width) / 2)));
+         background-repeat: no-repeat;
+         cursor: pointer;
+      }
+
+      .colormenu__trigger:hover {
+         border-color: var(--op-color-neutral-plus-three)
+      }
+
+      .colormenu__chip {
+         inline-size: var(--op-font-medium);
+         block-size: var(--op-font-medium);
+         flex: 0 0 auto;
+         border-radius: var(--op-radius-small);
+         border: 1px solid var(--op-color-neutral-plus-three);
+      }
+
+      /* Nothing chosen reads as nothing chosen, not as black. */
+      .colormenu__chip--none {
+         background:
+            linear-gradient(45deg, transparent 45%, var(--op-color-neutral-minus-five) 45% 55%, transparent 55%);
+      }
+
+      .colormenu__label {
+         flex: 1 1 auto;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+      }
+
+      .colormenu__caret {
+         flex: 0 0 auto;
+         opacity: 0.7
+      }
+
+      .colormenu__panel {
+         position: absolute;
+         z-index: 40;
+         inset-block-start: calc(100% + 4px);
+         inset-inline-start: 0;
+         display: grid;
+         grid-template-columns: repeat(5, 3.4rem);
+         gap: var(--op-space-2x-small);
+         padding: var(--op-space-x-small);
+         background: var(--op-color-neutral-plus-max);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         box-shadow: var(--op-shadow-large, 0 8px 24px rgb(0 0 0 / 0.45));
+      }
+
+      .colormenu__panel[hidden] {
+         display: none
+      }
+
+      .colormenu__swatch {
+         inline-size: 3.4rem;
+         block-size: 3.4rem;
+         padding: 0;
+         border: 1px solid var(--op-color-neutral-plus-three);
+         border-radius: var(--op-radius-small);
+         cursor: pointer;
+         background: transparent;
+         color: var(--op-color-neutral-minus-five);
+      }
+
+      .colormenu__swatch[aria-selected='true'] {
+         outline: 2px solid var(--op-color-neutral-minus-max);
+         outline-offset: 2px;
+      }
+
+      /* A token that does not resolve paints the inherited colour, so every swatch
+         comes out identical and the palette looks like one colour repeated. */
+      .colormenu__swatch--dead {
+         background: repeating-linear-gradient(45deg,
+               var(--op-color-neutral-plus-four) 0 4px, var(--op-color-neutral-plus-six) 4px 8px);
+      }
+
+      /*
+       * Optics' right sidebar and page footer, used as the slots they are.
+       *
+       * Both are already in the page grid — `sidebar-right` is its own sticky
+       * column beside main, and `main-footer` is a row of `.op-page__main` OUTSIDE
+       * `.op-page__main-content`. So a panel's config and its actions do not live
+       * inside the scrolling content at all, which is what a hand-rolled sticky
+       * footer inside `#main` was imitating.
+       *
+       * Empty means gone: a panel that fills neither should not leave a rail and a
+       * bar of furniture behind.
+       */
+      .op-page__sidebar--right:not(:has(*)),
+      .op-page__main-footer:not(:has(*)) {
+         display: none;
+      }
+
+      .panel-config {
+         inline-size: 34rem;
+         max-inline-size: 40vw;
+         padding: var(--op-space-medium);
+         overflow-y: auto;
+         border-inline-start: var(--op-border-width) solid var(--line);
+      }
+
+      /* The actions, in the page's own footer row. `justify-content: end` because
+         this is where the eye already goes for a primary button; anything the
+         footer has to SAY is pushed to the other end by the rule below. */
+      .panel-actions {
+         display: flex;
+         flex-wrap: wrap;
+         align-items: center;
+         justify-content: flex-end;
+         gap: var(--op-space-x-small);
+         padding: var(--op-space-small) var(--op-space-large);
+         background: var(--bg);
+         border-block-start: var(--op-border-width) solid var(--line);
+      }
+
+      .panel-actions > .status {
+         margin-inline-end: auto;
+         margin-block: 0;
+         max-inline-size: 60ch;
+      }
+
+      /* Under the two-column breakpoint the rail would leave the stage no room, so
+         it becomes a normal block under the content instead of a column. */
+      @media (max-width: 64rem) {
+         .op-page {
+            grid-template-areas: 'sidebar-left main';
+            grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+         }
+
+         .op-page__sidebar--right {
+            display: none;
+         }
+      }
+
+      /* The stage and the parts list, stacked. Explicit because they are no longer
+         inside a `.form`, whose `.full` rule used to supply the gap. */
+      .panel-stage {
+         display: flex;
+         flex-direction: column;
+         gap: var(--op-space-small);
+      }
+
+      .panel-cards {
+         display: grid;
+         gap: var(--op-space-small);
+      }
+
+      .scene-frame {
+         inline-size: 100%;
+         aspect-ratio: 16 / 9;
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         background: var(--bg);
+      }
+
+      /* A status line, not a code block: `pre` keeps the server's own line breaks,
+         which is why it is one, but the monospace slab a bare `pre` gives it read
+         as output rather than as a sentence. */
+      .status {
+         margin: 0;
+         font-family: inherit;
+         white-space: pre-wrap;
+      }
+
+      .chip[aria-pressed=true] {
+         background: var(--accent);
+         border-color: var(--accent);
+         color: var(--on-accent);
+         font-weight: var(--op-font-weight-semi-bold)
+      }
+
+      .grid {
+         display: grid;
+         width: 100%;
+         grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+         gap: var(--op-space-small)
+      }
+
+      .card {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         display: flex;
+         flex-direction: column
+      }
+
+      .card:hover {
+         border-color: var(--accent)
+      }
+
+      .thumb {
+         aspect-ratio: var(--video-ar);
+         background: var(--sunk) center/cover no-repeat;
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         color: var(--op-color-neutral-plus-two);
+         font-family: var(--m);
+         font-size: var(--op-font-x-large);
+         letter-spacing: var(--thumb-track)
+      }
+
+      .card .body {
+         padding: var(--op-space-small);
+         display: flex;
+         flex-direction: column;
+         gap: var(--op-space-2x-small)
+      }
+
+      .card .nm {
+         font-size: var(--op-font-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         line-height: var(--op-line-height-dense);
+         word-break: break-word
+      }
+
+      .path,
+      .card .path {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         word-break: break-all;
+         grid-column: span 2;
+      }
+
+      .meta {
+         display: flex;
+         gap: var(--op-space-2x-small);
+         flex-wrap: wrap;
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted)
+      }
+
+      .meta span {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         padding: var(--op-space-3x-small) var(--op-space-2x-small)
+      }
+
+      .kind {
+         position: absolute;
+         top: var(--op-space-x-small);
+         left: var(--op-space-x-small);
+         font-size: var(--op-font-2x-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wide);
+         padding: var(--op-space-3x-small) var(--op-space-2x-small);
+         border-radius: var(--op-radius-pill);
+         font-family: var(--m);
+         background: var(--scrim)
+      }
+
+      .kind.video {
+         color: var(--op-color-academy-primary-minus-two)
+      }
+
+      .kind.audio {
+         color: var(--op-color-primary-minus-three)
+      }
+
+      .kind.still {
+         color: var(--op-color-alerts-warning-minus-two)
+      }
+
+      /* The header strip that carries the breadcrumbs. Optics makes it sticky and
+         gives it the header z-index; the rule below only supplies the surface,
+         since a sticky bar with no background lets content slide under it. */
+      .op-page__main-header {
+         background: var(--bg);
+         border-bottom: var(--op-border-width) solid var(--line);
+         padding: var(--op-space-small) var(--op-space-large);
+      }
+
+      .breadcrumbs__link {
+         color: var(--muted);
+         cursor: pointer;
+         background: none;
+         border: 0;
+         font: inherit;
+         padding: 0;
+      }
+
+      .breadcrumbs__link:hover {
+         color: var(--fg);
+      }
+
+      .breadcrumbs__text {
+         color: var(--fg);
+      }
+
+      /* Ours, not Optics'. See crumbs() in studio.js — Optics ships no separator. */
+      .crumb-sep {
+         color: var(--muted);
+      }
+
+      /* ── the library index ────────────────────────────────────
+         A project is a card with art, a caption and a footer — the thing you
+         navigate by. It used to be a heading above a wall of every file in every
+         project, which buries the projects themselves. */
+      .libbar {
+         display: flex;
+         gap: var(--op-space-medium);
+         align-items: center;
+         flex-wrap: wrap;
+         padding-bottom: var(--op-space-small);
+         margin-bottom: var(--op-space-large);
+         border-bottom: var(--op-border-width) solid var(--line);
+      }
+
+      .libbar input[type='search'] {
+         flex: 1 1 var(--search-min);
+         min-width: 0;
+      }
+
+      .seg {
+         display: flex;
+         gap: var(--op-space-3x-small);
+         padding: var(--op-space-3x-small);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         background: var(--sunk);
+      }
+
+      .segbtn {
+         border: 0;
+         background: none;
+         color: var(--muted);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         border-radius: var(--op-radius-medium);
+         cursor: pointer;
+      }
+
+      .segbtn[aria-pressed='true'] {
+         background: var(--panel2);
+         color: var(--fg);
+      }
+
+      .libpick {
+         display: flex;
+         gap: var(--op-space-2x-small);
+         align-items: baseline;
+      }
+
+      .libpicklabel {
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+      }
+
+      /* Reads as a label you can change, not a form control in a toolbar. */
+      .libselect {
+         border: 0;
+         background: none;
+         color: var(--fg);
+         font: inherit;
+         font-size: var(--op-font-x-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         padding: 0;
+         cursor: pointer;
+         block-size: auto;
+      }
+
+      /*
+       * The scrubber, on tokens rather than literals.
+       *
+       * It arrived with seventeen hardcoded greens — a range input styled the way
+       * generators produce them. They are the brand ramp spelled out, so they go
+       * dark with the theme instead of staying lit, and `npm run check` stops
+       * reporting the Studio as inventing colour.
+       */
+      input[type=range] {
+         width: 100%;
+         margin: 3.8px 0;
+         background-color: transparent;
+      }
+
+      input[type=range]:focus {
+         outline: none;
+      }
+
+      input[type=range]::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-four);
+         border: 0px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-webkit-slider-thumb {
+         margin-top: -4px;
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         -webkit-appearance: none;
+      }
+
+      input[type=range]:focus::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-five);
+      }
+
+      input[type=range]::-moz-range-track {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-moz-range-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-track {
+         background: transparent;
+         border-color: transparent;
+         border-width: 3.8px 0;
+         color: transparent;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-fill-lower {
+         background: var(--op-color-primary-minus-one);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-fill-upper {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         margin-top: 0px;
+         /*Needed to keep the Edge thumb centred*/
+      }
+
+      input[type=range]:focus::-ms-fill-lower {
+         background: var(--accent);
+      }
+
+      input[type=range]:focus::-ms-fill-upper {
+         background: var(--op-color-primary-plus-two);
+      }
+
+      /*TODO: Use one of the selectors from https://stackoverflow.com/a/20541859/7077589 and figure out
+how to remove the virtical space around the range input in IE*/
+      @supports (-ms-ime-align:auto) {
+
+         /* Pre-Chromium Edge only styles, selector taken from hhttps://stackoverflow.com/a/32202953/7077589 */
+         input[type=range] {
+            margin: 0;
+            /*Edge starts the margin from the thumb, not the track as other browsers do*/
+         }
+      }
+
+
+      .projgrid {
+         display: grid;
+         grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+         gap: var(--op-space-medium);
+      }
+
+      .projlist {
+         display: grid;
+         gap: var(--op-space-x-small);
+      }
+
+      /* The angle has to be a registered property or it can't be interpolated —
+   an unregistered custom property is just a string and the spin won't animate. */
+      @property --gradient-angle {
+         syntax: "<angle>";
+         initial-value: 0deg;
+         inherits: false;
+      }
+
+      @keyframes gradient-spin {
+         to {
+            --gradient-angle: 360deg;
+         }
+      }
+
+      .projcard {
+         background-color: var(--panel);
+         border-radius: 0 var(--op-radius-x-large) var(--op-radius-x-large) var(--op-radius-x-large);
+         box-shadow: inset 0 0 0 1px var(--line);
+         display: flex;
+         flex-direction: column;
+         position: relative;
+      }
+
+      .projcard::after {
+         content: "";
+         position: absolute;
+         inset: calc(var(--op-border-width-large) * -1);
+         z-index: -1;
+         pointer-events: none;
+         background: conic-gradient(from calc(var(--gradient-angle) + 335deg),
+               transparent 0deg,
+               var(--op-color-primary-base) 30deg,
+               var(--op-color-academy-primary-base) 60deg,
+               transparent 100deg,
+               transparent 360deg);
+         border-radius: inherit;
+         opacity: 0;
+         filter: blur(10px);
+         transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1);
+         animation: gradient-spin 3s linear infinite;
+
+      }
+
+      .projcard:not(.projnew)::before {
+         content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
+         ;
+         position: absolute;
+         z-index: 0;
+         top: -19px;
+         left: 0px;
+      }
+
+      .projcard:hover::after {
+         opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+         .projcard::after {
+            animation: none;
+         }
+      }
+
+
+      .projart {
+         z-index: 1;
+         aspect-ratio: var(--video-ar);
+         margin: var(--op-space-small);
+         border-top-right-radius: var(--op-radius-large);
+         border-top-left-radius: var(--op-radius-large);
+         background: var(--sunk) center/cover no-repeat;
+      }
+
+      /* In list mode the art becomes a stripe: the row is the unit, not the image. */
+      .projlist .projcard {
+         flex-direction: row;
+         align-items: center;
+         gap: var(--op-space-small);
+         padding-inline-end: var(--op-space-small);
+      }
+
+      .projlist .projart {
+         aspect-ratio: auto;
+         inline-size: calc(var(--op-space-scale-unit) *12);
+         border-radius: var(--op-radius-medium);
+         block-size: var(--op-space-4x-large);
+         flex: 0 0 auto;
+      }
+
+      .projlist .projcap,
+      .projlist .projfoot {
+         padding: var(--op-space-x-large);
+         border: 0;
+         flex: 1 1 auto;
+      }
+
+      .projcap {
+         padding: var(--op-space-small) var(--op-space-small) var(--op-space-2x-small);
+      }
+
+      .projname {
+         font-size: var(--op-font-medium);
+         font-weight: var(--op-font-weight-semi-bold);
+         line-height: var(--op-line-height-dense);
+         word-break: break-word;
+      }
+
+      .projclient {
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+      }
+
+      .projfoot {
+         display: flex;
+         gap: var(--op-space-x-small);
+         justify-content: space-between;
+         align-items: baseline;
+         flex-wrap: wrap;
+         padding: var(--op-space-2x-small) var(--op-space-small) var(--op-space-small);
+         margin-top: auto;
+      }
+
+      .projwhen {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+      }
+
+      /* The tile that starts one, sized like the cards it sits among. */
+      .projnew {
+         align-items: center;
+         justify-content: center;
+         gap: var(--op-space-x-small);
+         min-block-size: var(--field-tall);
+         border-style: dashed;
+         color: var(--muted);
+      }
+
+      .projplus {
+         inline-size: var(--op-space-2x-large);
+         block-size: var(--op-space-2x-large);
+         border-radius: var(--op-radius-circle);
+         background: var(--panel2);
+         display: grid;
+         place-items: center;
+         font-size: var(--op-font-large);
+         color: var(--fg);
+      }
+
+      /* A project card is a summary you click, not a thumbnail. */
+      .projcard {
+         margin-bottom: var(--op-space-x-small);
+      }
+
+      .projcard:hover {
+         border-color: var(--accent);
+      }
+
+      .projhead {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: baseline;
+         justify-content: space-between;
+      }
+
+      .projhead .nm {
+         font-size: var(--op-font-medium);
+      }
+
+      .thumbwrap {
+         position: relative
+      }
+
+      .client {
+         font-size: var(--op-font-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wider);
+         color: var(--muted);
+         font-family: var(--m);
+         margin: var(--op-space-x-large) 0 var(--op-space-x-small);
+         padding-bottom: var(--op-space-x-small);
+         border-bottom: var(--op-border-width) solid var(--line)
+      }
+
+      .proj {
+         margin: var(--op-space-medium) 0 var(--op-space-x-small);
+         display: flex;
+         align-items: baseline;
+         gap: var(--op-space-x-small)
+      }
+
+      .proj h3 {
+         margin: 0;
+         font-size: var(--op-font-medium);
+         font-weight: var(--op-font-weight-bold)
+      }
+
+      .proj .n {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted)
+      }
+
+      .form {
+         /* Two columns of .form-group, not one.
+          *
+          * These forms ask up to thirteen questions, and one field per row made the
+          * Make panel taller than the viewport — most of that height was the gap
+          * beside short controls like Seconds and Brand, not the controls
+          * themselves.
+          *
+          * auto-fit rather than `1fr 1fr`: the form drops to one column when it can
+          * no longer give a field --field-col, which is a property of the space it
+          * is in rather than of a screen size. Same reason the Library grid has no
+          * media queries.
+          *
+          * align-items: start, because the groups are different heights — a hint on
+          * one field and not its neighbour should not push one label out of line
+          * with the other. */
+         display: grid;
+         max-width: var(--op-breakpoint-medium);
+         /* Two columns, or one — never three.
+          *
+          * auto-fit on its own fits as many --field-col tracks as the card allows,
+          * which is three at this max-width and leaves the labels cramped. Raising
+          * each track's floor to half the card caps the count at two, and the
+          * --field-col floor still wins in a narrow window, where two tracks no
+          * longer fit and it drops to one. No media query either way. */
+         grid-template-columns: repeat(auto-fit,
+               minmax(max(var(--field-col), (100% - var(--op-space-large)) / 2), 1fr));
+         align-items: start;
+         column-gap: var(--op-space-large);
+         row-gap: var(--op-space-small);
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-large)
+      }
+
+      /* Hints when you are in the field, not before.
+       *
+       * Thirteen controls each carrying a permanent line of italic help made the Make
+       * panel taller than the viewport, and most of it was answering questions nobody
+       * had yet. They are still here — still in the DOM, still read by a screen reader
+       * — and they open when the field has focus, which is exactly when the question
+       * gets asked.
+       *
+       * max-block-size rather than display:none: a hint that is display:none is gone
+       * from the accessibility tree too, and the point is to spend less height, not to
+       * withhold the text. */
+      .form .form-group {
+         position: relative;
+      }
+
+      /* Out of flow, so revealing one cannot move anything.
+       *
+       * The first attempt animated max-block-size and revealed on hover, which
+       * reflowed every field below the pointer — the page jumped as the mouse
+       * crossed it, which is worse than the height it was saving. Absolutely
+       * positioned, the hint costs no layout at all: it appears under the control,
+       * over whatever follows, and nothing else moves.
+       *
+       * Focus only. Hover is the wrong trigger for something that appears and
+       * disappears under a moving pointer. */
+      /*
+       * A FIELD's hint, not every hint in the form.
+       *
+       * `.form .form-hint` caught the status lines too — a `pre` that `tone()` has
+       * classed, sitting directly in the form rather than inside a form-group. Its
+       * parent is never `.form-group:focus-within`, so it was permanently
+       * invisible: Save wrote the file, Draft returned its error, and neither said
+       * anything. The child combinator is the whole fix — a hint belonging to a
+       * control hides until that control has focus; a hint belonging to the panel
+       * is just a line of text.
+       */
+      .form .form-group>.form-hint {
+         position: absolute;
+         inset-inline: 0;
+         inset-block-start: 100%;
+         z-index: 5;
+         margin-block-start: var(--op-space-3x-small);
+         padding: var(--op-space-2x-small) var(--op-space-x-small);
+         background: var(--panel2);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         opacity: 0;
+         visibility: hidden;
+         transition: opacity var(--op-transition-input), visibility var(--op-transition-input);
+      }
+
+      .form .form-group:focus-within>.form-hint {
+         opacity: 1;
+         visibility: visible;
+      }
+
+      /* A hint that is not guidance but a state — "no video in this project" — stays
+         in flow and visible: it explains why the control above it cannot be used, so
+         it has to be readable without focusing a control you cannot use. */
+      .form .form-group>.form-hint.always {
+         position: static;
+         opacity: 1;
+         visibility: visible;
+         background: none;
+         border: 0;
+         padding: 0;
+      }
+
+      /* An action sharing a row with a field.
+       *
+       * align-items: start puts a bare button level with its neighbour's *label*,
+       * which reads as a button that floated up out of the row. It has no label of
+       * its own, so it belongs on the control line: end-align it and it meets the
+       * bottom of the field beside it. */
+      .form>.form-group:has(> .btn):not(:has(.form-control)) {
+         align-self: end;
+      }
+
+      /* And the empty label above it takes no room — `field()` writes a <label>
+       * whether or not there is anything to put in it, and an empty one still
+       * reserves a line. */
+      .form>.form-group:has(> .btn):not(:has(.form-control))>.form-label:empty {
+         display: none;
+      }
+
+      /* What a column cannot hold.
+       *
+       * A script, an action row, a plan, a console line — these are not fields and
+       * they read badly at half width. `.full` is the existing marker for them; the
+       * :has() rules catch the textarea groups without every caller having to
+       * remember to add a class. */
+      .form>.full,
+      .form>.row,
+      .form>.form-group:has(textarea),
+      .form>.form-group:has(.hl-wrap) {
+         grid-column: 1 / -1;
+      }
+
+      /* Optics' .form-label sets colour and size. Only the muted tone is ours,
+         because the Studio's panel is darker than the surface Optics assumes. */
+      .form .form-label {
+         color: var(--muted)
+      }
+
+      /* Spanning only. This also set display:grid, which beat .full.row later in
+         the cascade and stacked the option chips one per line — .full says how wide
+         something is, never how it lays its own children out. */
+      .form .full {
+         grid-column: 1/-1;
+         display: grid;
+         place-content: stretch;
+         gap: var(--op-space-small);
+         margin-bottom: var(--op-space-medium);
+      }
+
+      pre {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-small);
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         white-space: pre-wrap;
+         word-break: break-word;
+         margin: 0
+      }
+
+      .empty {
+         color: var(--muted);
+         font-size: var(--op-font-small);
+         padding: var(--op-space-3x-large) 0
+      }
+
+      .wp {
+         aspect-ratio: var(--video-ar);
+         border-radius: var(--op-radius-large);
+         background: var(--sunk) center/cover no-repeat
+      }
+
+      .note {
+         /* Not a flex container: these carry inline <code>, and as flex items the
+            text runs either side of it get laid out as separate columns. */
+         display: block;
+         background: var(--info-bg);
+         border-left: var(--op-border-width-large) solid var(--op-color-academy-primary-minus-three);
+         padding: var(--op-space-small);
+         border-radius: 0 var(--op-radius-large) var(--op-radius-large) 0;
+         font-size: var(--op-font-x-small);
+         color: var(--info-fg);
+         line-height: var(--op-line-height-loose);
+         margin-bottom: var(--op-space-medium);
+         width: fit-content;
+         max-width: var(--op-breakpoint-medium);
+      }
+
+      .lt {
+         position: relative;
+         aspect-ratio: var(--video-ar);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         background: var(--sunk) center/cover no-repeat;
+         border: var(--op-border-width) solid var(--line)
+      }
+
+      .lt .t {
+         position: absolute;
+         left: var(--lt-inset);
+         bottom: var(--lt-name);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--lt-track-tight)
+      }
+
+      .lt .s {
+         position: absolute;
+         left: var(--lt-inset);
+         bottom: var(--lt-sub);
+         font-family: var(--m)
+      }
+
+      .lt .eb {
+         position: absolute;
+         left: var(--lt-inset);
+         top: var(--lt-eyebrow);
+         font-family: var(--m);
+         text-transform: uppercase;
+         letter-spacing: var(--lt-track-wide)
+      }
+
+      .lt .ti {
+         position: absolute;
+         left: var(--lt-inset);
+         top: var(--lt-title);
+         font-weight: var(--op-font-weight-extra-bold);
+         letter-spacing: var(--lt-track-tighter);
+         line-height: var(--op-line-height-densest);
+         max-width: var(--lt-title-max)
+      }
+
+      .wpe {
+         display: grid;
+         grid-template-columns: minmax(var(--canvas-min), var(--canvas-split)) minmax(var(--controls-min), 1fr);
+         gap: var(--op-space-large);
+         align-items: start
+      }
+
+      .wpe canvas {
+         width: 100%;
+         height: auto;
+         display: block;
+         border-radius: var(--op-radius-large);
+         border: var(--op-border-width) solid var(--line);
+         background: var(--sunk)
+      }
+
+      .wpe .panel2 {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: var(--op-space-medium)
+      }
+
+      .ctl {
+         display: grid;
+         grid-template-columns: var(--ctl-col) 1fr auto;
+         gap: var(--op-space-x-small);
+         align-items: center;
+         font-size: var(--op-font-x-small)
+      }
+
+      .ctl label {
+         color: var(--muted)
+      }
+
+      .ctl .v {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         min-width: var(--ctl-val);
+         text-align: right
+      }
+
+      .ctl .wide {
+         grid-column: 2/-1
+      }
+
+      .ctl input[type=color] {
+         width: 100%;
+         height: var(--op-input-height-small);
+         padding: 0;
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         background: none;
+         cursor: pointer
+      }
+
+      /* Optics gives .form-control a fixed 40px block-size, right for a text field
+         and wrong for a slider in a dense row. */
+      .ctl input[type=range].form-control {
+         block-size: auto;
+      }
+
+      .ctl input[type=range] {
+         width: 100%;
+         accent-color: var(--accent)
+      }
+
+      .sec {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         text-transform: uppercase;
+         letter-spacing: var(--track-wider);
+         color: var(--muted);
+         margin: var(--op-space-medium) 0 var(--op-space-x-small);
+         padding-bottom: var(--op-space-2x-small);
+         border-bottom: var(--op-border-width) solid var(--line)
+      }
+
+      .sec:first-child {
+         margin-top: 0
+      }
+
+      .stop {
+         display: grid;
+         grid-template-columns: var(--stop-col) 1fr var(--ctl-val) var(--stop-x);
+         gap: var(--op-space-x-small);
+         align-items: center;
+         margin-bottom: var(--op-space-x-small)
+      }
+
+      .stop button {
+         background: none;
+         border: var(--op-border-width) solid var(--line);
+         color: var(--muted);
+         border-radius: var(--op-radius-medium);
+         cursor: pointer;
+         font: inherit;
+         line-height: var(--op-line-height-densest);
+         padding: var(--op-space-2x-small) 0
+      }
+
+      .wpgrid .card {
+         cursor: pointer
+      }
+
+      .wpgrid .card[aria-selected=true] {
+         border-color: var(--accent);
+         box-shadow: 0 0 0 var(--op-border-width) var(--accent)
+      }
+
+      .badge {
+         display: inline-block;
+         margin-left: var(--op-space-x-small);
+         min-width: var(--badge-min);
+         padding: 0 var(--op-space-2x-small);
+         border-radius: var(--op-radius-pill);
+         background: var(--accent);
+         color: var(--on-accent);
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         font-weight: var(--op-font-weight-bold);
+         text-align: center;
+         vertical-align: middle
+      }
+
+      .badge:empty {
+         display: none
+      }
+
+      .con {
+         display: grid;
+         grid-template-columns: var(--joblist-w) 1fr;
+         gap: var(--op-space-medium);
+         align-items: start
+      }
+
+      .joblist {
+         background: var(--panel);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         overflow: hidden;
+         max-height: var(--panel-h);
+         overflow-y: auto
+      }
+
+      .joblist~div {
+         display: grid;
+         gap: var(--op-space-medium);
+      }
+
+      .job {
+         padding: var(--op-space-x-small) var(--op-space-small);
+         border-bottom: var(--op-border-width) solid var(--line);
+         cursor: pointer;
+         display: grid;
+         gap: var(--op-space-3x-small)
+      }
+
+      .job:last-child {
+         border-bottom: 0
+      }
+
+      .job[aria-selected=true] {
+         background: var(--panel2);
+         border-left: var(--op-border-width-large) solid var(--accent)
+      }
+
+      .job .jl {
+         font-size: var(--op-font-x-small);
+         font-weight: var(--op-font-weight-semi-bold);
+         word-break: break-word
+      }
+
+      .job .js {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted)
+      }
+
+      .job .js.run {
+         color: var(--accent)
+      }
+
+      .job .js.bad {
+         color: var(--danger-fg)
+      }
+
+      .log {
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-large);
+         padding: 0 var(--op-space-small);
+
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-base);
+         height: var(--panel-h);
+         overflow: auto;
+         white-space: pre-wrap;
+         word-break: break-word;
+         position: relative;
+      }
+
+      .log::before {
+         content: 'Console';
+         display: flex;
+         align-items: center;
+         position: sticky;
+         top: 0;
+         margin-inline: calc(var(--op-space-small) * -1);
+         margin-block-end: var(--op-space-small);
+         inset-block-start: 0;
+         padding: var(--op-space-small);
+         block-size: var(--op-space-2x-large);
+         border-block-end: var(--op-border-width) solid var(--line);
+         background-color: var(--op-color-neutral-plus-max);
+      }
+
+      .log .e {
+         color: var(--danger-fg)
+      }
+
+      .log .m {
+         color: var(--muted)
+      }
+
+      .cmd {
+         display: flex;
+         gap: var(--op-space-x-small);
+         margin-top: var(--op-space-small)
+      }
+
+      .cmd input {
+         flex: 1;
+         font-family: var(--m);
+         font-size: var(--op-font-x-small)
+      }
+
+      .runrow {
+         display: grid;
+         gap: var(--op-space-x-small);
+         align-items: start;
+         grid-template-columns: 1fr auto;
+         margin: var(--op-space-x-small) 0
+      }
+
+      .runrow code {
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+         color: var(--muted);
+         background: var(--sunk);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         padding: var(--op-space-2x-small) var(--op-space-x-small);
+         flex: 1;
+         min-width: var(--code-min);
+         word-break: break-all
+      }
+
+      /* ── path picking ──────────────────────────────────────────
+   A trace lives wherever its repo lives, so these fields take a real path. The
+   file list reuses .joblist/.job rather than inventing a second scrollable
+   bordered box. */
+      /* A .form-group is `auto 1fr`, and Optics only spans its own parts across
+         both columns — an unrecognised child lands in the narrow auto column, which
+         is why the Trace input was 293px wide with empty space beside it. */
+      .form-group .pick,
+      .form-group .plan,
+      .form-group pre {
+         grid-column: 1 / 3;
+      }
+
+      .pick {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: center;
+      }
+
+      .pick input {
+         flex: 1;
+         min-width: 0;
+         font-family: var(--m);
+         font-size: var(--op-font-x-small);
+      }
+
+      .crumb {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         padding: var(--op-space-2x-small) var(--op-space-small);
+         border-bottom: var(--op-border-width) solid var(--line);
+         word-break: break-all;
+      }
+
+      .ent {
+         display: flex;
+         gap: var(--op-space-x-small);
+         align-items: baseline;
+      }
+
+      .ent .nm2 {
+         flex: 1;
+         min-width: 0;
+         word-break: break-all;
+      }
+
+      .ent .tag {
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+      }
+
+      .hint {
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         /* Same reason as .lede — a hint is a sentence, not a layout. */
+         max-inline-size: 80ch;
+      }
+
+      .hint.ok {
+         color: var(--accent);
+      }
+
+      .hint.warn {
+         color: var(--op-color-alerts-warning-minus-two);
+      }
+
+      .hint.bad {
+         color: var(--danger-fg);
+      }
+
+      /* An ordered account of what a Run button is about to do. */
+      .plan {
+         counter-reset: plan;
+         display: grid;
+         gap: var(--op-space-x-small);
+         margin: var(--op-space-small) 0 var(--op-space-medium);
+         padding-inline: 0;
+      }
+
+      .plan li {
+         counter-increment: plan;
+         display: grid;
+         grid-template-columns: var(--op-space-large) 1fr;
+         gap: var(--op-space-x-small);
+         font-size: var(--op-font-x-small);
+         line-height: var(--op-line-height-loose);
+         list-style: none;
+      }
+
+      .plan li::before {
+         content: counter(plan);
+         font-family: var(--m);
+         font-size: var(--op-font-2x-small);
+         color: var(--muted);
+         text-align: right;
+      }
+
+      .plan li .w {
+         color: var(--muted);
+      }

@@ -2856,6 +2856,23 @@ async function fetchVoiceList() {
     // Both are real files on disk (lib/studio.js, lib/live-reload.js) rather than
     // strings inside the page generator, so `node --check` covers them and a
     // stray backtick can no longer serve the whole app as unstyled tags.
+    /*
+     * The stylesheet, served the same way as the script.
+     *
+     * `no-store` for the same reason: it must never be older than the markup that
+     * links it. A cached stylesheet against fresh markup is a page that looks
+     * broken in a way nothing in the source explains.
+     */
+    if (p === "/studio.css") {
+      const src = await readFile(join(TOOLKIT, "lib", "studio.css"), "utf8").catch(() => null);
+      if (src == null) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("lib/studio.css is missing\n");
+      }
+      res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": "no-store" });
+      return res.end(src);
+    }
+
     if (p === "/studio.js" || p === "/live-reload.js") {
       const src = await readFile(join(TOOLKIT, "lib", p.slice(1)), "utf8").catch(() => null);
       if (src == null) {
