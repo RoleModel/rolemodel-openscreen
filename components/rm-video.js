@@ -283,10 +283,16 @@ define('rm-scene', RMScene)
  * at the top of this file about half-loaded frames.
  */
 class RMBrowser extends RMElement {
-  static fields = ['url', 'at', 'for', 'w', 'dark']
+  static fields = ['url', 'x', 'y', 'w', 'at', 'for', 'dark']
   render() {
     const url = this.attr('url', 'app.rolemodelsoftware.com')
     const w = this.attr('w', '72')
+    // Placed like rm-image and rm-callout: a percentage of the stage, from its
+    // centre. It had no position at all, so `::slotted(*) { position:absolute }`
+    // from rm-scene left it wherever the default put it and the only way to move
+    // it was to change its width.
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
     /*
      * One field, and it both reads as the address and loads.
      *
@@ -302,7 +308,19 @@ class RMBrowser extends RMElement {
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; width:${Number(w)}cqw; --rise:22px; }
+        :host { display:block; position:absolute; left:${x}%; top:${y}%;
+                width:${Number(w)}cqw; --rise:22px; }
+        /*
+         * Centred on its own point, so 50/50 is the middle of the stage rather than
+         * its top-left corner — the same reading as every other part.
+         *
+         * Written as .win.anim, and carrying the entrance transform with it,
+         * because .win is also the animated element: a plain
+         * translate(-50%,-50%) here would be a later rule of equal specificity and
+         * would silently replace the rise and the scale, so the part would appear
+         * centred and dead.
+         */
+        .win.anim { transform: translate(-50%, calc(-50% + var(--rm-in-y) + var(--rm-out-y))) scale(var(--rm-in-s)); }
         .win { border-radius:0.8cqw; overflow:hidden; background:var(--surface);
                border:1px solid var(--line);
                box-shadow: 0 2.4cqw 5cqw rgba(0,0,0,.45), 0 .4cqw 1cqw rgba(0,0,0,.3); }

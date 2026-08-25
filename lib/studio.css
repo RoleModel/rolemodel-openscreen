@@ -2012,3 +2012,23 @@ pre {
    font-size: 2.4rem;
    line-height: 1;
 }
+
+/* A slider and the number it is currently at. The readout is fixed-width so the
+   row does not jitter as the value passes 9 and 99. */
+.range-row {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+}
+
+.range-row input[type='range'] {
+   flex: 1 1 auto;
+   min-inline-size: 0;
+}
+
+.range-row .path {
+   flex: 0 0 auto;
+   min-inline-size: 4rem;
+   text-align: end;
+   font-variant-numeric: tabular-nums;
+}
