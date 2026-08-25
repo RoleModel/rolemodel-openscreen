@@ -151,7 +151,23 @@ const TYPE = `
     --font: var(--rm-font, "DM Sans"), ui-sans-serif, system-ui, -apple-system, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --fg: var(--op-color-neutral-minus-max, #fff);
-    --muted: var(--op-color-neutral-minus-five, #a3a3a3);
+    /*
+     * Secondary text, measured rather than picked by eye.
+     *
+     * minus-five is 7.3:1 on the brand's dark boards — technically legible, and
+     * washed out beside a title at 18.5:1, which is what made a subtitle read as
+     * greyed-out rather than as secondary. minus-seven is 11.5:1: clearly
+     * readable, still visibly subordinate.
+     */
+    --muted: var(--op-color-neutral-minus-seven, #caccce);
+    /*
+     * And a shadow, because a card is not always over a board.
+     *
+     * Laid over footage as an overlay there is no controlled ground at all — the
+     * title sits on whatever the frame happens to show, and white on a white shirt
+     * is nothing. Invisible against a dark board, decisive against a bright frame.
+     */
+    --ink-shadow: 0 0.08cqw 0.5cqw rgb(0 0 0 / 0.55);
     --brand: var(--op-color-academy-primary-base, #00c278);
     /* What reads ON --brand. Optics mixes one per family; the Studio sets both
        when an accent is picked, because a fill without its ink is how a pale
@@ -335,8 +351,8 @@ class RMTitle extends RMElement {
                 text-align:${align === 'center' ? 'center' : 'left'};
                 padding:0 8cqw; gap:1cqw; }
         .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand-text); }
-        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
-        .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; }
+        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; text-shadow:var(--ink-shadow); }
+        .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; text-shadow:var(--ink-shadow); }
         .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand-text); margin-top:.6cqw; }
       </style>
       <div class="wrap anim">
@@ -366,8 +382,8 @@ class RMLowerThird extends RMElement {
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
                 box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
         .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
-        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; }
-        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; }
+        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; text-shadow:var(--ink-shadow); }
+        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; text-shadow:var(--ink-shadow); }
         /* Slides in rather than rising — reads as a reveal, and stays legible
            over busy footage. Uses the same registered properties so it still
            composes with the exit animation. */

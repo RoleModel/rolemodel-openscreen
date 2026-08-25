@@ -1203,7 +1203,8 @@ how to remove the virtical space around the range input in IE*/
 
       .projlist .projart {
          aspect-ratio: auto;
-         inline-size: var(--op-space-4x-large);
+         inline-size: calc(var(--op-space-scale-unit) *12);
+         border-radius: var(--op-radius-medium);
          block-size: var(--op-space-4x-large);
          flex: 0 0 auto;
       }

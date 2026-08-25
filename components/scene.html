@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8"/>
-<title>RoleModel scene</title>
-<!--
+  <meta charset="utf-8" />
+  <title>RoleModel scene</title>
+  <!--
   A HyperFrames scene, and the template to copy for a new one.
 
   Two things make this renderable rather than merely viewable:
@@ -18,54 +19,64 @@
   Render it:
     node components/render-scene.mjs components/scene.html -o out.mp4
 -->
-<link rel="stylesheet" href="../brand/fonts/fonts.css"/>
-<link rel="stylesheet" href="../brand/optics/optics.css"/>
-<link rel="stylesheet" href="../brand/optics/rolemodel-scales.css"/>
-<style>
-  :root { color-scheme: dark; }
-  html, body { margin: 0; background: var(--op-color-neutral-plus-max); }
-  body { display: grid; place-items: center; min-height: 100vh; }
-  #stage { width: 100vw; max-width: calc(100vh * 16 / 9); }
-</style>
-<script type="module" src="./rm-video.js"></script>
+  <link rel="stylesheet" href="../brand/fonts/fonts.css" />
+  <link rel="stylesheet" href="../brand/optics/optics.css" />
+  <link rel="stylesheet" href="../brand/optics/rolemodel-scales.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    html,
+    body {
+      margin: 0;
+      background: var(--op-color-neutral-plus-max);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+
+    #stage {
+      width: 100vw;
+      max-width: calc(100vh * 16 / 9);
+    }
+  </style>
+  <script type="module" src="./rm-video.js"></script>
 </head>
+
 <body>
 
-<div id="stage">
-  <rm-scene wallpaper="../brand/wallpapers/rm-dark-dotgrid">
+  <div id="stage">
+    <rm-scene wallpaper="../brand/wallpapers/rm-dark-dotgrid">
 
-    <rm-title
-      at="0" for="2600"
-      eyebrow="Product tour"
-      title="Estimating, in one pass"
-      sub="From takeoff to a signed proposal without leaving the browser."></rm-title>
+      <rm-title at="0" for="2600" eyebrow="Product tour" title="Estimating, in one pass"
+        sub="From takeoff to a signed proposal without leaving the browser."></rm-title>
 
-    <rm-browser
-      at="2600"
-      style="left:8%; top:14%"
-      w="68"
-      url="app.rolemodelsoftware.com/estimates"
-      image=""></rm-browser>
+      <rm-browser at="2600" style="left:12%; top:10%" w="80" url="rolemodelsoftware.com" image=""></rm-browser>
 
-    <rm-callout at="4200" for="2600" x="62" y="38" text="Live pricing"></rm-callout>
+      <rm-callout at="4200" for="2600" x="62" y="38" text="Live pricing"></rm-callout>
 
-    <rm-lower-third at="3000" for="4000" name="Dallas Peters" sub="Senior Designer"></rm-lower-third>
+      <rm-lower-third at="3000" for="4000" name="Dallas Peters" sub="Senior Designer"></rm-lower-third>
 
-  </rm-scene>
-</div>
+    </rm-scene>
+  </div>
 
-<script type="module">
-  import { RM } from "./rm-video.js";
-  await RM.ready();
-  RM.seek(0);
-  // The renderer drives seek(); this only matters when you open the file by hand.
-  if (!window.__hyperframes) {
-    const total = RM.duration();
-    const t0 = performance.now();
-    const tick = () => { RM.seek((performance.now() - t0) % total); requestAnimationFrame(tick); };
-    tick();
-  }
-</script>
+  <script type="module">
+    import { RM } from "./rm-video.js";
+    await RM.ready();
+    RM.seek(0);
+    // The renderer drives seek(); this only matters when you open the file by hand.
+    if (!window.__hyperframes) {
+      const total = RM.duration();
+      const t0 = performance.now();
+      const tick = () => { RM.seek((performance.now() - t0) % total); requestAnimationFrame(tick); };
+      tick();
+    }
+  </script>
 
 </body>
+
 </html>
