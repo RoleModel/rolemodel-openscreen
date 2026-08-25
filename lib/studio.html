@@ -686,6 +686,102 @@
          outline-offset: 2px;
       }
 
+      /*
+       * One colour, chosen from the brand.
+       *
+       * Closed it is a chip and a name; open it is the whole palette as a grid.
+       * Twenty swatches laid out permanently is a band of colour across a form
+       * that is mostly about something else — but a colour cannot be chosen from
+       * a list of names, so it opens to the pictures rather than shrinking them.
+       */
+      .colormenu {
+         position: relative;
+         display: block;
+      }
+
+      .colormenu__trigger {
+         display: inline-flex;
+         align-items: center;
+         gap: var(--op-space-2x-small);
+         inline-size: 100%;
+         /* Sized like the selects it sits beside. A control that is visibly shorter
+            than its neighbours reads as a different kind of thing. */
+         min-block-size: 2.5rem;
+         padding: var(--op-space-x-small);
+         background: var(--op-color-neutral-plus-six);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         color: var(--op-color-neutral-minus-two);
+         font-size: var(--op-font-x-small);
+         cursor: pointer;
+         text-align: start;
+      }
+
+      .colormenu__trigger:hover { border-color: var(--op-color-neutral-plus-three) }
+
+      .colormenu__chip {
+         inline-size: 1.1rem;
+         block-size: 1.1rem;
+         flex: 0 0 auto;
+         border-radius: var(--op-radius-small);
+         border: 1px solid var(--op-color-neutral-plus-three);
+      }
+
+      /* Nothing chosen reads as nothing chosen, not as black. */
+      .colormenu__chip--none {
+         background:
+            linear-gradient(45deg, transparent 45%, var(--op-color-neutral-minus-five) 45% 55%, transparent 55%);
+      }
+
+      .colormenu__label {
+         flex: 1 1 auto;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+      }
+
+      .colormenu__caret { flex: 0 0 auto; opacity: 0.7 }
+
+      .colormenu__panel {
+         position: absolute;
+         z-index: 40;
+         inset-block-start: calc(100% + 4px);
+         inset-inline-start: 0;
+         display: grid;
+         grid-template-columns: repeat(5, 2rem);
+         gap: var(--op-space-2x-small);
+         padding: var(--op-space-x-small);
+         background: var(--op-color-neutral-plus-max);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         box-shadow: var(--op-shadow-large, 0 8px 24px rgb(0 0 0 / 0.45));
+      }
+
+      .colormenu__panel[hidden] { display: none }
+
+      .colormenu__swatch {
+         inline-size: 2rem;
+         block-size: 2rem;
+         padding: 0;
+         border: 1px solid var(--op-color-neutral-plus-three);
+         border-radius: var(--op-radius-small);
+         cursor: pointer;
+         background: transparent;
+         color: var(--op-color-neutral-minus-five);
+      }
+
+      .colormenu__swatch[aria-selected='true'] {
+         outline: 2px solid var(--op-color-neutral-minus-max);
+         outline-offset: 2px;
+      }
+
+      /* A token that does not resolve paints the inherited colour, so every swatch
+         comes out identical and the palette looks like one colour repeated. */
+      .colormenu__swatch--dead {
+         background: repeating-linear-gradient(45deg,
+            var(--op-color-neutral-plus-four) 0 4px, var(--op-color-neutral-plus-six) 4px 8px);
+      }
+
       .chip[aria-pressed=true] {
          background: var(--accent);
          border-color: var(--accent);

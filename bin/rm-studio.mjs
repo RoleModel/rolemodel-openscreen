@@ -490,6 +490,32 @@ async function state() {
     // The panel that was open when the app last closed, so a restart lands where
     // the work was rather than back at the Library.
     lastView: await lastView(),
+    /*
+     * The brand's seed colours — one per family, and the palette anyone picks from.
+     *
+     * In state rather than in the compose catalogue, because it is brand data and
+     * three panels want it: a picker that only exists where the catalogue happens
+     * to be fetched is a picker that is missing from Wallpapers.
+     *
+     * `-original` is the colour as the brand defines it, before Optics builds a
+     * nineteen-step ramp around it. The ramp is the right thing for a surface to
+     * spend and the wrong thing to shop from: nineteen families times nineteen
+     * steps is 361 squares, and the bases repeat — `tertiary` and `accent` are one
+     * colour, and so are `primary` and Academy's.
+     *
+     * Both files, because the families are split across them: the published
+     * package carries its own, and rolemodel-scales.css carries the fourteen it
+     * does not ship.
+     */
+    colors: {
+      originals: await (async () => {
+        const [a, b] = await Promise.all([
+          readFile(join(TOOLKIT, "brand/optics/optics.css"), "utf8").catch(() => ""),
+          readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => ""),
+        ]);
+        return [...new Set([...`${a}\n${b}`.matchAll(/--op-color-([a-z0-9-]+)-original\s*:/g)].map((x) => x[1]))].sort();
+      })(),
+    },
   };
 }
 
@@ -3051,6 +3077,7 @@ async function fetchVoiceList() {
        */
       const scaleCss = await readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => "");
       const scales = [...new Set([...scaleCss.matchAll(/--op-color-([a-z-]+)-h\s*:/g)].map((x) => x[1]))].sort();
+
 
       const recipes = await loadRecipes(TOOLKIT);
       return json(res, 200, {

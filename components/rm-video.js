@@ -153,7 +153,14 @@ const TYPE = `
     --fg: var(--op-color-neutral-minus-max, #fff);
     --muted: var(--op-color-neutral-minus-five, #a3a3a3);
     --brand: var(--op-color-academy-primary-base, #00c278);
+    /* What reads ON --brand. Optics mixes one per family; the Studio sets both
+       when an accent is picked, because a fill without its ink is how a pale
+       accent ends up carrying text nobody can read. */
     --on-brand: var(--op-color-academy-primary-on-base, #00472c);
+    /* And the family as TEXT on the stage, which is neither of the above: a seed
+       can be a deep purple, and an eyebrow set in it on a dark wallpaper is
+       invisible. Falls back to --brand so a scene that sets only that still works. */
+    --brand-text: var(--brand);
     --surface: var(--op-color-neutral-plus-max, #242424);
     --surface-2: var(--op-color-neutral-plus-six, #333);
     --line: var(--op-color-neutral-plus-four, #424242);
@@ -327,10 +334,10 @@ class RMTitle extends RMElement {
                 align-items:${align === 'center' ? 'center' : 'flex-start'};
                 text-align:${align === 'center' ? 'center' : 'left'};
                 padding:0 8cqw; gap:1cqw; }
-        .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand); }
+        .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand-text); }
         h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
         .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; }
-        .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand); margin-top:.6cqw; }
+        .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand-text); margin-top:.6cqw; }
       </style>
       <div class="wrap anim">
         ${this.attr('eyebrow') ? `<div class="eb">${this.esc(this.attr('eyebrow'))}</div>` : ''}
@@ -358,7 +365,7 @@ class RMLowerThird extends RMElement {
                 border:1px solid var(--line); border-radius:.7cqw;
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
                 box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
-        .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand); flex:0 0 auto; }
+        .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
         .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; }
         .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; }
         /* Slides in rather than rising — reads as a reveal, and stays legible
@@ -396,7 +403,7 @@ class RMCallout extends RMElement {
                flex-direction:${side === 'left' ? 'row-reverse' : 'row'}; }
         .pin { width:1.5cqw; height:1.5cqw; border-radius:50%; flex:0 0 auto;
                background:var(--brand); box-shadow:0 0 0 .45cqw color-mix(in srgb, var(--brand) 28%, transparent); }
-        .txt { background:var(--brand); color:color-contrast(var(--brand)); font-weight:650; font-size:1.15cqw;
+        .txt { background:var(--brand); color:var(--on-brand); font-weight:650; font-size:1.15cqw;
                padding:.5cqw 1cqw; border-radius:.5cqw; white-space:nowrap; }
         /* Pops rather than rises. --rm-in-s is registered as a number, so it
            interpolates smoothly instead of stepping. */
@@ -471,7 +478,7 @@ class RMStat extends RMElement {
         ${TYPE}${TIMING}
         :host { display:block; --rise:16px; }
         @property --n { syntax:"<integer>"; initial-value:0; inherits:false; }
-        .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand); }
+        .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand-text); }
         ${
           counting
             ? `.v { counter-reset: n var(--n);
