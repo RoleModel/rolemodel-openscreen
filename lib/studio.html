@@ -67,6 +67,41 @@
       `data-el` is a handle. mountPanel() returns a map of them, so the JS wires
       behaviour to named nodes and never builds any.
    -->
+   <!--
+      First run: no projects yet.
+      ================================================================
+      Shown INSTEAD of whatever panel was asked for, because every scoped panel is
+      about a project and there is not one — a Scenes page with an empty footage
+      shelf and a dead Save button teaches nothing except that the tool is broken.
+
+      The art slot is deliberately empty markup rather than a placeholder image: an
+      <img> pointing at a file that does not exist is a broken-image icon, which is
+      worse than the space it was meant to fill. Drop a file in brand/imagery/ and
+      name it here.
+   -->
+   <template data-panel="firstrun">
+      <div data-region="main" class="panel-card firstrun">
+         <div data-el="art" class="firstrun__art" aria-hidden="true"></div>
+         <h2 class="firstrun__title">Make your first video</h2>
+         <p class="firstrun__lede">
+            Everything here happens inside a project — a folder with your footage,
+            scripts, scenes and renders in it. Make one and the rest of the app has
+            somewhere to put things.
+         </p>
+         <ol class="firstrun__steps">
+            <li><strong>Record or drop in footage.</strong> A screen capture, or files you already have.</li>
+            <li><strong>Write the script.</strong> Or describe the video and let Claude draft it.</li>
+            <li><strong>Give it a voice.</strong> Narration is synthesised from the script.</li>
+            <li><strong>Build the scenes.</strong> Titles, callouts and brand boards.</li>
+            <li><strong>Assemble and review.</strong> Cut it together, then share it.</li>
+         </ol>
+      </div>
+      <div data-region="footer">
+         <div data-el="status" class="hint"></div>
+         <button data-el="start" class="btn">Create your first project</button>
+      </div>
+   </template>
+
    <template data-panel="components">
       <p class="lede" data-region="main">
          Custom elements for HyperFrames scenes: title cards, browser chrome, lower
@@ -212,10 +247,6 @@
       </div>
 
       <div data-region="side">
-         <div class="form-group">
-            <label class="form-label" for="scene-project">Project</label>
-            <select data-el="project" id="scene-project" class="form-control"></select>
-         </div>
          <div class="form-group">
             <label class="form-label" for="scene-pick">Scene</label>
             <select data-el="pick" id="scene-pick" class="form-control"></select>

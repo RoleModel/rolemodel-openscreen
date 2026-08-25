@@ -49,7 +49,15 @@ import {
   settings as demoSettings,
 } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
-import { lastView, openFrameSettings, setLastView, setOpenFrameSettings, STATE_DIR } from "../lib/settings.mjs";
+import {
+	currentProject,
+	lastView,
+	openFrameSettings,
+	setCurrentProject,
+	setLastView,
+	setOpenFrameSettings,
+	STATE_DIR,
+} from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -490,6 +498,18 @@ async function state() {
     // The panel that was open when the app last closed, so a restart lands where
     // the work was rather than back at the Library.
     lastView: await lastView(),
+    /*
+     * The project you are working in, verified against the library.
+     *
+     * A stored id whose folder has since been deleted or renamed would put every
+     * panel inside a project that is not there — footage lists empty, saves
+     * failing, and nothing on screen saying why. Falling back to null lands you on
+     * the picker instead, which is a state the UI already knows how to render.
+     */
+    currentProject: await (async () => {
+      const id = await currentProject();
+      return id && projects.some((p) => p.id === id) ? id : null;
+    })(),
     /*
      * The brand's seed colours — one per family, and the palette anyone picks from.
      *
@@ -3158,6 +3178,24 @@ async function fetchVoiceList() {
      * unreachable — the same trap the script drafts fell into. A reload inside one
      * session would have worked, which is how that bug survives being tested.
      */
+    /*
+     * Switch the project you are working in.
+     *
+     * An empty string means the shared shelf — a script that travels between
+     * projects rather than belonging to one — which is a real choice and not the
+     * absence of one.
+     */
+    if (p === "/api/project/current" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.id ? String(body.id) : null;
+      if (id) {
+        const man = await readManifest(projectDir(id)).catch(() => null);
+        if (!man) return json(res, 404, { error: `no such project: ${id}` });
+      }
+      await setCurrentProject(id);
+      return json(res, 200, { ok: true, id });
+    }
+
     if (p === "/api/view" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       await setLastView(String(body.view ?? ""));
