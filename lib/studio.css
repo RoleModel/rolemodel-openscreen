@@ -2163,3 +2163,32 @@ textarea.form-control.script-body {
 .firstrun__steps strong {
    color: var(--fg);
 }
+
+/*
+ * The rail, where the labels go and the icons must not.
+ *
+ * Optics collapses a rail's labels with `font-size: 0` on `.sidebar__content > *`,
+ * which is right for text and fatal for ours: these icons ARE text — a ligature
+ * font rendered through `::before` — so they inherited the zero and the whole nav
+ * came up as an empty column. Optics' own comment on that rule reads "Need to get
+ * icon behavior"; this is that behaviour.
+ *
+ * A size, not `revert`: the button's own font-size is legitimately 0 in this mode,
+ * so the icon has to state its own rather than inherit anything.
+ */
+.sidebar--rail .sidebar__content > * .hgi-stroke {
+   font-size: var(--op-font-large);
+   line-height: 1;
+}
+
+/*
+ * And the tool list goes entirely.
+ *
+ * It is a row of status dots with names beside them, and `font-size: 0` takes the
+ * names — leaving a column of green dots that say something is true about
+ * something, with no way to tell what. A readout you cannot read is worse than one
+ * that is not there; the labels come back with the rail.
+ */
+.sidebar--rail #tools {
+   display: none;
+}
