@@ -99,14 +99,16 @@
       about a project and there is not one — a Scenes page with an empty footage
       shelf and a dead Save button teaches nothing except that the tool is broken.
 
-      The art slot is deliberately empty markup rather than a placeholder image: an
-      <img> pointing at a file that does not exist is a broken-image icon, which is
-      worse than the space it was meant to fill. Drop a file in brand/imagery/ and
-      name it here.
+      The art is assets/empty-state.svg, served through the same static route as
+      brand/ and components/. It is decorative — the heading and the steps carry the
+      meaning — so the frame is aria-hidden and the img's alt is empty rather than
+      describing a picture a screen reader gains nothing from.
    -->
    <template data-panel="firstrun">
       <div data-region="main" class="panel-card firstrun">
-         <div data-el="art" class="firstrun__art" aria-hidden="true"></div>
+         <div class="firstrun__art" aria-hidden="true">
+            <img data-el="art" src="/assets/empty-state.svg" alt="" />
+         </div>
          <h2 class="firstrun__title">Make your first video</h2>
          <p class="firstrun__lede">
             Everything here happens inside a project — a folder with your footage,
@@ -123,7 +125,7 @@
       </div>
       <div data-region="footer">
          <div data-el="status" class="hint"></div>
-         <button data-el="start" class="btn">Create your first project</button>
+         <button data-el="start" class="btn">Create a project</button>
       </div>
    </template>
 

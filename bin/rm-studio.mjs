@@ -2768,7 +2768,7 @@ async function fetchVoiceList() {
     // The component library and its gallery, served from the repo. Static and
     // read-only — the path is resolved against TOOLKIT and checked, so a scene
     // asking for ../../ gets a 404 rather than the filesystem.
-    if (p.startsWith("/components/") || p.startsWith("/brand/")) {
+    if (p.startsWith("/components/") || p.startsWith("/brand/") || p.startsWith("/assets/")) {
       const file = resolve(TOOLKIT, `.${p}`);
       if (!file.startsWith(TOOLKIT)) {
         res.writeHead(403);

@@ -2118,11 +2118,15 @@ textarea.form-control.script-body {
    padding-block: var(--op-space-2x-large);
 }
 
-/* The art slot. Sized so the layout does not jump when a graphic lands in it, and
-   invisible while it is empty rather than showing a hole. */
+/*
+ * The art.
+ *
+ * A capped block-size rather than a free one: the file is a square 1536 viewBox
+ * declaring width="100%" height="100%", so inside a grid cell with no height of its
+ * own it would take whatever it was given and push the steps off the screen.
+ */
 .firstrun__art {
-   inline-size: min(100%, 42rem);
-   min-block-size: 18rem;
+   inline-size: min(100%, 34rem);
    display: grid;
    place-items: center;
 }
@@ -2133,9 +2137,10 @@ textarea.form-control.script-body {
 
 .firstrun__art img,
 .firstrun__art svg {
-   inline-size: 100%;
+   inline-size: auto;
+   max-inline-size: 100%;
    block-size: auto;
-   max-block-size: 26rem;
+   max-block-size: 24rem;
 }
 
 .firstrun__title {
@@ -2225,4 +2230,17 @@ textarea.form-control.script-body {
    inline-size: 60%;
    background: var(--line);
    overflow: hidden;
+}
+
+/*
+ * `hidden` has to actually hide.
+ *
+ * The attribute's `display: none` comes from the UA stylesheet, which any author
+ * `display` rule outranks — and `.btn` sets one. So hiding the pipeline group took
+ * away its <h2>, which has no author display rule, and left all eight buttons on
+ * screen: the group looked half-hidden, and a property check said it was hidden
+ * because the property WAS set. This states it at a specificity that wins.
+ */
+.sidebar [data-group][hidden] {
+   display: none;
 }
