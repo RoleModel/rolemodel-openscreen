@@ -150,7 +150,13 @@ const STEPS = [
 			"-c",
 			"brew untap siddharthvaddem/openscreen 2>/dev/null; " +
 				"brew uninstall --cask openscreen 2>/dev/null; " +
-				"brew tap rolemodel/tap && brew install --cask rolemodel/tap/rolemodel-openscreen",
+				// `brew trust` before the install, and tolerated when absent: Homebrew 6
+				// refuses to load from an untrusted third-party tap with an ERROR rather
+				// than a prompt, so this repair — the one whose job is fixing a broken
+				// install — could not fix that one. `--tap`, not a bare name, because the
+				// bare form is ambiguous once a tap and a formula share a prefix. The
+				// `|| true` is for Homebrew 5, where the subcommand does not exist.
+				"brew tap rolemodel/tap && (brew trust --tap rolemodel/tap || true) && brew install --cask rolemodel/tap/rolemodel-openscreen",
 		]],
 		heavy: "downloads a ~900MB app",
 	},

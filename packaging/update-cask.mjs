@@ -128,9 +128,19 @@ const before = await readFile(caskPath, "utf8");
 // Replace only the generated lines. Anchored on the whole statement rather than
 // on a bare hex string, so a checksum quoted in a comment is not rewritten.
 let after = before.replace(/^(\s*)version ".*"$/m, `$1version "${version}"`);
+/*
+ * The whitespace after each key is captured and put back, not assumed.
+ *
+ * `brew style` aligns the values of a multi-line hash — `sha256 arm:` gains
+ * padding so the two hex strings line up — and this pattern used to require
+ * exactly one space. The styled cask therefore matched nothing, and the run died
+ * on "has the cask been reformatted?" with the release already built. Capturing
+ * the run of spaces means either style round-trips, and a bump leaves the file as
+ * `brew style` wants it rather than un-aligning it again.
+ */
 after = after.replace(
-	/^(\s*)sha256 arm: "[0-9a-f]*",\n(\s*)intel: "[0-9a-f]*"$/m,
-	`$1sha256 arm: "${sums.arm}",\n$2intel: "${sums.intel}"`,
+	/^(\s*)sha256(\s+)arm:(\s+)"[0-9a-f]*",\n(\s*)intel:(\s+)"[0-9a-f]*"$/m,
+	`$1sha256$2arm:$3"${sums.arm}",\n$4intel:$5"${sums.intel}"`,
 );
 
 if (after === before) {

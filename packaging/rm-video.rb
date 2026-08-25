@@ -102,7 +102,7 @@ class RmVideo < Formula
     ENTRIES.each do |entry|
       next unless (libexec/"bin/#{entry}.mjs").exist?
 
-      assert_predicate bin/entry, :exist?, "#{entry} was not linked"
+      assert_path_exists bin/entry, "#{entry} was not linked"
     end
 
     # The demo scripting DSL, exercised without a browser: `check` parses a

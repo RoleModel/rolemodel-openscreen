@@ -351,8 +351,8 @@ class RMTitle extends RMElement {
                 text-align:${align === 'center' ? 'center' : 'left'};
                 padding:0 8cqw; gap:1cqw; }
         .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand-text); }
-        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; text-shadow:var(--ink-shadow); }
-        .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; text-shadow:var(--ink-shadow); }
+        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
+        .sub { font-size:1.7cqw; color:var(--fg); max-width:46ch; line-height:1.45;  }
         .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand-text); margin-top:.6cqw; }
       </style>
       <div class="wrap anim">
@@ -382,8 +382,8 @@ class RMLowerThird extends RMElement {
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
                 box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
         .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
-        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; text-shadow:var(--ink-shadow); }
-        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; text-shadow:var(--ink-shadow); }
+        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2;  }
+        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; }
         /* Slides in rather than rising — reads as a reveal, and stays legible
            over busy footage. Uses the same registered properties so it still
            composes with the exit animation. */

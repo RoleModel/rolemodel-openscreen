@@ -38,19 +38,18 @@ cask "rolemodel-openscreen" do
   # artifactName here is a 404 whose first symptom is a failed install.
   arch arm: "Apple-Silicon", intel: "Intel"
 
-  version "0.0.1"
-  sha256 arm: "76d41df494e7b04bce33271278be239426e67d60c93c80716d87672ab5fae4ff",
-         intel: "797d7541d25c4510c4b6301de41f43415a279af1415d583f481cbcb733886075"
+  version "0.0.2"
+  sha256 arm:   "8c8208fa3caff8601de4158e7e9d49289e522e0ea5d557384e563f55a8046c5c",
+         intel: "938f9fbcdb00d5cc3097a7b2c527724463a6ecb6e515fbc613dadcb7ae7fd562"
 
   url "https://github.com/RoleModel/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg",
       verified: "github.com/RoleModel/openscreen/"
-
   # Two `name` stanzas, because the app answers to two things: what it calls itself
   # (CFBundleDisplayName, which is what the Dock and the menu bar show) and what it
   # is a build of, which is how anyone who has heard of it will search.
   name "RoleModel Studio"
   name "OpenScreen (RoleModel build)"
-  desc "Screen recorder and editor for product demos, with the RoleModel pipeline's CLI additions"
+  desc "Screen recorder and editor for product demos, with the RoleModel CLI pipeline"
   homepage "https://github.com/RoleModel/openscreen"
 
   livecheck do
@@ -59,7 +58,6 @@ cask "rolemodel-openscreen" do
   end
 
   auto_updates false
-
   # Same bundle name as upstream, so two casks would fight over
   # /Applications/Openscreen.app, and Homebrew's own error for that talks about a
   # pre-existing app rather than about two casks.
@@ -69,6 +67,10 @@ cask "rolemodel-openscreen" do
   # against is a third-party tap claiming the name — which is exactly how the
   # siddharthvaddem/openscreen mixup happened.
   conflicts_with cask: "openscreen"
+  # The artifact declares :monterey as its floor and the cask declared no floor
+  # at all, which `brew audit --cask --online` fails on — and on an older Mac
+  # meant brew happily installed an app that could not launch.
+  depends_on macos: :monterey
 
   app "Openscreen.app"
 
@@ -106,10 +108,43 @@ cask "rolemodel-openscreen" do
 
     opoo "This build is ad-hoc signed, not notarized: clearing its quarantine flag so macOS will open it."
     system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", app_path],
-                   sudo: false,
+                   args:         ["-dr", "com.apple.quarantine", app_path],
+                   sudo:         false,
                    print_stderr: false
   end
+
+  # Both names, because the app was renamed and the paths follow the name rather than
+  # the bundle. Electron derives `app.getPath("userData")` and the log directory from
+  # `app.name`, which on macOS is CFBundleDisplayName — so a copy installed after the
+  # rename writes to "RoleModel Studio" and one installed before it wrote to
+  # "Openscreen". A zap that lists only the current name leaves the older directory
+  # behind on exactly the machines that have been running this the longest.
+  #
+  # Both bundle ids, because it changed at 0.0.1.
+  #
+  # It used to be com.etiennelescot.openscreen — upstream's — which meant this
+  # installed as upstream's app and the two could not coexist. rolemodel.studio makes
+  # it a separate app.
+  #
+  # The cost is a real one and the caveats above say it out loud: macOS keys the
+  # Screen Recording grant to the bundle id, so a machine that had already granted it
+  # to the old id has to grant it again to the new one. There is no way to carry a
+  # TCC grant across identities, and the alternative was shipping for ever under
+  # someone else's identifier.
+  #
+  # The old paths stay listed so `brew zap` still cleans up after a build that
+  # predates the change.
+  zap trash: [
+    "~/Library/Application Support/Openscreen",
+    "~/Library/Application Support/openscreen",
+    "~/Library/Application Support/RoleModel Studio",
+    "~/Library/Logs/Openscreen",
+    "~/Library/Logs/RoleModel Studio",
+    "~/Library/Preferences/com.etiennelescot.openscreen.plist",
+    "~/Library/Preferences/rolemodel.studio.plist",
+    "~/Library/Saved Application State/com.etiennelescot.openscreen.savedState",
+    "~/Library/Saved Application State/rolemodel.studio.savedState",
+  ]
 
   caveats do
     <<~EOS
@@ -139,37 +174,4 @@ cask "rolemodel-openscreen" do
       first launch macOS will need you to approve it under Privacy & Security.
     EOS
   end
-
-  # Both names, because the app was renamed and the paths follow the name rather than
-  # the bundle. Electron derives `app.getPath("userData")` and the log directory from
-  # `app.name`, which on macOS is CFBundleDisplayName — so a copy installed after the
-  # rename writes to "RoleModel Studio" and one installed before it wrote to
-  # "Openscreen". A zap that lists only the current name leaves the older directory
-  # behind on exactly the machines that have been running this the longest.
-  #
-  # Both bundle ids, because it changed at 0.0.1.
-  #
-  # It used to be com.etiennelescot.openscreen — upstream's — which meant this
-  # installed as upstream's app and the two could not coexist. rolemodel.studio makes
-  # it a separate app.
-  #
-  # The cost is a real one and the caveats above say it out loud: macOS keys the
-  # Screen Recording grant to the bundle id, so a machine that had already granted it
-  # to the old id has to grant it again to the new one. There is no way to carry a
-  # TCC grant across identities, and the alternative was shipping for ever under
-  # someone else's identifier.
-  #
-  # The old paths stay listed so `brew zap` still cleans up after a build that
-  # predates the change.
-  zap trash: [
-    "~/Library/Application Support/RoleModel Studio",
-    "~/Library/Application Support/Openscreen",
-    "~/Library/Application Support/openscreen",
-    "~/Library/Preferences/rolemodel.studio.plist",
-    "~/Library/Preferences/com.etiennelescot.openscreen.plist",
-    "~/Library/Saved Application State/rolemodel.studio.savedState",
-    "~/Library/Saved Application State/com.etiennelescot.openscreen.savedState",
-    "~/Library/Logs/RoleModel Studio",
-    "~/Library/Logs/Openscreen",
-  ]
 end

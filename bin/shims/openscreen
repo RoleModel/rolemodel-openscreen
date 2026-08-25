@@ -30,5 +30,12 @@ do
   fi
 done
 
-echo "openscreen: no Openscreen.app found. brew install --cask rolemodel/tap/openscreen" >&2
+# The cask is `rolemodel-openscreen`. This line said `openscreen`, which was
+# dropped from the tap — so the one message a person sees when the app is
+# missing told them to install something that does not exist. The trust step is
+# here for the same reason install.sh has one: Homebrew 6 refuses an untrusted
+# third-party tap with an error rather than a prompt, so a bare tap-and-install
+# dies one line in.
+echo "openscreen: no Openscreen.app found. Install it with:" >&2
+echo "  brew trust --tap rolemodel/tap && brew install --cask rolemodel/tap/rolemodel-openscreen" >&2
 exit 127
