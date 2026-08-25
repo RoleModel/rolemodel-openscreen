@@ -146,7 +146,7 @@ for (const [i, seg] of segments.entries()) {
 
 	await writeFile(
 		html,
-		sceneHtml({ wallpaper: seg.wallpaper, elements: seg.elements ?? [], body: authored, title: name }),
+		sceneHtml({ wallpaper: seg.wallpaper, brand: seg.brand, elements: seg.elements ?? [], body: authored, title: name }),
 		"utf8",
 	);
 	scratch.push(html);

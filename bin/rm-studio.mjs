@@ -2575,6 +2575,17 @@ async function fetchVoiceList() {
 
     if (p === "/api/jobs") return json(res, 200, { jobs: jobs.list(), shell: SHELL });
 
+    /*
+     * Empty the Console.
+     *
+     * Before the id-suffixed routes below, and with no id of its own, so "clear"
+     * cannot be mistaken for a job called clear.
+     */
+    if (p === "/api/jobs/clear" && req.method === "POST") {
+      const cleared = await jobs.clearFinished();
+      return json(res, 200, { cleared, remaining: jobs.list().length });
+    }
+
     if (p === "/api/run" && req.method === "POST") {
       const b = JSON.parse(await text(req));
       try {
@@ -2888,7 +2899,7 @@ async function fetchVoiceList() {
     if (p === "/api/scene/preview" && req.method === "POST") {
       const b = JSON.parse(await text(req));
       const id = String(++previewSeq);
-      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, name: b.name || "Scene preview" });
+      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand: b.brand || undefined, name: b.name || "Scene preview" });
       // Only the last few matter; anything older is a frame nobody is looking at.
       for (const key of previews.keys()) {
         if (previews.size <= PREVIEWS_KEPT) break;
@@ -3059,6 +3070,17 @@ async function fetchVoiceList() {
         // A name, not a path: sceneHtml resolves it against whichever base it is
     // rendering for. A path here was right for a render and 404'd in preview.
     wallpapers: recipes.map((r) => ({ name: r.name, label: r.label })),
+        /*
+         * The brand pictures, so a scene can contain one.
+         *
+         * The clay renders have been sitting in brand/imagery/ visible only in the
+         * Brand panel — admirable and unusable, because the component set had no way
+         * to put a picture on a stage and the builder had no way to name one. Sent as
+         * name and file, never a path: rm-image resolves it against the stage's
+         * `assets` base, which is the only thing that knows whether this scene is
+         * being rendered or previewed.
+         */
+        imagery: JSON.parse(await readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8").catch(() => '{"imagery":[]}')).imagery.filter((i) => i.file),
       });
     }
 

@@ -145,7 +145,10 @@ const TIMING = `
 
 const TYPE = `
   :host {
-    --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    /* --rm-font is the way a scene changes its face. Without the var() every
+       component pins DM Sans on its own :host, which wins over anything the stage
+       sets — so the sub-brand typeface had nowhere to get in. */
+    --font: var(--rm-font, "DM Sans"), ui-sans-serif, system-ui, -apple-system, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --fg: var(--op-color-neutral-minus-max, #fff);
     --muted: var(--op-color-neutral-minus-five, #a3a3a3);
@@ -208,7 +211,16 @@ const define = (name, cls) => {
  * every glyph. Type sizes below are in cqw, so they follow the scale exactly.
  */
 class RMScene extends RMElement {
-  static fields = ['wallpaper', 'pad', 'width', 'height']
+  /*
+   * `assets` is the base the brand pictures live under, and it is not a field.
+   *
+   * Kept off `static fields` deliberately: the catalogue is what the Scenes panel
+   * offers you to fill in, and this is plumbing — sceneHtml sets it, because
+   * sceneHtml is the one place that knows whether this scene is being rendered
+   * out of components/ or previewed from a URL. An author naming a picture writes
+   * its NAME; the path is nobody's problem but this attribute's.
+   */
+  static fields = ['wallpaper', 'pad', 'width', 'height', 'brand']
   render() {
     const w = Number(this.attr('width', 1920))
     const h = Number(this.attr('height', 1080))
@@ -219,6 +231,10 @@ class RMScene extends RMElement {
         ${TYPE}
         :host { display:block; width:100%; aspect-ratio:${w}/${h}; overflow:hidden; container-type:inline-size;
                 background: var(--op-color-neutral-plus-max, #1f1f1f); }
+        /* The sub-brand's face, set on the stage and inherited by every part.
+           Custom properties cross into a child's shadow root, which is what makes
+           one declaration here enough. */
+        ${this.attr('brand') === 'academy' ? ':host { --rm-font: "Space Grotesk"; }' : ''}
         .stage { position:relative; width:100%; height:100%; padding:${Number(pad)}cqw;
                  background-size:cover; background-position:center; }
         ${wp ? `.stage { background-image:url("${this.esc(wp)}.jpg"); }` : ''}
@@ -392,6 +408,50 @@ class RMCallout extends RMElement {
   }
 }
 define('rm-callout', RMCallout)
+
+/* ── rm-image ────────────────────────────────────────────────────────────── */
+
+/**
+ * One of the brand pictures, placed on the stage.
+ *
+ * The component set could draw a browser, a title, a callout, a stat and a list,
+ * and had no way to put a picture on screen — so the clay renders sitting in
+ * brand/imagery/ could be admired in the Brand panel and used in nothing.
+ *
+ * `src` is a NAME by default: "academy-rocket.png", resolved against the scene's
+ * `assets` base. That is the wallpaper's lesson repeated — a caller-supplied path
+ * is correct for a render out of components/ and 404s in a preview served from a
+ * different URL, and the one place that knows the difference is the harness. A
+ * value containing a slash is passed through untouched, so an author can still
+ * point at something of their own.
+ *
+ * Sized by width alone, in cqw, so it scales with the stage exactly like the type
+ * does; the height follows the picture's own ratio rather than being stated twice
+ * and getting to disagree.
+ */
+class RMImage extends RMElement {
+  static fields = ['src', 'x', 'y', 'w', 'fit', 'alt', 'at', 'for']
+  render() {
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
+    const w = Number(this.attr('w', 30))
+    const raw = this.attr('src')
+    // A name resolves against the stage's base; a path is the author's business.
+    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const src = !raw || raw.includes('/') || /^[a-z]+:/i.test(raw) ? raw : `${base}/${raw}`
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
+                --rise:1.2cqw; --dur:var(--duration-slow, 520ms);
+                --ease:var(--ease-emphasis, cubic-bezier(0.34, 1.4, 0.64, 1)); }
+        .anim { transform: translate(-50%, calc(-50% + var(--rise) * (1 - var(--rm-in-o)))); }
+        img { display:block; width:100%; height:auto; object-fit:${this.attr('fit', 'contain')}; }
+      </style>
+      <div class="anim"><img src="${this.esc(src)}" alt="${this.esc(this.attr('alt', ''))}" /></div>`
+  }
+}
+define('rm-image', RMImage)
 
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
