@@ -243,7 +243,7 @@
       ]
     },
     "tint": {
-      "color": "#610505",
+      "color": "#000000",
       "alpha": 0.25,
       "angle": 168
     },
@@ -341,7 +341,7 @@
     "label": "LightningCAD · tinted board",
     "base": "#090c11",
     "gradient": {
-      "angle": 152,
+      "angle": 0,
       "stops": [
         {
           "color": "#000000",
@@ -354,9 +354,9 @@
       ]
     },
     "tint": {
-      "color": "#006cfa",
-      "alpha": 0.32,
-      "angle": 188
+      "color": "#428df0",
+      "alpha": 0.06,
+      "angle": 209
     },
     "texture": {
       "type": "dots",
@@ -366,8 +366,8 @@
       "weight": 1.4
     },
     "border": {
-      "width": 0,
-      "color": "#00c278",
+      "width": 23,
+      "color": "#005ec2",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"
@@ -479,6 +479,43 @@
     "border": {
       "width": 22,
       "color": "#66b5ff",
+      "inset": 0,
+      "radius": 0,
+      "sides": "bottom"
+    }
+  },
+  {
+    "name": "rolemodel",
+    "label": "Bright Blue",
+    "base": "#1a2432",
+    "gradient": {
+      "angle": 146,
+      "stops": [
+        {
+          "color": "#9ee7ff",
+          "at": 0
+        },
+        {
+          "color": "#5bb3f5",
+          "at": 1
+        }
+      ]
+    },
+    "tint": {
+      "color": "#0bc9ef",
+      "alpha": 0,
+      "angle": 180
+    },
+    "texture": {
+      "type": "grid",
+      "color": "#2970ff",
+      "opacity": 0.4,
+      "size": 16,
+      "weight": 1.4
+    },
+    "border": {
+      "width": 0,
+      "color": "#00c278",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"

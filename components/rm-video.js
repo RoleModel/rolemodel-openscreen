@@ -113,18 +113,27 @@ for (const [name, syntax, initial] of [
 
 const TIMING = `
   :host {
+    /*
+     * Motion comes from the brand, not from here.
+     *
+     * These are the tokens in rolemodel-brand/tokens/brand.json, generated into
+     * css/academy-theme.css. The fallbacks are the same values, so a component
+     * dropped on a page with no theme still moves correctly — but when the theme
+     * is present it wins, and retuning the brand retunes every video at once.
+     */
     --at: 0ms;
-    --dur: 520ms;
-    --out-dur: 320ms;
+    --dur: var(--duration-base, 400ms);
+    --out-dur: var(--duration-fast, 200ms);
     --hold: 999999ms;
-    --ease: cubic-bezier(.16,1,.3,1);
-    --rise: 14px;
+    --ease: var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1));
+    --ease-out-curve: var(--ease-exit, cubic-bezier(0.55, 0, 1, 0.45));
+    --rise: var(--distance-sm, 8px);
   }
   .anim {
     animation-name: rm-in, rm-out;
     animation-duration: var(--dur), var(--out-dur);
     animation-delay: calc(var(--at) - var(--t)), calc(var(--at) + var(--hold) - var(--t));
-    animation-timing-function: var(--ease), ease-in;
+    animation-timing-function: var(--ease), var(--ease-out-curve);
     animation-fill-mode: both, both;
     animation-play-state: paused, paused;
     opacity: calc(var(--rm-in-o) * var(--rm-out-o));
@@ -327,7 +336,7 @@ class RMLowerThird extends RMElement {
       <style>
         ${TYPE}${TIMING}
         :host { display:block; position:absolute; bottom:8cqw; ${side === 'right' ? 'right:6cqw' : 'left:6cqw'};
-                --rise:0px; --dur:460ms; }
+                --rise:0px; --dur:var(--duration-base, 400ms); }
         .card { display:flex; align-items:stretch; gap:1cqw;
                 background:color-mix(in srgb, var(--surface) 88%, transparent);
                 border:1px solid var(--line); border-radius:.7cqw;
@@ -365,7 +374,8 @@ class RMCallout extends RMElement {
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; --dur:420ms; }
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; --dur:var(--duration-fast, 200ms);
+                --ease:var(--ease-emphasis, cubic-bezier(0.34, 1.4, 0.64, 1)); }
         .row { display:flex; align-items:center; gap:.7cqw;
                flex-direction:${side === 'left' ? 'row-reverse' : 'row'}; }
         .pin { width:1.5cqw; height:1.5cqw; border-radius:50%; flex:0 0 auto;
@@ -405,7 +415,7 @@ class RMStat extends RMElement {
         ${
           counting
             ? `.v { counter-reset: n var(--n);
-                 animation: rm-count 1100ms var(--ease) both paused;
+                 animation: rm-count var(--duration-deliberate, 900ms) var(--ease) both paused;
                  animation-delay: calc(var(--at) - var(--t)); }
              .v::after { content: counter(n) "${this.esc(this.attr('unit', ''))}"; }
              @keyframes rm-count { from { --n: 0; } to { --n: ${Math.round(n)}; } }`

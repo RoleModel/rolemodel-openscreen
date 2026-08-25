@@ -1,0 +1,74 @@
+{
+	"imagery": [
+		{
+			"name": "academy-browser",
+			"file": "academy-browser.png",
+			"bytes": 288720,
+			"sha": "9e3fd4a9bce07f29",
+			"local": "9e3fd4a9bce07f29"
+		},
+		{
+			"name": "academy-cursor",
+			"file": "academy-cursor.png",
+			"bytes": 294161,
+			"sha": "0d29717214db24a4",
+			"local": "0d29717214db24a4"
+		},
+		{
+			"name": "academy-keyboard",
+			"file": "academy-keyboard.png",
+			"bytes": 253784,
+			"sha": "2e32663848e290fa",
+			"local": "2e32663848e290fa"
+		},
+		{
+			"name": "academy-phone",
+			"file": "academy-phone.png",
+			"bytes": 53132,
+			"sha": "c4a86aa1662d1e4f",
+			"local": "c4a86aa1662d1e4f"
+		},
+		{
+			"name": "academy-rocket",
+			"file": "academy-rocket.webp",
+			"bytes": 32404,
+			"sha": "6997847817eaf3f0",
+			"local": "6997847817eaf3f0"
+		},
+		{
+			"name": "academy-logo-clay",
+			"file": "academy-logo-clay.png",
+			"bytes": 231470,
+			"sha": "c5b95df7877d3a9a",
+			"local": "c5b95df7877d3a9a"
+		},
+		{
+			"name": "academy-plant",
+			"file": "academy-plant.webp",
+			"bytes": 110270,
+			"sha": "7199e53df59b2094",
+			"local": "7199e53df59b2094"
+		},
+		{
+			"name": "academy-ruby",
+			"file": "academy-ruby.webp",
+			"bytes": 70942,
+			"sha": "d12497fb41801c34",
+			"local": "d12497fb41801c34"
+		},
+		{
+			"name": "academy-javascript",
+			"file": "academy-javascript.webp",
+			"bytes": 94028,
+			"sha": "3a22b833b762eb0d",
+			"local": "3a22b833b762eb0d"
+		},
+		{
+			"name": "academy-questionmark",
+			"file": "academy-questionmark.webp",
+			"bytes": 61988,
+			"sha": "81c7bc1c0cc6c6f9",
+			"local": "81c7bc1c0cc6c6f9"
+		}
+	]
+}

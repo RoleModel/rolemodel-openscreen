@@ -24,7 +24,7 @@ browser on :4600 — that is the developer path, and it is in
 `brew install`, and you can do that by hand if you prefer:
 
 ```sh
-brew install rolemodel/tap/rm-video                    # the eight commands
+brew install rolemodel/tap/rm-video                    # the nine commands
 brew install --cask rolemodel/tap/rolemodel-openscreen # the app, "RoleModel Studio"
 rm-setup                                               # the rest, idempotent
 ```
@@ -87,6 +87,8 @@ components/render-scene.mjs  scene -> MP4, frame by frame
 lib/verify.mjs             assert the presets still match OpenScreen's own types
 bin/rm-video.mjs           CLI
 skill/SKILL.md             agent skill — record → brand → export, end to end
+skill/hyperframes-brand/   agent skill — RoleModel brand + motion tokens for
+                           HyperFrames compositions
 ```
 
 ## Why this shape

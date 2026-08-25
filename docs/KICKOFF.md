@@ -63,7 +63,7 @@ call site, which is what keeps rebasing on upstream cheap. What they add:
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and eight commands:
+That installs Node and nine commands:
 
 | command | does |
 |---|---|
@@ -73,6 +73,7 @@ That installs Node and eight commands:
 | `rm-voice` | narration → audio + an exact SRT |
 | `rm-mux` | reconciles narration timing against a recast render |
 | `rm-library` | builds the library index |
+| `rm-compose` | cuts scenes and footage into one document the editor opens |
 | `rm-share` | sends a finished video for review |
 | `rm-setup` | checks every piece of the install and repairs what it can |
 

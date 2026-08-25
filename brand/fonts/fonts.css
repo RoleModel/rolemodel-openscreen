@@ -1,0 +1,42 @@
+/*
+ * The brand faces, declared next to the files they load.
+ *
+ * templates/theme.css already declares these, but with `assets/brand/fonts/...`
+ * paths that only resolve from a staged render's root. A scene renders out of
+ * components/, links optics.css and rolemodel-scales.css — and neither of those
+ * carries an @font-face — so every rendered title came out in whatever the
+ * platform fell back to. On the render box that was Noto Sans, set with tracking
+ * tuned for DM Sans, which reads as badly kerned rather than as the wrong font.
+ *
+ * Paths here are bare filenames, so this file works from wherever it is linked
+ * as long as it sits beside the woff2 — which is the point of putting it here
+ * rather than in templates/.
+ *
+ * `font-display: block` rather than swap: a render seeks and screenshots, and a
+ * face that swaps in on frame 20 gives you twenty frames in the wrong typeface.
+ * Blocking is correct when nobody is waiting to read.
+ */
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("DMSans-Variable-latin.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("DMSans-Variable-latin-ext.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: block;
+  /* The extended range only — so the latin file serves the common case and this
+     one is fetched only when a glyph actually needs it. */
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: block;
+}

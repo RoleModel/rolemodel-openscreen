@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "RoleModel brand layer for OpenScreen \u2014 presets, wallpapers, annotation builders, and an agent skill.",
+  "description": "RoleModel brand layer for OpenScreen — presets, wallpapers, annotation builders, and an agent skill.",
   "bin": {
+    "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-library": "./bin/rm-library.mjs",
     "rm-mux": "./bin/rm-mux.mjs",
@@ -16,7 +17,7 @@
   },
   "scripts": {
     "build": "npm run sync-brand && npm run optics && npm run wallpapers",
-    "check": "npm run sync-brand:check && npm run optics:check && npm run optics-tokens:check && npm run icons:check && npm run verify && npm run sync-tap:check && npm run sync-docs:check",
+    "check": "npm run sync-brand:check && npm run optics:check && npm run optics-tokens:check && npm run icons:check && npm run imagery:check && npm run verify && npm run sync-tap:check && npm run sync-docs:check",
     "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
     "studio": "node bin/rm-studio.mjs",
     "presets": "node bin/rm-video.mjs presets",
@@ -43,12 +44,16 @@
     "icons": "node lib/make-icons.mjs",
     "icons:check": "node lib/make-icons.mjs --check",
     "logos": "node lib/make-logos.mjs",
+    "imagery": "node lib/make-imagery.mjs",
+    "vendor": "cp node_modules/gsap/dist/gsap.min.js brand/vendor/gsap.min.js",
+    "imagery:check": "node lib/make-imagery.mjs --check",
     "logos:check": "node lib/make-logos.mjs --check",
     "motion": "node lib/make-motion.mjs",
     "motion:check": "node lib/make-motion.mjs --check",
     "app": "node lib/launch-app.mjs"
   },
   "devDependencies": {
+    "gsap": "^3.14.2",
     "playwright": "^1.62.1"
   },
   "repository": {
