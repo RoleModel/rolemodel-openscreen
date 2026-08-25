@@ -380,7 +380,7 @@ class RMCallout extends RMElement {
                flex-direction:${side === 'left' ? 'row-reverse' : 'row'}; }
         .pin { width:1.5cqw; height:1.5cqw; border-radius:50%; flex:0 0 auto;
                background:var(--brand); box-shadow:0 0 0 .45cqw color-mix(in srgb, var(--brand) 28%, transparent); }
-        .txt { background:var(--brand); color:var(--on-brand); font-weight:650; font-size:1.15cqw;
+        .txt { background:var(--brand); color:color-contrast(var(--brand)); font-weight:650; font-size:1.15cqw;
                padding:.5cqw 1cqw; border-radius:.5cqw; white-space:nowrap; }
         /* Pops rather than rises. --rm-in-s is registered as a number, so it
            interpolates smoothly instead of stepping. */

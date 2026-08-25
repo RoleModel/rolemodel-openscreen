@@ -47,7 +47,6 @@
          --info-fg: var(--op-color-academy-primary-on-plus-four);
          --d: "DM Sans", ui-sans-serif, system-ui, sans-serif;
          --m: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
-
          /* The scrim under the kind pill on a thumbnail. Optics has no scrim colour
      and no 0.6 opacity step, so this is Optics black at the half-opacity
      token — mixed into the background rather than applied as opacity, which
@@ -674,6 +673,19 @@
          cursor: pointer
       }
 
+      /*
+       * A chosen swatch has to look chosen.
+       *
+       * `.btn` carries no pressed state, so picking a colour changed the markup and
+       * nothing on screen — and with an empty stage there is no part to take the
+       * colour either, so the whole interaction read as a dead control. The ring is
+       * drawn outside the button so it does not shift the swatch by a pixel.
+       */
+      .swatch[aria-pressed='true'] {
+         outline: 2px solid var(--accent);
+         outline-offset: 2px;
+      }
+
       .chip[aria-pressed=true] {
          background: var(--accent);
          border-color: var(--accent);
@@ -876,6 +888,119 @@
          block-size: auto;
       }
 
+      /*
+       * The scrubber, on tokens rather than literals.
+       *
+       * It arrived with seventeen hardcoded greens — a range input styled the way
+       * generators produce them. They are the brand ramp spelled out, so they go
+       * dark with the theme instead of staying lit, and `npm run check` stops
+       * reporting the Studio as inventing colour.
+       */
+      input[type=range] {
+         width: 100%;
+         margin: 3.8px 0;
+         background-color: transparent;
+      }
+
+      input[type=range]:focus {
+         outline: none;
+      }
+
+      input[type=range]::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-four);
+         border: 0px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-webkit-slider-thumb {
+         margin-top: -4px;
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         -webkit-appearance: none;
+      }
+
+      input[type=range]:focus::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-five);
+      }
+
+      input[type=range]::-moz-range-track {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-moz-range-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-track {
+         background: transparent;
+         border-color: transparent;
+         border-width: 3.8px 0;
+         color: transparent;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-fill-lower {
+         background: var(--op-color-primary-minus-one);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-fill-upper {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         margin-top: 0px;
+         /*Needed to keep the Edge thumb centred*/
+      }
+
+      input[type=range]:focus::-ms-fill-lower {
+         background: var(--accent);
+      }
+
+      input[type=range]:focus::-ms-fill-upper {
+         background: var(--op-color-primary-plus-two);
+      }
+
+      /*TODO: Use one of the selectors from https://stackoverflow.com/a/20541859/7077589 and figure out
+how to remove the virtical space around the range input in IE*/
+      @supports (-ms-ime-align:auto) {
+
+         /* Pre-Chromium Edge only styles, selector taken from hhttps://stackoverflow.com/a/32202953/7077589 */
+         input[type=range] {
+            margin: 0;
+            /*Edge starts the margin from the thumb, not the track as other browsers do*/
+         }
+      }
+
+
       .projgrid {
          display: grid;
          grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
@@ -887,21 +1012,75 @@
          gap: var(--op-space-x-small);
       }
 
+      /* The angle has to be a registered property or it can't be interpolated —
+   an unregistered custom property is just a string and the spin won't animate. */
+      @property --gradient-angle {
+         syntax: "<angle>";
+         initial-value: 0deg;
+         inherits: false;
+      }
+
+      @keyframes gradient-spin {
+         to {
+            --gradient-angle: 360deg;
+         }
+      }
+
       .projcard {
-         background: var(--panel);
-         border: var(--op-border-width) solid var(--line);
-         border-radius: var(--op-radius-x-large);
-         overflow: hidden;
+         background-color: var(--panel);
+         border-radius: 0 var(--op-radius-x-large) var(--op-radius-x-large) var(--op-radius-x-large);
+         box-shadow: inset 0 0 0 1px var(--line);
          display: flex;
          flex-direction: column;
+         position: relative;
       }
 
-      .projcard:hover {
-         border-color: var(--accent);
+      .projcard::after {
+         content: "";
+         position: absolute;
+         inset: calc(var(--op-border-width-large) * -1);
+         z-index: -1;
+         pointer-events: none;
+         background: conic-gradient(from calc(var(--gradient-angle) + 335deg),
+               transparent 0deg,
+               var(--op-color-primary-base) 30deg,
+               var(--op-color-academy-primary-base) 60deg,
+               transparent 100deg,
+               transparent 360deg);
+         border-radius: inherit;
+         opacity: 0;
+         filter: blur(10px);
+         transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1);
+         animation: gradient-spin 3s linear infinite;
+
       }
+
+      .projcard:not(.projnew)::before {
+         content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
+         ;
+         position: absolute;
+         z-index: 0;
+         top: -19px;
+         left: 0px;
+      }
+
+      .projcard:hover::after {
+         opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+         .projcard::after {
+            animation: none;
+         }
+      }
+
 
       .projart {
+         z-index: 1;
          aspect-ratio: var(--video-ar);
+         margin: var(--op-space-small);
+         border-top-right-radius: var(--op-radius-large);
+         border-top-left-radius: var(--op-radius-large);
          background: var(--sunk) center/cover no-repeat;
       }
 
@@ -1095,7 +1274,18 @@
        *
        * Focus only. Hover is the wrong trigger for something that appears and
        * disappears under a moving pointer. */
-      .form .form-hint {
+      /*
+       * A FIELD's hint, not every hint in the form.
+       *
+       * `.form .form-hint` caught the status lines too — a `pre` that `tone()` has
+       * classed, sitting directly in the form rather than inside a form-group. Its
+       * parent is never `.form-group:focus-within`, so it was permanently
+       * invisible: Save wrote the file, Draft returned its error, and neither said
+       * anything. The child combinator is the whole fix — a hint belonging to a
+       * control hides until that control has focus; a hint belonging to the panel
+       * is just a line of text.
+       */
+      .form .form-group>.form-hint {
          position: absolute;
          inset-inline: 0;
          inset-block-start: 100%;
@@ -1633,10 +1823,10 @@
             <h1>RoleModel Studio</h1>
             <div class="root" id="root">…</div>
             <button data-v="library" aria-current="true">Library</button>
-            <button data-v="new">New project</button>
             <button data-v="create">New video</button>
             <button data-v="editor">Editor</button>
             <button data-v="review">Review</button>
+            <button data-v="cut">Cut</button>
             <button data-v="compose">Compose</button>
             <button data-v="scenes">Scenes</button>
             <button data-v="scripts">Scripts</button>
