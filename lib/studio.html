@@ -24,15 +24,40 @@
          <div class="sidebar__content sidebar__content--start">
             <h1>RoleModel Studio</h1>
             <div class="root" id="root">…</div>
+            <!--
+               The nav in the order the work happens.
+               ============================================================
+               It used to be thirteen siblings named after subsystems — cut, compose,
+               scenes, recast — with nothing to say which came first. Every one of them
+               also opened by asking "which project?", so they were all equally step
+               one, and the nav could not have been ordered even if somebody had wanted
+               to. The project moved to the header, which is what freed this.
+
+               Two groups, because the app has two kinds of panel: nine that work
+               inside a project, and five that are about the toolkit and reference
+               `S.projects` zero times.
+
+               The headings are SIBLINGS of the buttons, not wrappers around them.
+               Optics styles this component through `.sidebar__content > *` in four
+               places — the base alignment and all three widths — and `display:
+               contents` on a wrapper does not fool a child combinator: it removes the
+               box, not the parentage. Grouping them cost the buttons their left
+               alignment and, in the rail, the `font-size: 0` that collapses their
+               labels. An <h2> gives the grouping real document structure without
+               putting anything between the content and its children.
+            -->
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>
+
+            <h2 class="navgroup">Make a video</h2>
             <button class="btn btn--no-border" data-v="create">New video</button>
-            <button class="btn btn--no-border" data-v="editor">Editor</button>
-            <button class="btn btn--no-border" data-v="review">Review</button>
-            <button class="btn btn--no-border" data-v="cut">Cut</button>
-            <button class="btn btn--no-border" data-v="compose">Compose</button>
-            <button class="btn btn--no-border" data-v="scenes">Scenes</button>
             <button class="btn btn--no-border" data-v="scripts">Scripts</button>
             <button class="btn btn--no-border" data-v="voice">Voice</button>
+            <button class="btn btn--no-border" data-v="scenes">Scenes</button>
+            <button class="btn btn--no-border" data-v="compose">Compose</button>
+            <button class="btn btn--no-border" data-v="cut">Cut</button>
+            <button class="btn btn--no-border" data-v="editor">Editor</button>
+            <button class="btn btn--no-border" data-v="review">Review</button>
+            <h2 class="navgroup">Toolkit</h2>
             <button class="btn btn--no-border" data-v="brand">Brand</button>
             <button class="btn btn--no-border" data-v="components">Components</button>
             <button class="btn btn--no-border" data-v="storage">Storage</button>

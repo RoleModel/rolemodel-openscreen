@@ -2192,3 +2192,36 @@ textarea.form-control.script-body {
 .sidebar--rail #tools {
    display: none;
 }
+
+/*
+ * Nav groups.
+ *
+ * The heading is a real <p> with the buttons in a labelled group beneath it,
+ * rather than a border and a hope: a screen reader gets "Make a video, group" and
+ * a sighted reader gets the same thing, from the same markup.
+ */
+.navgroup {
+   margin: var(--op-space-medium) 0 var(--op-space-2x-small);
+   padding-inline: var(--op-space-x-small);
+   font-size: var(--op-font-2x-small);
+   font-weight: var(--op-font-weight-semi-bold);
+   letter-spacing: var(--op-letter-spacing-label);
+   text-transform: uppercase;
+   color: var(--op-color-neutral-minus-six);
+}
+
+/*
+ * In the rail, a rule instead of a word.
+ *
+ * `font-size: 0` collapses the heading's text but not its box, so each group would
+ * leave a band of empty space where a label used to be. The grouping still has to
+ * read, so it becomes the thing a rail can show: a line.
+ */
+.sidebar--rail .navgroup {
+   margin: var(--op-space-x-small) 0;
+   padding: 0;
+   block-size: var(--op-border-width);
+   inline-size: 60%;
+   background: var(--line);
+   overflow: hidden;
+}
