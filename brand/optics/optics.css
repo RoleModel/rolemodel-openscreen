@@ -102,6 +102,10 @@ Noto Sans supports:
   --op-color-academy-primary-s: 100%;
   --op-color-academy-primary-l: 40%;
 
+  --op-color-primary-h: 157;
+  --op-color-primary-s: 100%;
+  --op-color-primary-l: 40%;
+
   /**
   * @tokens Neutral Colors
   * @presenter Color
