@@ -129,6 +129,62 @@
       <div data-el="host" data-region="main"></div>
    </template>
 
+   <template data-panel="scripts">
+      <p class="lede" data-region="main">
+         Narration and outlines as markdown — greppable, and they diff. A script
+         saved to a project lands in that project's scripts/ folder; the shared
+         shelf is for the ones that travel. Voice reads from here.
+      </p>
+
+      <div data-region="main" class="script-form">
+         <div class="form-row">
+            <div class="form-group">
+               <label class="form-label" for="script-project">Project</label>
+               <select data-el="project" id="script-project" class="form-control"></select>
+               <div class="form-hint">Moving it saves a copy into that project's scripts/ folder.</div>
+            </div>
+            <div class="form-group">
+               <label class="form-label" for="script-name">Name</label>
+               <input data-el="name" id="script-name" class="form-control" placeholder="case-study-opener" />
+               <div class="form-hint">The filename, without .md. Voice matches a narration run to a script by this.</div>
+            </div>
+            <div class="form-group">
+               <label class="form-label" for="script-seconds">Seconds</label>
+               <input data-el="seconds" id="script-seconds" class="form-control" type="number"
+                      value="30" min="10" max="180" step="5" />
+               <div class="form-hint">How long the draft should run. Drafting only.</div>
+            </div>
+         </div>
+
+         <div class="form-group">
+            <label class="form-label" for="script-about">About</label>
+            <textarea data-el="about" id="script-about" class="form-control" rows="3"
+                      placeholder="A URL, or a couple of sentences about what the video is for and who is watching."></textarea>
+            <div class="form-hint">The brief Claude drafts from. Type / for a directive.</div>
+         </div>
+
+         <div class="form-group">
+            <label class="form-label" for="script-body">Script</label>
+            <textarea data-el="body" id="script-body" class="form-control script-body" spellcheck="false"
+                      placeholder="Write the script…"></textarea>
+            <div data-el="count" class="form-hint"></div>
+         </div>
+
+         <div data-el="draftOut"></div>
+      </div>
+
+      <div data-region="side">
+         <div class="client">Saved</div>
+         <div data-el="saved" class="saved-list"></div>
+      </div>
+
+      <div data-region="footer">
+         <div data-el="status" class="hint"></div>
+         <button data-el="draft" class="btn ghost">Draft it with Claude</button>
+         <button data-el="save" class="btn">Save script</button>
+      </div>
+   </template>
+
    <template data-panel="scenes">
       <p class="lede" data-region="main">
          A scene is a stage with parts on it. Add a part, fill it in, watch it.

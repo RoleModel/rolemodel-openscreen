@@ -2032,3 +2032,31 @@ pre {
    text-align: end;
    font-variant-numeric: tabular-nums;
 }
+
+/* One form, stacked, with the three short fields on a row of their own. */
+.script-form {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+}
+
+.form-row {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+   gap: var(--op-space-small);
+   align-items: start;
+}
+
+/* Tall, because writing the script is the point of the screen. */
+.script-body {
+   block-size: 26rem;
+   min-block-size: 26rem;
+}
+
+/* The saved shelf, in the rail. Cards stack rather than grid: the column is one
+   card wide, and a grid of one column is a list with extra steps. */
+.saved-list {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+}

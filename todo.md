@@ -44,6 +44,9 @@ Casks quarantine what they install. Ad-hoc plus quarantine on macOS 15/26 is the
 no longer defeats it — the only way through is System Settings → Privacy &
 Security → Open Anyway. This is the first thing a new installer meets.
 
+
+## Will a new Apple Developer Cert fix this?
+
 Two ways out, and they are not equivalent:
 
 - Configure a Developer ID cert and the notarization secrets in the fork's
