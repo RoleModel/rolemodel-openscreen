@@ -1464,7 +1464,7 @@ how to remove the virtical space around the range input in IE*/
        * control hides until that control has focus; a hint belonging to the panel
        * is just a line of text.
        */
-.form .form-group > .form-hint {
+:is(.form, .panel-card) .form-group > .form-hint {
   position: absolute;
   inset-inline: 0;
   inset-block-start: 100%;
@@ -1481,7 +1481,7 @@ how to remove the virtical space around the range input in IE*/
     visibility var(--op-transition-input);
 }
 
-.form .form-group:focus-within > .form-hint {
+:is(.form, .panel-card) .form-group:focus-within > .form-hint {
   opacity: 1;
   visibility: visible;
 }
@@ -2033,6 +2033,21 @@ pre {
    font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The chrome that makes a panel's content a card.
+ *
+ * `.form` has always carried this — background, border, radius, padding — as part
+ * of being a two-column grid. A templated panel that lays its content out some
+ * other way still wants to be a card, so the chrome is its own class rather than
+ * something you inherit by agreeing to `.form`'s grid.
+ */
+.panel-card {
+   background: var(--panel);
+   border: var(--op-border-width) solid var(--line);
+   border-radius: var(--op-radius-large);
+   padding: var(--op-space-large);
+}
+
 /* One form, stacked, with the three short fields on a row of their own. */
 .script-form {
    display: flex;
@@ -2048,7 +2063,21 @@ pre {
 }
 
 /* Tall, because writing the script is the point of the screen. */
-.script-body {
+/*
+ * Tall enough to write a script in, and specific enough to win.
+ *
+ * Optics sets `textarea.form-control:not([type='radio'], [type='checkbox'])` —
+ * specificity (0,2,1) — to `calc(2 * var(--__op-form-control-height))`, which is
+ * 80px. A plain `textarea.script-body` is (0,2,1)'s inferior at (0,1,1) and loses,
+ * which is why this box came out two rows tall.
+ *
+ * Naming both classes matches that specificity, and this sheet loads after Optics,
+ * so it wins on order. The same fight is why the general
+ * `textarea { block-size: var(--field-tall) }` above has never applied to a
+ * `.form-control` textarea, and why every other tall box in this app is sized with
+ * an inline style instead.
+ */
+textarea.form-control.script-body {
    block-size: 26rem;
    min-block-size: 26rem;
 }
