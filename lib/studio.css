@@ -1991,3 +1991,24 @@ pre {
 .plan li .w {
   color: var(--muted);
 }
+
+/* A panel whose whole content is an embedded page. */
+.tall-frame {
+   inline-size: 100%;
+   block-size: var(--frame-h);
+   border: var(--op-border-width) solid var(--line);
+   border-radius: var(--op-radius-large);
+   background: var(--bg);
+}
+
+/* A command to copy, not output to read. */
+.cmd-note {
+   margin-block-start: var(--op-space-medium);
+}
+
+/* The bin on a part card. Bigger than the reorder arrows beside it, because it is
+   the one action on the card you cannot undo. 1rem is 10px here — see the top. */
+.kill .hgi-stroke {
+   font-size: 2.4rem;
+   line-height: 1;
+}

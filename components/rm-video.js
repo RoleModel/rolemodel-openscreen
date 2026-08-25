@@ -283,12 +283,22 @@ define('rm-scene', RMScene)
  * at the top of this file about half-loaded frames.
  */
 class RMBrowser extends RMElement {
-  static fields = ['url', 'image', 'src', 'at', 'for', 'w', 'dark']
+  static fields = ['url', 'at', 'for', 'w', 'dark']
   render() {
     const url = this.attr('url', 'app.rolemodelsoftware.com')
-    const image = this.attr('image')
-    const src = this.attr('src')
     const w = this.attr('w', '72')
+    /*
+     * One field, and it both reads as the address and loads.
+     *
+     * There were three: `url` drew the address bar, `src` embedded an iframe and
+     * `image` showed a screenshot — so the chrome could say one site while the
+     * viewport showed another, and whichever of the two was set won silently.
+     * `url` is the browser part's whole input now: what it says is what it loads.
+     *
+     * A scheme is added when the address is written the way people write one, so
+     * `app.rolemodelsoftware.com` resolves instead of being read as a relative path.
+     */
+    const target = url && !/^[a-z]+:\/\//i.test(url) ? `https://${url}` : url
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
@@ -311,9 +321,8 @@ class RMBrowser extends RMElement {
            keeps a literal white out of a file where every colour is a token. */
         .view { aspect-ratio:16/10; color-scheme: light; background: canvas;
                 display:block; width:100%; border:0; }
-        .view.img { object-fit:cover; object-position:top center; }
-        /* No screenshot yet. A plain white rectangle reads as a broken render;
-           this reads as a placeholder, which is what it is. */
+        /* No address yet. A plain white rectangle reads as a broken render; this
+           reads as a placeholder, which is what it is. */
         .view.empty { background:var(--op-color-neutral-plus-six, #333);
                       display:flex; align-items:center; justify-content:center;
                       color:var(--muted); font-family:var(--mono); font-size:.9cqw;
@@ -329,7 +338,7 @@ class RMBrowser extends RMElement {
             <span class="u">${this.esc(url)}</span>
           </div>
         </div>
-        ${src ? `<iframe class="view" src="${this.esc(src)}" loading="eager" sandbox="allow-scripts allow-same-origin"></iframe>` : image ? `<img class="view img" src="${this.esc(image)}" alt=""/>` : `<div class="view empty">screenshot</div>`}
+        ${target ? `<iframe class="view" src="${this.esc(target)}" loading="eager" sandbox="allow-scripts allow-same-origin"></iframe>` : `<div class="view empty">no address</div>`}
       </div>`
   }
 }

@@ -67,6 +67,68 @@
       `data-el` is a handle. mountPanel() returns a map of them, so the JS wires
       behaviour to named nodes and never builds any.
    -->
+   <template data-panel="components">
+      <p class="lede" data-region="main">
+         Custom elements for HyperFrames scenes: title cards, browser chrome, lower
+         thirds, callouts, stats, build-on lists. Drag the scrubber in the frame —
+         the page is seeked to that instant, which is exactly what the renderer does
+         frame by frame.
+      </p>
+      <div class="note" data-region="main">
+         Animation is <em>seeked, not played</em>: every component is a paused CSS
+         animation positioned by one <code>--t</code> property, so frame N is
+         identical on every render. Copy <code>components/scene.html</code> to start
+         a new one.
+      </div>
+      <div data-region="main">
+         <iframe data-el="gallery" class="tall-frame" src="/components/gallery.html"
+                 title="Component gallery"></iframe>
+         <pre class="cmd-note">node components/render-scene.mjs components/scene.html -o demo.mp4 --fps 30</pre>
+      </div>
+      <div data-region="footer">
+         <button data-el="openTab" class="btn">Open in a tab</button>
+         <button data-el="openScene" class="btn ghost">Open the scene template</button>
+      </div>
+   </template>
+
+   <template data-panel="new">
+      <p class="lede" data-region="main">
+         A project is a folder with a manifest. Client is separate from project name
+         — Feeney and Hershey are two clients, not one project.
+      </p>
+      <div data-region="side">
+         <div class="form-group">
+            <label class="form-label" for="new-name">Project</label>
+            <input data-el="name" id="new-name" class="form-control" placeholder="Railing Case Study" />
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="new-client">Client</label>
+            <input data-el="client" id="new-client" class="form-control" placeholder="Feeney" />
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="new-brand">Brand</label>
+            <select data-el="brand" id="new-brand" class="form-control"></select>
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="new-store">Storage</label>
+            <select data-el="store" id="new-store" class="form-control"></select>
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="new-bucket">Bucket</label>
+            <input data-el="bucket" id="new-bucket" class="form-control" placeholder="rm-video (remote only)" />
+         </div>
+      </div>
+      <div data-region="footer">
+         <pre data-el="status" class="status" hidden></pre>
+         <button data-el="go" class="btn">Create project</button>
+      </div>
+   </template>
+
+   <template data-panel="create">
+      <div data-el="tabs" class="row" data-region="main"></div>
+      <div data-el="host" data-region="main"></div>
+   </template>
+
    <template data-panel="scenes">
       <p class="lede" data-region="main">
          A scene is a stage with parts on it. Add a part, fill it in, watch it.
