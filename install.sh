@@ -140,6 +140,11 @@ fi
 step "The app"
 if brew list --cask 2>/dev/null | grep -qx "rolemodel-openscreen"; then
 	skip "rolemodel-openscreen"
+	# Also when it was already installed. The flag comes back on every upgrade and
+	# on anything that re-downloads the bundle, and re-running this script is what
+	# somebody does after hitting "Apple could not verify" — skipping the strip
+	# there means the one action that would fix it is the one we did not take.
+	unquarantine
 elif brew install --cask "$CASK" 2>/dev/null; then
 	say "  installed"
 	unquarantine

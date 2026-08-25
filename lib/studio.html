@@ -47,7 +47,6 @@
          --info-fg: var(--op-color-academy-primary-on-plus-four);
          --d: "DM Sans", ui-sans-serif, system-ui, sans-serif;
          --m: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
-
          /* The scrim under the kind pill on a thumbnail. Optics has no scrim colour
      and no 0.6 opacity step, so this is Optics black at the half-opacity
      token — mixed into the background rather than applied as opacity, which
@@ -79,10 +78,13 @@
             length where a colour belongs makes the whole declaration invalid rather
             than raising anything. */
          --grid: calc(var(--op-size-unit) * 4);
+         /* 240px. The narrowest a labelled control reads well at; below it the form
+            drops to one column on its own rather than at a breakpoint. */
+         --field-col: calc(var(--op-size-unit) * 60);
          /* One step brighter than --line. The border colour is right for a 1px edge
             against a panel and too dark for a 1px line on the page ground, which is
             why the grid was technically painting and effectively invisible. */
-         --grid-line: var(--op-color-neutral-plus-three);
+         --grid-line: oklch(from var(--op-color-neutral-plus-three) l c h / 0.2);
          --badge-min: calc(var(--op-size-unit) * 4);
          /* 16px job-count badge */
          --search-min: calc(var(--op-size-unit) * 64);
@@ -99,7 +101,9 @@
          /* 128px form label column */
          --form-max: calc(var(--op-size-unit) * 155);
          /* 620px form measure */
-         --field-tall: calc(var(--op-size-unit) * 38);
+         /* 256px. Was 152px, which is four lines of a script — enough to prove the
+            field works and not enough to write in. */
+         --field-tall: calc(var(--op-size-unit) * 64);
          /* 152px textarea */
          --code-min: calc(var(--op-size-unit) * 50);
          /* 200px argv readout */
@@ -134,23 +138,58 @@
          --swatch-ar: 16/6;
          --lt-inset: 6%;
          --lt-name: 18%;
-         --lt-sub: 10%;
-         --lt-eyebrow: 34%;
-         --lt-title: 42%;
+         --lt-sub: 15%;
+         --lt-eyebrow: 40%;
+         --lt-title: 48%;
          --lt-title-max: 80%;
          --lt-eyebrow-size: 1.35cqw;
-         --lt-title-size: 5cqw;
+         --lt-title-size: 8cqw;
          --lt-name-size: 2.3cqw;
          --lt-sub-size: 1.25cqw;
          --lt-track-tight: -.02em;
          --lt-track-tighter: -.03em;
          --lt-track-wide: .12em;
          --thumb-track: .3em;
+
+         --duration-slow: 300ms;
+         --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+         --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
          /* the AUDIO/no-poster watermark */
       }
 
       * {
          box-sizing: border-box
+      }
+
+      @view-transition {
+         navigation: auto;
+      }
+
+      .op-page__main {
+         /* Give the element its own isolated transition layer */
+         view-transition-name: main-content;
+      }
+
+      /* 2. Define custom animations for your isolated content layer */
+      @keyframes fade-out {
+         to {
+            opacity: 0;
+         }
+      }
+
+      @keyframes fade-in {
+         from {
+            opacity: 0;
+         }
+      }
+
+      /* 3. Target the custom transition layer name instead of (root) */
+      ::view-transition-old(main-content) {
+         animation: var(--duration-slow) var(--ease-enter) both fade-out;
+      }
+
+      ::view-transition-new(main-content) {
+         animation: var(--duration-slow) var(--ease-exit) both fade-in;
       }
 
       /* body.op-page, not .op-page.
@@ -182,18 +221,21 @@
          background-color: var(--bg);
          color: var(--fg);
          font-family: var(--d);
-         display: flex;
          min-height: 100vh;
          background-size: var(--grid) var(--grid);
          background-image:
             linear-gradient(to right, var(--grid-line) var(--op-border-width), transparent var(--op-border-width)),
             linear-gradient(to bottom, var(--grid-line) var(--op-border-width), transparent var(--op-border-width));
+         grid-template-areas: 'sidebar-left main ';
+         grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+         place-items: stretch;
       }
 
       .op-page {
          & .op-page__main {
             .op-page__main-content {
-               max-inline-size: var(--op-breakpoint-x-large);
+               /* Optics sets --op-breakpoint-medium here; see `main` above. */
+               max-inline-size: none;
             }
          }
       }
@@ -223,7 +265,7 @@
          display: flex;
          flex-direction: column;
          align-items: stretch;
-         max-inline-size: var(--op-breakpoint-x-large);
+         max-inline-size: none;
          gap: var(--op-space-medium);
       }
 
@@ -297,7 +339,19 @@
 
       main {
          flex: 1;
-         max-width: var(--op-breakpoint-x-large)
+         /*
+          * No width cap here, and none on .op-page__main-content or .container
+          * below — all three had one, so lifting any single one changed nothing
+          * and looked like the override had not applied.
+          *
+          * Optics caps main-content at --op-breakpoint-medium because its page
+          * shell is built for documents, where a measure is the point. This is a
+          * tool: the Library is a grid, Compose is a segment list, the Console is
+          * a log. Those want the window. Prose is capped where prose lives
+          * instead — see .lede and .hint — so the reading rule is kept by the
+          * elements it is actually about.
+          */
+         max-width: none
       }
 
       /*
@@ -370,7 +424,16 @@
          color: var(--muted);
          font-size: var(--op-font-medium);
          margin: 0 0 var(--op-space-large);
-         line-height: var(--op-line-height-base)
+         line-height: var(--op-line-height-base);
+         /*
+          * The measure lives here, not on the page.
+          *
+          * With the page's width caps lifted, a lede ran the full window — on a
+          * wide monitor that is a 200-character line, and the eye loses its place
+          * returning to the left edge. Capping the paragraph instead of the shell
+          * keeps grids and lists full-bleed while sentences stay readable.
+          */
+         max-inline-size: 72ch
       }
 
       .row {
@@ -464,6 +527,11 @@
       .hl-wrap {
          position: relative;
          inline-size: 100%;
+         /* Optics' .form-group is itself a two-column grid, and it spans the control
+          * across both by matching .form-control. The wrapper is not one, so it took
+          * the narrow first track and the field came out 186px wide inside a 982px
+          * group — the width the wrapping introduced, not one anybody chose. */
+         grid-column: 1 / -1;
       }
 
       /* `textarea.form-control`, not `textarea`.
@@ -477,8 +545,15 @@
        * every glyph drawn twice, slightly apart.
        *
        * (0,2,1) wins for the field without needing !important. */
-      .hl-wrap > textarea.form-control,
-      .hl-wrap > .hl-layer {
+      .hl-wrap>textarea.form-control,
+      .hl-wrap>.hl-layer {
+         /* The wrapper is 100% of the group; the textarea inside it is not, and a
+          * textarea with no width falls back to its `cols` default — 186px of a
+          * 982px card. It only looked right before because an unwrapped field took
+          * its width from the block it sat in. The layer is inset:0 and would not
+          * need this, but it shares the rule so the two cannot drift apart. */
+         inline-size: 100%;
+         box-sizing: border-box;
          font-family: var(--m);
          font-size: var(--op-font-x-small);
          line-height: var(--op-line-height-loose);
@@ -492,7 +567,7 @@
          margin: 0;
       }
 
-      .hl-wrap > .hl-layer {
+      .hl-wrap>.hl-layer {
          position: absolute;
          inset: 0;
          overflow: hidden;
@@ -504,7 +579,7 @@
 
       /* Transparent text, real caret. The layer behind supplies every visible glyph.
          Same specificity story as above — Optics sets the field's colour at (0,2,0). */
-      .hl-wrap > textarea.form-control {
+      .hl-wrap>textarea.form-control {
          position: relative;
          background: transparent;
          color: transparent;
@@ -524,8 +599,8 @@
          --accent at the top of this file says. A blue chip in a green product reads
          as a different application's widget. */
       .hl-val {
-         color: var(--op-color-academy-primary-plus-two);
-         background: var(--op-color-academy-primary-minus-six);
+         color: var(--op-color-academy-primary-on-plus-six);
+         background: var(--op-color-academy-primary-plus-six);
          border-radius: var(--op-radius-medium);
          padding-inline: var(--op-space-3x-small);
       }
@@ -596,6 +671,128 @@
          font: inherit;
          font-size: var(--op-font-x-small);
          cursor: pointer
+      }
+
+      /*
+       * A chosen swatch has to look chosen.
+       *
+       * `.btn` carries no pressed state, so picking a colour changed the markup and
+       * nothing on screen — and with an empty stage there is no part to take the
+       * colour either, so the whole interaction read as a dead control. The ring is
+       * drawn outside the button so it does not shift the swatch by a pixel.
+       */
+      .swatch[aria-pressed='true'] {
+         outline: 2px solid var(--accent);
+         outline-offset: 2px;
+      }
+
+      /*
+       * One colour, chosen from the brand.
+       *
+       * Closed it is a chip and a name; open it is the whole palette as a grid.
+       * Twenty swatches laid out permanently is a band of colour across a form
+       * that is mostly about something else — but a colour cannot be chosen from
+       * a list of names, so it opens to the pictures rather than shrinking them.
+       */
+      .colormenu {
+         position: relative;
+         display: block;
+      }
+
+      .colormenu__trigger {
+         display: inline-flex;
+         align-items: center;
+         gap: var(--op-space-x-small);
+         inline-size: 100%;
+         /* Sized like the selects it sits beside. A control that is visibly shorter
+            than its neighbours reads as a different kind of thing. */
+         min-block-size: var(--op-input-height-large);
+         padding: var(--op-space-x-small);
+         padding-inline-end: var(--op-space-3x-large);
+         background: var(--op-color-neutral-plus-six);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         color: var(--op-color-neutral-on-plus-six);
+         font-size: var(--op-font-x-small);
+         cursor: pointer;
+         text-align: start;
+         background-image: var(--op-encoded-images-dropdown-arrow);
+         background-position: center right;
+         background-position-x: calc(100% - ((var(--op-space-3x-large) / 2) - (var(--op-encoded-images-dropdown-arrow-width) / 2)));
+         background-repeat: no-repeat;
+         cursor: pointer;
+      }
+
+      .colormenu__trigger:hover {
+         border-color: var(--op-color-neutral-plus-three)
+      }
+
+      .colormenu__chip {
+         inline-size: var(--op-font-medium);
+         block-size: var(--op-font-medium);
+         flex: 0 0 auto;
+         border-radius: var(--op-radius-small);
+         border: 1px solid var(--op-color-neutral-plus-three);
+      }
+
+      /* Nothing chosen reads as nothing chosen, not as black. */
+      .colormenu__chip--none {
+         background:
+            linear-gradient(45deg, transparent 45%, var(--op-color-neutral-minus-five) 45% 55%, transparent 55%);
+      }
+
+      .colormenu__label {
+         flex: 1 1 auto;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+      }
+
+      .colormenu__caret {
+         flex: 0 0 auto;
+         opacity: 0.7
+      }
+
+      .colormenu__panel {
+         position: absolute;
+         z-index: 40;
+         inset-block-start: calc(100% + 4px);
+         inset-inline-start: 0;
+         display: grid;
+         grid-template-columns: repeat(5, 2rem);
+         gap: var(--op-space-2x-small);
+         padding: var(--op-space-x-small);
+         background: var(--op-color-neutral-plus-max);
+         border: 1px solid var(--op-color-neutral-plus-four);
+         border-radius: var(--op-radius-medium);
+         box-shadow: var(--op-shadow-large, 0 8px 24px rgb(0 0 0 / 0.45));
+      }
+
+      .colormenu__panel[hidden] {
+         display: none
+      }
+
+      .colormenu__swatch {
+         inline-size: 2rem;
+         block-size: 2rem;
+         padding: 0;
+         border: 1px solid var(--op-color-neutral-plus-three);
+         border-radius: var(--op-radius-small);
+         cursor: pointer;
+         background: transparent;
+         color: var(--op-color-neutral-minus-five);
+      }
+
+      .colormenu__swatch[aria-selected='true'] {
+         outline: 2px solid var(--op-color-neutral-minus-max);
+         outline-offset: 2px;
+      }
+
+      /* A token that does not resolve paints the inherited colour, so every swatch
+         comes out identical and the palette looks like one colour repeated. */
+      .colormenu__swatch--dead {
+         background: repeating-linear-gradient(45deg,
+               var(--op-color-neutral-plus-four) 0 4px, var(--op-color-neutral-plus-six) 4px 8px);
       }
 
       .chip[aria-pressed=true] {
@@ -727,7 +924,8 @@
          color: var(--fg);
       }
 
-      .breadcrumbs__sep {
+      /* Ours, not Optics'. See crumbs() in studio.js — Optics ships no separator. */
+      .crumb-sep {
          color: var(--muted);
       }
 
@@ -799,6 +997,119 @@
          block-size: auto;
       }
 
+      /*
+       * The scrubber, on tokens rather than literals.
+       *
+       * It arrived with seventeen hardcoded greens — a range input styled the way
+       * generators produce them. They are the brand ramp spelled out, so they go
+       * dark with the theme instead of staying lit, and `npm run check` stops
+       * reporting the Studio as inventing colour.
+       */
+      input[type=range] {
+         width: 100%;
+         margin: 3.8px 0;
+         background-color: transparent;
+      }
+
+      input[type=range]:focus {
+         outline: none;
+      }
+
+      input[type=range]::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-four);
+         border: 0px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-webkit-slider-thumb {
+         margin-top: -4px;
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         -webkit-appearance: none;
+      }
+
+      input[type=range]:focus::-webkit-slider-runnable-track {
+         background: var(--op-color-primary-minus-five);
+      }
+
+      input[type=range]::-moz-range-track {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 1.3px;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-moz-range-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-track {
+         background: transparent;
+         border-color: transparent;
+         border-width: 3.8px 0;
+         color: transparent;
+         width: 100%;
+         height: 8.4px;
+         cursor: pointer;
+      }
+
+      input[type=range]::-ms-fill-lower {
+         background: var(--op-color-primary-minus-one);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-fill-upper {
+         background: var(--accent);
+         border: 0.2px solid var(--line);
+         border-radius: 2.6px;
+      }
+
+      input[type=range]::-ms-thumb {
+         width: 16px;
+         height: 16px;
+         background: var(--accent);
+         border: 1px solid var(--accent);
+         border-radius: 12px;
+         cursor: pointer;
+         margin-top: 0px;
+         /*Needed to keep the Edge thumb centred*/
+      }
+
+      input[type=range]:focus::-ms-fill-lower {
+         background: var(--accent);
+      }
+
+      input[type=range]:focus::-ms-fill-upper {
+         background: var(--op-color-primary-plus-two);
+      }
+
+      /*TODO: Use one of the selectors from https://stackoverflow.com/a/20541859/7077589 and figure out
+how to remove the virtical space around the range input in IE*/
+      @supports (-ms-ime-align:auto) {
+
+         /* Pre-Chromium Edge only styles, selector taken from hhttps://stackoverflow.com/a/32202953/7077589 */
+         input[type=range] {
+            margin: 0;
+            /*Edge starts the margin from the thumb, not the track as other browsers do*/
+         }
+      }
+
+
       .projgrid {
          display: grid;
          grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
@@ -810,21 +1121,75 @@
          gap: var(--op-space-x-small);
       }
 
+      /* The angle has to be a registered property or it can't be interpolated —
+   an unregistered custom property is just a string and the spin won't animate. */
+      @property --gradient-angle {
+         syntax: "<angle>";
+         initial-value: 0deg;
+         inherits: false;
+      }
+
+      @keyframes gradient-spin {
+         to {
+            --gradient-angle: 360deg;
+         }
+      }
+
       .projcard {
-         background: var(--panel);
-         border: var(--op-border-width) solid var(--line);
-         border-radius: var(--op-radius-x-large);
-         overflow: hidden;
+         background-color: var(--panel);
+         border-radius: 0 var(--op-radius-x-large) var(--op-radius-x-large) var(--op-radius-x-large);
+         box-shadow: inset 0 0 0 1px var(--line);
          display: flex;
          flex-direction: column;
+         position: relative;
       }
 
-      .projcard:hover {
-         border-color: var(--accent);
+      .projcard::after {
+         content: "";
+         position: absolute;
+         inset: calc(var(--op-border-width-large) * -1);
+         z-index: -1;
+         pointer-events: none;
+         background: conic-gradient(from calc(var(--gradient-angle) + 335deg),
+               transparent 0deg,
+               var(--op-color-primary-base) 30deg,
+               var(--op-color-academy-primary-base) 60deg,
+               transparent 100deg,
+               transparent 360deg);
+         border-radius: inherit;
+         opacity: 0;
+         filter: blur(10px);
+         transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1);
+         animation: gradient-spin 3s linear infinite;
+
       }
+
+      .projcard:not(.projnew)::before {
+         content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
+         ;
+         position: absolute;
+         z-index: 0;
+         top: -19px;
+         left: 0px;
+      }
+
+      .projcard:hover::after {
+         opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+         .projcard::after {
+            animation: none;
+         }
+      }
+
 
       .projart {
+         z-index: 1;
          aspect-ratio: var(--video-ar);
+         margin: var(--op-space-small);
+         border-top-right-radius: var(--op-radius-large);
+         border-top-left-radius: var(--op-radius-large);
          background: var(--sunk) center/cover no-repeat;
       }
 
@@ -838,7 +1203,8 @@
 
       .projlist .projart {
          aspect-ratio: auto;
-         inline-size: var(--op-space-4x-large);
+         inline-size: calc(var(--op-space-scale-unit) *12);
+         border-radius: var(--op-radius-medium);
          block-size: var(--op-space-4x-large);
          flex: 0 0 auto;
       }
@@ -958,16 +1324,137 @@
       }
 
       .form {
-         /* A stack of .form-group wrappers. The label/control pairing used to be
-            this element's job via a two-column grid with alternating children;
-            it belongs to Optics' .form-group now, so this is just the card. */
+         /* Two columns of .form-group, not one.
+          *
+          * These forms ask up to thirteen questions, and one field per row made the
+          * Make panel taller than the viewport — most of that height was the gap
+          * beside short controls like Seconds and Brand, not the controls
+          * themselves.
+          *
+          * auto-fit rather than `1fr 1fr`: the form drops to one column when it can
+          * no longer give a field --field-col, which is a property of the space it
+          * is in rather than of a screen size. Same reason the Library grid has no
+          * media queries.
+          *
+          * align-items: start, because the groups are different heights — a hint on
+          * one field and not its neighbour should not push one label out of line
+          * with the other. */
          display: grid;
          max-width: var(--op-breakpoint-medium);
-         gap: 0;
+         /* Two columns, or one — never three.
+          *
+          * auto-fit on its own fits as many --field-col tracks as the card allows,
+          * which is three at this max-width and leaves the labels cramped. Raising
+          * each track's floor to half the card caps the count at two, and the
+          * --field-col floor still wins in a narrow window, where two tracks no
+          * longer fit and it drops to one. No media query either way. */
+         grid-template-columns: repeat(auto-fit,
+               minmax(max(var(--field-col), (100% - var(--op-space-large)) / 2), 1fr));
+         align-items: start;
+         column-gap: var(--op-space-large);
+         row-gap: var(--op-space-small);
          background: var(--panel);
          border: var(--op-border-width) solid var(--line);
          border-radius: var(--op-radius-large);
          padding: var(--op-space-large)
+      }
+
+      /* Hints when you are in the field, not before.
+       *
+       * Thirteen controls each carrying a permanent line of italic help made the Make
+       * panel taller than the viewport, and most of it was answering questions nobody
+       * had yet. They are still here — still in the DOM, still read by a screen reader
+       * — and they open when the field has focus, which is exactly when the question
+       * gets asked.
+       *
+       * max-block-size rather than display:none: a hint that is display:none is gone
+       * from the accessibility tree too, and the point is to spend less height, not to
+       * withhold the text. */
+      .form .form-group {
+         position: relative;
+      }
+
+      /* Out of flow, so revealing one cannot move anything.
+       *
+       * The first attempt animated max-block-size and revealed on hover, which
+       * reflowed every field below the pointer — the page jumped as the mouse
+       * crossed it, which is worse than the height it was saving. Absolutely
+       * positioned, the hint costs no layout at all: it appears under the control,
+       * over whatever follows, and nothing else moves.
+       *
+       * Focus only. Hover is the wrong trigger for something that appears and
+       * disappears under a moving pointer. */
+      /*
+       * A FIELD's hint, not every hint in the form.
+       *
+       * `.form .form-hint` caught the status lines too — a `pre` that `tone()` has
+       * classed, sitting directly in the form rather than inside a form-group. Its
+       * parent is never `.form-group:focus-within`, so it was permanently
+       * invisible: Save wrote the file, Draft returned its error, and neither said
+       * anything. The child combinator is the whole fix — a hint belonging to a
+       * control hides until that control has focus; a hint belonging to the panel
+       * is just a line of text.
+       */
+      .form .form-group>.form-hint {
+         position: absolute;
+         inset-inline: 0;
+         inset-block-start: 100%;
+         z-index: 5;
+         margin-block-start: var(--op-space-3x-small);
+         padding: var(--op-space-2x-small) var(--op-space-x-small);
+         background: var(--panel2);
+         border: var(--op-border-width) solid var(--line);
+         border-radius: var(--op-radius-medium);
+         opacity: 0;
+         visibility: hidden;
+         transition: opacity var(--op-transition-input), visibility var(--op-transition-input);
+      }
+
+      .form .form-group:focus-within>.form-hint {
+         opacity: 1;
+         visibility: visible;
+      }
+
+      /* A hint that is not guidance but a state — "no video in this project" — stays
+         in flow and visible: it explains why the control above it cannot be used, so
+         it has to be readable without focusing a control you cannot use. */
+      .form .form-group>.form-hint.always {
+         position: static;
+         opacity: 1;
+         visibility: visible;
+         background: none;
+         border: 0;
+         padding: 0;
+      }
+
+      /* An action sharing a row with a field.
+       *
+       * align-items: start puts a bare button level with its neighbour's *label*,
+       * which reads as a button that floated up out of the row. It has no label of
+       * its own, so it belongs on the control line: end-align it and it meets the
+       * bottom of the field beside it. */
+      .form>.form-group:has(> .btn):not(:has(.form-control)) {
+         align-self: end;
+      }
+
+      /* And the empty label above it takes no room — `field()` writes a <label>
+       * whether or not there is anything to put in it, and an empty one still
+       * reserves a line. */
+      .form>.form-group:has(> .btn):not(:has(.form-control))>.form-label:empty {
+         display: none;
+      }
+
+      /* What a column cannot hold.
+       *
+       * A script, an action row, a plan, a console line — these are not fields and
+       * they read badly at half width. `.full` is the existing marker for them; the
+       * :has() rules catch the textarea groups without every caller having to
+       * remember to add a class. */
+      .form>.full,
+      .form>.row,
+      .form>.form-group:has(textarea),
+      .form>.form-group:has(.hl-wrap) {
+         grid-column: 1 / -1;
       }
 
       /* Optics' .form-label sets colour and size. Only the muted tone is ours,
@@ -1387,6 +1874,8 @@
       .hint {
          font-size: var(--op-font-x-small);
          line-height: var(--op-line-height-loose);
+         /* Same reason as .lede — a hint is a sentence, not a layout. */
+         max-inline-size: 80ch;
       }
 
       .hint.ok {
@@ -1444,10 +1933,12 @@
             <h1>RoleModel Studio</h1>
             <div class="root" id="root">…</div>
             <button data-v="library" aria-current="true">Library</button>
-            <button data-v="new">New project</button>
             <button data-v="create">New video</button>
             <button data-v="editor">Editor</button>
             <button data-v="review">Review</button>
+            <button data-v="cut">Cut</button>
+            <button data-v="compose">Compose</button>
+            <button data-v="scenes">Scenes</button>
             <button data-v="scripts">Scripts</button>
             <button data-v="voice">Voice</button>
             <button data-v="brand">Brand</button>

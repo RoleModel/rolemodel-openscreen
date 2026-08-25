@@ -39,7 +39,7 @@
     "name": "academy-ruby",
     "label": "Academy · Ruby unit",
     "file": "academy-ruby.jpg",
-    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(97, 5, 5, 0.25) 0%, rgba(97, 5, 5, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
+    "css": "background-color:#141d27;background-image:linear-gradient(168deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0) 72%), linear-gradient(152deg, #233140 0.0%, #101821 100.0%)"
   },
   {
     "name": "academy-design",
@@ -57,7 +57,7 @@
     "name": "lcad-board",
     "label": "LightningCAD · tinted board",
     "file": "lcad-board.jpg",
-    "css": "background-color:#090c11;background-image:linear-gradient(188deg, rgba(0, 108, 250, 0.32) 0%, rgba(0, 108, 250, 0) 72%), linear-gradient(152deg, #000000 0.0%, #101821 100.0%)"
+    "css": "background-color:#090c11;background-image:linear-gradient(209deg, rgba(66, 141, 240, 0.06) 0%, rgba(66, 141, 240, 0) 72%), linear-gradient(0deg, #000000 0.0%, #101821 100.0%)"
   },
   {
     "name": "docks-board",
@@ -76,5 +76,11 @@
     "label": "Blue",
     "file": "rolemodel-blue.jpg",
     "css": "background-color:#0565eb;background-image:linear-gradient(180deg, rgba(2, 198, 237, 0.33) 0%, rgba(2, 198, 237, 0) 72%), linear-gradient(141deg, #0765ca 0.0%, #013774 100.0%)"
+  },
+  {
+    "name": "rolemodel",
+    "label": "Bright Blue",
+    "file": "rolemodel.jpg",
+    "css": "background-color:#1a2432;background-image:linear-gradient(146deg, #9ee7ff 0.0%, #5bb3f5 100.0%)"
   }
 ]

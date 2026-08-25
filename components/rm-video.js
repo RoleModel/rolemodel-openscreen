@@ -113,18 +113,27 @@ for (const [name, syntax, initial] of [
 
 const TIMING = `
   :host {
+    /*
+     * Motion comes from the brand, not from here.
+     *
+     * These are the tokens in rolemodel-brand/tokens/brand.json, generated into
+     * css/academy-theme.css. The fallbacks are the same values, so a component
+     * dropped on a page with no theme still moves correctly — but when the theme
+     * is present it wins, and retuning the brand retunes every video at once.
+     */
     --at: 0ms;
-    --dur: 520ms;
-    --out-dur: 320ms;
+    --dur: var(--duration-base, 400ms);
+    --out-dur: var(--duration-fast, 200ms);
     --hold: 999999ms;
-    --ease: cubic-bezier(.16,1,.3,1);
-    --rise: 14px;
+    --ease: var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1));
+    --ease-out-curve: var(--ease-exit, cubic-bezier(0.55, 0, 1, 0.45));
+    --rise: var(--distance-sm, 8px);
   }
   .anim {
     animation-name: rm-in, rm-out;
     animation-duration: var(--dur), var(--out-dur);
     animation-delay: calc(var(--at) - var(--t)), calc(var(--at) + var(--hold) - var(--t));
-    animation-timing-function: var(--ease), ease-in;
+    animation-timing-function: var(--ease), var(--ease-out-curve);
     animation-fill-mode: both, both;
     animation-play-state: paused, paused;
     opacity: calc(var(--rm-in-o) * var(--rm-out-o));
@@ -136,12 +145,38 @@ const TIMING = `
 
 const TYPE = `
   :host {
-    --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    /* --rm-font is the way a scene changes its face. Without the var() every
+       component pins DM Sans on its own :host, which wins over anything the stage
+       sets — so the sub-brand typeface had nowhere to get in. */
+    --font: var(--rm-font, "DM Sans"), ui-sans-serif, system-ui, -apple-system, sans-serif;
     --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --fg: var(--op-color-neutral-minus-max, #fff);
-    --muted: var(--op-color-neutral-minus-five, #a3a3a3);
+    /*
+     * Secondary text, measured rather than picked by eye.
+     *
+     * minus-five is 7.3:1 on the brand's dark boards — technically legible, and
+     * washed out beside a title at 18.5:1, which is what made a subtitle read as
+     * greyed-out rather than as secondary. minus-seven is 11.5:1: clearly
+     * readable, still visibly subordinate.
+     */
+    --muted: var(--op-color-neutral-minus-seven, #caccce);
+    /*
+     * And a shadow, because a card is not always over a board.
+     *
+     * Laid over footage as an overlay there is no controlled ground at all — the
+     * title sits on whatever the frame happens to show, and white on a white shirt
+     * is nothing. Invisible against a dark board, decisive against a bright frame.
+     */
+    --ink-shadow: 0 0.08cqw 0.5cqw rgb(0 0 0 / 0.55);
     --brand: var(--op-color-academy-primary-base, #00c278);
+    /* What reads ON --brand. Optics mixes one per family; the Studio sets both
+       when an accent is picked, because a fill without its ink is how a pale
+       accent ends up carrying text nobody can read. */
     --on-brand: var(--op-color-academy-primary-on-base, #00472c);
+    /* And the family as TEXT on the stage, which is neither of the above: a seed
+       can be a deep purple, and an eyebrow set in it on a dark wallpaper is
+       invisible. Falls back to --brand so a scene that sets only that still works. */
+    --brand-text: var(--brand);
     --surface: var(--op-color-neutral-plus-max, #242424);
     --surface-2: var(--op-color-neutral-plus-six, #333);
     --line: var(--op-color-neutral-plus-four, #424242);
@@ -199,7 +234,16 @@ const define = (name, cls) => {
  * every glyph. Type sizes below are in cqw, so they follow the scale exactly.
  */
 class RMScene extends RMElement {
-  static fields = ['wallpaper', 'pad', 'width', 'height']
+  /*
+   * `assets` is the base the brand pictures live under, and it is not a field.
+   *
+   * Kept off `static fields` deliberately: the catalogue is what the Scenes panel
+   * offers you to fill in, and this is plumbing — sceneHtml sets it, because
+   * sceneHtml is the one place that knows whether this scene is being rendered
+   * out of components/ or previewed from a URL. An author naming a picture writes
+   * its NAME; the path is nobody's problem but this attribute's.
+   */
+  static fields = ['wallpaper', 'pad', 'width', 'height', 'brand']
   render() {
     const w = Number(this.attr('width', 1920))
     const h = Number(this.attr('height', 1080))
@@ -210,6 +254,10 @@ class RMScene extends RMElement {
         ${TYPE}
         :host { display:block; width:100%; aspect-ratio:${w}/${h}; overflow:hidden; container-type:inline-size;
                 background: var(--op-color-neutral-plus-max, #1f1f1f); }
+        /* The sub-brand's face, set on the stage and inherited by every part.
+           Custom properties cross into a child's shadow root, which is what makes
+           one declaration here enough. */
+        ${this.attr('brand') === 'academy' ? ':host { --rm-font: "Space Grotesk"; }' : ''}
         .stage { position:relative; width:100%; height:100%; padding:${Number(pad)}cqw;
                  background-size:cover; background-position:center; }
         ${wp ? `.stage { background-image:url("${this.esc(wp)}.jpg"); }` : ''}
@@ -302,10 +350,10 @@ class RMTitle extends RMElement {
                 align-items:${align === 'center' ? 'center' : 'flex-start'};
                 text-align:${align === 'center' ? 'center' : 'left'};
                 padding:0 8cqw; gap:1cqw; }
-        .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand); }
-        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
-        .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; }
-        .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand); margin-top:.6cqw; }
+        .eb { font-family:var(--mono); font-size:1.25cqw; letter-spacing:.16em; text-transform:uppercase; color:var(--brand-text); }
+        h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; text-shadow:var(--ink-shadow); }
+        .sub { font-size:1.7cqw; color:var(--muted); max-width:46ch; line-height:1.45; text-shadow:var(--ink-shadow); }
+        .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand-text); margin-top:.6cqw; }
       </style>
       <div class="wrap anim">
         ${this.attr('eyebrow') ? `<div class="eb">${this.esc(this.attr('eyebrow'))}</div>` : ''}
@@ -327,15 +375,15 @@ class RMLowerThird extends RMElement {
       <style>
         ${TYPE}${TIMING}
         :host { display:block; position:absolute; bottom:8cqw; ${side === 'right' ? 'right:6cqw' : 'left:6cqw'};
-                --rise:0px; --dur:460ms; }
+                --rise:0px; --dur:var(--duration-base, 400ms); }
         .card { display:flex; align-items:stretch; gap:1cqw;
                 background:color-mix(in srgb, var(--surface) 88%, transparent);
                 border:1px solid var(--line); border-radius:.7cqw;
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
                 box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
-        .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand); flex:0 0 auto; }
-        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; }
-        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; }
+        .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
+        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2; text-shadow:var(--ink-shadow); }
+        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; text-shadow:var(--ink-shadow); }
         /* Slides in rather than rising — reads as a reveal, and stays legible
            over busy footage. Uses the same registered properties so it still
            composes with the exit animation. */
@@ -365,7 +413,8 @@ class RMCallout extends RMElement {
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; --dur:420ms; }
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; --dur:var(--duration-fast, 200ms);
+                --ease:var(--ease-emphasis, cubic-bezier(0.34, 1.4, 0.64, 1)); }
         .row { display:flex; align-items:center; gap:.7cqw;
                flex-direction:${side === 'left' ? 'row-reverse' : 'row'}; }
         .pin { width:1.5cqw; height:1.5cqw; border-radius:50%; flex:0 0 auto;
@@ -382,6 +431,50 @@ class RMCallout extends RMElement {
   }
 }
 define('rm-callout', RMCallout)
+
+/* ── rm-image ────────────────────────────────────────────────────────────── */
+
+/**
+ * One of the brand pictures, placed on the stage.
+ *
+ * The component set could draw a browser, a title, a callout, a stat and a list,
+ * and had no way to put a picture on screen — so the clay renders sitting in
+ * brand/imagery/ could be admired in the Brand panel and used in nothing.
+ *
+ * `src` is a NAME by default: "academy-rocket.png", resolved against the scene's
+ * `assets` base. That is the wallpaper's lesson repeated — a caller-supplied path
+ * is correct for a render out of components/ and 404s in a preview served from a
+ * different URL, and the one place that knows the difference is the harness. A
+ * value containing a slash is passed through untouched, so an author can still
+ * point at something of their own.
+ *
+ * Sized by width alone, in cqw, so it scales with the stage exactly like the type
+ * does; the height follows the picture's own ratio rather than being stated twice
+ * and getting to disagree.
+ */
+class RMImage extends RMElement {
+  static fields = ['src', 'x', 'y', 'w', 'fit', 'alt', 'at', 'for']
+  render() {
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
+    const w = Number(this.attr('w', 30))
+    const raw = this.attr('src')
+    // A name resolves against the stage's base; a path is the author's business.
+    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const src = !raw || raw.includes('/') || /^[a-z]+:/i.test(raw) ? raw : `${base}/${raw}`
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
+                --rise:1.2cqw; --dur:var(--duration-slow, 520ms);
+                --ease:var(--ease-emphasis, cubic-bezier(0.34, 1.4, 0.64, 1)); }
+        .anim { transform: translate(-50%, calc(-50% + var(--rise) * (1 - var(--rm-in-o)))); }
+        img { display:block; width:100%; height:auto; object-fit:${this.attr('fit', 'contain')}; }
+      </style>
+      <div class="anim"><img src="${this.esc(src)}" alt="${this.esc(this.attr('alt', ''))}" /></div>`
+  }
+}
+define('rm-image', RMImage)
 
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
@@ -401,11 +494,11 @@ class RMStat extends RMElement {
         ${TYPE}${TIMING}
         :host { display:block; --rise:16px; }
         @property --n { syntax:"<integer>"; initial-value:0; inherits:false; }
-        .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand); }
+        .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand-text); }
         ${
           counting
             ? `.v { counter-reset: n var(--n);
-                 animation: rm-count 1100ms var(--ease) both paused;
+                 animation: rm-count var(--duration-deliberate, 900ms) var(--ease) both paused;
                  animation-delay: calc(var(--at) - var(--t)); }
              .v::after { content: counter(n) "${this.esc(this.attr('unit', ''))}"; }
              @keyframes rm-count { from { --n: 0; } to { --n: ${Math.round(n)}; } }`

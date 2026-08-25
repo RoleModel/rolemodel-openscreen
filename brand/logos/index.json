@@ -1,32 +1,5 @@
 [
   {
-    "id": "rolemodel",
-    "label": "RoleModel Software",
-    "variants": {
-      "logo": {
-        "file": "rolemodel-logo.svg",
-        "bytes": 12132,
-        "sha256": "e968248f3577df46"
-      },
-      "logo-color-on-dark": {
-        "file": "rolemodel-logo-color-on-dark.svg",
-        "bytes": 13263,
-        "sha256": "3b6507b50348b615"
-      },
-      "logo-white": {
-        "file": "rolemodel-logo-white.svg",
-        "bytes": 12139,
-        "sha256": "45756ffeeec9fc90"
-      },
-      "logo-black": null,
-      "icon": {
-        "file": "rolemodel-icon.svg",
-        "bytes": 1028,
-        "sha256": "f1c53561daba4f3c"
-      }
-    }
-  },
-  {
     "id": "academy",
     "label": "Craftsmanship Academy",
     "variants": {
@@ -35,7 +8,6 @@
         "bytes": 20871,
         "sha256": "c0a83a9b384f5110"
       },
-      "logo-color-on-dark": null,
       "logo-white": {
         "file": "academy-logo-white.svg",
         "bytes": 20904,
@@ -54,25 +26,46 @@
     }
   },
   {
-    "id": "lcad",
-    "label": "LightningCAD",
+    "id": "almanac",
+    "label": "Almanac",
     "variants": {
-      "logo": null,
-      "logo-color-on-dark": null,
+      "logo": {
+        "file": "almanac-logo.svg",
+        "bytes": 5715,
+        "sha256": "ed03cba95542abf7"
+      },
       "logo-white": {
-        "file": "lcad-logo-white.svg",
-        "bytes": 13777,
-        "sha256": "fde57effa293fea0"
+        "file": "almanac-logo-white.svg",
+        "bytes": 5868,
+        "sha256": "593f36435fb08727"
       },
-      "logo-black": {
-        "file": "lcad-logo-black.svg",
-        "bytes": 13777,
-        "sha256": "ead5b3d160b3a377"
-      },
+      "logo-black": null,
       "icon": {
-        "file": "lcad-icon.svg",
-        "bytes": 2505,
-        "sha256": "c49737ef7c61404e"
+        "file": "almanac-icon.svg",
+        "bytes": 1392,
+        "sha256": "9e0dd5f9492dbb2a"
+      }
+    }
+  },
+  {
+    "id": "compass",
+    "label": "Compass",
+    "variants": {
+      "logo": {
+        "file": "compass-logo.svg",
+        "bytes": 7125,
+        "sha256": "38a608b3689a7842"
+      },
+      "logo-white": {
+        "file": "compass-logo-white.svg",
+        "bytes": 7040,
+        "sha256": "5e3a19bd77f47cdd"
+      },
+      "logo-black": null,
+      "icon": {
+        "file": "compass-icon.svg",
+        "bytes": 1419,
+        "sha256": "3194beb1c6cb511b"
       }
     }
   },
@@ -85,7 +78,6 @@
         "bytes": 6174,
         "sha256": "469ffd82a930f20d"
       },
-      "logo-color-on-dark": null,
       "logo-white": {
         "file": "docks-logo-white.svg",
         "bytes": 5848,
@@ -104,11 +96,32 @@
     }
   },
   {
+    "id": "lcad",
+    "label": "LightningCAD",
+    "variants": {
+      "logo": null,
+      "logo-white": {
+        "file": "lcad-logo-white.svg",
+        "bytes": 13777,
+        "sha256": "fde57effa293fea0"
+      },
+      "logo-black": {
+        "file": "lcad-logo-black.svg",
+        "bytes": 13777,
+        "sha256": "ead5b3d160b3a377"
+      },
+      "icon": {
+        "file": "lcad-icon.svg",
+        "bytes": 2505,
+        "sha256": "c49737ef7c61404e"
+      }
+    }
+  },
+  {
     "id": "railing",
     "label": "Railing Designer",
     "variants": {
       "logo": null,
-      "logo-color-on-dark": null,
       "logo-white": {
         "file": "railing-logo-white.svg",
         "bytes": 7205,
@@ -123,6 +136,50 @@
         "file": "railing-icon.svg",
         "bytes": 1103,
         "sha256": "1e133a51ca834980"
+      }
+    }
+  },
+  {
+    "id": "rolemodel",
+    "label": "RoleModel Software",
+    "variants": {
+      "logo": {
+        "file": "rolemodel-logo.svg",
+        "bytes": 12132,
+        "sha256": "e968248f3577df46"
+      },
+      "logo-white": {
+        "file": "rolemodel-logo-white.svg",
+        "bytes": 12139,
+        "sha256": "45756ffeeec9fc90"
+      },
+      "logo-black": null,
+      "icon": {
+        "file": "rolemodel-icon.svg",
+        "bytes": 1028,
+        "sha256": "f1c53561daba4f3c"
+      }
+    }
+  },
+  {
+    "id": "standard",
+    "label": "Standard",
+    "variants": {
+      "logo": {
+        "file": "standard-logo.svg",
+        "bytes": 5237,
+        "sha256": "fe51a655af5cf76a"
+      },
+      "logo-white": {
+        "file": "standard-logo-white.svg",
+        "bytes": 5323,
+        "sha256": "f17abd2cb793daea"
+      },
+      "logo-black": null,
+      "icon": {
+        "file": "standard-icon.svg",
+        "bytes": 1910,
+        "sha256": "4d0db181c1ebf4d4"
       }
     }
   }

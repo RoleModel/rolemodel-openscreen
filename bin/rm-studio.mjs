@@ -26,8 +26,12 @@ import { createServer } from "node:http";
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
+import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
+import { cutlistToDocument } from "../lib/cutlist.mjs";
+import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
-import { renderStudioHTML } from "../lib/studio-ui.mjs";
+import { clientStamp, renderStudioHTML } from "../lib/studio-ui.mjs";
 import {
 	buildCatalog,
 	capture,
@@ -45,7 +49,7 @@ import {
   settings as demoSettings,
 } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
-import { openFrameSettings, setOpenFrameSettings, STATE_DIR } from "../lib/settings.mjs";
+import { lastView, openFrameSettings, setLastView, setOpenFrameSettings, STATE_DIR } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
@@ -113,6 +117,18 @@ async function reindex(id, { force = false } = {}) {
 // describe work done on that library, and they must outlive this process.
 jobs.setJournal(join(LIB, ".rm-studio", "jobs"));
 const SCRIPTS = join(LIB, "_scripts");
+
+/*
+ * Scene previews, held between the POST that stashes one and the GET that shows
+ * it. Module scope, not inside the handler — declared there, every request built
+ * a fresh empty Map and the GET that followed always 404'd.
+ *
+ * In memory rather than on disk: a preview is a keystroke old and worth nothing
+ * once the next one arrives. Only the last few are kept.
+ */
+const previews = new Map();
+let previewSeq = 0;
+const PREVIEWS_KEPT = 8;
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
 const thumbDir = (id) => join(projectDir(id), ".thumbs");
@@ -358,11 +374,25 @@ async function scriptsIn(dir, project) {
   try {
     const files = (await readdir(dir)).filter((f) => f.endsWith(".md"));
     return await Promise.all(
-      files.map(async (f) => ({
-        name: f.replace(/\.md$/, ""),
-        project,
-        body: await readFile(join(dir, f), "utf8"),
-      })),
+      files.map(async (f) => {
+        const name = f.replace(/\.md$/, "");
+        /*
+         * The brief that produced it, when there is one.
+         *
+         * Read here rather than fetched on demand so the Scripts panel can offer
+         * a redo without a round trip per card. Hand-written scripts have no
+         * brief and never will; absent is normal, not an error.
+         */
+        const brief = await readFile(join(dir, `${name}.brief.json`), "utf8")
+          .then(JSON.parse)
+          .catch(() => null);
+        return {
+          name,
+          project,
+          body: await readFile(join(dir, f), "utf8"),
+          brief,
+        };
+      }),
     );
   } catch {
     return [];
@@ -393,7 +423,7 @@ async function state() {
       if (catalog) p.catalog = catalog;
     }),
   );
-  const [wallpapers, scripts, tokens, motion, logos] = await Promise.all([
+  const [wallpapers, scripts, tokens, motion, logos, imagery] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
     readFile(join(TOOLKIT, "brand/tokens.json"), "utf8").then(JSON.parse).catch(() => ({})),
@@ -405,6 +435,11 @@ async function state() {
     // Vendored and staged into renders since, but until now not visible anywhere —
     // which made "we have brand assets" a claim you had to take on trust.
     readFile(join(TOOLKIT, "brand/logos/index.json"), "utf8").then(JSON.parse).catch(() => []),
+    // The clay renders. Same shape as logos: an index the page reads, so the
+    // Studio never has to guess a filename or an extension.
+    readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8")
+      .then((t) => JSON.parse(t).imagery)
+      .catch(() => []),
   ]);
 
   const presets = [];
@@ -444,6 +479,7 @@ async function state() {
     // Label and hint only. The direction sentences stay server-side: the panel's
     // job is to name a motion preset, /api/make's job is to turn it into prompt.
     logos,
+    imagery,
     motion: {
       default: motion.default || "brand",
       presets: Object.entries(motion.presets || {}).map(([id, m]) => ({ id, label: m.label, hint: m.hint })),
@@ -451,6 +487,35 @@ async function state() {
     tools: { openscreen: os.ok, claude: claude.ok, ffmpeg: ff.ok, rclone: rclone.ok, hyperframes: hf.ok, voice },
     voiceVenv: venvDir(),
     remotes,
+    // The panel that was open when the app last closed, so a restart lands where
+    // the work was rather than back at the Library.
+    lastView: await lastView(),
+    /*
+     * The brand's seed colours — one per family, and the palette anyone picks from.
+     *
+     * In state rather than in the compose catalogue, because it is brand data and
+     * three panels want it: a picker that only exists where the catalogue happens
+     * to be fetched is a picker that is missing from Wallpapers.
+     *
+     * `-original` is the colour as the brand defines it, before Optics builds a
+     * nineteen-step ramp around it. The ramp is the right thing for a surface to
+     * spend and the wrong thing to shop from: nineteen families times nineteen
+     * steps is 361 squares, and the bases repeat — `tertiary` and `accent` are one
+     * colour, and so are `primary` and Academy's.
+     *
+     * Both files, because the families are split across them: the published
+     * package carries its own, and rolemodel-scales.css carries the fourteen it
+     * does not ship.
+     */
+    colors: {
+      originals: await (async () => {
+        const [a, b] = await Promise.all([
+          readFile(join(TOOLKIT, "brand/optics/optics.css"), "utf8").catch(() => ""),
+          readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => ""),
+        ]);
+        return [...new Set([...`${a}\n${b}`.matchAll(/--op-color-([a-z0-9-]+)-original\s*:/g)].map((x) => x[1]))].sort();
+      })(),
+    },
   };
 }
 
@@ -505,6 +570,16 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    /*
+     * What the client file is right now, so a stale window can notice.
+     *
+     * The page is stamped with the mtime it was built from; this is the current one.
+     * A window that has been open across an edit reports a feature as broken when it
+     * is simply running yesterday's code, and that has cost more time today than any
+     * actual bug.
+     */
+    if (p === "/api/client-stamp") return json(res, 200, { stamp: await clientStamp() });
+
     if (p === "/api/state") return json(res, 200, await state());
 
     if (p === "/api/project" && req.method === "POST") {
@@ -532,6 +607,7 @@ const server = createServer(async (req, res) => {
           "library.json   the manifest (client, brand, storage)",
           "catalog.json   generated by indexing — do not hand-edit",
           "scripts/       narration and outlines for this project",
+          "               a .brief.json beside a script is what was asked for, so it can be redone",
           "media/",
           "  Footage/     captures and source clips",
           "  Renders/     one folder per video, each with its brief.md",
@@ -745,25 +821,56 @@ const server = createServer(async (req, res) => {
         wants.push("No title card — open on the content.");
       }
 
-      const webcam = String(pick("webcam", body.webcam) || "").trim();
+      /*
+       * Media is named to Claude by ABSOLUTE path.
+       *
+       * The catalog stores paths relative to the project ("Audio/demo.wav"), and the
+       * step runs with `cwd` set to the render directory — so a relative name resolves
+       * to <project>/media/Renders/<slug>/Audio/demo.wav, which does not exist. Claude
+       * was told to use a file it could not open, found nothing, and carried on: the
+       * visible result was "it ignored the audio track I gave it", with nothing in the
+       * transcript to say why.
+       *
+       * Quoted, because the library path contains a space ("RoleModel Library") and a
+ * bare path in prose has no visible end — a reader that stops at the space opens
+ * nothing and reports nothing.
+ *
+ * A missing file is reported rather than named. An instruction pointing at
+       * nothing is worse than none — it spends attention and yields silence.
+       */
+      const mediaPath = async (rel) => {
+        if (!rel) return null;
+        const abs = join(mediaDir(id), rel);
+        return (await stat(abs).catch(() => null)) ? abs : null;
+      };
+
+      const webcamRel = String(pick("webcam", body.webcam) || "").trim();
+      const webcam = (await mediaPath(webcamRel)) ?? "";
+      if (webcamRel && !webcam) wants.push(`The webcam clip named for this render (${webcamRel}) is not on disk — render without it.`);
       if (webcam) {
         wants.push(
-          `Composite ${webcam} from this project as a circular picture-in-picture in the lower ` +
-            "right, about 22% of frame height, with a soft edge — the same treatment a recording " +
-            "gets. It is a real clip: use it, do not draw a placeholder.",
+          `Composite this exact file as a circular picture-in-picture in the lower right: "${webcam}"
+  About ` +
+            "22% of frame height, with a soft edge — the same treatment a recording gets. " +
+            "It is a real clip on disk: use it, do not draw a placeholder.",
         );
       }
 
       // /music is the same track in a different role, so either directive supplies it.
-      const audio = String(fromDoc.music || pick("audio", body.audio) || "").trim();
+      const audioRel = String(fromDoc.music || pick("audio", body.audio) || "").trim();
+      const audio = (await mediaPath(audioRel)) ?? "";
+      if (audioRel && !audio) wants.push(`The audio named for this render (${audioRel}) is not on disk — say so rather than substituting a synthesised voice.`);
       if (audio) {
         const asMusic = fromDoc.music ? true : String(pick("audioRole", body.audioRole) || "narration") === "music";
         wants.push(
           asMusic
-            ? `Use ${audio} from this project as a music bed under the whole render, ducked well ` +
+            ? `Use this exact file as a music bed under the whole render: "${audio}"
+  Ducked well ` +
                 "below any speech, and fade it out at the end."
-            : `Use ${audio} from this project as the narration track. Cut the visuals to it, and ` +
-                "do not synthesise a voice — the spoken audio already exists.",
+            : `Use this exact file as the narration track: "${audio}"` +
+                "\n  It is an absolute path and it exists. Mux it in as the spoken audio, cut the " +
+                "visuals to its timing, and do NOT synthesise a voice. If you cannot read it, stop " +
+                "and say so rather than rendering silent or substituting a synthesised voice.",
         );
       }
 
@@ -1259,6 +1366,74 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    /*
+     * Can a demuxer open this at all?
+     *
+     * `-show_format` reads the header and the index and stops; it does not decode,
+     * so this costs milliseconds even on a 4K file on a mounted remote. A file that
+     * fails here fails identically in the editor, and saying so before handing it
+     * over is the difference between a sentence and a Chromium pipeline enum.
+     */
+    const playable = async (file) => {
+      const r = await capture("ffprobe", ["-v", "error", "-show_format", "-of", "json", file]);
+      return r.ok;
+    };
+
+    /*
+     * Point a document back at a video that is actually there.
+     *
+     * A capture is written to the app's private recordings folder and then copied
+     * into the project, but the document kept the private path. Clean that folder —
+     * the app does, and so does anyone reclaiming disk — and the document still
+     * opens, still validates, and has no picture. Three of five documents in the
+     * library were in that state, one with its own video sitting beside it.
+     *
+     * Only ever repairs to a sibling of the document, so it cannot invent an
+     * association: same directory, same basename, a video extension. A document
+     * whose media is present is untouched, and one with no candidate is left alone
+     * and reported rather than blanked.
+     */
+    const repairDocumentMedia = async (docPath) => {
+      let doc;
+      try {
+        doc = JSON.parse(await readFile(docPath, "utf8"));
+      } catch {
+        return { repaired: false, reason: "the document could not be read" };
+      }
+      const current = doc?.media?.screenVideoPath;
+      if (!current) return { repaired: false, reason: "the document names no video" };
+      if (await stat(current).catch(() => null)) {
+        /*
+         * Present is not the same as playable.
+         *
+         * An interrupted encode leaves a file with ftyp and mdat and no moov atom —
+         * ffmpeg writes the index last — so it exists, has size, and no demuxer can
+         * open it. Handed to the editor it fails as
+         * "MEDIA_ERR_SRC_NOT_SUPPORTED (4) — DEMUXER_ERROR_COULD_NOT_OPEN", which
+         * says nothing about which file or why, and reads as the editor being
+         * broken. One ffprobe of the header is cheap and turns that into a sentence.
+         */
+        if (await playable(current)) return { repaired: false, reason: null };
+        return {
+          repaired: false,
+          reason:
+            `${basename(current)} is not a readable video — the render was almost certainly ` +
+            "interrupted before it finished writing. Render it again.",
+        };
+      }
+
+      const stem = basename(docPath, extname(docPath));
+      for (const ext of [".mp4", ".mov", ".webm", ".mkv"]) {
+        const sibling = join(dirname(docPath), stem + ext);
+        if ((await stat(sibling).catch(() => null)) && (await playable(sibling))) {
+          doc.media.screenVideoPath = sibling;
+          await writeFile(docPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+          return { repaired: true, from: current, to: sibling, reason: null };
+        }
+      }
+      return { repaired: false, reason: `the video it names is gone: ${current}` };
+    };
+
     if (p === "/api/open-media" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const media = requestedPath(body);
@@ -1291,9 +1466,21 @@ const server = createServer(async (req, res) => {
       // and it needs no PATH lookup, no probe for whether this build has the
       // verb, and no launch-and-reveal fallback for when it does not. In a
       // browser there is nobody to ask, so the CLI path stays.
+      // Before handing it over, not after: an editor that has already opened a
+      // document with no media has nothing useful to do with the news.
+      const repair = made ? { repaired: false, reason: null } : await repairDocumentMedia(doc);
+
       const opened = body.hosted ? { opened: false, via: "host" } : await openInOpenScreen(doc);
       if (body.projectId) await reindex(body.projectId, { force: true }).catch(() => {});
-      return json(res, 200, { ...opened, document: doc, made });
+      return json(res, 200, {
+        ...opened,
+        document: doc,
+        made,
+        repaired: repair.repaired,
+        // Reported rather than swallowed: "the editor lost my video" and "the file
+        // this document names was deleted" need different responses.
+        mediaProblem: repair.reason,
+      });
     }
 
     if (p === "/api/open" && req.method === "POST") {
@@ -2251,6 +2438,42 @@ async function fetchVoiceList() {
         `Write it to ${dest} and print nothing else.`,
       ].join("\n");
 
+      /*
+       * Keep the brief, not just what it produced.
+       *
+       * The prompt was assembled here, handed to Claude, and thrown away — so once
+       * the script existed the inputs that made it were gone, and "same idea, one
+       * change" meant retyping the brief from memory and hoping it matched.
+       *
+       * It goes beside the script inside the project rather than into a side store:
+       * scripts/ is part of a project, so the brief travels with it, syncs with it,
+       * and diffs with it. `prompt` is recorded as well as the inputs because the
+       * assembly rules here will change, and a redo should be able to show what was
+       * actually asked the first time.
+       */
+      await writeFile(
+        join(dir, `${nm}.brief.json`),
+        `${JSON.stringify(
+          {
+            version: 1,
+            name: nm,
+            // Recorded rather than inferred from where the file sits: a script moved
+            // between projects should still say which one it was drafted for.
+            projectId: id,
+            about,
+            seconds: Number(body.seconds) || 30,
+            brand: m.brand || "rolemodel",
+            client: m.client ?? null,
+            project: m.name,
+            prompt,
+            drafted: new Date().toISOString(),
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+
       return json(res, 200, {
         dest,
         prompt,
@@ -2269,8 +2492,96 @@ async function fetchVoiceList() {
       });
     }
 
+    /*
+     * A remote's name is spliced straight into an rclone argv, so it is checked
+     * rather than trusted. Not for shell injection — there is no shell here — but
+     * because a name starting with "-" is read by rclone as a flag, and rclone's
+     * own config keys are this shape anyway.
+     */
+    const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+    /*
+     * What a remote is, minus the part nobody may read back.
+     *
+     * `rclone config show` prints the secret — obscured, but obscuring is
+     * reversible by design, so it is a credential and it does not leave this
+     * process. The client gets whether one is set, not what it is.
+     */
+    const readRemote = async (name) => {
+      const r = await capture("rclone", ["config", "show", name]);
+      /*
+       * Exit code is not the signal here. `rclone config show does-not-exist`
+       * exits 0 and prints the section header plus a comment, so a missing
+       * remote is detected by the absence of a type rather than by a failure.
+       */
+      if (!r.ok) return null;
+      const cfg = {};
+      for (const line of r.out.split("\n")) {
+        const m = line.match(/^\s*([a-z_]+)\s*=\s*(.*)$/);
+        if (m) cfg[m[1]] = m[2].trim();
+      }
+      if (!cfg.type) return null;
+      return {
+        name,
+        type: cfg.type,
+        provider: cfg.provider ?? null,
+        endpoint: cfg.endpoint ?? null,
+        accessKeyId: cfg.access_key_id ?? null,
+        hasSecret: Boolean(cfg.secret_access_key),
+      };
+    };
+
+    const storageName = p.startsWith("/api/storage/") ? decodeURIComponent(p.slice("/api/storage/".length)) : null;
+
+    if (storageName !== null && !REMOTE_NAME.test(storageName)) {
+      return json(res, 400, { error: "a remote name is letters, digits, dash and underscore" });
+    }
+
+    if (storageName && req.method === "GET") {
+      const r = await readRemote(storageName);
+      return r ? json(res, 200, r) : json(res, 404, { error: `no rclone remote named "${storageName}"` });
+    }
+
+    /*
+     * Update, not re-create. `rclone config update` leaves untouched keys alone,
+     * which is what makes "leave the secret blank to keep the current one"
+     * honest — the alternative, delete-and-recreate, would silently drop any key
+     * this form does not know about.
+     */
+    if (storageName && req.method === "PUT") {
+      const b = JSON.parse(await text(req));
+      const args = ["config", "update", storageName];
+      if (b.endpoint) args.push("endpoint", String(b.endpoint));
+      if (b.accessKeyId) args.push("access_key_id", String(b.accessKeyId));
+      // Only when a new one was actually typed. An empty string here would
+      // overwrite a working credential with nothing.
+      if (b.secretAccessKey) args.push("secret_access_key", String(b.secretAccessKey));
+      if (args.length === 3) return json(res, 400, { ok: false, err: "nothing to change" });
+      const r = await capture("rclone", args);
+      return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
+    }
+
+    if (storageName && req.method === "DELETE") {
+      const r = await capture("rclone", ["config", "delete", storageName]);
+      return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
+    }
+
+    /*
+     * Proof, not a saved form. Credentials that parse are not credentials that
+     * work, and the difference only shows up later in a failed sync — so listing
+     * the buckets is the cheapest call that actually authenticates.
+     */
+    if (storageName && req.method === "POST") {
+      const r = await capture("rclone", ["lsd", `${storageName}:`, "--max-depth", "1"]);
+      const buckets = r.ok ? r.out.split("\n").map((l) => l.trim().split(/\s+/).pop()).filter(Boolean) : [];
+      return json(res, 200, { ok: r.ok, buckets, err: r.err });
+    }
+
     if (p === "/api/storage" && req.method === "POST") {
       const b = JSON.parse(await text(req));
+      if (!REMOTE_NAME.test(String(b.name ?? ""))) {
+        return json(res, 400, { ok: false, err: "a remote name is letters, digits, dash and underscore" });
+      }
       const args = [
         "config", "create", b.name, "s3",
         "provider", "Cloudflare",
@@ -2289,6 +2600,17 @@ async function fetchVoiceList() {
        free-text only behind --shell. */
 
     if (p === "/api/jobs") return json(res, 200, { jobs: jobs.list(), shell: SHELL });
+
+    /*
+     * Empty the Console.
+     *
+     * Before the id-suffixed routes below, and with no id of its own, so "clear"
+     * cannot be mistaken for a job called clear.
+     */
+    if (p === "/api/jobs/clear" && req.method === "POST") {
+      const cleared = await jobs.clearFinished();
+      return json(res, 200, { cleared, remaining: jobs.list().length });
+    }
 
     if (p === "/api/run" && req.method === "POST") {
       const b = JSON.parse(await text(req));
@@ -2571,6 +2893,419 @@ async function fetchVoiceList() {
     }
 
     if (p === "/api/wallpapers") return json(res, 200, { wallpapers: await loadRecipes(TOOLKIT) });
+    /*
+     * What a composition can be built from.
+     *
+     * Components come from the catalogue parser rather than a list here, so adding a
+     * field to a component makes it appear in the form with no second edit. Footage
+     * is whatever the project already has — a composition names files, it does not
+     * import them.
+     */
+
+    /*
+     * Preview an authored scene exactly as it will render.
+     *
+     * Wrapped by the same sceneHtml() the renderer uses, so what is on screen and
+     * what comes out of ffmpeg cannot disagree — a preview built any other way is a
+     * second implementation of the harness and will drift from it. Served under
+     * /components/ so `./rm-video.js` and the brand stylesheets resolve.
+     */
+    /*
+     * Preview an authored scene exactly as it will render.
+     *
+     * Two steps, because an iframe cannot POST: the body is stashed and the frame
+     * GETs it back. The obvious shortcuts do not work — a `srcdoc` document and a
+     * `blob:` URL both have an opaque origin with no base, so the stylesheets, the
+     * fonts and rm-video.js all fail to resolve and the scene renders unstyled with
+     * nothing upgraded. It has to come from this origin.
+     *
+     * Wrapped by the same sceneHtml() the renderer uses, so what is on screen and
+     * what comes out of ffmpeg cannot disagree.
+     */
+    if (p === "/api/scene/preview" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(++previewSeq);
+      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand: b.brand || undefined, name: b.name || "Scene preview" });
+      // Only the last few matter; anything older is a frame nobody is looking at.
+      for (const key of previews.keys()) {
+        if (previews.size <= PREVIEWS_KEPT) break;
+        previews.delete(key);
+      }
+      return json(res, 200, { url: `/api/scene/preview/${id}` });
+    }
+
+    if (p.startsWith("/api/scene/preview/")) {
+      const held = previews.get(p.slice("/api/scene/preview/".length));
+      if (!held) {
+        res.writeHead(404);
+        return res.end("no such preview");
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      return res.end(sceneHtml({ ...held, title: held.name, base: "" }));
+    }
+
+    /*
+     * Ask Claude for a scene body.
+     *
+     * The contract is a file, not a string built here: it is long, it is the thing
+     * that decides whether a scene renders correctly, and it belongs next to the
+     * brand rules it enforces rather than inside a request handler.
+     */
+    /*
+     * One completion, no tools, small model.
+     *
+     * This used to hand the job to an agent: read SCENE.md, read the 470 lines of
+     * rm-video.js, read design.md, then write the file — with edit permissions and a
+     * streaming session, to produce twenty lines of markup against a fixed
+     * vocabulary. It cost more than everything else in the Studio combined and took
+     * the longest to come back.
+     *
+     * The vocabulary IS the contract, and it is already parsed for the palette. Sent
+     * inline it is under a kilobyte, so there is nothing to read, nothing to permit,
+     * and no reason for a large model: the task is assembling known tags around
+     * somebody's sentence.
+     *
+     * The markup comes back on stdout and the Studio writes the file, which also
+     * means the panel can drop it straight into the cards instead of telling you to
+     * go and pick it up.
+     */
+    if (p === "/api/scene/draft" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = b.projectId;
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man) return json(res, 404, { error: "pick a project" });
+      const about = String(b.about ?? "").trim();
+      if (!about) return json(res, 400, { error: "what is the scene? a sentence is enough" });
+      if (!String(b.name ?? "").trim()) return json(res, 400, { error: "give the scene a name" });
+
+      const cat = await readComponentCatalogue(TOOLKIT);
+      const vocabulary = cat
+        .map((c) => `<${c.tag} at="ms" for="ms" ${c.fields.map((f) => `${f}="…"`).join(" ")}></${c.tag}>`)
+        .join("\n");
+
+      const prompt = [
+        "Write the inside of a HyperFrames scene using only these elements.",
+        "Output markup and nothing else: no prose, no code fences, no <html>, <head>,",
+        "<body> or <rm-scene> wrapper — those are supplied.",
+        "`at` and `for` are milliseconds. Elements may overlap. Omit a field you do not need.",
+        "No decorative rules, underlines or dividers; the components carry their own.",
+        "",
+        vocabulary,
+        "",
+        man.client ? `Client: ${man.client}. Project: ${man.name}.` : `Project: ${man.name}.`,
+        `Scene: ${about}`,
+      ].join("\n");
+
+      let out = "";
+      try {
+        const r = await capture("claude", [
+          "-p", prompt,
+          // Small on purpose: assembling known tags around a sentence.
+          "--model", "haiku",
+          // No tools at all. Nothing here needs to read or write anything.
+          "--allowedTools", "",
+          "--output-format", "text",
+        ]);
+        if (!r.ok) throw new Error(r.err || "claude exited non-zero");
+        out = r.out;
+      } catch (err) {
+        return json(res, 502, { error: `could not draft it: ${String(err.message ?? err).slice(0, 200)}` });
+      }
+
+      /*
+       * Keep only elements we know.
+       *
+       * A fence, an apology or an invented tag all render as nothing, and a scene
+       * that silently comes back empty is worse than one that says what it got.
+       */
+      const tags = cat.map((c) => c.tag).join("|");
+      const kept = (out.match(new RegExp(`<(?:${tags})\\b[^>]*>(?:</(?:${tags})>)?`, "g")) ?? []).join("\n");
+      if (!kept) return json(res, 422, { error: "the draft came back with no usable elements — try saying it differently" });
+
+      const nm = wpSlug(b.name);
+      const dir = join(projectDir(id), "scenes");
+      await mkdir(dir, { recursive: true });
+      const dest = join(dir, `${nm}.html`);
+      await writeFile(dest, `${kept}\n`, "utf8");
+      return json(res, 200, { ok: true, name: nm, file: dest, body: kept });
+    }
+
+    /* Read and write an authored scene body. */
+    if (p === "/api/scene" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const man = await readManifest(projectDir(b.projectId ?? "")).catch(() => null);
+      if (!man) return json(res, 404, { error: "pick a project" });
+      // wpSlug("") is "untitled", so `!nm` never fired and an unnamed scene saved
+      // over any previous one. The raw value is what has to be present.
+      if (!String(b.name ?? "").trim()) return json(res, 400, { error: "give the scene a name" });
+      const nm = wpSlug(b.name);
+      const dir = join(projectDir(b.projectId), "scenes");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, `${nm}.html`), String(b.body ?? ""), "utf8");
+      return json(res, 200, { ok: true, name: nm, file: join(dir, `${nm}.html`) });
+    }
+
+    if (p === "/api/scenes") {
+      const id = new URL(req.url, "http://x").searchParams.get("project") ?? "";
+      const dir = join(projectDir(id), "scenes");
+      const names = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith(".html"));
+      const scenes = await Promise.all(
+        names.map(async (f) => ({
+        name: f.replace(/\.html$/, ""),
+        // The path too: a composition references the FILE, so that a scene
+        // edited later updates every composition using it.
+        file: join(dir, f),
+        body: await readFile(join(dir, f), "utf8"),
+      })),
+      );
+      return json(res, 200, { scenes });
+    }
+    if (p === "/api/compose/catalogue") {
+      /*
+       * Every colour the brand actually has, not the eight seeds.
+       *
+       * brand/tokens.json carries the seed hexes, and picking from those offers a
+       * dozen swatches of which several are the same colour twice — `tertiary` and
+       * `accent` are both #44bb7e, and `primary` and the Academy sub-brand are both
+       * #00b871. Optics generates a full ramp from each seed, and those ramps are the
+       * palette: nineteen scales with a base and nine steps either side.
+       *
+       * Read from rolemodel-scales.css rather than restated here, so a scale added to
+       * the brand appears in the picker without a second edit — and returned as custom
+       * property NAMES rather than hexes, so a colour follows the theme instead of
+       * being frozen at whatever it resolved to the day it was picked.
+       */
+      const scaleCss = await readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => "");
+      const scales = [...new Set([...scaleCss.matchAll(/--op-color-([a-z-]+)-h\s*:/g)].map((x) => x[1]))].sort();
+
+
+      const recipes = await loadRecipes(TOOLKIT);
+      return json(res, 200, {
+        components: await readComponentCatalogue(TOOLKIT),
+    colors: {
+      scales,
+      // Optics' own ladder, darkest to lightest. `base` is the seed itself.
+      steps: [
+        "minus-max", "minus-eight", "minus-seven", "minus-six", "minus-five",
+        "minus-four", "minus-three", "minus-two", "minus-one",
+        "base",
+        "plus-one", "plus-two", "plus-three", "plus-four", "plus-five",
+        "plus-six", "plus-seven", "plus-eight", "plus-max",
+      ],
+    },
+        // The path a scene's HTML uses, which is relative to components/.
+        // A name, not a path: sceneHtml resolves it against whichever base it is
+    // rendering for. A path here was right for a render and 404'd in preview.
+    wallpapers: recipes.map((r) => ({ name: r.name, label: r.label })),
+        /*
+         * The brand pictures, so a scene can contain one.
+         *
+         * The clay renders have been sitting in brand/imagery/ visible only in the
+         * Brand panel — admirable and unusable, because the component set had no way
+         * to put a picture on a stage and the builder had no way to name one. Sent as
+         * name and file, never a path: rm-image resolves it against the stage's
+         * `assets` base, which is the only thing that knows whether this scene is
+         * being rendered or previewed.
+         */
+        imagery: JSON.parse(await readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8").catch(() => '{"imagery":[]}')).imagery.filter((i) => i.file),
+      });
+    }
+
+    /*
+     * Hand a composition over as a job.
+     *
+     * Rendering steps a browser frame by frame — a six-second card is 180 seeks and
+     * screenshots — so this writes the spec and returns a step the Console streams,
+     * the same shape drafting a script uses. Doing it inline would be a request that
+     * looks hung for a minute and cannot be watched.
+     */
+    /*
+     * A cut list becomes a document the editor opens.
+     *
+     * Composing renders: it lays scenes and footage end to end and encodes one new
+     * video, which takes minutes and throws the parts away. This does neither. It
+     * writes an AxcutDocument that POINTS at the footage already on disk and says
+     * which SPAN of each file plays and when — so a cut is instant, reversible, and
+     * still the original media at full quality.
+     *
+     * The trims are the reason this exists. `clipSchema` has carried
+     * sourceStartSec/sourceEndSec the whole time and nothing in the pipeline ever
+     * set them, so every clip was the whole file and "edit raw footage" had no way
+     * to mean anything.
+     */
+    /*
+     * The panel you were on, remembered across a restart.
+     *
+     * Not localStorage: the app asks the OS for a free port on every launch, so the
+     * page's origin changes each start and a browser store keyed to it is
+     * unreachable — the same trap the script drafts fell into. A reload inside one
+     * session would have worked, which is how that bug survives being tested.
+     */
+    if (p === "/api/view" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      await setLastView(String(body.view ?? ""));
+      return json(res, 200, { ok: true });
+    }
+
+    if (p === "/api/cut" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man) return json(res, 404, { error: "pick a project" });
+
+      const clips = Array.isArray(body.clips) ? body.clips : [];
+      if (!clips.length) return json(res, 400, { error: "add at least one clip" });
+
+      /*
+       * Footage is named by its place in the project, not by a path.
+       *
+       * The catalogue has no absolute path in it — only `rel` — so a browser has
+       * none to send, and asking for one means either inventing it there or
+       * accepting whatever arrives. Resolving `rel` against the project's own media
+       * directory is both the fix and the check: there is nowhere else it can land.
+       */
+      for (const c of clips) {
+        const f = join(mediaDir(id), String(c.rel ?? ""));
+        if (!(f === LIB || f.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}: ${c.rel}` });
+        if (!(await stat(f).catch(() => null))) return json(res, 404, { error: `no such footage: ${c.rel}` });
+        c.file = f;
+      }
+
+      const name = wpSlug(body.name || "cut");
+      const outDir = join(projectDir(id), "media", "Renders", name);
+      await mkdir(outDir, { recursive: true });
+
+      /*
+       * Each title becomes one transparent still, laid over the cut.
+       *
+       * Rendered here rather than queued as a job: a still is one screenshot, and
+       * a job would put a progress log and a "finished" state between somebody
+       * typing a title and seeing it. The card is composed at full frame with its
+       * own layout, so the overlay is the whole frame and the transparency does
+       * the positioning.
+       */
+      const titles = Array.isArray(body.titles) ? body.titles : [];
+      const overlays = [];
+      for (const [i, t] of titles.entries()) {
+        const text_ = String(t.text ?? "").trim();
+        if (!text_) continue;
+        const forSec = Number(t.forSec) > 0 ? Number(t.forSec) : 3;
+        const esc = (v) => String(v).replace(/"/g, "&quot;");
+        const card = [
+          `<rm-title at="0" for="${Math.round(forSec * 1000)}"`,
+          t.eyebrow ? ` eyebrow="${esc(t.eyebrow)}"` : "",
+          ` title="${esc(text_)}"`,
+          t.sub ? ` sub="${esc(t.sub)}"` : "",
+          "></rm-title>",
+        ].join("");
+        const png = join(outDir, `title-${i + 1}.png`);
+        try {
+          await renderStill({ body: card, out: png, atMs: Math.round(forSec * 500) });
+        } catch (err) {
+          return json(res, 500, { error: `the title would not render: ${String(err.message).slice(0, 200)}` });
+        }
+        // An opaque card is a rectangle over the footage, not a title on it.
+        if (!(await hasAlpha(png))) return json(res, 500, { error: "the title came out opaque — it would hide the video rather than sit on it" });
+        overlays.push({ path: png, atSec: Number(t.atSec) || 0, forSec });
+      }
+
+      let doc;
+      try {
+        doc = cutlistToDocument({
+          id: `${id}-${name}`,
+          title: man.name ? `${man.name} — ${name}` : name,
+          createdAt: new Date().toISOString(),
+          clips: clips.map((c) => ({
+            path: c.file,
+            durationSec: Number(c.durationSec) || undefined,
+            inSec: Number(c.inSec) || 0,
+            outSec: c.outSec == null ? undefined : Number(c.outSec),
+            label: c.label || undefined,
+          })),
+          overlays,
+        });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+
+      const docPath = join(outDir, `${name}.openscreen`);
+      await writeFile(docPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+      /*
+       * The cut list is kept beside the document.
+       *
+       * The document is the output and it is lossy as a source: it has already
+       * dropped the zero-length clips and any overlay past the end. Keeping what
+       * was actually asked for is the difference between a cut you can reopen and
+       * a video you have to rebuild from memory.
+       */
+      await writeFile(join(outDir, "cutlist.json"), `${JSON.stringify({ name, clips, titles }, null, 2)}\n`, "utf8");
+
+      return json(res, 200, {
+        document: docPath,
+        out: outDir,
+        clips: doc.timeline.clips.length,
+        overlays: doc.annotations.length,
+        durationSec: doc.timeline.clips.at(-1).timelineEndSec,
+      });
+    }
+
+    if (p === "/api/compose" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man) return json(res, 404, { error: "pick a project" });
+      const segments = Array.isArray(body.segments) ? body.segments : [];
+      if (!segments.length) return json(res, 400, { error: "add at least one segment" });
+
+      /*
+       * Footage is named by its place in the project, not by a path.
+       *
+       * A catalogue entry has `rel` and no absolute path, so the panel had nothing
+       * to put in `seg.path` and sent undefined — which resolved to the working
+       * directory and came back 403, making every composition with footage in it
+       * fail on a check that looked like a security refusal. Resolving `rel` here is
+       * the fix and the check at once.
+       */
+      for (const seg of segments) {
+        if (seg.kind !== "footage") continue;
+        const f = seg.rel ? join(mediaDir(id), String(seg.rel)) : resolve(String(seg.path ?? ""));
+        if (!(f === LIB || f.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}: ${seg.rel ?? seg.path}` });
+        if (!(await stat(f).catch(() => null))) return json(res, 404, { error: `no such footage: ${seg.rel ?? seg.path}` });
+        seg.path = f;
+      }
+
+      /*
+   * Narration is a file in the library too, and gets the same check as footage.
+   * A capture is usually silent, so this is the audio in most compositions.
+   */
+  let audio = null;
+  if (body.audio) {
+    audio = resolve(String(body.audio));
+    if (!(audio === LIB || audio.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}: ${body.audio}` });
+    if (!(await stat(audio).catch(() => null))) return json(res, 404, { error: `no such audio: ${body.audio}` });
+  }
+
+  const name = wpSlug(body.name || "composition");
+      const outDir = join(projectDir(id), "media", "Renders", name);
+      await mkdir(outDir, { recursive: true });
+      const specPath = join(outDir, "composition.json");
+      // Kept, not written to a temp file: it is the source the render came from, and
+      // the only thing that makes a composition editable again rather than a video.
+      await writeFile(specPath, `${JSON.stringify({ name, audio, segments }, null, 2)}\n`, "utf8");
+
+      return json(res, 200, {
+        spec: specPath,
+        out: outDir,
+        step: {
+          label: `compose ${name}`,
+          project: id,
+          bin: "node",
+          args: [join(TOOLKIT, "bin", "rm-compose.mjs"), specPath, "--out", outDir],
+          cwd: outDir,
+        },
+      });
+    }
+
 
     // Save an edited wallpaper. The browser has already drawn the 4K frame on a
     // canvas — it sends the JPEG bytes with the recipe. That is deliberate: it
@@ -2602,7 +3337,32 @@ async function fetchVoiceList() {
         `${JSON.stringify(all.map((r) => ({ name: r.name, label: r.label, file: `${r.name}.jpg`, css: wpCSS(r) })), null, 2)}\n`,
         "utf8",
       );
-      return json(res, 200, { ok: true, name: recipe.name, file: join(dir, `${recipe.name}.jpg`), count: all.length });
+      /*
+       * Install it where the editor looks, in the same request.
+       *
+       * Saving stopped at the toolkit, so a wallpaper you had just made and were
+       * looking at did not exist as far as the editor was concerned — one recipe sat
+       * rendered and unreachable that way. The editor's list is generated into the
+       * fork, so writing the render alone was never going to be enough.
+       */
+      const fork = resolve(TOOLKIT, "..", "openscreen");
+      const install = await installWallpapersIntoFork({ recipes: all, out: dir, fork }).catch((err) => ({
+        installed: 0,
+        reason: String(err?.message ?? err),
+      }));
+      return json(res, 200, {
+        ok: true,
+        name: recipe.name,
+        file: join(dir, `${recipe.name}.jpg`),
+        count: all.length,
+        installed: install.installed,
+        // The manifest is compiled into the app, so a running editor is still showing
+        // the old list. Saying so is the difference between "it is broken" and "it is
+        // one rebuild away".
+        note: install.reason
+          ? `saved, but not installed into the editor: ${install.reason}`
+          : "installed into the editor — rebuild OpenScreen to see it in the picker",
+      });
     }
 
     if (p.startsWith("/wallpaper/")) {
