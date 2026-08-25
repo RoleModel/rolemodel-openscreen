@@ -2053,7 +2053,8 @@ pre {
   padding: var(--op-space-large);
 }
 
-/* One form, stacked, with the three short fields on a row of their own. */
+/* Main is the writing surface: a brief and the script, stacked. The knobs moved
+   to the rail. */
 .script-form {
   display: flex;
   flex-direction: column;

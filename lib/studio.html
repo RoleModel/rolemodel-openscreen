@@ -48,15 +48,15 @@
             -->
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>
 
-            <h2 class="navgroup">Make a video</h2>
-            <button class="btn btn--no-border" data-v="create">New video</button>
-            <button class="btn btn--no-border" data-v="scripts">Scripts</button>
-            <button class="btn btn--no-border" data-v="voice">Voice</button>
-            <button class="btn btn--no-border" data-v="scenes">Scenes</button>
-            <button class="btn btn--no-border" data-v="compose">Compose</button>
-            <button class="btn btn--no-border" data-v="cut">Cut</button>
-            <button class="btn btn--no-border" data-v="editor">Editor</button>
-            <button class="btn btn--no-border" data-v="review">Review</button>
+            <h2 class="navgroup" data-group="make">Make a video</h2>
+            <button class="btn btn--no-border" data-group="make" data-v="create">New video</button>
+            <button class="btn btn--no-border" data-group="make" data-v="scripts">Scripts</button>
+            <button class="btn btn--no-border" data-group="make" data-v="voice">Voice</button>
+            <button class="btn btn--no-border" data-group="make" data-v="scenes">Scenes</button>
+            <button class="btn btn--no-border" data-group="make" data-v="compose">Compose</button>
+            <button class="btn btn--no-border" data-group="make" data-v="cut">Cut</button>
+            <button class="btn btn--no-border" data-group="make" data-v="editor">Editor</button>
+            <button class="btn btn--no-border" data-group="make" data-v="review">Review</button>
             <h2 class="navgroup">Toolkit</h2>
             <button class="btn btn--no-border" data-v="brand">Brand</button>
             <button class="btn btn--no-border" data-v="components">Components</button>
@@ -197,25 +197,6 @@
       </p>
 
       <div data-region="main" class="panel-card script-form">
-         <div class="form-row">
-            <div class="form-group">
-               <label class="form-label" for="script-project">Project</label>
-               <select data-el="project" id="script-project" class="form-control"></select>
-               <div class="form-hint">Moving it saves a copy into that project's scripts/ folder.</div>
-            </div>
-            <div class="form-group">
-               <label class="form-label" for="script-name">Name</label>
-               <input data-el="name" id="script-name" class="form-control" placeholder="case-study-opener" />
-               <div class="form-hint">The filename, without .md. Voice matches a narration run to a script by this.</div>
-            </div>
-            <div class="form-group">
-               <label class="form-label" for="script-seconds">Seconds</label>
-               <input data-el="seconds" id="script-seconds" class="form-control" type="number"
-                      value="30" min="10" max="180" step="5" />
-               <div class="form-hint">How long the draft should run. Drafting only.</div>
-            </div>
-         </div>
-
          <div class="form-group">
             <label class="form-label" for="script-about">About</label>
             <textarea data-el="about" id="script-about" class="form-control" rows="3"
@@ -233,7 +214,35 @@
          <div data-el="draftOut"></div>
       </div>
 
+      <!--
+         The rail is the settings and the shelf.
+         Main is where you write; the name, the length and where it saves are knobs
+         about the thing being written, not the thing itself.
+      -->
       <div data-region="side">
+         <div class="form-group">
+            <label class="form-label" for="script-name">Name</label>
+            <input data-el="name" id="script-name" class="form-control" placeholder="case-study-opener" />
+            <div class="form-hint">The filename, without .md. Voice matches a narration run to a script by this.</div>
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="script-shelf">Save to</label>
+            <select data-el="shelf" id="script-shelf" class="form-control">
+               <option value="project">This project</option>
+               <option value="shared">Shared shelf</option>
+            </select>
+            <div class="form-hint">
+               A project script lands in its scripts/ folder. The shared shelf is for the
+               ones that travel between projects.
+            </div>
+         </div>
+         <div class="form-group">
+            <label class="form-label" for="script-seconds">Seconds</label>
+            <input data-el="seconds" id="script-seconds" class="form-control" type="number"
+                   value="30" min="10" max="180" step="5" />
+            <div class="form-hint">How long the draft should run. Drafting only.</div>
+         </div>
+
          <div class="client">Saved</div>
          <div data-el="saved" class="saved-list"></div>
       </div>
