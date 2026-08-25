@@ -3,23 +3,23 @@
 		{
 			"name": "academy-browser",
 			"file": "academy-browser.png",
-			"bytes": 288720,
-			"sha": "9e3fd4a9bce07f29",
-			"local": "9e3fd4a9bce07f29"
+			"bytes": 212404,
+			"sha": "4235637941415149",
+			"local": "82387feb165cc8f8"
 		},
 		{
 			"name": "academy-cursor",
 			"file": "academy-cursor.png",
-			"bytes": 294161,
+			"bytes": 304471,
 			"sha": "0d29717214db24a4",
-			"local": "0d29717214db24a4"
+			"local": "3739607f5eca0372"
 		},
 		{
 			"name": "academy-keyboard",
 			"file": "academy-keyboard.png",
-			"bytes": 253784,
+			"bytes": 399899,
 			"sha": "2e32663848e290fa",
-			"local": "2e32663848e290fa"
+			"local": "bff8e7e0952a8570"
 		},
 		{
 			"name": "academy-phone",
@@ -31,16 +31,23 @@
 		{
 			"name": "academy-rocket",
 			"file": "academy-rocket.webp",
-			"bytes": 32404,
+			"bytes": 47024,
 			"sha": "6997847817eaf3f0",
-			"local": "6997847817eaf3f0"
+			"local": "c66fefe18e74fcc0"
+		},
+		{
+			"name": "academy-slide",
+			"file": "academy-slide.png",
+			"bytes": 521582,
+			"sha": "04e5fd6070030f8c",
+			"local": "04e5fd6070030f8c"
 		},
 		{
 			"name": "academy-logo-clay",
 			"file": "academy-logo-clay.png",
-			"bytes": 231470,
-			"sha": "c5b95df7877d3a9a",
-			"local": "c5b95df7877d3a9a"
+			"bytes": 304155,
+			"sha": "043891666edbbb05",
+			"local": "043891666edbbb05"
 		},
 		{
 			"name": "academy-plant",
