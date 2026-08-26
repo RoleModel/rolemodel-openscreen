@@ -92,7 +92,7 @@
   /* 16px job-count badge */
   --search-min: calc(var(--op-size-unit) * 64);
   /* 256px search field basis */
-  --card-min: calc(var(--op-size-unit) * 58);
+  --card-min: calc(var(--op-size-unit) * 78);
   /* 232px library card */
   --preview-min: calc(var(--op-size-unit) * 105);
   /* 420px title/lower-third */
@@ -932,7 +932,6 @@ button.btn:disabled {
 }
 
 .thumb {
-  aspect-ratio: var(--video-ar);
   background: var(--sunk) center/cover no-repeat;
   display: flex;
   align-items: center;
@@ -941,6 +940,7 @@ button.btn:disabled {
   font-family: var(--m);
   font-size: var(--op-font-x-large);
   letter-spacing: var(--thumb-track);
+  block-size: calc(var(--op-space-scale-unit) * 20);
 }
 
 .card .body {
@@ -1134,14 +1134,14 @@ input[type='range']::-webkit-slider-runnable-track {
   border: 0px solid var(--line);
   border-radius: 1.3px;
   width: 100%;
-  height: 8.4px;
+  height: 5.4px;
   cursor: pointer;
 }
 
 input[type='range']::-webkit-slider-thumb {
-  margin-top: -4px;
-  width: 16px;
-  height: 16px;
+  margin-top: -6px;
+  width: var(--op-space-medium);
+  height: var(--op-space-medium);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: 12px;
@@ -1158,13 +1158,13 @@ input[type='range']::-moz-range-track {
   border: 0.2px solid var(--line);
   border-radius: 1.3px;
   width: 100%;
-  height: 8.4px;
+  height: var(--op-space-small);
   cursor: pointer;
 }
 
 input[type='range']::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: var(--op-space-medium);
+  height: var(--op-space-medium);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: 12px;
@@ -1184,13 +1184,13 @@ input[type='range']::-ms-track {
 input[type='range']::-ms-fill-lower {
   background: var(--op-color-primary-minus-one);
   border: 0.2px solid var(--line);
-  border-radius: 2.6px;
+  border-radius: var(--op-radius-medium);
 }
 
 input[type='range']::-ms-fill-upper {
   background: var(--accent);
   border: 0.2px solid var(--line);
-  border-radius: 2.6px;
+  border-radius: var(--op-radius-medium);
 }
 
 input[type='range']::-ms-thumb {
@@ -2135,123 +2135,123 @@ textarea.form-control.script-body {
  * before it.
  */
 .projmenu {
-   position: relative;
-   flex: 0 0 auto;
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .projmenu__trigger {
-   display: inline-flex;
-   align-items: center;
-   gap: var(--op-space-x-small);
-   padding: var(--op-space-2x-small) var(--op-space-x-small);
-   background: var(--op-color-neutral-plus-six);
-   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
-   border-radius: var(--op-radius-medium);
-   color: var(--fg);
-   font: inherit;
-   font-size: var(--op-font-x-small);
-   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  background: var(--op-color-neutral-plus-six);
+  border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-medium);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  cursor: pointer;
 }
 
 .projmenu__trigger:hover,
 .projmenu__trigger[aria-expanded='true'] {
-   border-color: var(--op-color-neutral-plus-three);
+  border-color: var(--op-color-neutral-plus-three);
 }
 
 .projmenu__mark {
-   color: var(--accent);
-   font-size: var(--op-font-medium);
+  color: var(--accent);
+  font-size: var(--op-font-medium);
 }
 
 .projmenu__label {
-   max-inline-size: 28ch;
-   overflow: hidden;
-   text-overflow: ellipsis;
-   white-space: nowrap;
+  max-inline-size: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The chevron points at the menu: up while it is closed and below, flipping when
    it opens, which is the affordance the editor's own menu uses. */
 .projmenu__caret {
-   font-size: var(--op-font-x-small);
-   opacity: 0.7;
-   transform: rotate(180deg);
+  font-size: var(--op-font-x-small);
+  opacity: 0.7;
+  transform: rotate(180deg);
 }
 
 .projmenu__trigger[aria-expanded='true'] .projmenu__caret {
-   transform: none;
+  transform: none;
 }
 
 .projmenu__menu {
-   position: absolute;
-   z-index: 60;
-   inset-block-start: calc(100% + var(--op-space-2x-small));
-   inset-inline-start: 0;
-   min-inline-size: 30rem;
-   padding: var(--op-space-2x-small);
-   display: flex;
-   flex-direction: column;
-   gap: 1px;
-   background: var(--op-color-neutral-plus-max);
-   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
-   border-radius: var(--op-radius-large);
-   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+  position: absolute;
+  z-index: 60;
+  inset-block-start: calc(100% + var(--op-space-2x-small));
+  inset-inline-start: 0;
+  min-inline-size: 30rem;
+  padding: var(--op-space-2x-small);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--op-color-neutral-plus-max);
+  border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-large);
+  box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
 }
 
 .projmenu__item {
-   display: flex;
-   align-items: center;
-   gap: var(--op-space-x-small);
-   padding: var(--op-space-x-small);
-   background: none;
-   border: 0;
-   border-radius: var(--op-radius-medium);
-   color: var(--fg);
-   font: inherit;
-   font-size: var(--op-font-x-small);
-   text-align: start;
-   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-x-small);
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-medium);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  text-align: start;
+  cursor: pointer;
 }
 
 .projmenu__item:hover,
 .projmenu__item:focus-visible {
-   background: var(--op-color-neutral-plus-six);
+  background: var(--op-color-neutral-plus-six);
 }
 
 .projmenu__item[aria-current='true'] .hgi-stroke {
-   color: var(--accent);
+  color: var(--accent);
 }
 
 .projmenu__text {
-   flex: 1 1 auto;
-   overflow: hidden;
-   text-overflow: ellipsis;
-   white-space: nowrap;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* What tells two similarly named projects apart at a glance. */
 .projmenu__note {
-   flex: 0 0 auto;
-   color: var(--muted);
-   font-size: var(--op-font-2x-small);
-   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
 }
 
 .projmenu__sep {
-   block-size: var(--op-border-width);
-   margin: var(--op-space-2x-small) 0;
-   background: var(--line);
+  block-size: var(--op-border-width);
+  margin: var(--op-space-2x-small) 0;
+  background: var(--line);
 }
 
 /* First run. Measured for reading, and centred, because there is nothing else on
    the page to align to. */
 .firstrun {
-   display: flex;
-   flex-direction: column;
-   align-items: center;
-   gap: var(--op-space-medium);
-   text-align: center;
-   padding-block: var(--op-space-2x-large);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-medium);
+  text-align: center;
+  padding-block: var(--op-space-2x-large);
 }
 
 /*
@@ -2262,48 +2262,48 @@ textarea.form-control.script-body {
  * own it would take whatever it was given and push the steps off the screen.
  */
 .firstrun__art {
-   inline-size: min(100%, 34rem);
-   display: grid;
-   place-items: center;
+  inline-size: min(100%, 34rem);
+  display: grid;
+  place-items: center;
 }
 
 .firstrun__art:empty {
-   min-block-size: var(--op-space-large);
+  min-block-size: var(--op-space-large);
 }
 
 .firstrun__art img,
 .firstrun__art svg {
-   inline-size: auto;
-   max-inline-size: 100%;
-   block-size: auto;
-   max-block-size: 24rem;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: 24rem;
 }
 
 .firstrun__title {
-   margin: 0;
-   font-size: var(--op-font-x-large);
+  margin: 0;
+  font-size: var(--op-font-x-large);
 }
 
 .firstrun__lede {
-   margin: 0;
-   max-inline-size: 60ch;
-   color: var(--muted);
+  margin: 0;
+  max-inline-size: 60ch;
+  color: var(--muted);
 }
 
 /* Numbered because it IS a sequence — the pipeline's order is the one thing the
    nav has never said out loud. */
 .firstrun__steps {
-   margin: 0;
-   text-align: start;
-   max-inline-size: 60ch;
-   display: flex;
-   flex-direction: column;
-   gap: var(--op-space-x-small);
-   color: var(--muted);
+  margin: 0;
+  text-align: start;
+  max-inline-size: 60ch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
+  color: var(--muted);
 }
 
 .firstrun__steps strong {
-   color: var(--fg);
+  color: var(--fg);
 }
 
 /*
@@ -2319,8 +2319,8 @@ textarea.form-control.script-body {
  * so the icon has to state its own rather than inherit anything.
  */
 .sidebar--rail .sidebar__content > * .hgi-stroke {
-   font-size: var(--op-font-large);
-   line-height: 1;
+  font-size: var(--op-font-large);
+  line-height: 1;
 }
 
 /*
@@ -2332,7 +2332,7 @@ textarea.form-control.script-body {
  * that is not there; the labels come back with the rail.
  */
 .sidebar--rail #tools {
-   display: none;
+  display: none;
 }
 
 /*
@@ -2343,13 +2343,13 @@ textarea.form-control.script-body {
  * a sighted reader gets the same thing, from the same markup.
  */
 .navgroup {
-   margin: var(--op-space-medium) 0 var(--op-space-2x-small);
-   padding-inline: var(--op-space-x-small);
-   font-size: var(--op-font-2x-small);
-   font-weight: var(--op-font-weight-semi-bold);
-   letter-spacing: var(--op-letter-spacing-label);
-   text-transform: uppercase;
-   color: var(--op-color-neutral-minus-six);
+  margin: var(--op-space-medium) 0 var(--op-space-2x-small);
+  padding-inline: var(--op-space-x-small);
+  font-size: var(--op-font-2x-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  letter-spacing: var(--op-letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--op-color-neutral-minus-six);
 }
 
 /*
@@ -2360,72 +2360,70 @@ textarea.form-control.script-body {
  * read, so it becomes the thing a rail can show: a line.
  */
 .sidebar--rail .navgroup {
-   margin: var(--op-space-x-small) 0;
-   padding: 0;
-   block-size: var(--op-border-width);
-   inline-size: 60%;
-   background: var(--line);
-   overflow: hidden;
+  margin: var(--op-space-x-small) 0;
+  padding: 0;
+  block-size: var(--op-border-width);
+  inline-size: 60%;
+  background: var(--line);
+  overflow: hidden;
 }
-
-
 
 /* Three ways in. auto-fit rather than a fixed three, so the cards drop to two and
    then one as the column narrows without a media query deciding when. */
 .choose-grid {
-   display: grid;
-   grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
-   gap: var(--op-space-medium);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--op-space-medium);
 }
 
 .choose-card {
-   display: flex;
-   flex-direction: column;
-   align-items: center;
-   gap: var(--op-space-x-small);
-   padding: var(--op-space-large);
-   background: var(--panel);
-   border: var(--op-border-width) solid var(--line);
-   border-radius: var(--op-radius-large);
-   cursor: pointer;
-   text-align: center;
-   color: inherit;
-   font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-large);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  cursor: pointer;
+  text-align: center;
+  color: inherit;
+  font: inherit;
 }
 
 .choose-card:hover,
 .choose-card:focus-visible {
-   border-color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* A fixed frame so three pictures of different proportions line up as a row rather
    than making the cards different heights. */
 .choose-card img {
-   inline-size: auto;
-   max-inline-size: 100%;
-   block-size: 12rem;
-   object-fit: contain;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: 12rem;
+  object-fit: contain;
 }
 
 /* The stand-in when the picture does not arrive: the same size as the frame it
    replaces, so the row of cards keeps its shape. */
 .choose-card__glyph {
-   color: var(--accent);
-   display: grid;
-   font-size: var(--op-font-3x-large);
-   block-size: 12rem;
-   place-items: center;
+  color: var(--accent);
+  display: grid;
+  font-size: var(--op-font-3x-large);
+  block-size: 12rem;
+  place-items: center;
 }
 
 .choose-card__name {
-   font-weight: var(--op-font-weight-semi-bold);
-   font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-semi-bold);
+  font-size: var(--op-font-medium);
 }
 
 .choose-card__note {
-   color: var(--muted);
-   font-size: var(--op-font-x-small);
-   max-inline-size: 30ch;
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  max-inline-size: 30ch;
 }
 
 /*
@@ -2443,82 +2441,82 @@ textarea.form-control.script-body {
  * only not clipping can, and `:has()` scopes that to exactly the moment it matters.
  */
 .card:has(.kebab__menu:not([hidden])) {
-   overflow: visible;
+  overflow: visible;
 }
 
 .kebab {
-   position: absolute;
-   inset-block-start: var(--op-space-x-small);
-   inset-inline-end: var(--op-space-x-small);
-   z-index: 5;
+  position: absolute;
+  inset-block-start: var(--op-space-x-small);
+  inset-inline-end: var(--op-space-x-small);
+  z-index: 5;
 }
 
 .kebab__trigger {
-   display: grid;
-   place-items: center;
-   inline-size: 3.2rem;
-   block-size: 3.2rem;
-   padding: 0;
-   background: var(--op-color-neutral-plus-max);
-   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
-   border-radius: var(--op-radius-medium);
-   color: var(--muted);
-   font: inherit;
-   cursor: pointer;
+  display: grid;
+  place-items: center;
+  inline-size: 3.2rem;
+  block-size: 3.2rem;
+  padding: 0;
+  background: var(--op-color-neutral-plus-max);
+  border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-medium);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
 }
 
 .kebab__trigger:hover,
 .kebab__trigger[aria-expanded='true'] {
-   color: var(--fg);
-   border-color: var(--op-color-neutral-plus-three);
+  color: var(--fg);
+  border-color: var(--op-color-neutral-plus-three);
 }
 
 .kebab__menu {
-   position: absolute;
-   z-index: 60;
-   inset-block-start: calc(100% + var(--op-space-2x-small));
-   inset-inline-end: 0;
-   min-inline-size: 20rem;
-   padding: var(--op-space-2x-small);
-   display: flex;
-   flex-direction: column;
-   gap: 1px;
-   background: var(--op-color-neutral-plus-max);
-   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
-   border-radius: var(--op-radius-large);
-   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+  position: absolute;
+  z-index: 60;
+  inset-block-start: calc(100% + var(--op-space-2x-small));
+  inset-inline-end: 0;
+  min-inline-size: 20rem;
+  padding: var(--op-space-2x-small);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--op-color-neutral-plus-max);
+  border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-large);
+  box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
 }
 
 .kebab__item {
-   display: flex;
-   align-items: center;
-   gap: var(--op-space-x-small);
-   padding: var(--op-space-x-small);
-   background: none;
-   border: 0;
-   border-radius: var(--op-radius-medium);
-   color: var(--fg);
-   font: inherit;
-   font-size: var(--op-font-x-small);
-   text-align: start;
-   cursor: pointer;
-   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-x-small);
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-medium);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  text-align: start;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .kebab__item:hover,
 .kebab__item:focus-visible {
-   background: var(--op-color-neutral-plus-six);
+  background: var(--op-color-neutral-plus-six);
 }
 
 /* Red on the ink, not a red slab. The destructive item should be findable without
    being the loudest thing on the card, which is what the full-size button was. */
 .kebab__item--danger {
-   color: var(--op-color-alerts-danger-base);
+  color: var(--op-color-alerts-danger-base);
 }
 
 .kebab__item--armed {
-   background: var(--op-color-alerts-danger-base);
-   color: var(--op-color-alerts-danger-on-base);
+  background: var(--op-color-alerts-danger-base);
+  color: var(--op-color-alerts-danger-on-base);
 }
 
 /*
@@ -2831,6 +2829,43 @@ textarea.form-control.script-body {
   font-size: var(--op-font-x-large);
 }
 
+/*
+ * The wallpaper dials, once they live in a 340px rail.
+ *
+ * `.ctl` is `<label> <control> <value>` on one line, which was right when the
+ * editor drew itself a wide right-hand half. In the page's own rail the label
+ * takes 96px and the control 195px, leaving the value column to collapse to
+ * ZERO — the angle read "12" with the degrees clipped off — and the gradient
+ * stops, which are a four-column grid nested in that 195px, lost their remove
+ * button off the end entirely.
+ *
+ * So in the rail the label goes on its own line and the control gets the width.
+ * Nothing about the editor changes; this is the column telling the row how much
+ * room there is.
+ */
+.panel-config .ctl {
+  grid-template-columns: 1fr auto;
+}
+
+.panel-config .ctl > .form-label,
+.panel-config .ctl > .wide {
+  grid-column: 1 / -1;
+}
+
+/* The stop's own row, with the same problem one level down: four columns in
+   what is left of a narrow grid. The swatch and the remove button size to
+   themselves, and the slider takes what remains. */
+.panel-config .stop {
+  grid-template-columns: auto 1fr var(--ctl-val) var(--op-input-height-small);
+}
+
+.panel-config .stop button:last-child {
+  aspect-ratio: 1;
+  display: grid;
+  padding: 0;
+  place-items: center;
+}
+
 [hidden] {
-   display: none !important;
+  display: none !important;
 }
