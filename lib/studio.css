@@ -751,9 +751,25 @@ button.btn:disabled {
   z-index: 40;
   inset-block-start: calc(100% + 4px);
   inset-inline-start: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 3.4rem);
-  gap: var(--op-space-2x-small);
+  /*
+   * One row per family, each row a ramp read dark to light.
+   *
+   * It was a five-column grid of one swatch per family, which is the shape you
+   * want when a family IS a colour. A family is a ladder of eighteen, so the
+   * rows are the families and the columns are the steps — and a ramp laid out in
+   * order is also the thing that lets you see which step you are picking.
+   *
+   * Taller than the trigger and scrolled, because twenty ramps is more than a
+   * popover should ever try to be. Wider than the trigger too: the rail is 340px
+   * and this needs about 400, which is what absolute positioning is for.
+   */
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  inline-size: max-content;
+  max-block-size: 60vh;
+  max-inline-size: 44rem;
+  overflow-y: auto;
   padding: var(--op-space-x-small);
   background: var(--op-color-neutral-plus-max);
   border: 1px solid var(--op-color-neutral-plus-four);
@@ -765,18 +781,61 @@ button.btn:disabled {
   display: none;
 }
 
-.colormenu__swatch {
-  inline-size: 3.4rem;
-  block-size: 3.4rem;
-  padding: 0;
-  border: 1px solid var(--op-color-neutral-plus-three);
+/*
+ * In the rail, the panel opens toward the page, not off the edge of it.
+ *
+ * It is anchored to the trigger's left, which is right in the middle of a wide
+ * panel and wrong in a 340px column pinned to the window edge: 436px of ramps
+ * starting at the trigger's left edge ends ~100px past the viewport, and the
+ * darkest steps of every ramp were simply unreachable.
+ */
+.panel-config .colormenu__panel {
+  inset-inline-end: 0;
+  inset-inline-start: auto;
+}
+
+.colormenu__row {
+  align-items: center;
+  display: grid;
+  gap: var(--op-space-2x-small);
+  grid-template-columns: 9rem auto;
+}
+
+.colormenu__family {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  overflow: hidden;
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The ramp itself: no gap, so eighteen steps read as one continuous scale
+   rather than as eighteen unrelated chips. */
+.colormenu__ramp {
   border-radius: var(--op-radius-small);
+  display: flex;
+  overflow: hidden;
+}
+
+.colormenu__swatch {
+  inline-size: 1.8rem;
+  block-size: 2.6rem;
+  padding: 0;
+  border: none;
   cursor: pointer;
   background: transparent;
   color: var(--op-color-neutral-minus-five);
 }
 
+.colormenu__swatch:hover {
+  /* Lifted rather than outlined: an outline between two touching swatches
+     shifts the ones either side of it. */
+  box-shadow: inset 0 0 0 2px var(--op-color-neutral-plus-max);
+}
+
 .colormenu__swatch[aria-selected='true'] {
+  outline-offset: -2px;
   outline: 2px solid var(--op-color-neutral-minus-max);
   outline-offset: 2px;
 }
@@ -1722,8 +1781,21 @@ pre {
 
 /* Optics gives .form-control a fixed 40px block-size, right for a text field
          and wrong for a slider in a dense row. */
+/*
+ * A slider is not a text box.
+ *
+ * Optics' `.form-control` gives every control the same box — a border, a fill and
+ * a fixed 40px block-size — which is right for something you type into and wrong
+ * for a track with a thumb on it. The border drew a rectangle around the track,
+ * so every dial read as an input containing a slider rather than as a slider, and
+ * in the narrow rail that rectangle is what made the row look boxed-in.
+ */
 .ctl input[type='range'].form-control {
+  background: none;
   block-size: auto;
+  border: none;
+  box-shadow: none;
+  padding: 0;
 }
 
 .ctl input[type='range'] {
@@ -2344,7 +2416,7 @@ textarea.form-control.script-body {
  */
 .navgroup {
   margin: var(--op-space-medium) 0 var(--op-space-2x-small);
-  padding-inline: var(--op-space-x-small);
+  padding-inline: var(--op-space-large);
   font-size: var(--op-font-2x-small);
   font-weight: var(--op-font-weight-semi-bold);
   letter-spacing: var(--op-letter-spacing-label);
@@ -2855,8 +2927,41 @@ textarea.form-control.script-body {
 /* The stop's own row, with the same problem one level down: four columns in
    what is left of a narrow grid. The swatch and the remove button size to
    themselves, and the slider takes what remains. */
+/*
+ * A gradient stop, in two rows.
+ *
+ * Four controls on one line — a colour menu, a slider, a percentage and a remove
+ * button — needs about 480px to be comfortable and has 308. The colour menu is
+ * the one that cannot shrink: it carries a swatch, a hex value and a chevron, and
+ * squeezed it truncates the hex to "#2..." which is the part you are reading.
+ *
+ * So the identity of the stop sits on the first row and gets the width it needs,
+ * and the slider — the only control here that WANTS to be wide, because its
+ * precision is its length — takes the whole second row.
+ */
 .panel-config .stop {
-  grid-template-columns: auto 1fr var(--ctl-val) var(--op-input-height-small);
+  grid-template-areas:
+    'color value remove'
+    'slider slider slider';
+  grid-template-columns: 1fr var(--ctl-val) var(--op-input-height-small);
+  row-gap: var(--op-space-2x-small);
+}
+
+.panel-config .stop > .colormenu {
+  grid-area: color;
+  min-inline-size: 0;
+}
+
+.panel-config .stop > input[type='range'] {
+  grid-area: slider;
+}
+
+.panel-config .stop > .v {
+  grid-area: value;
+}
+
+.panel-config .stop > button:last-child {
+  grid-area: remove;
 }
 
 .panel-config .stop button:last-child {
