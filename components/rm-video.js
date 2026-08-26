@@ -37,12 +37,14 @@
 /* ── deterministic time ──────────────────────────────────────────────────── */
 
 const root = document.documentElement
+const readyWork = new Set()
 
 export const RM = {
   /** Put the whole scene at `ms`. Idempotent, and the only way time advances. */
   seek(ms) {
     root.style.setProperty('--t', `${ms}ms`)
     root.dataset.t = String(ms)
+    root.dispatchEvent(new CustomEvent('rmseek', { detail: ms }))
   },
   get t() {
     return Number(root.dataset.t ?? 0)
@@ -55,8 +57,14 @@ export const RM = {
   async ready() {
     await document.fonts?.ready
     const imgs = [...document.querySelectorAll('img')].map((i) => (i.complete ? null : new Promise((r) => i.addEventListener('load', r, { once: true }) || i.addEventListener('error', r, { once: true }))))
-    await Promise.all(imgs.filter(Boolean))
+    await Promise.all([...imgs.filter(Boolean), ...readyWork])
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  },
+  /** A component can register work the outer document cannot see, such as a canvas texture. */
+  waitFor(promise) {
+    readyWork.add(promise)
+    promise.finally(() => readyWork.delete(promise))
+    return promise
   },
   /** Every component on the page, with its window. Useful for building a timeline. */
   beats() {
