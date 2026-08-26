@@ -2417,16 +2417,6 @@ textarea.form-control.script-body {
    z-index: 5;
 }
 
-/* In a toolbar rather than pinned to a card's corner. */
-.kebab--inline {
-   position: static;
-}
-
-.kebab--inline .kebab__menu {
-   inset-inline-end: auto;
-   inset-inline-start: 0;
-}
-
 .kebab__trigger {
    display: grid;
    place-items: center;
@@ -2511,6 +2501,71 @@ textarea.form-control.script-body {
  * `display` should beat it on the same element — so rather than chase every
  * selector that might outrank it, this settles it once.
  */
+/*
+ * One target for bringing footage in.
+ *
+ * A button rather than a div: it is clickable and it opens a file picker, so it
+ * should be reachable by keyboard and announce itself without being told to.
+ * Full width because the thing you are aiming at is a whole file being dragged
+ * across the screen, and a small target for that is a miss.
+ */
+.dropzone {
+  align-items: center;
+  background-color: transparent;
+  border: var(--op-border-width) dashed var(--line);
+  border-radius: var(--op-radius-large);
+  color: var(--op-color-neutral-on-plus-max);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-2x-small);
+  padding: var(--op-space-large) var(--op-space-medium);
+  text-align: center;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+  width: 100%;
+}
+
+.dropzone:hover:not(:disabled),
+.dropzone:focus-visible {
+  border-color: var(--op-color-primary-base);
+}
+
+/*
+ * While something is over it.
+ *
+ * The dashes go solid and the fill comes up: a dashed outline reads as "a place
+ * where something could go", and once the file is over it, it is no longer a
+ * could.
+ */
+.dropzone--over {
+  background-color: var(--op-color-primary-plus-max);
+  border-color: var(--op-color-primary-base);
+  border-style: solid;
+}
+
+.dropzone:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.dropzone .hgi-stroke {
+  color: var(--op-color-primary-base);
+  font-size: var(--op-font-2x-large);
+}
+
+.dropzone__lead {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.dropzone__sub {
+  color: var(--op-color-neutral-on-plus-max);
+  font-size: var(--op-font-x-small);
+  opacity: 0.75;
+}
+
 [hidden] {
    display: none !important;
 }

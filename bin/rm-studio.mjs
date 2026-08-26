@@ -24,7 +24,8 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { pipeline } from "node:stream/promises";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
@@ -1046,6 +1047,41 @@ const server = createServer(async (req, res) => {
      * download, a client's Dropbox — and moving somebody's original out from
      * under them is not a thing to do without asking.
      */
+    /*
+     * Where a piece of media goes, and under what name.
+     *
+     * Shared by both ways in — copying a file already on this disk, and receiving
+     * one dropped onto the page — so a dropped file lands exactly where a browsed
+     * one does. Two copies of this drifting apart would put the same recording in
+     * two folders depending on how it arrived, and the catalog reads folders.
+     */
+    const mediaSpot = async (id, filename) => {
+      const ext = extname(filename).toLowerCase();
+      const AUDIO = [".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"];
+      const VIDEO = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"];
+      const STILL = [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"];
+      // What it is decides where it goes, so the catalog and every panel that
+      // reads it stay right.
+      const folder = VIDEO.includes(ext) ? "Footage" : AUDIO.includes(ext) ? "Audio" : STILL.includes(ext) ? "Stills" : null;
+      if (!folder) {
+        return { error: `${ext || "that"} is not media this pipeline handles — video, audio or a still image` };
+      }
+
+      const dir = join(mediaDir(id), folder);
+      await mkdir(dir, { recursive: true });
+
+      // Never silently replace something already there: two takes with the same
+      // name is normal, and losing the first one to an import is not.
+      const stem = basename(filename, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "import";
+      let dest = join(dir, `${stem}${ext}`);
+      let n = 2;
+      while (await stat(dest).then(() => true).catch(() => false)) {
+        dest = join(dir, `${stem}-${n}${ext}`);
+        n++;
+      }
+      return { folder, dest, renamed: basename(dest) !== `${stem}${ext}` ? basename(dest) : null };
+    };
+
     if (p === "/api/import" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = body.projectId;
@@ -1056,41 +1092,52 @@ const server = createServer(async (req, res) => {
       const st = await stat(src).catch(() => null);
       if (!st?.isFile()) return json(res, 404, { error: `no such file: ${src}` });
 
-      // Where it goes is decided by what it is, so the catalog and every panel
-      // that reads it stay right.
-      const ext = extname(src).toLowerCase();
-      const AUDIO = [".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"];
-      const VIDEO = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"];
-      const STILL = [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"];
-      const folder = VIDEO.includes(ext) ? "Footage" : AUDIO.includes(ext) ? "Audio" : STILL.includes(ext) ? "Stills" : null;
-      if (!folder) {
-        return json(res, 400, {
-          error: `${ext || "that"} is not media this pipeline handles — video, audio or a still image`,
-        });
-      }
+      const spot = await mediaSpot(id, src);
+      if (spot.error) return json(res, 400, { error: spot.error });
 
-      const dir = join(mediaDir(id), folder);
-      await mkdir(dir, { recursive: true });
-
-      // Never silently replace something already there: two takes with the same
-      // name is normal, and losing the first one to an import is not.
-      const stem = basename(src, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "import";
-      let dest = join(dir, `${stem}${ext}`);
-      let n = 2;
-      while (await stat(dest).then(() => true).catch(() => false)) {
-        dest = join(dir, `${stem}-${n}${ext}`);
-        n++;
-      }
-
-      await copyFile(src, dest);
+      await copyFile(src, spot.dest);
       await reindex(id, { force: true }).catch(() => {});
-      return json(res, 200, {
-        ok: true,
-        into: folder,
-        file: dest,
-        renamed: basename(dest) !== `${stem}${ext}` ? basename(dest) : null,
-        bytes: st.size,
-      });
+      return json(res, 200, { ok: true, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: st.size });
+    }
+
+    /*
+     * The same import, from bytes rather than a path.
+     *
+     * Dropping a file on a page hands the page its CONTENTS, not its location —
+     * and in a browser it cannot have the location at all. So the path route
+     * cannot serve a drop, and asking somebody to type the path of a file they
+     * are looking at is the interaction this replaces.
+     *
+     * Streamed to disk rather than buffered: this is footage, and a 4GB take
+     * read into memory to be written straight back out is a crash where a copy
+     * would have done.
+     */
+    if (p === "/api/import/upload" && req.method === "POST") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const id = q.get("project") ?? "";
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      if (!m) return json(res, 404, { error: "pick a project" });
+
+      // basename on purpose: the name comes from the page, and a browser will
+      // happily hand over "../../x" if something upstream of it wants it to.
+      const name = basename(String(q.get("name") ?? "")).trim();
+      if (!name) return json(res, 400, { error: "that upload had no filename" });
+
+      const spot = await mediaSpot(id, name);
+      if (spot.error) return json(res, 400, { error: spot.error });
+
+      try {
+        await pipeline(req, createWriteStream(spot.dest));
+      } catch (e) {
+        // A half-written file in a media folder is worse than a failed import:
+        // it indexes, it plays for four seconds, and nothing says why.
+        await rm(spot.dest, { force: true }).catch(() => {});
+        return json(res, 500, { error: `that upload did not finish: ${e.message}` });
+      }
+
+      const st = await stat(spot.dest).catch(() => null);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { ok: true, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: st?.size ?? 0 });
     }
 
     if (p === "/api/documents") {
