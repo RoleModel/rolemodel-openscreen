@@ -47,6 +47,48 @@ function die(msg) {
 	process.exit(1);
 }
 
+/*
+ * Which browser drives the demo.
+ *
+ * Playwright ships its own Chromium build, and that is what launched: a plain
+ * blue-globe icon, no profile, no branding. Fine for a trace nobody watches, and
+ * wrong for a capture — the video shows a browser the viewer has never seen,
+ * which reads as a mock-up of the product rather than the product.
+ *
+ * `chrome` is the installed Google Chrome, driven through Playwright's channel
+ * support. It is the default because captures are the reason this exists, and it
+ * falls back to the bundled build rather than failing when Chrome is not there.
+ */
+const BROWSER_CHANNELS = { chrome: "chrome", edge: "msedge", msedge: "msedge", chromium: undefined };
+
+/**
+ * Launch options for a demo browser.
+ *
+ * The automation banner is suppressed for the same reason the channel matters:
+ * it is a yellow bar across the top of every frame saying the browser is being
+ * controlled by test software, and it is the first thing a viewer reads.
+ */
+function launchOptions(which, headless) {
+	const channel = BROWSER_CHANNELS[which];
+	return {
+		headless,
+		...(channel ? { channel } : {}),
+		args: ["--disable-blink-features=AutomationControlled"],
+		ignoreDefaultArgs: ["--enable-automation"],
+	};
+}
+
+/** Open it, and say so plainly if the named browser is not installed. */
+async function openBrowser(chromium, which, headless) {
+	try {
+		return { browser: await chromium.launch(launchOptions(which, headless)), used: which };
+	} catch (err) {
+		if (which === "chromium") throw err;
+		console.error(`  [browser] ${which} would not start (${err.message.split("\n")[0]}) — using the bundled Chromium`);
+		return { browser: await chromium.launch(launchOptions("chromium", headless)), used: "chromium" };
+	}
+}
+
 const DEFAULT_W = 1440;
 const DEFAULT_H = 900;
 /** How long a step may take before we call it stuck. */
@@ -56,13 +98,16 @@ const SETTLE_MS = 350;
 /** How long the sentinel title needs to reach the window manager. */
 const TITLE_SETTLE_MS = 400;
 /**
- * How long to let the recorder fail before trusting it.
+ * How long to wait for the recorder to say it is recording.
  *
- * Tunable because it is a property of the machine, not of this script: the app
- * has to start, ask the OS for its window list and match a title, and a laptop
- * that has just woken up takes longer than a warm one.
+ * Not a settle window any more — it is a ceiling on waiting for a real signal.
+ * 2500ms was a guess and it was wrong: this machine takes 5022ms to resolve the
+ * window and 5662ms to start, so the old wait expired while the recorder was
+ * still looking. Tunable because it is a property of the machine, not of this
+ * script — the app has to start, ask the OS for its window list and match a
+ * title, and a laptop that has just woken takes longer than a warm one.
  */
-const RECORDER_SETTLE_MS = Number(process.env.RM_RECORDER_SETTLE_MS) || 2500;
+const RECORDER_SETTLE_MS = Number(process.env.RM_RECORDER_SETTLE_MS) || 20_000;
 /** Held frames after the last step, so the cut is not on the click. */
 const TAIL_HOLD_MS = 900;
 
@@ -446,7 +491,11 @@ async function captureCommand() {
 		console.log(`  attached  ${cdpUrl}`);
 		console.log(`  page      ${(hit.title || hit.url).slice(0, 70)}`);
 	} else {
-		browser = await chromium.launch({ headless: flag("headless") === true });
+		const want = typeof flag("browser") === "string" ? String(flag("browser")) : "chrome";
+		if (!(want in BROWSER_CHANNELS)) die(`--browser must be one of ${Object.keys(BROWSER_CHANNELS).join(", ")}`);
+		const opened = await openBrowser(chromium, want, flag("headless") === true);
+		browser = opened.browser;
+		console.log(`  browser   ${opened.used}`);
 		context = await browser.newContext({
 			viewport: { width, height },
 			baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
@@ -510,9 +559,30 @@ async function captureCommand() {
 	const bin = typeof flag("openscreen") === "string" ? String(flag("openscreen")) : "openscreen";
 	console.log("");
 	console.log(`  recorder  ${bin} ${recArgs.join(" ")}`);
+	/*
+	 * "Recording started", not a guess.
+	 *
+	 * The CLI emits `{"event":"started"}` when its runner window exists — which is
+	 * 300ms in and means nothing yet — and then, seconds later, a log line saying
+	 * which window it resolved and that recording began. Measured on this machine:
+	 * started at 338ms, `Recording source:` at 5022ms, `Recording started` at
+	 * 5662ms.
+	 *
+	 * That gap is the whole bug. The old code waited a flat 2.5s for a failure and
+	 * then ran the script, so the recorder was still looking for its window while
+	 * the first steps navigated the page out from under the sentinel — and the
+	 * opening seconds of every successful capture were never filmed either.
+	 */
+	let capturing = null;
+	const recording = new Promise((r) => {
+		capturing = r;
+	});
 	const child = spawn(bin, recArgs, { stdio: ["pipe", "pipe", "pipe"] });
 	const rec = attachRecorder(child, {
 		onLog: (line) => console.error(`  [record] ${line}`),
+		onEvent: (ev) => {
+			if (typeof ev?.message === "string" && /Recording started/i.test(ev.message)) capturing(true);
+		},
 	});
 
 	/*
@@ -522,7 +592,24 @@ async function captureCommand() {
 	 * matches, listing the ones that are open, so waiting a beat and then checking
 	 * for a problem catches the failure that actually happens.
 	 */
-	await new Promise((r) => setTimeout(r, RECORDER_SETTLE_MS));
+	/*
+	 * Wait for the capture, or for the failure, or for the ceiling — whichever
+	 * comes first. Polled rather than raced on a single timer so a recorder that
+	 * fails at four seconds is reported at four seconds, not at the ceiling.
+	 */
+	const deadline = Date.now() + RECORDER_SETTLE_MS;
+	let live = false;
+	while (Date.now() < deadline) {
+		if (rec.problem()) break;
+		const got = await Promise.race([recording, new Promise((r) => setTimeout(() => r(false), 200))]);
+		if (got) {
+			live = true;
+			break;
+		}
+	}
+	if (!live && !rec.problem()) {
+		console.error(`  [record] no "Recording started" after ${RECORDER_SETTLE_MS}ms — going ahead anyway`);
+	}
 	const early = rec.problem();
 	if (early) {
 		await browser.close();

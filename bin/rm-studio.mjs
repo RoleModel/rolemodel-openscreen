@@ -4011,6 +4011,10 @@ function driverArgs(body) {
 	if (w) out.push("--width", w);
 	if (h) out.push("--height", h);
 	if (body?.headless) out.push("--headless");
+	// Which browser the viewer will see. Only sent when it is not the default, so
+	// an older rm-demo that does not know the flag keeps working.
+	const browser = String(body?.browser ?? "").trim();
+	if (browser && browser !== "chrome") out.push("--browser", browser);
 	return out;
 }
 
