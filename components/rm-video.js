@@ -564,6 +564,93 @@ class RMStat extends RMElement {
 }
 define('rm-stat', RMStat)
 
+/* ── rm-year ─────────────────────────────────────────────────────────────── */
+
+/*
+ * A big number that types itself, with a caret that blinks beside it.
+ *
+ * The treatment is lifted from the Academy title slides: a year set large in
+ * mono, revealed character by character, with a block caret keeping time next to
+ * it. It reads as a terminal writing the number rather than as a label, which is
+ * why it works as a graphic element and why rm-stat is not the same thing —
+ * rm-stat counts a MEASUREMENT up from zero and labels it, this types a string.
+ *
+ * The reference drives both with GSAP. Here they are two paused CSS animations
+ * offset by `--t`, like every other part, so a frame at 3.2s is the same frame
+ * every time it is rendered. That matters more here than elsewhere: a typewriter
+ * driven by wall-clock time lands mid-character at a different place in every
+ * render, and the frame-stepping renderer would produce a different video each
+ * run.
+ */
+class RMYear extends RMElement {
+  static fields = ['value', 'x', 'y', 'size', 'caret', 'at', 'for']
+  render() {
+    const value = this.attr('value', '2026')
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
+    // 9.4cqw is 180px on a 1920 stage, which is the reference size.
+    const size = Number(this.attr('size', 9.4))
+    const caret = this.attr('caret', 'on') !== 'off'
+    const chars = [...value].length
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:0px; }
+        /* Centred on its own point, carrying the entrance with it — the same
+           reason every other part writes the translate into .anim. */
+        .anim { transform: translate(-50%, calc(-50% + var(--rm-in-y) + var(--rm-out-y))) scale(var(--rm-in-s)); }
+        /*
+         * Fixed width, right-aligned — so the caret does not walk.
+         *
+         * Laid out to fit its content, the row grows as the number types and the
+         * caret slides right with every character, which reads as the whole part
+         * drifting. The reference pins it in a fixed block aligned to the end;
+         * the number then grows leftward and the caret keeps still, which is what
+         * makes it look like something typing rather than something expanding.
+         */
+        .row { display:flex; align-items:baseline; justify-content:flex-end;
+               font-family:var(--mono); font-size:${size}cqw;
+               gap:${size * 0.08}cqw;
+               inline-size:calc(${chars}ch + ${size * 0.17}cqw); }
+        /*
+         * The typewriter, in ch units.
+         *
+         * A monospace ch is exactly one character wide, so animating the width
+         * from 0ch to Nch in N steps reveals exactly one more character per step
+         * — no measuring, and no per-character elements to stagger.
+         */
+        .n { font-family:var(--mono); font-weight:600; font-size:${size}cqw; line-height:1;
+             color:var(--fg); letter-spacing:0;
+             display:inline-block; overflow:hidden; white-space:pre;
+             inline-size:${chars}ch;
+             animation: rm-type var(--duration-deliberate, 1000ms) steps(${chars}) both paused;
+             animation-delay: calc(var(--at) + 200ms - var(--t)); }
+        @keyframes rm-type { from { inline-size:0ch; } to { inline-size:${chars}ch; } }
+        /*
+         * The caret keeps its own time.
+         *
+         * Stepped rather than eased, so it is on or off and never half-lit, and
+         * finite rather than infinite: an infinite animation has no end for the
+         * renderer to be past, and the part would never settle.
+         */
+        .c { inline-size:${size * 0.09}cqw; block-size:${size * 0.83}cqw; flex:0 0 auto;
+             background:var(--brand); border-radius:${size * 0.011}cqw;
+             transform:translateY(${size * 0.067}cqw);
+             animation: rm-blink 1000ms steps(1) 16 both paused;
+             animation-delay: calc(var(--at) + 200ms - var(--t)); }
+        @keyframes rm-blink { 0% { opacity:1; } 50% { opacity:0; } 100% { opacity:1; } }
+      </style>
+      <div class="anim">
+        <div class="row">
+          <span class="n">${this.esc(value)}</span>
+          ${caret ? '<i class="c"></i>' : ''}
+        </div>
+      </div>`
+  }
+}
+define('rm-year', RMYear)
+
 /* ── rm-bullets ──────────────────────────────────────────────────────────── */
 
 /** A list that builds. Each `<li>` gets `stagger` ms after the one before it. */
