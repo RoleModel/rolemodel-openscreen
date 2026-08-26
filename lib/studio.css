@@ -2596,6 +2596,91 @@ textarea.form-control.script-body {
   border-style: solid;
 }
 
+/*
+ * The footage shelf: pictures, not filenames.
+ *
+ * A row rather than a grid, and it scrolls sideways inside itself — a project
+ * with fifteen takes would otherwise push the running order you are building
+ * down past the fold, and the running order is the thing you are looking at.
+ */
+.shelfstrip {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--op-space-x-small);
+  overflow-x: auto;
+  padding-block-end: var(--op-space-2x-small);
+}
+
+.shelfstrip > .path {
+  align-self: center;
+  flex: none;
+}
+
+.shelfclip {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  inline-size: 14rem;
+  overflow: hidden;
+  padding: 0;
+  text-align: start;
+}
+
+.shelfclip:hover {
+  border-color: var(--accent);
+}
+
+.shelfclip__shot {
+  aspect-ratio: var(--video-ar);
+  background: var(--sunk);
+  display: block;
+  position: relative;
+}
+
+.shelfclip__shot img {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+/* Over the picture rather than beside it: the row is already as wide as it can
+   be, and the running time is only wanted while you are looking at the frame. */
+.shelfclip__len,
+.shelfclip__mute {
+  background: rgb(0 0 0 / 0.66);
+  border-radius: var(--op-radius-small);
+  color: var(--op-color-neutral-plus-max);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  padding: 0 var(--op-space-3x-small);
+  position: absolute;
+}
+
+.shelfclip__len {
+  inset-block-end: var(--op-space-3x-small);
+  inset-inline-end: var(--op-space-3x-small);
+}
+
+.shelfclip__mute {
+  inset-block-start: var(--op-space-3x-small);
+  inset-inline-start: var(--op-space-3x-small);
+}
+
+.shelfclip__name {
+  font-size: var(--op-font-x-small);
+  line-height: var(--op-line-height-dense);
+  overflow: hidden;
+  padding: var(--op-space-3x-small) var(--op-space-2x-small) var(--op-space-2x-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 [hidden] {
    display: none !important;
 }
