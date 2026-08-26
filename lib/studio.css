@@ -1637,14 +1637,15 @@ pre {
   max-width: var(--lt-title-max);
 }
 
-.wpe {
-  display: grid;
-  grid-template-columns: minmax(var(--canvas-min), var(--canvas-split)) minmax(var(--controls-min), 1fr);
-  gap: var(--op-space-large);
-  align-items: start;
-}
-
-.wpe canvas {
+/*
+ * The artwork, in main.
+ *
+ * This used to be the left half of a two-column grid the editor drew for itself,
+ * with the dials in the right half and Save under them. Those are the page's own
+ * columns now — main, the rail, the footer — so the preview is simply as wide as
+ * the column it is in.
+ */
+.wpprev canvas {
   width: 100%;
   height: auto;
   display: block;
@@ -1653,11 +1654,10 @@ pre {
   background: var(--sunk);
 }
 
-.wpe .panel2 {
-  background: var(--panel);
-  border: var(--op-border-width) solid var(--line);
-  border-radius: var(--op-radius-large);
-  padding: var(--op-space-medium);
+.panel2 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
 }
 
 .ctl {
@@ -2564,6 +2564,36 @@ textarea.form-control.script-body {
   color: var(--op-color-neutral-on-plus-max);
   font-size: var(--op-font-x-small);
   opacity: 0.75;
+}
+
+/*
+ * The card that starts a new one.
+ *
+ * First in the grid, at the size of the thing it makes — a wallpaper is a picture,
+ * and "make another picture" belongs among the pictures rather than in a toolbar
+ * row that held one button. Dashed for the same reason the drop zone is: it marks
+ * a place where something is not yet.
+ */
+.cardnew {
+  align-items: center;
+  background: transparent;
+  border-style: dashed;
+  color: var(--op-color-neutral-on-plus-max);
+  cursor: pointer;
+  gap: var(--op-space-3x-small);
+  justify-content: center;
+  min-block-size: 12rem;
+  padding: var(--op-space-medium);
+  text-align: center;
+}
+
+.cardnew .hgi-stroke {
+  color: var(--accent);
+  font-size: var(--op-font-x-large);
+}
+
+.cardnew:hover {
+  border-style: solid;
 }
 
 [hidden] {

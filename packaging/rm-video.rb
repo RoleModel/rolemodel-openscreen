@@ -12,9 +12,9 @@ class RmVideo < Formula
   sha256 "7242e8bace3ce0254b2b7b9aa5ec092cdcaa30d9a7e2383a1b28d91dde48ca76"
   license "MIT"
 
-  # Node is the only runtime dependency. There is nothing to compile — the
-  # toolkit is plain ESM and the wallpapers ship pre-rendered, so no Playwright
-  # or Chromium download happens at install time.
+  # Node is the only system runtime dependency. The scripted-demo commands need
+  # Playwright at runtime, so install the production dependency tree into
+  # libexec before linking the CLIs.
   depends_on "node"
 
   # Every CLI in the toolkit, not just one.
@@ -30,6 +30,8 @@ class RmVideo < Formula
   ENTRIES = %w[rm-video rm-studio rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-insert].freeze
 
   def install
+    system "npm", "ci", "--omit=dev"
+
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
     # so the whole thing goes to libexec and only the entry points are linked.
     libexec.install Dir["*"]
@@ -72,6 +74,7 @@ class RmVideo < Formula
       It brands, narrates and scripts OpenScreen projects; it does not record or
       export them. Install the app for that:
 
+        brew trust --tap rolemodel/tap
         brew install --cask rolemodel/tap/rolemodel-openscreen
 
       Use RoleModel's fork rather than upstream: the Studio hands documents to

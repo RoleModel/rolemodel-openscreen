@@ -150,6 +150,7 @@ cask "rolemodel-openscreen" do
     <<~EOS
       `openscreen` is put on PATH by the rm-video formula, not by this cask:
 
+        brew trust --tap rolemodel/tap
         brew install rolemodel/tap/rm-video
 
       A symlink to the binary inside the bundle breaks Electron's helper-app
