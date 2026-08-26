@@ -3009,6 +3009,44 @@ textarea.form-control.script-body {
   padding-block-end: var(--op-space-small);
 }
 
+/*
+ * A card you have picked for a video.
+ *
+ * The checkbox is pinned opposite the kebab so the two never overlap, and the
+ * card takes a ring rather than a fill — a fill would fight the thumbnail, which
+ * is the thing being judged.
+ */
+.card__pick {
+  accent-color: var(--accent);
+  block-size: 1.6rem;
+  cursor: pointer;
+  inline-size: 1.6rem;
+  inset-block-start: var(--op-space-x-small);
+  inset-inline-start: var(--op-space-x-small);
+  position: absolute;
+  z-index: 5;
+}
+
+.card--picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--op-border-width) var(--accent);
+}
+
+/* What is picked, and the one thing to do with it. `.status` is pushed to the
+   far end by the existing .panel-actions rule, which is what leaves the buttons
+   where the eye already goes. */
+.pickbar {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: var(--op-space-x-small);
+  justify-content: flex-end;
+}
+
+.pickbar .status {
+  margin-inline-end: auto;
+}
+
 [hidden] {
   display: none !important;
 }

@@ -913,6 +913,34 @@ const server = createServer(async (req, res) => {
       }
 
       // /music is the same track in a different role, so either directive supplies it.
+      /*
+       * The assets picked on the project page, named in the brief.
+       *
+       * Without these the model had two files to work with — one webcam clip and
+       * one audio track, chosen from single-selects — and no way to be told about
+       * the rest of the project. A composition that needs four clips and two
+       * stills either invented placeholder paths or did without.
+       *
+       * Resolved to real paths here and dropped if missing, because a brief that
+       * names a file which is not on disk is worse than one that does not mention
+       * it: the model writes markup around it and the render fails at the last
+       * step, having already spent the minutes.
+       */
+      const assetRels = Array.isArray(body.assets) ? body.assets.map(String) : [];
+      const assets = [];
+      for (const rel of assetRels) {
+        const full = await mediaPath(rel);
+        if (full) assets.push({ rel, full });
+        else wants.push(`An asset picked for this render (${rel}) is not on disk — leave it out.`);
+      }
+      if (assets.length) {
+        wants.push(
+          `Use these files from the project, by path, rather than inventing placeholders:\n${assets
+            .map((a) => `  ${a.full}`)
+            .join("\n")}`,
+        );
+      }
+
       const audioRel = String(fromDoc.music || pick("audio", body.audio) || "").trim();
       const audio = (await mediaPath(audioRel)) ?? "";
       if (audioRel && !audio) wants.push(`The audio named for this render (${audioRel}) is not on disk — say so rather than substituting a synthesised voice.`);
@@ -977,6 +1005,7 @@ const server = createServer(async (req, res) => {
         `- motion: ${motionPick ? motionPick.label : "none"}`,
         `- voice: ${audioIsNarration ? "recorded track" : voiceId || "none (silent)"}`,
         `- title card: ${titleCard || "none"}`,
+        `- assets: ${assets.length ? assets.map((a) => a.rel).join(", ") : "none"}`,
         `- webcam: ${webcam || "none"}`,
         `- audio: ${audio ? `${audio} (${body.audioRole || "narration"})` : "none"}`,
         `- created: ${new Date().toISOString()}`,

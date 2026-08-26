@@ -158,6 +158,29 @@ If you want a prompt to type into, that is opt-in:
 rm-studio --shell
 ```
 
+## Which agent writes the words and the scenes
+
+Two steps hand a prompt to a coding agent and let it write files: drafting a
+script, and generating a composition's scene HTML. Which agent runs them is a
+setting, not a hardcoded binary — see [`lib/agents.mjs`](lib/agents.mjs) and
+[docs/AI-AGENTS.md](docs/AI-AGENTS.md).
+
+```bash
+curl -s localhost:<port>/api/agent                      # what is available
+curl -s -X POST localhost:<port>/api/agent \
+  -H 'content-type: application/json' -d '{"agent":"pi"}'
+```
+
+`claude` is the default and runs on a Claude Code subscription. [Pi](https://pi.dev)
+is wired in as a second agent and **has not been run** — its flags come from Pi's
+CLI reference rather than from a real install, and `ready: false` keeps it out of
+the default so nobody meets it by having a render fail.
+
+Pi is an agent harness, not an inference provider: pointed at Anthropic it is the
+same tokens at API prices. It only reduces cost pointed at a cheaper model, and
+the two steps are not equally forgiving — drafting a script is prose, generating
+a scene writes code against the component set. Start with the script step.
+
 ## Narration
 
 A markdown script becomes a voice track and a subtitle file that cannot drift
