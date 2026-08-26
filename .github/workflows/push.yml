@@ -11,12 +11,13 @@ name: Check and release
 # from a tag nobody had rebuilt since, so an install predated `assets/` being
 # published and showed blank cards on the New video page.
 #
-# Nothing here checked a push either: `npm run check` ran only inside the tag
-# workflow, so main could go red and stay red until somebody cut a release.
+# Nothing checked a push either: the gate ran only inside the tag workflow, so
+# main could go red and stay red until somebody cut a release.
 #
 # WHAT IT DOES
 #
-#   1. Runs the full gate on every push to main.
+#   1. Runs the gate on every push to main (check:ci — see the step for what
+#      it leaves out and why).
 #   2. If the gate passes AND the push changed something that ships, bumps the
 #      patch version, commits it, and pushes the tag.
 #   3. release.yml sees the tag and does the publishing.
@@ -51,7 +52,16 @@ jobs:
       # needs the dev ones the checks use.
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run check
+      # `check:ci`, not `check`.
+      #
+      # The full gate ends with sync-tap:check and sync-docs:check, and both
+      # compare this repo against a SIBLING checkout — the Homebrew tap and the
+      # fork's website. Neither exists on a runner, so both exit 1 and the gate
+      # would fail on every push for a reason that has nothing to do with the
+      # push. Those two are about cross-repo publication and are checked where
+      # publication happens: release.yml for the tap, the fork's own Docs
+      # workflow for the site.
+      - run: npm run check:ci
 
   release:
     name: Version and tag

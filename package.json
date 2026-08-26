@@ -53,7 +53,8 @@
     "motion:check": "node lib/make-motion.mjs --check",
     "app": "node lib/launch-app.mjs",
     "bem": "node lib/bem-check.mjs",
-    "bem:check": "node lib/bem-check.mjs --check"
+    "bem:check": "node lib/bem-check.mjs --check",
+    "check:ci": "npm run sync-brand:check && npm run optics:check && npm run optics-tokens:check && npm run icons:check && npm run imagery:check && npm run bem:check && npm run verify"
   },
   "devDependencies": {
     "gsap": "^3.14.2"
