@@ -101,6 +101,23 @@ const WATCH =
   (!argv.includes("--no-watch") && existsSync(join(TOOLKIT, ".git")));
 const LIB = defaultRoot();
 
+/*
+ * Brand assets somebody added, kept in the library rather than in the toolkit.
+ *
+ * Not brand/imagery/: `npm run imagery` rewrites that index from its own WANTED
+ * list, so an uploaded entry would be erased on the next run and would fail
+ * `imagery:check` in the meantime. And TOOLKIT is the installed package — on a
+ * `brew upgrade` it is replaced, which would take a client's logo with it.
+ *
+ * The library is where the person's own material already lives, it survives an
+ * upgrade, and it is the thing they would think to back up.
+ */
+const ADDED_DIR = join(LIB, "Brand");
+const ADDED_INDEX = join(ADDED_DIR, "index.json");
+
+const readAdded = async () =>
+	JSON.parse(await readFile(ADDED_INDEX, "utf8").catch(() => '{"added":[]}')).added ?? [];
+
 /**
  * Re-read a project's media and write the catalog.
  *
@@ -148,7 +165,7 @@ const MIME = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
   // svg belongs here as much as png does: a logo served as octet-stream is a
   // logo a browser refuses to draw in an <img>, which reads as a missing asset.
-  ".svg": "image/svg+xml",
+  ".svg": "image/svg+xml", ".gif": "image/gif", ".avif": "image/avif",
   ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
 };
 
@@ -432,7 +449,7 @@ async function state() {
       if (catalog) p.catalog = catalog;
     }),
   );
-  const [wallpapers, scripts, tokens, motion, logos, imagery] = await Promise.all([
+  const [wallpapers, scripts, tokens, motion, logos, imagery, added] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
     readFile(join(TOOLKIT, "brand/tokens.json"), "utf8").then(JSON.parse).catch(() => ({})),
@@ -449,6 +466,8 @@ async function state() {
     readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8")
       .then((t) => JSON.parse(t).imagery)
       .catch(() => []),
+    // And whatever was added here, which lives in the library beside the projects.
+    readAdded(),
   ]);
 
   const presets = [];
@@ -489,6 +508,7 @@ async function state() {
     // job is to name a motion preset, /api/make's job is to turn it into prompt.
     logos,
     imagery,
+    added,
     motion: {
       default: motion.default || "brand",
       presets: Object.entries(motion.presets || {}).map(([id, m]) => ({ id, label: m.label, hint: m.hint })),
@@ -1098,6 +1118,69 @@ const server = createServer(async (req, res) => {
       await copyFile(src, spot.dest);
       await reindex(id, { force: true }).catch(() => {});
       return json(res, 200, { ok: true, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: st.size });
+    }
+
+    /*
+     * A brand asset somebody added — a client logo, a product shot, a texture.
+     *
+     * The Brand page could show the vendored marks and clay renders and nothing
+     * else, so "use our client's logo in this title card" had no answer inside
+     * the app at all: you put the file somewhere by hand and hoped a composition
+     * could name it.
+     *
+     * Written into the library, not the toolkit — see ADDED_DIR for why.
+     */
+    if (p === "/api/brand/asset" && req.method === "POST") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      // basename, then a scrub: this becomes a filename in a shared folder, and
+      // the name arrives from a browser.
+      const raw = basename(String(q.get("name") ?? "")).trim();
+      const ext = extname(raw).toLowerCase();
+      const IMAGE = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".avif"];
+      if (!IMAGE.includes(ext)) {
+        return json(res, 400, {
+          error: `${ext || "that"} is not an image — png, jpg, webp, svg, gif or avif`,
+        });
+      }
+      const stem = basename(raw, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "asset";
+
+      await mkdir(ADDED_DIR, { recursive: true });
+      // Never silently replace: two versions of a client's mark under one name is
+      // how the wrong one ends up in a render nobody re-checks.
+      let file = `${stem}${ext}`;
+      let n = 2;
+      while (await stat(join(ADDED_DIR, file)).then(() => true).catch(() => false)) {
+        file = `${stem}-${n}${ext}`;
+        n++;
+      }
+      const dest = join(ADDED_DIR, file);
+
+      try {
+        await pipeline(req, createWriteStream(dest));
+      } catch (e) {
+        await rm(dest, { force: true }).catch(() => {});
+        return json(res, 500, { error: `that upload did not finish: ${e.message}` });
+      }
+
+      const st = await stat(dest).catch(() => null);
+      const entry = { name: stem, file, bytes: st?.size ?? 0 };
+      const list = (await readAdded()).filter((e) => e.file !== file);
+      list.push(entry);
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      await writeFile(ADDED_INDEX, `${JSON.stringify({ added: list }, null, "\t")}\n`);
+      return json(res, 200, { ok: true, ...entry });
+    }
+
+    if (p === "/api/brand/asset/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const file = basename(String(body.file ?? ""));
+      const list = await readAdded();
+      if (!list.some((e) => e.file === file)) return json(res, 404, { error: "no such asset" });
+      // The index is the only list of what this app put there, so it is the only
+      // thing allowed to name what it removes.
+      await rm(join(ADDED_DIR, file), { force: true });
+      await writeFile(ADDED_INDEX, `${JSON.stringify({ added: list.filter((e) => e.file !== file) }, null, "\t")}\n`);
+      return json(res, 200, { ok: true });
     }
 
     /*
@@ -2815,6 +2898,26 @@ async function fetchVoiceList() {
     // The component library and its gallery, served from the repo. Static and
     // read-only — the path is resolved against TOOLKIT and checked, so a scene
     // asking for ../../ gets a 404 rather than the filesystem.
+    /*
+     * An added asset, served from the library.
+     *
+     * A separate prefix from /brand/, which resolves against TOOLKIT — these are
+     * deliberately not there, so they cannot be reached through it.
+     */
+    if (p.startsWith("/added/")) {
+      const file = join(ADDED_DIR, basename(decodeURIComponent(p.slice("/added/".length))));
+      const st = await stat(file).catch(() => null);
+      if (!st?.isFile()) {
+        res.writeHead(404);
+        return res.end();
+      }
+      res.writeHead(200, {
+        "content-type": MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
+        "content-length": st.size,
+      });
+      return createReadStream(file).pipe(res);
+    }
+
     if (p.startsWith("/components/") || p.startsWith("/brand/") || p.startsWith("/assets/")) {
       const file = resolve(TOOLKIT, `.${p}`);
       if (!file.startsWith(TOOLKIT)) {
