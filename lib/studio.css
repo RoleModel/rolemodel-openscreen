@@ -3126,6 +3126,32 @@ textarea.fills.form-control {
   display: none;
 }
 
+/*
+ * A brand mark, drawn at the size of its frame.
+ *
+ * These were `max-inline-size: 78%; max-block-size: 62%` — a ceiling and no
+ * floor. An SVG bigger than the frame was scaled down to fit; one SMALLER than
+ * the frame was left at its intrinsic size, so academy-icon (46x46 in the file)
+ * drew at 36px beside a wordmark drawing at 316px, and read as a mistake rather
+ * than as a mark.
+ *
+ * Explicit size plus `object-fit: contain` scales in both directions and keeps
+ * the aspect ratio, so every mark is presented at the same scale whatever the
+ * exporter happened to write into the file.
+ */
+.brandmark {
+  block-size: 62%;
+  inline-size: 78%;
+  object-fit: contain;
+}
+
+/* Imagery and added assets are photographs and cut-out renders rather than
+   marks: they get more of the frame, and the same scaling in both directions. */
+.brandmark--photo {
+  block-size: 82%;
+  inline-size: 82%;
+}
+
 [hidden] {
   display: none !important;
 }
