@@ -116,8 +116,22 @@ vf.push("format=yuv420p");
 
 const af = padAudio > 0.02 ? `apad=pad_dur=${padAudio.toFixed(3)}` : "anull";
 
+/*
+ * MP4s from Apple software carry an `elst` edit list, and the mov demuxer cannot
+ * always find a keyframe before the timestamp it shifts to:
+ *
+ *   st: 0 edit list: 1 Missing key frame while searching for timestamp: 1001
+ *   st: 0 edit list 1 Cannot find an index entry before timestamp: 1001.
+ *
+ * ffmpeg keeps going, which is why this reads as noise — but the frames it
+ * returns are NOT the frames that were asked for. Measured on a real capture,
+ * seeking to 1s with and without this flag produced two different frames.
+ *
+ * A demuxer option, so it goes before the `-i` it applies to.
+ */
 const args = [
 	"-y",
+	"-ignore_editlist", "1",
 	"-i", video,
 	"-i", audio,
 	"-filter_complex", `[0:v]${vf.join(",")}[v];[1:a]${af}[a]`,

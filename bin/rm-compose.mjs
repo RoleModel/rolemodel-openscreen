@@ -195,8 +195,23 @@ const FOOTAGE_UNDER_VOICE = 0.35;
 const narration = spec.audio ? resolve(spec.audio) : null;
 if (narration && !(await stat(narration).catch(() => null))) die(`no such audio: ${spec.audio}`);
 
+/*
+ * MP4s from Apple software carry an `elst` edit list, and the mov demuxer cannot
+ * always find a keyframe before the timestamp it shifts to:
+ *
+ *   st: 0 edit list: 1 Missing key frame while searching for timestamp: 1001
+ *   st: 0 edit list 1 Cannot find an index entry before timestamp: 1001.
+ *
+ * ffmpeg keeps going, which is why this reads as noise — but the frames it
+ * returns are NOT the frames that were asked for. Measured on a real capture,
+ * seeking to 1s with and without this flag produced two different frames.
+ *
+ * A demuxer option, so it goes before the `-i` it applies to.
+ */
+const IGNORE_EDITLIST = ["-ignore_editlist", "1"];
+
 const inputs = [];
-for (const p of pieces) inputs.push("-i", p.path);
+for (const p of pieces) inputs.push(...IGNORE_EDITLIST, "-i", p.path);
 // One silence source, trimmed per silent piece. Cheaper than an input each.
 inputs.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000");
 const silentIdx = pieces.length;
