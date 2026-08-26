@@ -164,7 +164,7 @@ A markdown script becomes a voice track and a subtitle file that cannot drift
 from it.
 
 ```bash
-rm-voice feeney-cable-rail-promo --script opener --voice af_nova
+rm-voice ridgeline-cable-rail-promo --script opener --voice af_nova
 rm-voice --voices
 ```
 

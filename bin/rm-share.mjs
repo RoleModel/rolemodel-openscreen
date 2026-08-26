@@ -2,7 +2,7 @@
 /*
  * Send a finished video for review.
  *
- *   rm-share <video.mp4> --project "Feeney Railing" [--title "..."]
+ *   rm-share <video.mp4> --project "Ridgeline Railing" [--title "..."]
  *   rm-share --check
  *
  * The last mile. Everything else in the toolkit gets a video made; this gets it

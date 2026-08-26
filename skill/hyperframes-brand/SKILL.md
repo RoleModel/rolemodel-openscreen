@@ -168,7 +168,7 @@ clip while the rest is silently dropped — it looks like it worked.
 
 ```bash
 rm-mux --video demo.mp4 --audio narration.wav --srt narration.srt -o final.mp4
-rm-share final.mp4 --project "Feeney Railing"
+rm-share final.mp4 --project "Ridgeline Railing"
 ```
 
 `rm-share` returns a link a client opens with no account and leaves timestamped

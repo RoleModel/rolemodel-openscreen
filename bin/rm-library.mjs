@@ -2,12 +2,12 @@
 /**
  * rm-library — mounted project libraries.
  *
- *   rm-library init "Feeney Hershey" --remote s3 --bucket rm-video --prefix feeney
- *   rm-library mount feeney-hershey
- *   rm-library index feeney-hershey
+ *   rm-library init "Ridgeline Hershey" --remote s3 --bucket rm-video --prefix ridgeline
+ *   rm-library mount ridgeline-hershey
+ *   rm-library index ridgeline-hershey
  *   rm-library find "runway 4k"
  *   rm-library status
- *   rm-library unmount feeney-hershey
+ *   rm-library unmount ridgeline-hershey
  *
  * The mount is rclone's job. This owns the manifest, the tuning, and the catalog.
  */
@@ -93,7 +93,7 @@ async function isMounted(id) {
 switch (cmd) {
 	case "new": {
 		const name = argv.slice(1).filter((a) => !a.startsWith("--")).join(" ");
-		if (!name) die('name it: rm-library new "Feeney Hershey"');
+		if (!name) die('name it: rm-library new "Ridgeline Hershey"');
 		const m = newManifest({ name, remote: "local", bucket: "", driver: "local" });
 		await writeManifest(projectDir(m.id), m);
 		await run("mkdir", ["-p", mountPoint(m.id)]);
@@ -105,7 +105,7 @@ switch (cmd) {
 
 	case "init": {
 		const name = argv[1];
-		if (!name || name.startsWith("--")) die('give the project a name, e.g. rm-library init "Feeney Hershey"');
+		if (!name || name.startsWith("--")) die('give the project a name, e.g. rm-library init "Ridgeline Hershey"');
 		const remote = flag("remote", "s3");
 		const bucket = flag("bucket");
 		if (typeof bucket !== "string") die("--bucket is required");

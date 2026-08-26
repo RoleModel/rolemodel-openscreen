@@ -72,7 +72,7 @@ three named as load-bearing:
 - Panels: Library, New project, Record, Make a video, From a test, Scripts,
   Voice, Brand, Wallpapers, Components, Storage, Console.
 - Work is organised as project folders on disk under a library root, grouped by
-  client (Feeney and Hershey are two clients, not one project). Each project is
+  client (Ridgeline and Hershey are two clients, not one project). Each project is
   a folder with a manifest, plus `media/`, `scripts/`, and `media/Renders/`.
 - Long jobs stream into **Console** over SSE rather than hiding behind a spinner.
   Commands are built server-side from an allowlist of binaries and passed as an
@@ -160,7 +160,7 @@ Binding, from `brand/tokens.json` and the Academy HyperFrames spec:
 - Three presets: `rolemodel`, `academy`, `lightning`.
 - `lib/verify.mjs` — 129 assertions, 78 of which run without an OpenScreen
   checkout.
-- Real client work in the library on this machine (a Feeney railing project).
+- Real client work in the library on this machine (a Ridgeline railing project).
 - Research lives in the FigJam board *Video Tools Research — CCC Days*
   (`figma.com/board/BKPsEkjIqsk0osNiDyZjqI`) and in three markdown docs that
   were delivered into a conversation rather than into the repo.

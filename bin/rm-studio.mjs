@@ -1727,7 +1727,7 @@ const server = createServer(async (req, res) => {
                *
                * The Capture list names windows that already exist. A *launched* capture
                * drives a browser it opens itself, so passing the picked window recorded
-               * one thing while the script drove another — thirty seconds of the Feeney
+               * one thing while the script drove another — thirty seconds of the Ridgeline
                * window while a blank Chromium got the clicks. Attaching is the opposite
                * case: the picked window IS the browser being driven, so it is exactly
                * what the recorder should film.

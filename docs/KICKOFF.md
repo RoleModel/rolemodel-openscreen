@@ -202,7 +202,7 @@ export OPENFRAME_URL=http://localhost:3100
 export OPENFRAME_TOKEN=…                    # from OPENFRAME_API_TOKENS on the instance
 
 rm-share --check                            # configured and reachable?
-rm-share demo.mp4 --project "Feeney Railing"
+rm-share demo.mp4 --project "Ridgeline Railing"
 ```
 
 Out comes a link a client opens with no account. They leave notes on the frame

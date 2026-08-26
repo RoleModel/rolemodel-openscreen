@@ -2,8 +2,8 @@
 /**
  * rm-voice — turn a project's script into narration plus a synced SRT.
  *
- *   rm-voice feeney-cable-rail-promo --script opener
- *   rm-voice feeney-cable-rail-promo --script opener --voice bm_george --gap 400
+ *   rm-voice ridgeline-cable-rail-promo --script opener
+ *   rm-voice ridgeline-cable-rail-promo --script opener --voice bm_george --gap 400
  *   rm-voice --voices
  *   rm-voice --setup [--force]     build the local voice environment
  *
@@ -80,7 +80,7 @@ if (argv.includes("--voices")) {
 
 const ROOT = defaultRoot();
 const id = argv.find((a) => !a.startsWith("--"));
-if (!id) die('which project? e.g. rm-voice feeney-cable-rail-promo --script opener');
+if (!id) die('which project? e.g. rm-voice ridgeline-cable-rail-promo --script opener');
 
 const projectDir = join(ROOT, id);
 const manifest = await readManifest(projectDir).catch(() => null);

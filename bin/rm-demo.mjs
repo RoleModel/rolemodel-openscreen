@@ -330,7 +330,7 @@ async function captureCommand() {
 	 *
 	 * The script drives a browser this command launches. Naming another window means
 	 * recording that one while the script drives the browser — two things, neither
-	 * connected, which is what happened: the Feeney window was filmed while a blank
+	 * connected, which is what happened: the Ridgeline window was filmed while a blank
 	 * Chromium got the clicks.
 	 */
 	if (!attach && typeof flag("window") === "string") {

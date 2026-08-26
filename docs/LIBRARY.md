@@ -48,15 +48,15 @@ up as "the mount is unusably slow" rather than as an error:
 ## Use
 
 ```bash
-rm-library init "Feeney Hershey" --remote s3 --bucket rm-video --prefix feeney
-rclone config create feeney-hershey s3     # once, name must match the project id
+rm-library init "Ridgeline Hershey" --remote s3 --bucket rm-video --prefix ridgeline
+rclone config create ridgeline-hershey s3     # once, name must match the project id
 
-rm-library mount feeney-hershey
-rm-library index feeney-hershey
+rm-library mount ridgeline-hershey
+rm-library index ridgeline-hershey
 rm-library find "runway"          --kind video
 rm-library view                   # browsable HTML page, opens in your browser
 rm-library status
-rm-library unmount feeney-hershey
+rm-library unmount ridgeline-hershey
 ```
 
 `index` runs `ffprobe` over every media file — **header only**, not the whole
@@ -69,7 +69,7 @@ metadata — `Stills`, `B-Roll`, a client name.
 ## What this does not do yet
 
 Search today is substring matching over filename, path, folder tags, and codec.
-That answers "where's the Feeney footage." It does not answer **"find the clip
+That answers "where's the Ridgeline footage." It does not answer **"find the clip
 where someone demos the dashboard"** — the question that actually gets asked.
 
 That needs enrichment, and the research already found the cheap path: shot
