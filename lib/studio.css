@@ -2398,10 +2398,13 @@ textarea.form-control.script-body {
  * the heading vanished and eight buttons stayed) and then the New video chooser
  * (`display: grid`), which is twice for one cause.
  *
- * Last in the file on purpose: `[hidden]` is (0,1,0) and ties with a class, so
- * source order is what decides it, and being last means it beats every rule above
- * rather than the two that have bitten so far.
+ * `!important`, which is the right tool exactly here and almost nowhere else.
+ * Being last in the file is not enough: `[hidden]` is (0,1,0) and loses outright to
+ * `nav .btn.btn--no-border` at (0,3,0), which is one of ours. The attribute's whole
+ * meaning is "this is not rendered", and there is no case where an author's
+ * `display` should beat it on the same element — so rather than chase every
+ * selector that might outrank it, this settles it once.
  */
 [hidden] {
-   display: none;
+   display: none !important;
 }
