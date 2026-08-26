@@ -890,6 +890,9 @@ button.btn:disabled {
 }
 
 .card {
+  /* The kebab is absolutely positioned inside this, so the card has to be the
+     thing it positions against — without this it escapes to the page. */
+  position: relative;
   background: var(--panel);
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-large);
@@ -2387,6 +2390,109 @@ textarea.form-control.script-body {
    color: var(--muted);
    font-size: var(--op-font-x-small);
    max-inline-size: 30ch;
+}
+
+/*
+ * The kebab on a card.
+ *
+ * Top-right of the body and out of the reading order of the name and the meta,
+ * because it is a control ABOUT the card rather than part of what the card says.
+ */
+/*
+ * The card stops clipping while its menu is open.
+ *
+ * `.card` is `overflow: hidden` so the thumbnail takes its rounded corners, which
+ * also cut the menu off at the card's bottom edge — the last item, which is the
+ * destructive one, was the half you could not see. z-index cannot escape a clip;
+ * only not clipping can, and `:has()` scopes that to exactly the moment it matters.
+ */
+.card:has(.kebab__menu:not([hidden])) {
+   overflow: visible;
+}
+
+.kebab {
+   position: absolute;
+   inset-block-start: var(--op-space-x-small);
+   inset-inline-end: var(--op-space-x-small);
+   z-index: 5;
+}
+
+/* In a toolbar rather than pinned to a card's corner. */
+.kebab--inline {
+   position: static;
+}
+
+.kebab--inline .kebab__menu {
+   inset-inline-end: auto;
+   inset-inline-start: 0;
+}
+
+.kebab__trigger {
+   display: grid;
+   place-items: center;
+   inline-size: 3.2rem;
+   block-size: 3.2rem;
+   padding: 0;
+   background: var(--op-color-neutral-plus-max);
+   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+   border-radius: var(--op-radius-medium);
+   color: var(--muted);
+   font: inherit;
+   cursor: pointer;
+}
+
+.kebab__trigger:hover,
+.kebab__trigger[aria-expanded='true'] {
+   color: var(--fg);
+   border-color: var(--op-color-neutral-plus-three);
+}
+
+.kebab__menu {
+   position: absolute;
+   z-index: 60;
+   inset-block-start: calc(100% + var(--op-space-2x-small));
+   inset-inline-end: 0;
+   min-inline-size: 20rem;
+   padding: var(--op-space-2x-small);
+   display: flex;
+   flex-direction: column;
+   gap: 1px;
+   background: var(--op-color-neutral-plus-max);
+   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+   border-radius: var(--op-radius-large);
+   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+}
+
+.kebab__item {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-x-small);
+   background: none;
+   border: 0;
+   border-radius: var(--op-radius-medium);
+   color: var(--fg);
+   font: inherit;
+   font-size: var(--op-font-x-small);
+   text-align: start;
+   cursor: pointer;
+   white-space: nowrap;
+}
+
+.kebab__item:hover,
+.kebab__item:focus-visible {
+   background: var(--op-color-neutral-plus-six);
+}
+
+/* Red on the ink, not a red slab. The destructive item should be findable without
+   being the loudest thing on the card, which is what the full-size button was. */
+.kebab__item--danger {
+   color: var(--op-color-alerts-danger-base);
+}
+
+.kebab__item--armed {
+   background: var(--op-color-alerts-danger-base);
+   color: var(--op-color-alerts-danger-on-base);
 }
 
 /*
