@@ -57,7 +57,7 @@
     "name": "lcad-board",
     "label": "LightningCAD · tinted board",
     "file": "lcad-board.jpg",
-    "css": "background-color:#090c11;background-image:linear-gradient(209deg, rgba(66, 141, 240, 0.06) 0%, rgba(66, 141, 240, 0) 72%), linear-gradient(0deg, #000000 0.0%, #101821 100.0%)"
+    "css": "background-color:#090c11;background-image:linear-gradient(209deg, rgba(66, 141, 240, 0.06) 0%, rgba(66, 141, 240, 0) 72%), linear-gradient(0deg, #011013 0.0%, #101821 100.0%)"
   },
   {
     "name": "docks-board",
