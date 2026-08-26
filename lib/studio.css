@@ -3173,7 +3173,62 @@ textarea.fills.form-control {
   display: none !important;
 }
 
+/* ── Interview ──────────────────────────────────────────────────────────── */
+
+.interview__question,
+.interview__plan {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  padding: var(--op-space-medium);
+}
+
+.interview__question {
+  background: color-mix(in oklch, var(--accent) 7%, var(--panel));
+}
+
+.interview__count,
+.interview__seconds {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}
+
+.interview__shots {
+  display: grid;
+  gap: var(--op-space-small);
+  margin: 0;
+  padding-inline-start: 1.4rem;
+}
+
+.interview__shots li {
+  padding-inline-start: var(--op-space-3x-small);
+}
+
+.interview__seconds {
+  margin-inline-start: var(--op-space-small);
+}
+
 /* ── Paper edit ─────────────────────────────────────────────────────────── */
+
+.paper-edit {
+  align-items: stretch;
+  display: grid;
+  gap: var(--op-space-large);
+  grid-template-columns: minmax(20rem, 28rem) minmax(0, 1fr);
+  min-block-size: calc(100dvh - 12rem);
+}
+
+.paper-edit__setup.form {
+  align-content: start;
+  max-inline-size: none;
+}
+
+.paper-edit__review {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
 
 .paper-edit__title {
   font-size: var(--op-font-large);
@@ -3197,40 +3252,54 @@ textarea.fills.form-control {
   display: flex;
   flex-wrap: wrap;
   gap: var(--op-space-3x-small);
-  margin-block: var(--op-space-small);
+  margin-block: var(--op-space-small) var(--op-space-x-small);
 }
 
 .paper-edit__beat-chip {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--op-radius-small);
-  color: var(--op-color-neutral-plus-three);
+  color: var(--fg);
   font: inherit;
   padding: var(--op-space-3x-small) var(--op-space-x-small);
 }
 
 .paper-edit__beat-chip--active {
-  background: var(--op-color-primary-minus-eight);
-  border-color: var(--op-color-primary-base);
+  background: color-mix(in oklch, var(--accent) 18%, var(--panel));
+  border-color: var(--accent);
   color: inherit;
 }
 
 .paper-edit__lines {
-  border-block: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
   display: flex;
   flex-direction: column;
+  max-block-size: min(58vh, 44rem);
+  overflow: auto;
+}
+
+.paper-edit__review .paper-edit__lines {
+  flex: 1;
+  max-block-size: none;
+  min-block-size: 0;
 }
 
 .paper-edit__line {
+  align-items: baseline;
   background: transparent;
   border: 0;
   border-block-end: 1px solid var(--line);
   border-inline-start: 3px solid transparent;
-  color: inherit;
+  color: var(--fg);
   cursor: pointer;
+  display: grid;
   font: inherit;
-  line-height: var(--op-line-height-loose);
-  padding: var(--op-space-2x-small) var(--op-space-small);
+  font-size: var(--op-font-small);
+  gap: var(--op-space-small);
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  line-height: var(--op-line-height-base);
+  padding: var(--op-space-x-small) var(--op-space-small);
   text-align: start;
 }
 
@@ -3240,21 +3309,43 @@ textarea.fills.form-control {
 
 .paper-edit__line:hover,
 .paper-edit__line:focus-visible {
-  background: var(--op-color-primary-minus-eight);
+  background: color-mix(in oklch, var(--accent) 10%, var(--panel));
   outline: none;
 }
 
 .paper-edit__line--assigned {
-  border-inline-start-color: var(--op-color-primary-base);
+  border-inline-start-color: var(--accent);
 }
 
 .paper-edit__line--active {
-  background: var(--op-color-primary-minus-eight);
+  background: color-mix(in oklch, var(--accent) 18%, var(--panel));
 }
 
-.paper-edit__line:disabled {
+.paper-edit__line[aria-disabled='true'] {
   cursor: default;
-  opacity: 1;
+}
+
+.paper-edit__time {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  white-space: nowrap;
+}
+
+.paper-edit__text {
+  min-inline-size: 0;
+}
+
+@media (max-width: 980px) {
+  .paper-edit {
+    grid-template-columns: minmax(0, 1fr);
+    min-block-size: auto;
+  }
+
+  .paper-edit__review .paper-edit__lines {
+    flex: initial;
+    max-block-size: min(58vh, 44rem);
+  }
 }
 
 /* ── Storyboard ────────────────────────────────────────────────────────────

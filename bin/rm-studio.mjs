@@ -31,9 +31,10 @@ import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
+import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
-import { connect as graphConnect, disconnect as graphDisconnect, moveNode, removeNode } from "../lib/board-graph.mjs";
+import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
 	boardProgress,
@@ -182,6 +183,9 @@ const PREVIEWS_KEPT = 8;
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
 const paperEditDir = (id) => join(projectDir(id), "paper-edits");
+const interviewDir = (id) => join(projectDir(id), "interview");
+const interviewPath = (id) => join(interviewDir(id), "interview.json");
+const interviewReplyPath = (id) => join(interviewDir(id), "next-turn.json");
 
 /*
  * A paper edit belongs to one source recording.  The filename is derived from
@@ -246,6 +250,31 @@ async function readPaperEdit(id, rel) {
 async function writePaperEdit(id, rel, state) {
   await mkdir(paperEditDir(id), { recursive: true });
   await writeFile(paperEditPath(id, rel), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+async function readInterview(id) {
+  const raw = await readFile(interviewPath(id), "utf8").catch(() => null);
+  if (!raw) return { version: 1, turns: [], plan: null };
+  try {
+    const saved = JSON.parse(raw);
+    return {
+      version: 1,
+      turns: Array.isArray(saved?.turns)
+        ? saved.turns.map((turn) => ({ question: String(turn?.question ?? "").trim(), answer: String(turn?.answer ?? "") })).filter((turn) => turn.question)
+        : [],
+      plan: saved?.plan ?? null,
+      problems: Array.isArray(saved?.problems) ? saved.problems.map(String) : [],
+      pendingReply: Boolean(saved?.pendingReply),
+      updatedAt: saved?.updatedAt ?? null,
+    };
+  } catch {
+    throw new Error("the saved interview is not readable");
+  }
+}
+
+async function writeInterview(id, state) {
+  await mkdir(interviewDir(id), { recursive: true });
+  await writeFile(interviewPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
 }
 
 /** A completed VTT is already an attachment of this recording, not a loose file. */
@@ -3685,6 +3714,93 @@ async function fetchVoiceList() {
     }
 
     /*
+     * ──────────────────────────── the interview ──────────────────────────
+     *
+     * The interview is durable project work, not an in-browser chat.  A person
+     * can leave while Claude thinks, another teammate can pick it back up, and
+     * the shot list carries the answers that produced it into Storyboard.
+     */
+    if (p === "/api/interview" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        const state = await readInterview(id);
+        return json(res, 200, { state, phase: interviewState(state) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/interview/start" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const state = { version: 1, turns: [{ question: FIRST_QUESTION, answer: "" }], plan: null, pendingReply: false };
+      await writeInterview(id, state);
+      return json(res, 200, { state, phase: interviewState(state) });
+    }
+
+    if (p === "/api/interview/answer" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const answer = String(body.answer ?? "").trim();
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      if (!answer) return json(res, 400, { error: "write an answer first" });
+      try {
+        const state = await readInterview(id);
+        const turn = state.turns.at(-1);
+        if (!turn) throw new Error("start the interview first");
+        if (String(turn.answer ?? "").trim()) throw new Error("Claude is already working on that answer");
+        turn.answer = answer;
+        state.pendingReply = true;
+        await writeInterview(id, state);
+        const seconds = Number(body.seconds) || null;
+        const prompt = `${buildTurnPrompt({ turns: state.turns, seconds, project: manifest.name })}\n\nWrite only that JSON to ${interviewReplyPath(id)}.`;
+        await writeFile(join(interviewDir(id), "prompt.txt"), `${prompt}\n`, "utf8");
+        return json(res, 200, {
+          state,
+          step: { ...agentStep(await agentChoice(), { prompt, cwd: interviewDir(id), label: `interview ${manifest.name}` }), project: id },
+        });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/interview/next" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        const state = await readInterview(id);
+        if (!state.pendingReply) throw new Error("answer the current question before loading Claude's reply");
+        const raw = await readFile(interviewReplyPath(id), "utf8");
+        const next = readTurn(parseTurn(raw));
+        if (next.kind === "ambiguous") throw new Error(next.problem);
+        if (next.kind === "ask") {
+          state.turns.push({ question: next.question, answer: "" });
+          state.plan = null;
+        } else {
+          state.plan = planToBrief(next, {
+            projectId: id,
+            seconds: Number(body.seconds) || null,
+            drafted: new Date().toISOString(),
+            turns: state.turns,
+          });
+          state.problems = next.problems;
+        }
+        state.pendingReply = false;
+        await writeInterview(id, state);
+        return json(res, 200, { state, phase: interviewState(state) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
      * ─────────────────────────── the paper edit ──────────────────────────
      *
      * A transcript is deliberately kept next to the project, not inside the
@@ -4097,6 +4213,100 @@ async function fetchVoiceList() {
         return b;
       });
       return json(res, 200, { ok: true, graph: graphFor(next), board: next, progress: boardProgress(next) });
+    }
+
+    /*
+     * Adding, renaming and removing a shot — from the canvas rather than the brief.
+     *
+     * A NOTE ON IDS. `slotsFromBrief` derives a slot id from its order and name,
+     * which is right for re-reading a brief idempotently and wrong the moment a
+     * node exists on a canvas: renaming would mint a new id and orphan every take
+     * under it. So a node created HERE gets an id once, from a stamp, and its name
+     * is thereafter ordinary mutable data. The two kinds of slot coexist — what an
+     * id means is "this shot", however it was made.
+     */
+    if (p === "/api/board/node/add" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const name = String(body.name ?? "").trim() || "New shot";
+      const nodeId = graphIdFor("slot", `${id}:${at}:${name}`);
+      const next = await applyToBoard(dir, board, { type: "node", at, by, nodeId, name }, (b) => {
+        const graph = graphFor(b);
+        // Placed to the right of everything, on the same row: a new shot appears
+        // where you would look for it rather than under one already there.
+        const rightmost = graph.nodes.reduce((m, n) => Math.max(m, n.x), 0);
+        const row = graph.nodes.length ? Math.min(...graph.nodes.map((n) => n.y)) : 400;
+        b.slots = [...(b.slots ?? []), { id: nodeId, order: (b.slots ?? []).length, name, intent: "", seconds: null, notes: "" }];
+        b.graph = {
+          ...graph,
+          nodes: [...graph.nodes, { id: nodeId, kind: "shot", name, intent: "", seconds: null, x: graph.nodes.length ? rightmost + NODE_WIDTH + NODE_GAP_X : 400, y: row }],
+        };
+        return b;
+      });
+      return json(res, 200, { board: next, graph: graphFor(next), progress: boardProgress(next), nodeId });
+    }
+
+    if (p === "/api/board/node/update" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const nodeId = String(body.nodeId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      if (!(board.slots ?? []).some((x) => x.id === nodeId)) return json(res, 404, { error: "no such shot on this board" });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "rename", at, by, nodeId }, (b) => {
+        b.slots = b.slots.map((sl) =>
+          sl.id !== nodeId
+            ? sl
+            : {
+                ...sl,
+                // The id is NOT recomputed. That is the whole point: renaming a
+                // shot must not orphan the takes sitting under it.
+                name: typeof body.name === "string" ? body.name.trim() || sl.name : sl.name,
+                intent: typeof body.intent === "string" ? body.intent.trim() : sl.intent,
+                seconds: body.seconds === null || body.seconds === "" ? null : Number(body.seconds) > 0 ? Number(body.seconds) : sl.seconds,
+              },
+        );
+        b.graph = graphFor(b);
+        return b;
+      });
+      return json(res, 200, { board: next, graph: graphFor(next), progress: boardProgress(next) });
+    }
+
+    if (p === "/api/board/node/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const nodeId = String(body.nodeId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "remove", at, by, nodeId }, (b) => {
+        // `removeNode` heals the chain: the shot before now leads to the shot
+        // after, rather than the cut silently ending where the deletion was.
+        b.graph = removeNode(graphFor(b), nodeId);
+        b.slots = (b.slots ?? []).filter((sl) => sl.id !== nodeId);
+        /*
+         * The takes go too, and the ratings with them.
+         *
+         * Leaving them would be worse than losing them: a take whose shot no
+         * longer exists cannot be seen, cannot be rated, and cannot be removed —
+         * it would just make every future merge carry rows nothing can reach.
+         * `history.jsonl` still holds every rating that was ever given.
+         */
+        const gone = new Set((b.takes ?? []).filter((t) => t.slotId === nodeId).map((t) => t.id));
+        b.takes = (b.takes ?? []).filter((t) => t.slotId !== nodeId);
+        b.ratings = (b.ratings ?? []).filter((r) => !gone.has(r.takeId));
+        delete b.picks?.[nodeId];
+        delete b.pickedAt?.[nodeId];
+        return b;
+      });
+      return json(res, 200, { board: next, graph: graphFor(next), progress: boardProgress(next) });
     }
 
     /** What happened, in order. The board is state; this is the record. */
