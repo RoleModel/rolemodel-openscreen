@@ -2381,6 +2381,16 @@ textarea.form-control.script-body {
    object-fit: contain;
 }
 
+/* The stand-in when the picture does not arrive: the same size as the frame it
+   replaces, so the row of cards keeps its shape. */
+.choose-card__glyph {
+   color: var(--accent);
+   display: grid;
+   font-size: var(--op-font-3x-large);
+   block-size: 12rem;
+   place-items: center;
+}
+
 .choose-card__name {
    font-weight: var(--op-font-weight-semi-bold);
    font-size: var(--op-font-medium);
