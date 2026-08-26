@@ -2096,15 +2096,122 @@ textarea.form-control.script-body {
   gap: var(--op-space-x-small);
 }
 
-/* The project switcher, at the end of the header row beside the trail. Pushed to
-   the far end so the breadcrumb keeps reading left-to-right as a trail rather than
-   competing with a control for the same start edge. */
-.projswitch {
-   margin-inline-start: auto;
+/*
+ * The project menu, modelled on the editor's own top-bar menu.
+ *
+ * A native <select> was the wrong control: a form field doing a navigation
+ * control's job, so it read as something you fill in rather than the thing that
+ * says where you are. It also sat at the far end of the header, opposite the
+ * trail — but the project scopes everything the trail describes, so it belongs
+ * before it.
+ */
+.projmenu {
+   position: relative;
+   flex: 0 0 auto;
 }
 
-.projswitch select {
-   min-inline-size: 22rem;
+.projmenu__trigger {
+   display: inline-flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-2x-small) var(--op-space-x-small);
+   background: var(--op-color-neutral-plus-six);
+   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+   border-radius: var(--op-radius-medium);
+   color: var(--fg);
+   font: inherit;
+   font-size: var(--op-font-x-small);
+   cursor: pointer;
+}
+
+.projmenu__trigger:hover,
+.projmenu__trigger[aria-expanded='true'] {
+   border-color: var(--op-color-neutral-plus-three);
+}
+
+.projmenu__mark {
+   color: var(--accent);
+   font-size: var(--op-font-medium);
+}
+
+.projmenu__label {
+   max-inline-size: 28ch;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+/* The chevron points at the menu: up while it is closed and below, flipping when
+   it opens, which is the affordance the editor's own menu uses. */
+.projmenu__caret {
+   font-size: var(--op-font-x-small);
+   opacity: 0.7;
+   transform: rotate(180deg);
+}
+
+.projmenu__trigger[aria-expanded='true'] .projmenu__caret {
+   transform: none;
+}
+
+.projmenu__menu {
+   position: absolute;
+   z-index: 60;
+   inset-block-start: calc(100% + var(--op-space-2x-small));
+   inset-inline-start: 0;
+   min-inline-size: 30rem;
+   padding: var(--op-space-2x-small);
+   display: flex;
+   flex-direction: column;
+   gap: 1px;
+   background: var(--op-color-neutral-plus-max);
+   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+   border-radius: var(--op-radius-large);
+   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+}
+
+.projmenu__item {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-x-small);
+   background: none;
+   border: 0;
+   border-radius: var(--op-radius-medium);
+   color: var(--fg);
+   font: inherit;
+   font-size: var(--op-font-x-small);
+   text-align: start;
+   cursor: pointer;
+}
+
+.projmenu__item:hover,
+.projmenu__item:focus-visible {
+   background: var(--op-color-neutral-plus-six);
+}
+
+.projmenu__item[aria-current='true'] .hgi-stroke {
+   color: var(--accent);
+}
+
+.projmenu__text {
+   flex: 1 1 auto;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+/* What tells two similarly named projects apart at a glance. */
+.projmenu__note {
+   flex: 0 0 auto;
+   color: var(--muted);
+   font-size: var(--op-font-2x-small);
+   font-variant-numeric: tabular-nums;
+}
+
+.projmenu__sep {
+   block-size: var(--op-border-width);
+   margin: var(--op-space-2x-small) 0;
+   background: var(--line);
 }
 
 /* First run. Measured for reading, and centred, because there is nothing else on
