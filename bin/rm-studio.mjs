@@ -776,6 +776,7 @@ const server = createServer(async (req, res) => {
       let brand = body.brand || m.brand || "rolemodel";
       const src = (body.source || "").trim();
       if (!src) return json(res, 400, { error: "give it a script or a URL" });
+      const output = body.output === "template" ? "template" : "video";
 
       const isUrl = /^https?:\/\//i.test(src);
 
@@ -961,6 +962,31 @@ const server = createServer(async (req, res) => {
       const docVoice = fromDoc.voice === "none" ? "" : fromDoc.voice;
       const voiceId = String(docVoice ?? body.voice ?? "").trim();
       const audioIsNarration = audio && !(fromDoc.music || String(pick("audioRole", body.audioRole) || "narration") === "music");
+
+      /*
+       * A HyperFrames template is a small project, not just a loose HTML file.
+       *
+       * Claude needs a relative source it can put in an <audio> element and the
+       * manual renderer needs that source to still be beside index.html later.
+       * Copying the chosen media into a hidden folder gives both that contract
+       * without moving the original or cluttering the project's Library shelf.
+       */
+      const stageTemplateMedia = async (file, name) => {
+        if (!file) return "";
+        const dir = join(outDir, ".template-media");
+        await mkdir(dir, { recursive: true });
+        const dest = join(dir, `${name}${extname(file).toLowerCase()}`);
+        await copyFile(file, dest);
+        return `.template-media/${basename(dest)}`;
+      };
+      const templateAudio = output === "template" ? await stageTemplateMedia(audio, audioIsNarration ? "narration" : "music") : "";
+      const templateWebcam = output === "template" ? await stageTemplateMedia(webcam, "webcam") : "";
+      const templateAssets = [];
+      if (output === "template") {
+        for (const [i, asset] of assets.entries()) {
+          templateAssets.push(await stageTemplateMedia(asset.full, `asset-${String(i + 1).padStart(2, "0")}`));
+        }
+      }
       if (voiceId && !audioIsNarration) {
         wants.push(
           `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
@@ -988,15 +1014,31 @@ const server = createServer(async (req, res) => {
             .join("\n")
             .trim();
 
-      const prompt = isUrl
-        ? `Using /hyperframes, make a ${body.seconds || 20}-second ${brand}-branded promo for ${src}.\nRender the MP4 into ${outDir}.${direction}`
-        : `Using /hyperframes, build a ${brand}-branded video from the script below.\nRender the MP4 into ${outDir}.${direction}\n\n${spokenSrc}`;
+      const subject = isUrl ? `a ${body.seconds || 20}-second ${brand}-branded promo for ${src}` : `a ${brand}-branded video from the script below`;
+      const templateDirection = output === "template"
+        ? [
+            `Create a reviewable HyperFrames template for ${subject}.`,
+            `Write the project entry point to ${join(outDir, "index.html")} and do not render an MP4.`,
+            "Use a standalone root composition with data-composition-id, data-start, data-duration, data-width and data-height.",
+            "Keep every GSAP timeline paused and registered on window.__timelines. Do not use remote media or fonts.",
+            templateAudio
+              ? `Use the selected ${audioIsNarration ? "narration" : "music"} as a separate <audio> track with src=\"${templateAudio}\". It is the real selected file: do not replace or synthesise it.${audioIsNarration ? " Build the visual pacing around it." : " Keep it under any speech."}`
+              : voiceId
+                ? `Create .template-media/narration.wav with hyperframes tts using voice ${voiceId}, then use it as a separate <audio> track. Do not render the video yet.`
+                : "There is no audio track. Keep the template silent.",
+            templateWebcam ? `Use this exact webcam clip when a picture-in-picture is called for: \"${templateWebcam}\".` : "",
+            templateAssets.length ? `Use these staged project assets where they help, rather than placeholders:\n${templateAssets.map((file) => `  ${file}`).join("\n")}` : "",
+            "The next human step is HyperFrames lint and review, then a manual render from this folder.",
+          ].filter(Boolean).join("\n")
+        : `Using /hyperframes, make ${subject}.\nRender the MP4 into ${outDir}.`;
+      const prompt = `${templateDirection}${direction}${isUrl ? "" : `\n\n${spokenSrc}`}`;
 
       const brief = [
         `# ${body.title || slug}`,
         "",
         `- project: ${m.name}${m.client ? ` (${m.client})` : ""}`,
         `- brand: ${brand}`,
+        `- output: ${output}`,
         `- source: ${isUrl ? src : "script (below)"}`,
         `- seconds: ${body.seconds || 20}`,
         `- browser chrome: ${body.browser ? body.browserUrl || "yes" : "no"}`,
@@ -1008,6 +1050,7 @@ const server = createServer(async (req, res) => {
         `- assets: ${assets.length ? assets.map((a) => a.rel).join(", ") : "none"}`,
         `- webcam: ${webcam || "none"}`,
         `- audio: ${audio ? `${audio} (${body.audioRole || "narration"})` : "none"}`,
+        `- template audio: ${templateAudio || "none"}`,
         `- created: ${new Date().toISOString()}`,
         "",
         "## Prompt",
@@ -1023,11 +1066,27 @@ const server = createServer(async (req, res) => {
       ].join("\n");
 
       await writeFile(join(outDir, "brief.md"), brief, "utf8");
+      const renderStep = output === "template"
+        ? {
+            label: `render template ${slug}`,
+            project: id,
+            bin: "npx",
+            args: ["--yes", "hyperframes", "render", "--output", join(outDir, `${slug}.mp4`), "--quality", "draft"],
+            cwd: outDir,
+            note: "run this after Claude has written index.html; the result is a draft MP4 with the selected audio",
+          }
+        : null;
       return json(res, 200, {
         prompt,
         dir: outDir,
         brief: join(outDir, "brief.md"),
         isUrl,
+        output,
+        template: output === "template" ? join(outDir, "index.html") : null,
+        lintStep: output === "template"
+          ? { label: `lint template ${slug}`, project: id, bin: "npx", args: ["--yes", "hyperframes", "lint"], cwd: outDir }
+          : null,
+        renderStep,
         // Headless agent, run from the render directory so relative paths in the
         // prompt land where the brief says they will. Which agent, and the argv
         // that goes with it, is lib/agents.mjs — one decision, not two copies.

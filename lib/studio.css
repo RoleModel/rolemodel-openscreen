@@ -3047,6 +3047,38 @@ textarea.form-control.script-body {
   margin-inline-end: auto;
 }
 
+/*
+ * A field that is the whole point of its panel.
+ *
+ * `--field-tall` is a fixed 26-ish lines, right for one field among many and
+ * wrong for the only one in the column — a script is hundreds of words, and
+ * writing it in a small window on an otherwise empty page is the panel refusing
+ * to use the space it has.
+ *
+ * Sized against the viewport rather than flexed to fill: main scrolls, so a
+ * flex-grow child resolves against content height and collapses back to its
+ * minimum.
+ *
+ * A SUBTRACTION rather than a percentage, because what sits above and below it —
+ * the lede, the label, the card padding, the footer — is a fixed number of
+ * pixels, not a share of the screen. At 70dvh the box cleared the footer on a
+ * tall window and ran under it on a laptop, which is exactly what a proportion
+ * does to fixed chrome. `dvh` because mobile browser chrome changes the
+ * viewport, and the cap stops it becoming a page of its own on a big display.
+ */
+textarea.fills,
+textarea.fills.form-control {
+  block-size: min(calc(100dvh - 32rem), 80rem);
+  min-block-size: var(--field-tall);
+  resize: vertical;
+}
+
+/* The group holding it grows too, or the textarea is capped by a row that sized
+   itself to the old height. */
+.form-group:has(> textarea.fills) {
+  grid-column: 1 / -1;
+}
+
 [hidden] {
   display: none !important;
 }
