@@ -2915,9 +2915,18 @@ textarea.form-control.script-body {
 
 /* The kebab is pinned to a card's corner by default; in a row it is just the
    last column. */
+/*
+ * In a row, the kebab is the last column rather than pinned to a corner.
+ *
+ * `relative`, NOT `static`. The menu inside is absolutely positioned against its
+ * wrapper, and a static wrapper is not a containing block — so the menu resolved
+ * against whatever positioned ancestor it found next and opened hundreds of
+ * pixels from the button that owns it. `relative` takes it out of the corner
+ * pinning without taking away the box the menu is measured from.
+ */
 .s3row__menu {
   inset: auto;
-  position: static;
+  position: relative;
 }
 
 /* Same target as the project drop zone, at half the height: here it is the
