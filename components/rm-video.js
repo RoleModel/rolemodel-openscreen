@@ -511,15 +511,37 @@ define('rm-image', RMImage)
  * frame on every render.
  */
 class RMStat extends RMElement {
-  static fields = ['value', 'label', 'unit', 'count', 'at', 'for']
+  static fields = ['value', 'label', 'unit', 'count', 'x', 'y', 'at', 'for']
   render() {
+    /*
+     * Placed like every other part: a percentage of the stage, from its centre.
+     *
+     * It had no position at all, so `::slotted(*) { position:absolute }` from
+     * rm-scene left it wherever the default put it — the top-left corner — and
+     * the only way to move one was an inline `style="left:..;top:.."` on the tag.
+     * That is why the gallery positions two of these by hand, and why the Scenes
+     * panel offered no sliders for them: the sliders are generated from `static
+     * fields`, so a part that does not declare x and y cannot be dragged.
+     */
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
     const value = this.attr('value', '0')
     const n = Number(String(value).replace(/[^0-9.-]/g, ''))
     const counting = this.hasAttribute('count') && Number.isFinite(n)
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; --rise:16px; }
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; --rise:16px; }
+        /*
+         * Centred on its own point, so 50/50 is the middle of the stage.
+         *
+         * Written on .anim with the entrance transform carried along, exactly as
+         * rm-browser does: a bare translate(-50%,-50%) would be a later rule of
+         * equal specificity and would silently replace the rise, leaving the part
+         * centred and dead.
+         */
+        .anim { transform: translate(-50%, calc(-50% + var(--rm-in-y) + var(--rm-out-y))) scale(var(--rm-in-s));
+                text-align:center; }
         @property --n { syntax:"<integer>"; initial-value:0; inherits:false; }
         .v { font-size:6cqw; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--brand-text); }
         ${

@@ -19,9 +19,9 @@
   },
   {
     "name": "rm-ascii",
-    "label": "RoleModel · ascii gradient panel",
+    "label": "Academy · ascii gradient panel",
     "file": "rm-ascii.jpg",
-    "css": "background-color:#00b871;background-image:linear-gradient(118deg, #00b871 0.0%, #44bb7e 46.0%, #3e62b6 100.0%)"
+    "css": "background-color:#00b871;background-image:linear-gradient(140deg, #00b871 0.0%, #44bb7e 17.0%, #3e62b6 100.0%)"
   },
   {
     "name": "rm-light",

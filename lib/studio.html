@@ -136,15 +136,8 @@
          the page is seeked to that instant, which is exactly what the renderer does
          frame by frame.
       </p>
-      <div class="note" data-region="main">
-         Animation is <em>seeked, not played</em>: every component is a paused CSS
-         animation positioned by one <code>--t</code> property, so frame N is
-         identical on every render. Copy <code>components/scene.html</code> to start
-         a new one.
-      </div>
       <div data-region="main">
-         <iframe data-el="gallery" class="tall-frame" src="/components/gallery.html"
-                 title="Component gallery"></iframe>
+         <iframe data-el="gallery" class="tall-frame" src="/components/gallery.html" title="Component gallery"></iframe>
          <pre class="cmd-note">node components/render-scene.mjs components/scene.html -o demo.mp4 --fps 30</pre>
       </div>
       <div data-region="footer">
@@ -235,14 +228,14 @@
          <div class="form-group">
             <label class="form-label" for="script-about">About</label>
             <textarea data-el="about" id="script-about" class="form-control" rows="3"
-                      placeholder="A URL, or a couple of sentences about what the video is for and who is watching."></textarea>
+               placeholder="A URL, or a couple of sentences about what the video is for and who is watching."></textarea>
             <div class="form-hint">The brief Claude drafts from. Type / for a directive.</div>
          </div>
 
          <div class="form-group">
             <label class="form-label" for="script-body">Script</label>
             <textarea data-el="body" id="script-body" class="form-control script-body" spellcheck="false"
-                      placeholder="Write the script…"></textarea>
+               placeholder="Write the script…"></textarea>
             <div data-el="count" class="form-hint"></div>
          </div>
 
@@ -273,8 +266,8 @@
          </div>
          <div class="form-group">
             <label class="form-label" for="script-seconds">Seconds</label>
-            <input data-el="seconds" id="script-seconds" class="form-control" type="number"
-                   value="30" min="10" max="180" step="5" />
+            <input data-el="seconds" id="script-seconds" class="form-control" type="number" value="30" min="10" max="180"
+               step="5" />
             <div class="form-hint">How long the draft should run. Drafting only.</div>
          </div>
 
@@ -300,7 +293,7 @@
          <iframe data-el="frame" class="scene-frame" title="Scene preview"></iframe>
          <div class="row">
             <input data-el="scrub" class="form-control" type="range" min="0" max="8000" step="16" value="0"
-                   aria-label="Scrub the scene" />
+               aria-label="Scrub the scene" />
             <span data-el="time" class="path">0 ms</span>
          </div>
          <div data-el="palette" class="row">
@@ -345,7 +338,7 @@
          <div class="form-group">
             <label class="form-label" for="scene-brief">Ask Claude for one</label>
             <textarea data-el="brief" id="scene-brief" class="form-control" rows="3"
-                      placeholder="What is this scene? One or two sentences."></textarea>
+               placeholder="What is this scene? One or two sentences."></textarea>
          </div>
       </div>
 

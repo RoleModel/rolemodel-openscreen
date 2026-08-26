@@ -152,15 +152,18 @@
 
   <section>
     <h2>rm-browser</h2>
-    <div class="sig">url · image · src · w · at · for</div>
+    <div class="sig">url · x · y · w · at · for</div>
     <div class="frame">
       <rm-scene wallpaper="../brand/wallpapers/lcad-board">
-        <rm-browser at="200" style="left:16%; top:50%; transform:translateY(-50%)" w="68"
+        <!-- x/y, not an inline style. `left:16%` put the window's CENTRE at 16%,
+             and at 68% wide that hung most of it off the left of the frame — the
+             inline positioning predates the part having x and y of its own. -->
+        <rm-browser at="200" x="50" y="50" w="68"
           url="app.rolemodelsoftware.com/estimates"></rm-browser>
         <rm-callout at="1200" x="66" y="42" text="Live pricing"></rm-callout>
       </rm-scene>
     </div>
-    <pre>&lt;rm-browser at="200" w="68" url="app.rolemodelsoftware.com" image="shot.png"&gt;&lt;/rm-browser&gt;</pre>
+    <pre>&lt;rm-browser at="200" x="50" y="50" w="68" url="app.rolemodelsoftware.com"&gt;&lt;/rm-browser&gt;</pre>
   </section>
 
   <section>
@@ -176,14 +179,14 @@
 
   <section>
     <h2>rm-stat</h2>
-    <div class="sig">value · unit · label · count</div>
+    <div class="sig">value · unit · label · count · x · y · at · for</div>
     <div class="frame">
       <rm-scene wallpaper="../brand/wallpapers/rm-dark-dotgrid">
-        <rm-stat at="300" style="left:12%; top:34%" value="94" unit="%" label="Faster to first estimate" count></rm-stat>
-        <rm-stat at="800" style="left:52%; top:34%" value="12" unit="k" label="Line items priced" count></rm-stat>
+        <rm-stat at="300" x="27" y="45" value="94" unit="%" label="Faster to first estimate" count></rm-stat>
+        <rm-stat at="800" x="73" y="45" value="12" unit="k" label="Line items priced" count></rm-stat>
       </rm-scene>
     </div>
-    <pre>&lt;rm-stat at="300" value="94" unit="%" label="Faster to first estimate" count&gt;&lt;/rm-stat&gt;</pre>
+    <pre>&lt;rm-stat at="300" x="27" y="45" value="94" unit="%" label="Faster to first estimate" count&gt;&lt;/rm-stat&gt;</pre>
   </section>
 
   <section>
