@@ -103,7 +103,18 @@ cask "rolemodel-openscreen" do
     app_path = "#{appdir}/Openscreen.app"
     next unless File.directory?(app_path)
 
-    signature = Utils.popen_read("/usr/bin/codesign", "-d", "--verbose=2", app_path, err: :out)
+    # `system_command`, not `Utils.popen_read`. Utils is not in scope inside a cask
+    # block, and reaching for it fails the install outright with "undefined method
+    # popen_read" — after the app is already on disk, so the bundle is left
+    # quarantined and unopenable by the very code meant to unquarantine it.
+    #
+    # codesign writes its description to stderr, so it is merged_output that holds
+    # the answer, and must_succeed is off because an unsigned bundle exits non-zero
+    # and that is a reading, not a failure.
+    signature = system_command("/usr/bin/codesign",
+                               args:         ["-d", "--verbose=2", app_path],
+                               must_succeed: false,
+                               print_stderr: false).merged_output
     next unless signature.include?("Signature=adhoc")
 
     opoo "This build is ad-hoc signed, not notarized: clearing its quarantine flag so macOS will open it."
