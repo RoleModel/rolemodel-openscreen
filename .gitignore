@@ -18,3 +18,7 @@ recordings/
 .codegraph/
 .claude/skills/impeccable/
 HANDOFF.md
+
+# Affinity's lock file, written while a document is open. The .af source beside it
+# is worth keeping; a lock naming this machine is not.
+*.af~lock~

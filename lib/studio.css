@@ -2232,15 +2232,69 @@ textarea.form-control.script-body {
    overflow: hidden;
 }
 
+
+
+/* Three ways in. auto-fit rather than a fixed three, so the cards drop to two and
+   then one as the column narrows without a media query deciding when. */
+.choose-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+   gap: var(--op-space-medium);
+}
+
+.choose-card {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-large);
+   background: var(--panel);
+   border: var(--op-border-width) solid var(--line);
+   border-radius: var(--op-radius-large);
+   cursor: pointer;
+   text-align: center;
+   color: inherit;
+   font: inherit;
+}
+
+.choose-card:hover,
+.choose-card:focus-visible {
+   border-color: var(--accent);
+}
+
+/* A fixed frame so three pictures of different proportions line up as a row rather
+   than making the cards different heights. */
+.choose-card img {
+   inline-size: auto;
+   max-inline-size: 100%;
+   block-size: 12rem;
+   object-fit: contain;
+}
+
+.choose-card__name {
+   font-weight: var(--op-font-weight-semi-bold);
+   font-size: var(--op-font-medium);
+}
+
+.choose-card__note {
+   color: var(--muted);
+   font-size: var(--op-font-x-small);
+   max-inline-size: 30ch;
+}
+
 /*
- * `hidden` has to actually hide.
+ * `hidden` has to actually hide. Everywhere.
  *
- * The attribute's `display: none` comes from the UA stylesheet, which any author
- * `display` rule outranks — and `.btn` sets one. So hiding the pipeline group took
- * away its <h2>, which has no author display rule, and left all eight buttons on
- * screen: the group looked half-hidden, and a property check said it was hidden
- * because the property WAS set. This states it at a specificity that wins.
+ * The attribute's `display: none` comes from the UA stylesheet, which ANY author
+ * `display` rule outranks — and this sheet sets one on most things. It caught the
+ * nav's pipeline group first (`.btn` has a display, the group's <h2> does not, so
+ * the heading vanished and eight buttons stayed) and then the New video chooser
+ * (`display: grid`), which is twice for one cause.
+ *
+ * Last in the file on purpose: `[hidden]` is (0,1,0) and ties with a class, so
+ * source order is what decides it, and being last means it beats every rule above
+ * rather than the two that have bitten so far.
  */
-.sidebar [data-group][hidden] {
+[hidden] {
    display: none;
 }
