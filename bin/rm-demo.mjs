@@ -27,6 +27,7 @@
  */
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { attachRecorder, CURSOR_MODES, recordArgs, sentinelTitle } from "../lib/demo-capture.mjs";
 import { attach as watchClicks, serialize as serializeDemo } from "../lib/demo-record.mjs";
@@ -59,6 +60,27 @@ function die(msg) {
  * support. It is the default because captures are the reason this exists, and it
  * falls back to the bundled build rather than failing when Chrome is not there.
  */
+/*
+ * Where a signed-in browser keeps its profile.
+ *
+ * "Use my signed-in browser" used to mean attaching over CDP, and Chrome cannot
+ * be given a debugging port while it is running — so the instruction was: quit
+ * Chrome completely, relaunch it from a terminal with two flags, then come back.
+ * Nobody making a video is going to do that, and the ones who try will do it
+ * once and not again.
+ *
+ * A persistent profile is the same outcome without any of that. It is real
+ * Chrome with a real profile directory, so a sign-in survives to the next
+ * capture — and because the directory is ours rather than Chrome's own, the
+ * browser you already have open keeps running untouched. Chrome locks a profile
+ * while it is using it, which is the reason pointing this at your normal one
+ * would put us straight back where we started.
+ *
+ * The cost is honest and worth saying out loud: the first capture on a site that
+ * needs a login has to sign in once, in the window that opens.
+ */
+const PROFILE_DIR = join(homedir(), ".config", "rolemodel-openscreen", "browser");
+
 const BROWSER_CHANNELS = { chrome: "chrome", edge: "msedge", msedge: "msedge", chromium: undefined };
 
 /**
@@ -443,15 +465,23 @@ async function captureCommand() {
 				[
 					`could not attach to a browser at ${cdpUrl} (${String(err.message).split("\n")[0]})`,
 					"",
-					"  Chrome cannot be given a debugging port while it is running, so it has to be",
-					"  started with one. Quit Chrome completely, then:",
+					// The answer first, because it is the one almost everybody wants and it
+					// costs nothing. Attaching exists for driving a session this cannot
+					// reproduce — a VPN, an SSO device trust, a tab already deep in a flow.
+					"  If you wanted a browser you stay signed in to, you do not need this:",
+					"",
+					"    --profile        real Chrome, its own profile, kept between captures.",
+					"                     Sign in once in the window that opens; it remembers.",
+					"                     Your everyday Chrome keeps running, untouched.",
+					"",
+					"  Attaching is for driving a session that cannot be reproduced — a VPN, an",
+					"  SSO device trust, a tab already part-way through something. Chrome cannot",
+					"  be given a debugging port while it is running, so that route means quitting",
+					"  it completely and starting it again:",
 					"",
 					// Quoted, because zsh globs a bare * and the command it printed failed
 					// with "no matches found" — a copy-pasteable line that does not paste.
 					`    open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-allow-origins='*'`,
-					"",
-					"  That keeps your normal profile, so you stay signed in. Then run this again",
-					"  with --attach.",
 				].join("\n"),
 			);
 		}
@@ -493,14 +523,33 @@ async function captureCommand() {
 	} else {
 		const want = typeof flag("browser") === "string" ? String(flag("browser")) : "chrome";
 		if (!(want in BROWSER_CHANNELS)) die(`--browser must be one of ${Object.keys(BROWSER_CHANNELS).join(", ")}`);
-		const opened = await openBrowser(chromium, want, flag("headless") === true);
-		browser = opened.browser;
-		console.log(`  browser   ${opened.used}`);
-		context = await browser.newContext({
-			viewport: { width, height },
-			baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
-		});
-		page = await context.newPage();
+		const headless = flag("headless") === true;
+		const baseURL = typeof flag("url") === "string" ? String(flag("url")) : undefined;
+		const profile = flag("profile");
+		const wantsProfile = profile === true || typeof profile === "string";
+
+		if (wantsProfile) {
+			/*
+			 * A persistent context IS the browser: there is no separate `browser`
+			 * to close, and closing the context is what ends the session. `browser`
+			 * stays null and every teardown below already tolerates that.
+			 */
+			const dir = typeof profile === "string" ? resolve(profile) : PROFILE_DIR;
+			await mkdir(dir, { recursive: true });
+			context = await chromium.launchPersistentContext(dir, {
+				...launchOptions(want, headless),
+				viewport: { width, height },
+				baseURL,
+			});
+			page = context.pages()[0] ?? (await context.newPage());
+			console.log(`  browser   ${want} · signed-in profile at ${dir}`);
+		} else {
+			const opened = await openBrowser(chromium, want, headless);
+			browser = opened.browser;
+			console.log(`  browser   ${opened.used}`);
+			context = await browser.newContext({ viewport: { width, height }, baseURL });
+			page = await context.newPage();
+		}
 
 		// The sentinel has to be on a page the OS can see before the recorder looks.
 		await page.goto("about:blank");
@@ -558,7 +607,16 @@ async function captureCommand() {
 
 	const bin = typeof flag("openscreen") === "string" ? String(flag("openscreen")) : "openscreen";
 	console.log("");
-	console.log(`  recorder  ${bin} ${recArgs.join(" ")}`);
+	/*
+	 * Quoted for a shell, because this line exists to be pasted.
+	 *
+	 * `recArgs.join(" ")` printed the library path bare, and the default library
+	 * lives at "~/RoleModel Library" — so the one command anybody would copy when a
+	 * capture misbehaved was split at the space and failed on a directory that does
+	 * not exist. The spawn was always right; only what it printed was not.
+	 */
+	const shq = (a) => (/^[A-Za-z0-9_@%+=:,.\/-]+$/.test(a) ? a : `'${String(a).replaceAll("'", `'\\''`)}'`);
+	console.log(`  recorder  ${bin} ${recArgs.map(shq).join(" ")}`);
 	/*
 	 * "Recording started", not a guess.
 	 *
@@ -612,7 +670,7 @@ async function captureCommand() {
 	}
 	const early = rec.problem();
 	if (early) {
-		await browser.close();
+		await (browser ?? context)?.close();
 		die(
 			/No window title contains/.test(early)
 				? `${early}\n\n  The window this drives is titled "${title}" until the recorder has it.\n  Every window above is a page title, so the recorder looked before this one\n  existed — give it longer with RM_RECORDER_SETTLE_MS, or record a display.`
@@ -641,7 +699,7 @@ async function captureCommand() {
 	try {
 		result = await rec.finished();
 	} catch (err) {
-		await browser.close();
+		await (browser ?? context)?.close();
 		die(err.message);
 	}
 	/*
@@ -650,10 +708,10 @@ async function captureCommand() {
 	 * In attach mode this is the person's own Chrome with their tabs in it. Closing the
 	 * context would take their session with it; disconnecting just lets go.
 	 */
-	if (attach) await browser.close();
+	if (attach) await (browser ?? context)?.close();
 	else {
 		await context.close();
-		await browser.close();
+		await (browser ?? context)?.close();
 	}
 
 	// The narration goes beside the document under the same basename, which is how
@@ -713,12 +771,38 @@ async function runCommand() {
 	// Headed on purpose. A headless run records a browser nobody is looking at,
 	// and the cursor telemetry recast draws its overlay from comes out of a real
 	// pointer moving over a real window.
-	const browser = await chromium.launch({ headless: flag("headless") === true });
-	const context = await browser.newContext({
+	const headless = flag("headless") === true;
+	const want = typeof flag("browser") === "string" ? String(flag("browser")) : "chrome";
+	if (!(want in BROWSER_CHANNELS)) die(`--browser must be one of ${Object.keys(BROWSER_CHANNELS).join(", ")}`);
+	const contextOptions = {
 		viewport: { width, height },
 		recordVideo: { dir, size: { width, height } },
 		baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
-	});
+	};
+
+	/*
+	 * `run` takes the same two browser flags as `capture`, and for the same reason.
+	 *
+	 * It used to call `chromium.launch()` bare — Playwright's own Chromium, blank,
+	 * signed into nothing — so a script that clicked anything behind a login could
+	 * be *captured* but not *rehearsed*. Since `run` is how you check a script
+	 * before recording it, a rehearsal that cannot reach the page is not a
+	 * rehearsal.
+	 */
+	const profile = flag("profile");
+	let browser = null;
+	let context;
+	if (profile === true || typeof profile === "string") {
+		const profileDir = typeof profile === "string" ? resolve(profile) : PROFILE_DIR;
+		await mkdir(profileDir, { recursive: true });
+		// A persistent context IS the browser; there is no separate handle to close.
+		context = await chromium.launchPersistentContext(profileDir, { ...launchOptions(want, headless), ...contextOptions });
+		console.log(`  browser   ${want} · signed-in profile at ${profileDir}`);
+	} else {
+		const opened = await openBrowser(chromium, want, headless);
+		browser = opened.browser;
+		context = await browser.newContext(contextOptions);
+	}
 	await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
 
 	const page = await context.newPage();
@@ -747,7 +831,7 @@ async function runCommand() {
 	await page.close();
 	const rawVideo = video ? await video.path().catch(() => null) : null;
 	await context.close();
-	await browser.close();
+	await browser?.close();
 
 	// Name the screencast after the trace so recast finds it and uses the smooth
 	// path instead of assembling sparse screenshot frames.
@@ -808,6 +892,10 @@ switch (cmd) {
 				"  --width <px>      viewport width (default 1440)",
 				"  --height <px>     viewport height (default 900)",
 				"  --headless        run without a visible window (worse cursor overlay)",
+				"  --browser <name>  chrome (default) | chromium | edge",
+				"  --profile [dir]   a browser you stay signed in to: real Chrome, its own",
+				"                    profile, kept between runs. Sign in once in the window",
+				"                    that opens. Your everyday browser is left alone.",
 				"",
 				"Options for capture — every one is an `openscreen record` flag",
 				"  --project <out.openscreen>  where the document lands (required)",

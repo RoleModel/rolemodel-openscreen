@@ -4011,6 +4011,14 @@ function driverArgs(body) {
 	if (w) out.push("--width", w);
 	if (h) out.push("--height", h);
 	if (body?.headless) out.push("--headless");
+	/*
+	 * A browser the person stays signed in to.
+	 *
+	 * This is the answer to "use my own browser" that does not require quitting
+	 * Chrome and relaunching it with a debugging port. rm-demo keeps the profile;
+	 * the browser already on screen is never touched.
+	 */
+	if (body?.profile) out.push("--profile");
 	// Which browser the viewer will see. Only sent when it is not the default, so
 	// an older rm-demo that does not know the flag keeps working.
 	const browser = String(body?.browser ?? "").trim();
