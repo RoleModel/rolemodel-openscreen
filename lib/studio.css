@@ -810,6 +810,32 @@ button.btn:disabled {
   padding: var(--op-space-medium);
   overflow-y: auto;
   border-inline-start: var(--op-border-width) solid var(--line);
+  /*
+   * Stacked, because Optics makes this a flex row.
+   *
+   * Every panel put exactly one block in here, so a row and a column looked the
+   * same and nothing said which it was. The first panel to hand over two — the
+   * recast steps AND its settings — put them side by side in a 34rem column and
+   * pushed the second one off the edge of the window.
+   */
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-medium);
+  align-items: stretch;
+}
+
+/*
+ * Optics gives a sidebar's child `block-size: 100%`, which is right for one
+ * full-height panel and wrong for a stack.
+ *
+ * Written as `.panel-config > *` first, which is (0,1,0) against Optics' nested
+ * `.op-page .op-page__sidebar > *` at (0,3,0) — so it lost, the numbered steps
+ * kept the full column height, and their four items spread out over a thousand
+ * pixels with the settings below the fold. Three classes to beat three classes.
+ */
+.op-page .op-page__sidebar--right.panel-config > * {
+  block-size: auto;
+  flex: none;
 }
 
 /* The actions, in the page's own footer row. `justify-content: end` because
