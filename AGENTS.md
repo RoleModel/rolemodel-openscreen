@@ -100,6 +100,45 @@ Write code that is **accessible, performant, type-safe, and maintainable**. Focu
 
 ---
 
+## CSS is BEM. This is not optional.
+
+Every class in `lib/studio.css` is `block`, `block__element`, `block--modifier`,
+or `block__element--modifier`. Nothing else.
+
+```css
+/* yes */                      /* no */
+.projcard { }                  .projcard { }
+.projcard__name { }            .nm { }
+.projcard--new { }             .projnew { }
+                               .projcard .nm { }   /* element through parent */
+```
+
+**Never style an element through its parent.** `.card .path` looks harmless and
+is the shape that makes specificity fights inevitable — the day something else
+needs a `.path`, one of the two silently wins. Give the element its block's name
+and style it directly.
+
+**Never invent a bare generic name.** `.body`, `.meta`, `.kind`, `.row`, `.status`
+read as global blocks and are really parts of one. Two panels both wanting a
+"body" is how a rule written for one restyles the other.
+
+`npm run check` enforces this — `lib/bem-check.mjs` fails on any class that is
+not a declared block or namespaced to one. Adding a genuinely new **block** is a
+deliberate act: name it in `BLOCKS` in that file, and say why in the commit.
+
+### The ledger
+
+`LEGACY` in that file lists classes that predate the rule. It exists so the check
+can fail on anything **new** without a hundred-name rename landing in one commit.
+
+**It only ever shrinks.** Converting a class means moving every use of it —
+`studio.css`, `studio.js`, `studio.html`, and the assertions in `verify.mjs` that
+match on class names — then deleting it from `LEGACY`. The check fails if a name
+on the ledger is no longer in the CSS, so the list cannot rot into a record of
+things that no longer exist.
+
+Do not add to it. A new class has no reason to be there.
+
 ## Testing
 
 - Write assertions inside `it()` or `test()` blocks

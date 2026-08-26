@@ -1310,7 +1310,7 @@ how to remove the virtical space around the range input in IE*/
   gap: var(--op-space-medium);
 }
 
-.projlist {
+.projgrid--list {
   display: grid;
   gap: var(--op-space-x-small);
 }
@@ -1352,7 +1352,7 @@ how to remove the virtical space around the range input in IE*/
   animation: gradient-spin 3s linear infinite;
 }
 
-.projcard:not(.projnew)::before {
+.projcard:not(.projcard--new)::before {
   content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
   position: absolute;
   z-index: 0;
@@ -1370,7 +1370,7 @@ how to remove the virtical space around the range input in IE*/
   }
 }
 
-.projart {
+.projcard__art {
   z-index: 1;
   aspect-ratio: var(--video-ar);
   margin: var(--op-space-small);
@@ -1380,14 +1380,14 @@ how to remove the virtical space around the range input in IE*/
 }
 
 /* In list mode the art becomes a stripe: the row is the unit, not the image. */
-.projlist .projcard {
+.projgrid--list .projcard {
   flex-direction: row;
   align-items: center;
   gap: var(--op-space-small);
   padding-inline-end: var(--op-space-small);
 }
 
-.projlist .projart {
+.projgrid--list .projcard__art {
   aspect-ratio: auto;
   inline-size: calc(var(--op-space-scale-unit) * 12);
   border-radius: var(--op-radius-medium);
@@ -1395,30 +1395,30 @@ how to remove the virtical space around the range input in IE*/
   flex: 0 0 auto;
 }
 
-.projlist .projcap,
-.projlist .projfoot {
+.projgrid--list .projcard__cap,
+.projgrid--list .projcard__foot {
   padding: var(--op-space-x-large);
   border: 0;
   flex: 1 1 auto;
 }
 
-.projcap {
+.projcard__cap {
   padding: var(--op-space-small) var(--op-space-small) var(--op-space-2x-small);
 }
 
-.projname {
+.projcard__name {
   font-size: var(--op-font-medium);
   font-weight: var(--op-font-weight-semi-bold);
   line-height: var(--op-line-height-dense);
   word-break: break-word;
 }
 
-.projclient {
+.projcard__client {
   font-size: var(--op-font-x-small);
   color: var(--muted);
 }
 
-.projfoot {
+.projcard__foot {
   display: flex;
   gap: var(--op-space-x-small);
   justify-content: space-between;
@@ -1428,14 +1428,14 @@ how to remove the virtical space around the range input in IE*/
   margin-top: auto;
 }
 
-.projwhen {
+.projcard__when {
   font-family: var(--m);
   font-size: var(--op-font-2x-small);
   color: var(--muted);
 }
 
 /* The tile that starts one, sized like the cards it sits among. */
-.projnew {
+.projcard--new {
   align-items: center;
   justify-content: center;
   gap: var(--op-space-x-small);
@@ -1444,7 +1444,7 @@ how to remove the virtical space around the range input in IE*/
   color: var(--muted);
 }
 
-.projplus {
+.projgrid__plus {
   inline-size: var(--op-space-2x-large);
   block-size: var(--op-space-2x-large);
   border-radius: var(--op-radius-circle);
@@ -1464,14 +1464,14 @@ how to remove the virtical space around the range input in IE*/
   border-color: var(--accent);
 }
 
-.projhead {
+.projgrid__head {
   display: flex;
   gap: var(--op-space-x-small);
   align-items: baseline;
   justify-content: space-between;
 }
 
-.projhead .nm {
+.projgrid__head .nm {
   font-size: var(--op-font-medium);
 }
 
@@ -2857,6 +2857,7 @@ textarea.form-control.script-body {
 .s3row {
   align-items: center;
   border-block-end: var(--op-border-width) solid var(--line);
+  background-color: var(--panel);
   cursor: grab;
   display: grid;
   gap: var(--op-space-small);
