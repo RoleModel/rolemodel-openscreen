@@ -2692,12 +2692,21 @@ async function fetchVoiceList() {
         type: cfg.type,
         provider: cfg.provider ?? null,
         endpoint: cfg.endpoint ?? null,
+        region: cfg.region ?? null,
         accessKeyId: cfg.access_key_id ?? null,
         hasSecret: Boolean(cfg.secret_access_key),
       };
     };
 
-    const storageName = p.startsWith("/api/storage/") ? decodeURIComponent(p.slice("/api/storage/".length)) : null;
+    /*
+     * `/api/storage/<name>` — the remote ITSELF, one segment and no more.
+     *
+     * Scoped that way because the browse routes below are
+     * `/api/storage/<name>/<verb>`, and this used to take everything after the
+     * prefix: "openframe/ls" is not a remote name, so the guard under it
+     * answered 400 and no browse route was ever reached.
+     */
+    const storageName = /^\/api\/storage\/[^/]+$/.test(p) ? decodeURIComponent(p.slice("/api/storage/".length)) : null;
 
     if (storageName !== null && !REMOTE_NAME.test(storageName)) {
       return json(res, 400, { error: "a remote name is letters, digits, dash and underscore" });
@@ -2722,6 +2731,8 @@ async function fetchVoiceList() {
       // Only when a new one was actually typed. An empty string here would
       // overwrite a working credential with nothing.
       if (b.secretAccessKey) args.push("secret_access_key", String(b.secretAccessKey));
+      if (b.provider) args.push("provider", String(b.provider));
+      if (b.region) args.push("region", String(b.region));
       if (args.length === 3) return json(res, 400, { ok: false, err: "nothing to change" });
       const r = await capture("rclone", args);
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
@@ -2743,19 +2754,205 @@ async function fetchVoiceList() {
       return json(res, 200, { ok: r.ok, buckets, err: r.err });
     }
 
+    /*
+     * Looking inside a remote, and moving things around in it.
+     *
+     * The Storage panel could create a remote and list its buckets, and that was
+     * the end of it: everything a bucket then held was invisible from here. A
+     * render is uploaded and then never seen again — you go to the Cloudflare
+     * dashboard, or you run rclone by hand, to answer "did that land" and "what
+     * is in there".
+     *
+     * Every one of these is an rclone subcommand, because rclone is already the
+     * thing that speaks S3 here and a second S3 client would be a second set of
+     * credentials to keep in step.
+     *
+     * `remotePath` is the whole safety story. A remote name and a path are both
+     * spliced into an argv, so both are checked: the name against REMOTE_NAME as
+     * before, and the path for the two things that turn a path into something
+     * else — a leading dash, which rclone reads as a flag, and `..`, which walks
+     * out of the prefix the caller thinks it is confined to.
+     */
+    const remotePath = (name, path) => {
+      if (!REMOTE_NAME.test(String(name ?? ""))) return null;
+      const clean = String(path ?? "")
+        .replace(/^\/+/, "")
+        .replace(/\/+$/, "");
+      if (!clean) return `${name}:`;
+      // A leading "-" on any segment is a flag to rclone, and ".." escapes the
+      // prefix. Neither can appear in a name we are willing to build an argv from.
+      if (clean.split("/").some((seg) => seg === ".." || seg === "." || seg.startsWith("-"))) return null;
+      return `${name}:${clean}`;
+    };
+
+    const storageOp = p.startsWith("/api/storage/") ? p.slice("/api/storage/".length).split("/") : [];
+    const opRemote = storageOp.length > 1 ? decodeURIComponent(storageOp[0]) : null;
+    const opName = storageOp.length > 1 ? storageOp[1] : null;
+
+    /*
+     * One level of a remote, as JSON.
+     *
+     * `lsjson` rather than `ls` because parsing rclone's human output is how you
+     * get a file called "2024 final.mp4" split into three columns. --max-depth 1
+     * keeps this a directory listing: recursing a bucket of renders to draw one
+     * folder is minutes of API calls for rows nobody asked to see.
+     */
+    if (opName === "ls" && req.method === "GET") {
+      const target = remotePath(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
+      if (!target) return json(res, 400, { error: "that is not a path this can list" });
+      const r = await capture("rclone", ["lsjson", target, "--max-depth", "1"]);
+      if (!r.ok) return json(res, 200, { ok: false, entries: [], err: r.err.trim() });
+      let entries = [];
+      try {
+        entries = JSON.parse(r.out);
+      } catch {
+        return json(res, 200, { ok: false, entries: [], err: "rclone did not return a listing" });
+      }
+      return json(res, 200, {
+        ok: true,
+        entries: entries.map((e) => ({
+          name: e.Name,
+          size: e.Size,
+          modified: e.ModTime,
+          dir: Boolean(e.IsDir),
+          mime: e.MimeType ?? null,
+        })),
+      });
+    }
+
+    /*
+     * Put a file in, streamed.
+     *
+     * `rcat` reads the object from stdin, so a browser upload goes straight
+     * through without ever being a file on this machine. A render is gigabytes;
+     * buffering one to disk to send it somewhere else is a copy nobody needs and
+     * a temp file somebody has to clean up.
+     */
+    if (opName === "put" && req.method === "POST") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const dir = q.get("path") ?? "";
+      const file = basename(String(q.get("name") ?? "")).trim();
+      if (!file) return json(res, 400, { error: "that upload had no filename" });
+      const target = remotePath(opRemote, dir ? `${dir}/${file}` : file);
+      if (!target) return json(res, 400, { error: "that is not a path this can write to" });
+
+      const child = spawn("rclone", ["rcat", target], { stdio: ["pipe", "pipe", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => {
+        err += d;
+      });
+      const code = await new Promise((done) => {
+        req.pipe(child.stdin);
+        req.on("error", () => child.kill());
+        child.on("error", (e) => {
+          err += String(e);
+          done(1);
+        });
+        child.on("close", done);
+      });
+      return code === 0
+        ? json(res, 200, { ok: true, file })
+        : json(res, 500, { error: err.trim() || `rclone exited ${code}` });
+    }
+
+    /*
+     * Take one out, streamed the same way.
+     *
+     * `cat` rather than a signed URL: the credential lives in rclone's config on
+     * this machine and has no business being minted into a link the browser then
+     * holds. The cost is that the bytes come through here, which for one file
+     * somebody clicked is not a cost worth a second auth path.
+     */
+    if (opName === "get" && req.method === "GET") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const target = remotePath(opRemote, q.get("path"));
+      if (!target || target.endsWith(":")) {
+        res.writeHead(400);
+        return res.end();
+      }
+      const file = basename(String(q.get("path") ?? "")) || "download";
+      const child = spawn("rclone", ["cat", target], { stdio: ["ignore", "pipe", "pipe"] });
+      res.writeHead(200, {
+        "content-type": MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
+        "content-disposition": `inline; filename="${file.replace(/"/g, "")}"`,
+      });
+      return child.stdout.pipe(res);
+    }
+
+    if (opName === "mkdir" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const target = remotePath(opRemote, b.path);
+      if (!target || target.endsWith(":")) return json(res, 400, { error: "name the folder" });
+      const r = await capture("rclone", ["mkdir", target]);
+      return r.ok ? json(res, 200, { ok: true }) : json(res, 500, { error: r.err.trim() });
+    }
+
+    /*
+     * Move, which is also rename and also what a drag onto a folder does.
+     *
+     * One verb for all three because in object storage they are one operation —
+     * there are no directories to move BETWEEN, only keys with slashes in them.
+     * `moveto` rather than `move`: `move` treats its destination as a directory
+     * and would put the file inside a folder named after the new name.
+     */
+    if (opName === "mv" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const from = remotePath(opRemote, b.from);
+      const to = remotePath(opRemote, b.to);
+      if (!from || !to || from.endsWith(":") || to.endsWith(":")) {
+        return json(res, 400, { error: "a move needs a source and a destination" });
+      }
+      if (from === to) return json(res, 200, { ok: true, unchanged: true });
+      const r = await capture("rclone", [b.dir ? "move" : "moveto", from, to]);
+      return r.ok ? json(res, 200, { ok: true }) : json(res, 500, { error: r.err.trim() });
+    }
+
+    /*
+     * And take something away.
+     *
+     * A folder is `purge`, which removes what is under it — there is no such
+     * thing as an empty directory to remove instead, and refusing to delete a
+     * non-empty one would mean the panel could create folders it could never get
+     * rid of. The confirmation for that lives in the UI, where the person is.
+     */
+    if (opName === "rm" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const target = remotePath(opRemote, b.path);
+      if (!target || target.endsWith(":")) return json(res, 400, { error: "that is not a path this can remove" });
+      const r = await capture("rclone", [b.dir ? "purge" : "deletefile", target]);
+      return r.ok ? json(res, 200, { ok: true }) : json(res, 500, { error: r.err.trim() });
+    }
+
     if (p === "/api/storage" && req.method === "POST") {
       const b = JSON.parse(await text(req));
       if (!REMOTE_NAME.test(String(b.name ?? ""))) {
         return json(res, 400, { ok: false, err: "a remote name is letters, digits, dash and underscore" });
       }
+      /*
+       * Which S3, not just Cloudflare's.
+       *
+       * `provider` was pinned to "Cloudflare", so the panel could only ever make
+       * an R2 remote — and rclone uses that value to decide which dialect of S3
+       * it is speaking, so pointing the old form at an AWS endpoint produced a
+       * remote that authenticated and then failed on operations. R2 stays the
+       * default because it is what this pipeline recommends and it has no egress
+       * fee, which is the line item that hurts with video.
+       *
+       * AWS wants a region and no endpoint; R2 and the rest want an endpoint and
+       * no region. Sending the empty one anyway writes a blank key into the
+       * config that rclone then honours as "" rather than as absent.
+       */
+      const PROVIDERS = new Set(["Cloudflare", "AWS", "Minio", "Wasabi", "DigitalOcean", "Other"]);
+      const provider = PROVIDERS.has(String(b.provider)) ? String(b.provider) : "Cloudflare";
       const args = [
         "config", "create", b.name, "s3",
-        "provider", "Cloudflare",
+        "provider", provider,
         "access_key_id", b.accessKeyId,
         "secret_access_key", b.secretAccessKey,
-        "endpoint", b.endpoint,
         "acl", "private",
       ];
+      if (b.endpoint) args.push("endpoint", b.endpoint);
+      if (b.region) args.push("region", b.region);
       const r = await capture("rclone", args);
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }

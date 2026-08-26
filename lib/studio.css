@@ -2717,6 +2717,120 @@ textarea.form-control.script-body {
   white-space: nowrap;
 }
 
+/*
+ * Looking inside a remote.
+ *
+ * A list rather than a grid of cards: what you want from a bucket listing is
+ * name, size and when — three columns you read down — and a card per object
+ * turns forty renders into a page of scrolling.
+ */
+.s3bar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+  margin-block-end: var(--op-space-small);
+}
+
+.s3list {
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  display: flex;
+  flex-direction: column;
+  margin-block-end: var(--op-space-small);
+  overflow: hidden;
+}
+
+.s3row {
+  align-items: center;
+  border-block-end: var(--op-border-width) solid var(--line);
+  cursor: grab;
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: auto 1fr auto auto;
+  padding: var(--op-space-2x-small) var(--op-space-small);
+}
+
+.s3row:last-child {
+  border-block-end: none;
+}
+
+.s3row:hover {
+  background-color: var(--panel);
+}
+
+/* Half-there while it is being dragged, so the row you are holding is obvious
+   without the drop targets having to compete with it. */
+.s3row--dragging {
+  opacity: 0.4;
+}
+
+/* Only folders take this, because only folders are drop targets. */
+.s3row--over {
+  background-color: var(--op-color-primary-plus-max);
+  box-shadow: inset 0 0 0 var(--op-border-width) var(--op-color-primary-base);
+}
+
+.s3row__icon {
+  color: var(--accent);
+}
+
+.s3row__name {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: inherit;
+  font: inherit;
+  overflow: hidden;
+  padding: 0;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s3row:has(.s3row__icon.hgi-folder-01) .s3row__name {
+  cursor: pointer;
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.s3row__meta {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  white-space: nowrap;
+}
+
+/* The kebab is pinned to a card's corner by default; in a row it is just the
+   last column. */
+.s3row__menu {
+  inset: auto;
+  position: static;
+}
+
+/* Same target as the project drop zone, at half the height: here it is the
+   second way in, not the only one. */
+.s3drop {
+  align-items: center;
+  background-color: transparent;
+  border: var(--op-border-width) dashed var(--line);
+  border-radius: var(--op-radius-large);
+  color: var(--op-color-neutral-on-plus-max);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  padding: var(--op-space-medium);
+  text-align: center;
+}
+
+.s3drop:hover {
+  border-color: var(--op-color-primary-base);
+}
+
+.s3drop .hgi-stroke {
+  color: var(--op-color-primary-base);
+  font-size: var(--op-font-x-large);
+}
+
 [hidden] {
    display: none !important;
 }
