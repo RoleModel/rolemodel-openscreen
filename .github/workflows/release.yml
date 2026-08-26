@@ -48,7 +48,13 @@ jobs:
           {"schemaVersion":7,"project":{"id":"p","title":"t","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"assets":[],"timeline":{"clips":[],"gaps":[],"trimRanges":[],"muteRanges":[],"speedRanges":[],"captionRanges":[]},"annotations":[],"zoomRanges":[],"legacyEditor":{}}
           JSON
           node bin/rm-video.mjs brand /tmp/t.openscreen --preset academy --unit rails --title "CI" --eyebrow "smoke"
-          node -e 'const d=require("/tmp/t.openscreen");if(!d.annotations.length)throw new Error("no annotations written");if(!d.legacyEditor.wallpaper)throw new Error("no wallpaper set");console.log("ok")'
+          # readFileSync + JSON.parse, not require(). `require` only parses JSON
+          # for a `.json` extension; for anything else Node treats the file as
+          # CommonJS JavaScript, so this tried to EXECUTE the document and died
+          # on `"schemaVersion": 7` with a SyntaxError. It has never worked —
+          # v0.0.1 failed here in 16s too, which is why no release has ever been
+          # produced and the tap still points at a tarball nobody built.
+          node -e 'const d=JSON.parse(require("node:fs").readFileSync("/tmp/t.openscreen","utf8"));if(!d.annotations.length)throw new Error("no annotations written");if(!d.legacyEditor.wallpaper)throw new Error("no wallpaper set");console.log("ok")'
 
   release:
     needs: verify
