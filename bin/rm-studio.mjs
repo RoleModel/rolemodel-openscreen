@@ -1121,6 +1121,22 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * The worked example, so "From a test" is something you can press.
+     *
+     * This panel asked for a Playwright trace you had produced somewhere else,
+     * or for a demo script written against a product the Studio has never seen —
+     * so the one panel that needed a worked example was the one where you could
+     * not get started without already knowing the answer. This is a real script
+     * against a real public site, and it runs.
+     */
+    if (p === "/api/demo/example") {
+      const file = join(TOOLKIT, "presets/demos/rolemodel-tour.md");
+      const body = await readFile(file, "utf8").catch(() => null);
+      if (body === null) return json(res, 404, { error: "the example script is not installed" });
+      return json(res, 200, { ok: true, name: "rolemodel-tour", body });
+    }
+
+    /*
      * A brand asset somebody added — a client logo, a product shot, a texture.
      *
      * The Brand page could show the vendored marks and clay renders and nothing
