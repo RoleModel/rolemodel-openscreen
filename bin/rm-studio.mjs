@@ -29,6 +29,7 @@ import { pipeline } from "node:stream/promises";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
+import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
@@ -51,13 +52,15 @@ import {
 } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import {
+	STATE_DIR,
+	agentChoice,
 	currentProject,
 	lastView,
 	openFrameSettings,
+	setAgentChoice,
 	setCurrentProject,
 	setLastView,
 	setOpenFrameSettings,
-	STATE_DIR,
 } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
@@ -984,20 +987,10 @@ const server = createServer(async (req, res) => {
         dir: outDir,
         brief: join(outDir, "brief.md"),
         isUrl,
-        // Headless Claude, run from the render directory so relative paths in the
-        // prompt land where the brief says they will.
-        step: {
-          label: `make ${slug}`,
-          project: id,
-          bin: "claude",
-          // stream-json, not the default text output. `claude -p` in text mode
-          // prints one blob when it finishes, so a long render showed an empty
-          // Console for minutes and looked hung. stream-json emits an event per
-          // step; --verbose is required alongside it. The Studio renders those
-          // events rather than showing raw NDJSON.
-          args: ["-p", prompt, "--permission-mode", "acceptEdits", "--output-format", "stream-json", "--verbose"],
-          cwd: outDir,
-        },
+        // Headless agent, run from the render directory so relative paths in the
+        // prompt land where the brief says they will. Which agent, and the argv
+        // that goes with it, is lib/agents.mjs — one decision, not two copies.
+        step: { ...agentStep(await agentChoice(), { prompt, cwd: outDir, label: `make ${slug}` }), project: id },
       });
     }
 
@@ -2643,18 +2636,7 @@ async function fetchVoiceList() {
       return json(res, 200, {
         dest,
         prompt,
-        step: {
-          label: `draft ${nm}`,
-          project: id,
-          bin: "claude",
-          // stream-json, not the default text output. `claude -p` in text mode
-          // prints one blob when it finishes, so a long render showed an empty
-          // Console for minutes and looked hung. stream-json emits an event per
-          // step; --verbose is required alongside it. The Studio renders those
-          // events rather than showing raw NDJSON.
-          args: ["-p", prompt, "--permission-mode", "acceptEdits", "--output-format", "stream-json", "--verbose"],
-          cwd: dir,
-        },
+        step: { ...agentStep(await agentChoice(), { prompt, cwd: dir, label: `draft ${nm}` }), project: id },
       });
     }
 
@@ -3559,6 +3541,31 @@ async function fetchVoiceList() {
       }
       await setCurrentProject(id);
       return json(res, 200, { ok: true, id });
+    }
+
+    /*
+     * Which agent runs the AI steps.
+     *
+     * A route rather than an env var for the reason lib/settings.mjs exists: a
+     * GUI launched from Finder inherits no shell environment, so configuration
+     * only a shell can supply is configuration nobody can set.
+     *
+     * `ready` is reported so the UI can say which of these has actually been run
+     * — see lib/agents.mjs. Pi is wired and untested, and a picker that presents
+     * it as an equal choice would be lying.
+     */
+    if (p === "/api/agent") {
+      if (req.method === "POST") {
+        const body = JSON.parse(await text(req));
+        const want = String(body.agent ?? "");
+        if (!AGENTS[want]) return json(res, 400, { error: `no agent called "${want}"` });
+        await setAgentChoice(want);
+        return json(res, 200, { ok: true, agent: want });
+      }
+      return json(res, 200, {
+        chosen: (await agentChoice()) ?? "claude",
+        agents: Object.values(AGENTS).map((a) => ({ id: a.id, label: a.label, billing: a.billing, ready: a.ready })),
+      });
     }
 
     if (p === "/api/view" && req.method === "POST") {
