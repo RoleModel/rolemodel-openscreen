@@ -511,6 +511,168 @@ class RMImage extends RMElement {
 }
 define('rm-image', RMImage)
 
+/* ── rm-shader ───────────────────────────────────────────────────────────── */
+
+/*
+ * The RoleModel mark-driven dither field, made for a seekable scene.
+ *
+ * The brand-site version advances on requestAnimationFrame. A video renderer
+ * cannot use wall-clock time: the same 2400ms frame must always be the same, so
+ * this one draws only when RM.seek() changes the scene time or the canvas resizes.
+ */
+const SHADER_ICON = new URL('../brand/logos/standard-icon.svg', import.meta.url).href
+const SHADER_VERTEX = 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}'
+const SHADER_FRAGMENT = [
+  'precision highp float;uniform vec2 r;uniform float d;uniform float t;uniform float density;uniform sampler2D markTex;uniform vec3 bg;uniform vec3 dots;varying vec2 v;',
+  'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
+  'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}float b8(vec2 p){return 4.*b4(mod(p,4.))+b2(floor(p/4.));}',
+  'float mark(vec2 uv,float scale,float angle){vec2 q=uv-.5;q.x*=r.x/r.y;q=mat2(cos(angle),-sin(angle),sin(angle),cos(angle))*q;vec2 m=q*scale+.5;if(m.x<0.||m.x>1.||m.y<0.||m.y>1.)return 0.;return texture2D(markTex,m).a;}',
+  'void main(){vec2 px=floor(gl_FragCoord.xy/d);float spin=t*.15;float shape=.12*density+(.62+.18*density)*(.42*mark(v,.64,spin)+.28*mark(v,.50,spin)+.17*mark(v,.39,spin));vec2 c=v-.5;c.x*=r.x/r.y;shape=clamp(shape*(1.-smoothstep(.23,.59,length(c))),0.,1.);gl_FragColor=vec4(mix(bg,dots,step(1.-b8(mod(px,8.))/64.,shape)),1.);}',
+].join('')
+const SHADER_HEX = /^#(?:[\da-f]{3}|[\da-f]{6})$/i
+const shaderClamp = (value, min, max) => Math.min(max, Math.max(min, value))
+const shaderColour = (value, fallback) => (SHADER_HEX.test(value) ? value : fallback)
+const shaderVector = (root, colour, fallback) => {
+  const swatch = document.createElement('i')
+  swatch.style.color = colour
+  root.append(swatch)
+  const parts = getComputedStyle(swatch).color.match(/\d+(?:\.\d+)?/g)
+  swatch.remove()
+  if (!parts || parts.length < 3) return fallback
+  return parts.slice(0, 3).map((part) => Number(part) / 255)
+}
+const compileShader = (gl, type, source) => {
+  const shader = gl.createShader(type)
+  if (!shader) return null
+  gl.shaderSource(shader, source)
+  gl.compileShader(shader)
+  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader
+  gl.deleteShader(shader)
+  return null
+}
+
+class RMShader extends RMElement {
+  static fields = ['title', 'subtitle', 'theme', 'accent', 'density', 'motion', 'at', 'for']
+
+  disconnectedCallback() {
+    this._dispose?.()
+    this._dispose = null
+  }
+
+  render() {
+    this._dispose?.()
+    const dark = this.attr('theme', 'dark') === 'dark'
+    const accent = shaderColour(this.attr('accent'), 'var(--op-color-primary-base, #3a70b3)')
+    const density = shaderClamp(Number(this.attr('density', 1)) || 1, 0.4, 2.2)
+    const drifting = this.attr('motion', 'still') === 'drift'
+    const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
+    const dots = dark ? 'var(--op-color-neutral-minus-seven, #caccce)' : 'var(--op-color-neutral-plus-seven, #333333)'
+    const ink = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
+    const title = this.esc(this.attr('title', 'Standard'))
+    const subtitle = this.attr('subtitle')
+    this.shadowRoot.innerHTML =
+      '<style>' +
+      TYPE +
+      TIMING +
+      ':host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:' +
+      background +
+      ';}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:' +
+      ink +
+      ';text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:' +
+      accent +
+      ';mask:url(' +
+      SHADER_ICON +
+      ') center/contain no-repeat;-webkit-mask:url(' +
+      SHADER_ICON +
+      ') center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:' +
+      dots +
+      ';}</style><div class="asset anim"><canvas aria-hidden="true"></canvas><div class="lockup"><i class="mark" aria-hidden="true"></i><h2>' +
+      title +
+      '</h2>' +
+      (subtitle ? '<p>' + this.esc(subtitle) + '</p>' : '') +
+      '</div></div>'
+
+    const canvas = this.shadowRoot.querySelector('canvas')
+    const gl = canvas.getContext('webgl', { alpha: false, antialias: false })
+    const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
+    const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, SHADER_FRAGMENT)
+    const program = gl?.createProgram()
+    if (!(gl && vertex && fragment && program)) return
+    gl.attachShader(program, vertex)
+    gl.attachShader(program, fragment)
+    gl.linkProgram(program)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return
+    gl.useProgram(program)
+
+    const buffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW)
+    const position = gl.getAttribLocation(program, 'p')
+    gl.enableVertexAttribArray(position)
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+    const uniform = (name) => gl.getUniformLocation(program, name)
+    const resolution = uniform('r')
+    const time = uniform('t')
+    const dotSize = uniform('d')
+    gl.uniform1f(uniform('density'), density)
+    gl.uniform3fv(uniform('bg'), shaderVector(this.shadowRoot, background, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
+    gl.uniform3fv(uniform('dots'), shaderVector(this.shadowRoot, dots, dark ? [0.8, 0.8, 0.8] : [0.2, 0.2, 0.2]))
+
+    const texture = gl.createTexture()
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+    gl.uniform1i(uniform('markTex'), 0)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+
+    const draw = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+      const width = Math.max(1, Math.round(canvas.clientWidth * ratio))
+      const height = Math.max(1, Math.round(canvas.clientHeight * ratio))
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width
+        canvas.height = height
+        gl.viewport(0, 0, width, height)
+      }
+      gl.uniform2f(resolution, canvas.width, canvas.height)
+      gl.uniform1f(dotSize, 2.5 * (canvas.width / Math.max(1, canvas.clientWidth)))
+      gl.uniform1f(time, drifting ? (RM.t / 1000) * 0.05 : 0)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+    }
+    const observer = new ResizeObserver(draw)
+    const onSeek = () => draw()
+    observer.observe(canvas)
+    root.addEventListener('rmseek', onSeek)
+    let settleTexture
+    RM.waitFor(new Promise((resolve) => (settleTexture = resolve)))
+    const image = new Image()
+    image.onload = () => {
+      const source = document.createElement('canvas')
+      source.width = source.height = 512
+      source.getContext('2d')?.drawImage(image, 0, 0, 512, 512)
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+      draw()
+      settleTexture()
+    }
+    image.onerror = () => settleTexture()
+    image.src = SHADER_ICON
+    draw()
+    this._dispose = () => {
+      observer.disconnect()
+      root.removeEventListener('rmseek', onSeek)
+      settleTexture()
+      gl.deleteTexture(texture)
+      gl.deleteBuffer(buffer)
+      gl.deleteProgram(program)
+      gl.deleteShader(vertex)
+      gl.deleteShader(fragment)
+    }
+  }
+}
+define('rm-shader', RMShader)
+
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -685,4 +847,4 @@ class RMBullets extends RMElement {
 }
 define('rm-bullets', RMBullets)
 
-export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMStat, RMBullets }
+export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }

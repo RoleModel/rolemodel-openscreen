@@ -416,10 +416,18 @@ async function scriptsIn(dir, project) {
         const brief = await readFile(join(dir, `${name}.brief.json`), "utf8")
           .then(JSON.parse)
           .catch(() => null);
+        /*
+         * When it was last written, so the project page can order it against
+         * footage. Without this a script has no timestamp and sorts to the end of
+         * a list whose whole point is "newest first", so a script written a
+         * minute ago sits below footage from last week.
+         */
+        const st = await stat(join(dir, f)).catch(() => null);
         return {
           name,
           project,
           body: await readFile(join(dir, f), "utf8"),
+          mtime: st ? st.mtime.toISOString() : null,
           brief,
         };
       }),
