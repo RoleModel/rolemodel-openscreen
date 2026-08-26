@@ -514,7 +514,7 @@ define('rm-image', RMImage)
 /* ── rm-shader ───────────────────────────────────────────────────────────── */
 
 /*
- * The RoleModel mark-driven dither field, made for a seekable scene.
+ * The RoleModel halftone field, made for a seekable scene.
  *
  * The brand-site version advances on requestAnimationFrame. A video renderer
  * cannot use wall-clock time: the same 2400ms frame must always be the same, so
@@ -523,15 +523,15 @@ define('rm-image', RMImage)
 const SHADER_ICON = new URL('../brand/logos/standard-icon.svg', import.meta.url).href
 const SHADER_VERTEX = 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}'
 const SHADER_FRAGMENT = [
-  'precision highp float;uniform vec2 r;uniform float d;uniform float t;uniform float density;uniform sampler2D markTex;uniform vec3 bg;uniform vec3 dots;varying vec2 v;',
+  'precision highp float;uniform vec2 r;uniform float d;uniform float t;uniform float density;uniform float gamma;uniform float black;uniform float white;uniform float imageAspect;uniform sampler2D imageTex;uniform vec3 paper;uniform vec3 ink;varying vec2 v;',
   'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
   'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}float b8(vec2 p){return 4.*b4(mod(p,4.))+b2(floor(p/4.));}',
-  'float mark(vec2 uv,float scale,float angle){vec2 q=uv-.5;q.x*=r.x/r.y;q=mat2(cos(angle),-sin(angle),sin(angle),cos(angle))*q;vec2 m=q*scale+.5;if(m.x<0.||m.x>1.||m.y<0.||m.y>1.)return 0.;return texture2D(markTex,m).a;}',
-  'void main(){vec2 px=floor(gl_FragCoord.xy/d);float spin=t*.15;float shape=.12*density+(.62+.18*density)*(.42*mark(v,.64,spin)+.28*mark(v,.50,spin)+.17*mark(v,.39,spin));vec2 c=v-.5;c.x*=r.x/r.y;shape=clamp(shape*(1.-smoothstep(.23,.59,length(c))),0.,1.);gl_FragColor=vec4(mix(bg,dots,step(1.-b8(mod(px,8.))/64.,shape)),1.);}',
+  'vec2 coverUV(vec2 uv){float canvasAspect=r.x/r.y;vec2 s=canvasAspect>imageAspect?vec2(1.,imageAspect/canvasAspect):vec2(canvasAspect/imageAspect,1.);return(uv-.5)*s+.5;}',
+  'void main(){vec2 px=floor(gl_FragCoord.xy/d);vec2 drift=vec2(sin(t*.8),cos(t*.6))*.012;vec4 sample=texture2D(imageTex,coverUV(v+drift));vec3 photo=mix(vec3(1.),sample.rgb,sample.a);float luma=dot(photo,vec3(.299,.587,.114));float level=clamp((1.-luma-black)/max(.001,white-black),0.,1.);float coverage=clamp(pow(level,gamma)*density,0.,1.);float threshold=1.-b8(mod(px,8.))/64.;gl_FragColor=vec4(mix(paper,ink,step(threshold,coverage)),1.);}',
 ].join('')
 const SHADER_HEX = /^#(?:[\da-f]{3}|[\da-f]{6})$/i
 const shaderClamp = (value, min, max) => Math.min(max, Math.max(min, value))
-const shaderColour = (value, fallback) => (SHADER_HEX.test(value) ? value : fallback)
+const shaderColour = (value, fallback) => (SHADER_HEX.test(value) || String(value).startsWith('var(') ? value : fallback)
 const shaderVector = (root, colour, fallback) => {
   const swatch = document.createElement('i')
   swatch.style.color = colour
@@ -552,7 +552,7 @@ const compileShader = (gl, type, source) => {
 }
 
 class RMShader extends RMElement {
-  static fields = ['title', 'subtitle', 'theme', 'accent', 'density', 'motion', 'at', 'for']
+  static fields = ['title', 'subtitle', 'image', 'theme', 'accent', 'density', 'dot', 'black', 'white', 'gamma', 'motion', 'at', 'for']
 
   disconnectedCallback() {
     this._dispose?.()
@@ -564,12 +564,19 @@ class RMShader extends RMElement {
     const dark = this.attr('theme', 'dark') === 'dark'
     const accent = shaderColour(this.attr('accent'), 'var(--op-color-primary-base, #3a70b3)')
     const density = shaderClamp(Number(this.attr('density', 1)) || 1, 0.4, 2.2)
+    const dot = shaderClamp(Number(this.attr('dot', 2)) || 2, 1, 12)
+    const black = shaderClamp(Number(this.attr('black', 0.02)) || 0, 0, 0.4)
+    const white = shaderClamp(Number(this.attr('white', 0.58)) || 0.58, 0.2, 1)
+    const gamma = shaderClamp(Number(this.attr('gamma', 0.9)) || 0.9, 0.3, 2)
     const drifting = this.attr('motion', 'still') === 'drift'
     const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
     const dots = dark ? 'var(--op-color-neutral-minus-seven, #caccce)' : 'var(--op-color-neutral-plus-seven, #333333)'
     const ink = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
     const title = this.esc(this.attr('title', 'Standard'))
     const subtitle = this.attr('subtitle')
+    const rawImage = this.attr('image')
+    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const imageSource = !rawImage || rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage || SHADER_ICON : `${base}/${rawImage}`
     this.shadowRoot.innerHTML =
       '<style>' +
       TYPE +
@@ -614,16 +621,20 @@ class RMShader extends RMElement {
     const resolution = uniform('r')
     const time = uniform('t')
     const dotSize = uniform('d')
+    const aspect = uniform('imageAspect')
     gl.uniform1f(uniform('density'), density)
-    gl.uniform3fv(uniform('bg'), shaderVector(this.shadowRoot, background, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
-    gl.uniform3fv(uniform('dots'), shaderVector(this.shadowRoot, dots, dark ? [0.8, 0.8, 0.8] : [0.2, 0.2, 0.2]))
+    gl.uniform1f(uniform('gamma'), gamma)
+    gl.uniform1f(uniform('black'), black)
+    gl.uniform1f(uniform('white'), white)
+    gl.uniform3fv(uniform('paper'), shaderVector(this.shadowRoot, background, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
+    gl.uniform3fv(uniform('ink'), shaderVector(this.shadowRoot, accent, dark ? [0.23, 0.44, 0.7] : [0.23, 0.44, 0.7]))
 
     const texture = gl.createTexture()
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, texture)
     for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
-    gl.uniform1i(uniform('markTex'), 0)
+    gl.uniform1i(uniform('imageTex'), 0)
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
 
     const draw = () => {
@@ -636,8 +647,8 @@ class RMShader extends RMElement {
         gl.viewport(0, 0, width, height)
       }
       gl.uniform2f(resolution, canvas.width, canvas.height)
-      gl.uniform1f(dotSize, 2.5 * (canvas.width / Math.max(1, canvas.clientWidth)))
-      gl.uniform1f(time, drifting ? (RM.t / 1000) * 0.05 : 0)
+      gl.uniform1f(dotSize, dot * (canvas.width / Math.max(1, canvas.clientWidth)))
+      gl.uniform1f(time, drifting ? RM.t / 1000 : 0)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
     }
     const observer = new ResizeObserver(draw)
@@ -648,16 +659,14 @@ class RMShader extends RMElement {
     RM.waitFor(new Promise((resolve) => (settleTexture = resolve)))
     const image = new Image()
     image.onload = () => {
-      const source = document.createElement('canvas')
-      source.width = source.height = 512
-      source.getContext('2d')?.drawImage(image, 0, 0, 512, 512)
       gl.bindTexture(gl.TEXTURE_2D, texture)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+      gl.uniform1f(aspect, image.naturalWidth / Math.max(1, image.naturalHeight))
       draw()
       settleTexture()
     }
     image.onerror = () => settleTexture()
-    image.src = SHADER_ICON
+    image.src = imageSource
     draw()
     this._dispose = () => {
       observer.disconnect()

@@ -581,6 +581,24 @@ textarea {
   border-color: var(--line);
 }
 
+/*
+ * The placeholder is not transparent, even though the text is.
+ *
+ * Nothing here or in Optics styles ::placeholder, and current Chromium derives
+ * it from `currentColor` — so making the text transparent for the highlight
+ * layer made the placeholder transparent with it. The layer only ever paints the
+ * VALUE, so an empty field had nothing visible in it at all: five fields showed
+ * a blank box until you clicked in and started typing.
+ *
+ * It went unnoticed while these were 26 lines tall among other fields. Giving the
+ * script box the height of the column turned a small empty box into a large one,
+ * which is the only thing that changed.
+ */
+.hl-wrap > textarea.form-control::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
 /* The key reads as syntax, the value as data — which is why only the value is
          chipped. One accent for every setting rather than a colour per directive: a
          palette invented here would say things about the brand that the brand does
@@ -3077,6 +3095,25 @@ textarea.fills.form-control {
    itself to the old height. */
 .form-group:has(> textarea.fills) {
   grid-column: 1 / -1;
+}
+
+/*
+ * A container with nothing in it takes no room.
+ *
+ * Several panels append a slot up front and fill it later — where a build's argv
+ * goes, where its output goes, which assets were picked. Appended empty they are
+ * still grid items, so a form carried two or three blank rows and the gaps
+ * between them, which reads as broken spacing rather than as space held for
+ * something.
+ *
+ * `:empty` rather than removing them in JS: the slots are filled and cleared by
+ * several paths, and a rule that re-evaluates itself cannot fall out of step
+ * with them. It matches only a truly childless element, which is what these are
+ * until something is put in.
+ */
+.form > .full:empty,
+.form > .form-group:empty {
+  display: none;
 }
 
 [hidden] {
