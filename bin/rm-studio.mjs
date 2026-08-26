@@ -31,6 +31,16 @@ import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
+import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
+import {
+	RATINGS,
+	boardProgress,
+	boardToDocument,
+	chosenTake,
+	slotsFromBrief,
+	takeId as takeIdFor,
+	toCutlist,
+} from "../lib/storyboard.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
 import { clientStamp, renderStudioHTML } from "../lib/studio-ui.mjs";
@@ -43,7 +53,7 @@ import {
 	run,
 	writeManifest,
 } from "../lib/library.mjs";
-import { ROOT as TOOLKIT, loadPreset } from "../lib/theme.mjs";
+import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
 import {
   actions as demoActions,
   describe as describeDemo,
@@ -55,6 +65,13 @@ import {
 	STATE_DIR,
 	agentChoice,
 	currentProject,
+	reviewerName,
+	setReviewerName,
+	setSupabaseSettings,
+	supabaseProblem,
+	supabaseSettings,
+	setSyncChoice,
+	syncChoice,
 	docsUrl,
 	lastView,
 	openFrameSettings,
@@ -161,6 +178,29 @@ let previewSeq = 0;
 const PREVIEWS_KEPT = 8;
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
+
+/**
+ * A name safe to write to disk, keeping everything a disk can actually take.
+ *
+ * The rule used to be `[a-z0-9 _-]` and drop the rest, written in three places.
+ * That is a rule about ASCII rather than about filenames: "Rôle Mödel.mp4"
+ * imported as "Rle Mdel.mp4", a client logo called "Café.png" became "Caf.png",
+ * and a Japanese or Arabic name was erased to the fallback entirely. APFS, ext4
+ * and NTFS all take UTF-8; what they cannot take is a path separator, a control
+ * character, or the punctuation Windows reserves.
+ *
+ * The leading dot goes for a different reason — not safety, but that a hidden
+ * file in a media folder indexes and then cannot be found by anyone who goes
+ * looking for it in Finder.
+ *
+ * NOT for anything that becomes an id or a URL segment. Slugs stay ASCII, and
+ * the two callers that build one still fold this down themselves.
+ */
+const safeName = (name, fallback) =>
+	String(name ?? "")
+		.replace(/[/\\:*?"<>|\x00-\x1f]/g, "")
+		.replace(/^\.+/, "")
+		.trim() || fallback;
 const thumbDir = (id) => join(projectDir(id), ".thumbs");
 
 const MIME = {
@@ -743,7 +783,7 @@ const server = createServer(async (req, res) => {
 
     if (p === "/api/script" && req.method === "POST") {
       const body = JSON.parse(await text(req));
-      const safe = (body.name || "untitled").replace(/[^a-z0-9 _-]/gi, "").trim() || "untitled";
+      const safe = safeName(body.name, "untitled");
       // A script either belongs to a project or to the shared shelf. Most do
       // belong to a project, and burying them all in one global folder is how
       // you end up unable to tell which client a script was written for.
@@ -1169,7 +1209,17 @@ const server = createServer(async (req, res) => {
      * two folders depending on how it arrived, and the catalog reads folders.
      */
     const mediaSpot = async (id, filename) => {
-      const ext = extname(filename).toLowerCase();
+      /*
+       * Both cases of the extension, because they do different jobs.
+       *
+       * `ext` decides which folder this lands in and is compared against
+       * lowercase lists. `raw` is what has to be stripped off the name — and
+       * `basename(file, ext)` is case-SENSITIVE, so stripping ".mp4" off
+       * "Clip.MP4" removed nothing and the scrub below then ate the dot:
+       * "Clip.MP4" imported as "ClipMP4.mp4".
+       */
+      const rawExt = extname(filename);
+      const ext = rawExt.toLowerCase();
       const AUDIO = [".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"];
       const VIDEO = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"];
       const STILL = [".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"];
@@ -1185,7 +1235,8 @@ const server = createServer(async (req, res) => {
 
       // Never silently replace something already there: two takes with the same
       // name is normal, and losing the first one to an import is not.
-      const stem = basename(filename, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "import";
+      // Keeps everything a disk can take — see safeName.
+      const stem = safeName(basename(filename, rawExt), "import");
       let dest = join(dir, `${stem}${ext}`);
       let n = 2;
       while (await stat(dest).then(() => true).catch(() => false)) {
@@ -1251,7 +1302,7 @@ const server = createServer(async (req, res) => {
           error: `${ext || "that"} is not an image — png, jpg, webp, svg, gif or avif`,
         });
       }
-      const stem = basename(raw, ext).replace(/[^a-z0-9 _-]/gi, "").trim() || "asset";
+      const stem = safeName(basename(raw, ext), "asset");
 
       await mkdir(ADDED_DIR, { recursive: true });
       // Never silently replace: two versions of a client's mark under one name is
@@ -1659,6 +1710,31 @@ const server = createServer(async (req, res) => {
       } catch {
         return { repaired: false, reason: "the document could not be read" };
       }
+
+      /*
+       * A wallpaper pinned to a Homebrew keg that no longer exists.
+       *
+       * Documents branded before `stablePath` recorded the versioned Cellar path —
+       * `.../Cellar/rm-video/0.0.1/libexec/...` — so upgrading to 0.1.0 deleted the
+       * directory every one of them pointed at. The compositor then complains once
+       * PER FRAME and still exits 0, writing an MP4 with no wallpaper: a failure
+       * loud in the log and invisible in the result.
+       *
+       * Rewritten rather than reported, because unlike a missing video there is no
+       * ambiguity about what was meant — the same file is still installed, at the
+       * version-stable path Homebrew maintains for exactly this. Saved separately
+       * from the media repair below so a document with a healthy video still gets
+       * its wallpaper fixed.
+       */
+      const wall = doc?.editor?.wallpaper;
+      if (typeof wall === "string") {
+        const stable = stablePath(wall);
+        if (stable !== wall && (await stat(stable).catch(() => null))) {
+          doc.editor.wallpaper = stable;
+          await writeFile(docPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        }
+      }
+
       const current = doc?.media?.screenVideoPath;
       if (!current) return { repaired: false, reason: "the document names no video" };
       if (await stat(current).catch(() => null)) {
@@ -2388,7 +2464,8 @@ async function fetchVoiceList() {
       const m = await readManifest(projectDir(id)).catch(() => null);
       if (!m) return json(res, 404, { error: "pick a project" });
 
-      const safe = (body.name || "demo").replace(/[^a-z0-9 _-]/gi, "").trim() || "demo";
+      // Slugged on the next line, so this one only has to be writable.
+      const safe = safeName(body.name, "demo");
       const slug = safe.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
       const parsed = parseDemo(String(body.body ?? ""));
       if (parsed.problems.length) return json(res, 400, { error: parsed.problems.join("; "), problems: parsed.problems });
@@ -3527,6 +3604,290 @@ async function fetchVoiceList() {
       return json(res, 200, { ok: true, name: nm, file: join(dir, `${nm}.html`) });
     }
 
+    /*
+     * ────────────────────────── the storyboard ──────────────────────────
+     *
+     * One board per project, read whole and written whole. Every mutating route
+     * goes through `applyToBoard` so the board, the history log and the sync
+     * adapter cannot drift — a route that wrote the file itself would eventually
+     * forget the log, and the log is the part that survives a bad merge.
+     *
+     * Ratings are attributed on the SERVER, from the stored reviewer name, rather
+     * than taken from the request. A client that names its own rater can rate as
+     * anybody, and the entire value of a rating is whose it is.
+     */
+    if (p === "/api/board" && req.method === "GET") {
+      const id = new URL(req.url, "http://x").searchParams.get("project") ?? "";
+      if (!id) return json(res, 400, { error: "which project?" });
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      try {
+        const board = await readBoard(projectDir(id), { projectId: id, title: m?.name ?? "" });
+        return json(res, 200, {
+          board,
+          progress: boardProgress(board),
+          ratings: RATINGS,
+          me: await reviewerName(),
+          sync: await syncState(),
+        });
+      } catch (err) {
+        // A corrupt or too-new board is reported as itself. The panel shows the
+        // sentence rather than an empty board, because an empty board is what a
+        // person would then start filling in over the top of real work.
+        return json(res, 409, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * The shots, from the brief.
+     *
+     * Re-reading a brief is idempotent and does not touch takes: slot ids derive
+     * from order and name, so an unchanged brief produces the identical slots and
+     * everything stays attached. An EDITED shot name is a new slot by design —
+     * see slotsFromBrief for why that is the safe direction to be wrong in.
+     */
+    if (p === "/api/board/slots" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!id) return json(res, 400, { error: "which project?" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const brief = body.brief ?? board.brief;
+      if (!Array.isArray(brief?.shots) || !brief.shots.length) {
+        return json(res, 400, { error: "a storyboard needs a brief that lists the shots — add at least one" });
+      }
+      const next = await applyToBoard(
+        dir,
+        board,
+        { type: "slots", at: new Date().toISOString(), by: await reviewerName(), count: brief.shots.length },
+        (b) => {
+          b.brief = brief;
+          b.slots = slotsFromBrief(id, brief);
+          return b;
+        },
+      );
+      return json(res, 200, { board: next, progress: boardProgress(next) });
+    }
+
+    /** Offer a span of a file as a candidate for one slot. */
+    if (p === "/api/board/take" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const slot = String(body.slotId ?? "");
+      const rel = String(body.rel ?? "");
+      if (!id || !slot || !rel) return json(res, 400, { error: "a take needs a project, a shot and a file" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      if (!board.slots.some((x) => x.id === slot)) return json(res, 400, { error: "that shot is not on this board" });
+      /*
+       * `rel`, resolved here, exactly as the Cut route does it.
+       *
+       * The catalogue carries no absolute path, so the browser has none to send —
+       * and accepting one would mean trusting a client to name a file anywhere on
+       * the disk. Resolving against the project's own media directory is both the
+       * lookup and the boundary check.
+       *
+       * It is also what makes a board portable: an absolute path identifies
+       * nothing on a teammate's machine, so `rel` is what gets stored.
+       */
+      const file = join(mediaDir(id), rel);
+      if (!(file === LIB || file.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}: ${rel}` });
+      const st = await stat(file).catch(() => null);
+      if (!st) return json(res, 404, { error: `no such footage: ${rel}` });
+      const inSec = Math.max(0, Number(body.inSec) || 0);
+      const durationSec = Number(body.durationSec) || null;
+      const outSec = Number(body.outSec) > inSec ? Number(body.outSec) : durationSec || inSec;
+      const tid = takeIdFor(slot, rel, inSec, outSec);
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "take", at, by, slotId: slot, takeId: tid, rel }, (b) => {
+        // The id IS the span, so re-offering the same span is a no-op rather than
+        // a duplicate card. Two people adding the same clip meant it once.
+        if (!b.takes.some((t) => t.id === tid)) {
+          b.takes.push({ id: tid, slotId: slot, rel, inSec, outSec, durationSec, addedBy: by, addedAt: at });
+        }
+        return b;
+      });
+      return json(res, 200, { board: next, progress: boardProgress(next), takeId: tid });
+    }
+
+    /** Say what you think of a take. Signed by the server, not by the caller. */
+    if (p === "/api/board/rate" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const take = String(body.takeId ?? "");
+      const rating = String(body.rating ?? "");
+      if (!id || !take) return json(res, 400, { error: "a rating needs a project and a take" });
+      if (!RATINGS.some((r) => r.id === rating)) {
+        return json(res, 400, { error: `rating must be one of ${RATINGS.map((r) => r.id).join(", ")}` });
+      }
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "rate", at, by, takeId: take, rating }, (b) => {
+        // Appended, never replaced in place. `scoreOf` takes the latest per person,
+        // so changing your mind is a new line and the log keeps both — which is how
+        // "we all agreed" can be checked later rather than asserted.
+        b.ratings.push({ takeId: take, by, rating, at });
+        return b;
+      });
+      return json(res, 200, { board: next, progress: boardProgress(next) });
+    }
+
+    /** Choose the take for a slot, or clear the choice and fall back to the ratings. */
+    if (p === "/api/board/pick" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const slot = String(body.slotId ?? "");
+      if (!id || !slot) return json(res, 400, { error: "a pick needs a project and a shot" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const take = body.takeId ? String(body.takeId) : null;
+      if (take && !board.takes.some((t) => t.id === take)) return json(res, 400, { error: "that take is not on this board" });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "pick", at, by, slotId: slot, takeId: take }, (b) => {
+        b.pickedAt = b.pickedAt ?? {};
+        if (take) {
+          b.picks[slot] = take;
+          b.pickedAt[slot] = at;
+        } else {
+          delete b.picks[slot];
+          delete b.pickedAt[slot];
+        }
+        return b;
+      });
+      return json(res, 200, { board: next, progress: boardProgress(next) });
+    }
+
+    /** Say something about a take or a shot, so a decision carries its argument. */
+    if (p === "/api/board/comment" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const text = String(body.text ?? "").trim();
+      if (!id || !text) return json(res, 400, { error: "a comment needs a project and something to say" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const cid = `cmt_${Buffer.from(`${by}:${at}:${text}`).toString("base64url").slice(-16)}`;
+      const next = await applyToBoard(dir, board, { type: "comment", at, by, id: cid, text }, (b) => {
+        b.comments.push({ id: cid, by, at, text, takeId: body.takeId ?? null, slotId: body.slotId ?? null });
+        return b;
+      });
+      return json(res, 200, { board: next, progress: boardProgress(next) });
+    }
+
+    /*
+     * Sharing: what is configured, what is missing, and who you are signed in as.
+     *
+     * The anon key comes back as-is because Supabase publishes it on purpose — it
+     * identifies the project and authorises nothing. The session does NOT come
+     * back: it holds a refresh token, and the panel has no use for one.
+     */
+    if (p === "/api/board/sharing" && req.method === "GET") {
+      return json(res, 200, await sharingState());
+    }
+
+    if (p === "/api/board/signin" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        await SUPABASE_SYNC.signIn({ email: String(body.email ?? ""), password: String(body.password ?? "") });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+      return json(res, 200, await sharingState());
+    }
+
+    if (p === "/api/board/signout" && req.method === "POST") {
+      await SUPABASE_SYNC.signOut();
+      return json(res, 200, await sharingState());
+    }
+
+    /** What happened, in order. The board is state; this is the record. */
+    if (p === "/api/board/history" && req.method === "GET") {
+      const id = new URL(req.url, "http://x").searchParams.get("project") ?? "";
+      if (!id) return json(res, 400, { error: "which project?" });
+      return json(res, 200, { history: await readHistory(projectDir(id)) });
+    }
+
+    /** Who your ratings are signed by, and which backend they reach. */
+    if (p === "/api/board/settings" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      if (typeof body.reviewer === "string") await setReviewerName(body.reviewer);
+      if (typeof body.sync === "string") await setSyncChoice(body.sync);
+      return json(res, 200, { me: await reviewerName(), sync: (await syncChoice()) ?? "local" });
+    }
+
+    /**
+     * Pull, merge, push.
+     *
+     * Reports rather than throws when the chosen adapter is not ready: the board
+     * still works, and "Supabase is not available" is a true and actionable thing
+     * to show, whereas a 500 makes a working local board look broken.
+     */
+    if (p === "/api/board/sync" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!id) return json(res, 400, { error: "which project?" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const r = await syncBoard(dir, board, await syncFor(await syncChoice()));
+      return json(res, 200, { board: r.board, progress: boardProgress(r.board), synced: r.synced, reason: r.reason });
+    }
+
+    /*
+     * The picks, as a document the editor opens.
+     *
+     * `toCutlist` is a projection of the picks rather than an export of them, so
+     * this route copies nothing and cannot fall behind the board. A slot with no
+     * pick is a hole in the assembly and is left as one — see toCutlist.
+     */
+    if (p === "/api/board/cut" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!id) return json(res, 400, { error: "which project?" });
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const m = await readManifest(dir).catch(() => null);
+      const name = String(body.name ?? "").trim() || "storyboard-cut";
+      /*
+       * The same resolver, and the same refusal.
+       *
+       * A board is data and can be hand-edited, so a `rel` reaching here is no more
+       * trusted than one arriving over HTTP — the check belongs at the point the
+       * name becomes a file, which is here.
+       */
+      const resolveRel = (r) => {
+        const f = join(mediaDir(id), String(r ?? ""));
+        if (!(f === LIB || f.startsWith(LIB + sep))) throw new Error(`outside ${LIB}: ${r}`);
+        return f;
+      };
+      let doc;
+      try {
+        doc = boardToDocument(board, {
+          title: m?.name ? `${m.name} · ${name}` : name,
+          createdAt: new Date().toISOString(),
+          resolve: resolveRel,
+        });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+      // Every picked take must still be on disk. A cut that references a deleted
+      // file opens in the editor as a timeline of missing media, which reads as a
+      // broken app rather than as footage somebody moved.
+      for (const c of toCutlist(board)) {
+        if (!(await stat(resolveRel(c.rel)).catch(() => null))) {
+          return json(res, 404, { error: `the take chosen for "${c.label}" is gone: ${c.rel}` });
+        }
+      }
+      const outDir = join(dir, "media", "Renders");
+      await mkdir(outDir, { recursive: true });
+      const dest = join(outDir, `${name}.openscreen`);
+      await writeFile(dest, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+      return json(res, 200, { document: dest, clips: toCutlist(board).length, seconds: boardProgress(board).seconds });
+    }
+
     if (p === "/api/scenes") {
       const id = new URL(req.url, "http://x").searchParams.get("project") ?? "";
       const dir = join(projectDir(id), "scenes");
@@ -4194,6 +4555,46 @@ async function browsePlaces(root) {
 		if (st?.isDirectory()) out.push({ name, path });
 	}
 	return out;
+}
+
+/**
+ * Which sync adapters exist and whether each one can actually run here.
+ *
+ * `ready` is a value on the local adapter and a question on the hosted one, so
+ * this asks rather than reads — and carries the reason when the answer is no,
+ * because "not available" without a cause is a dead end.
+ */
+async function syncState() {
+	const adapters = [];
+	for (const a of Object.values(SYNCS)) {
+		const ready = typeof a.ready === "function" ? await a.ready() : a.ready;
+		adapters.push({
+			id: a.id,
+			label: a.label,
+			detail: a.detail,
+			ready,
+			problem: !ready && typeof a.problem === "function" ? await a.problem() : null,
+		});
+	}
+	return { chosen: (await syncChoice()) ?? "local", adapters };
+}
+
+/**
+ * Whether sharing can work here, and who is signed in.
+ *
+ * `url` goes back only so the panel can tell its two states apart — this build
+ * has nowhere to sync to, versus nobody has signed in yet — because different
+ * people fix those and they must never share a sentence. The key, the team and
+ * the session do not: the first two are deployment config the panel no longer
+ * asks for, and the session holds a refresh token, which is a credential.
+ */
+async function sharingState() {
+	const cfg = await supabaseSettings();
+	return {
+		url: cfg.url,
+		signedInAs: cfg.session?.user?.email ?? null,
+		problem: supabaseProblem(cfg),
+	};
 }
 
 function captureArgs(source) {
