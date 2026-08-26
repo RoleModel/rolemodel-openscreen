@@ -1526,6 +1526,16 @@ how to remove the virtical space around the range input in IE*/
   padding: var(--op-space-large);
 }
 
+/* The sidebar already supplies the panel surface. Voice uses the form grid for
+   its field layout, but must not draw a second card inside that rail. */
+.panel-config > .form.rail-form {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  max-inline-size: none;
+  padding: 0;
+}
+
 /* Hints when you are in the field, not before.
        *
        * Thirteen controls each carrying a permanent line of italic help made the Make

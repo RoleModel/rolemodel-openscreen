@@ -55,6 +55,7 @@ import {
 	STATE_DIR,
 	agentChoice,
 	currentProject,
+	docsUrl,
 	lastView,
 	openFrameSettings,
 	setAgentChoice,
@@ -502,6 +503,9 @@ async function state() {
 
   return {
     libraryRoot: LIB,
+    // Where the Docs button goes. Sent with state rather than fetched on demand:
+    // it is one string and the button is drawn on every render.
+    docsUrl: await docsUrl(),
     projects,
     wallpapers,
     scripts,
