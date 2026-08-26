@@ -552,7 +552,7 @@ const compileShader = (gl, type, source) => {
 }
 
 class RMShader extends RMElement {
-  static fields = ['title', 'subtitle', 'image', 'theme', 'accent', 'density', 'dot', 'black', 'white', 'gamma', 'motion', 'at', 'for']
+  static fields = ['title', 'subtitle', 'image', 'overlay', 'theme', 'accent', 'density', 'dot', 'black', 'white', 'gamma', 'motion', 'at', 'for']
 
   disconnectedCallback() {
     this._dispose?.()
@@ -572,11 +572,13 @@ class RMShader extends RMElement {
     const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
     const dots = dark ? 'var(--op-color-neutral-minus-seven, #caccce)' : 'var(--op-color-neutral-plus-seven, #333333)'
     const ink = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
-    const title = this.esc(this.attr('title', 'Standard'))
+    const title = this.esc(this.attr('title'))
     const subtitle = this.attr('subtitle')
+    const showOverlay = this.attr('overlay', 'on') === 'on'
     const rawImage = this.attr('image')
     const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
-    const imageSource = !rawImage || rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage || SHADER_ICON : `${base}/${rawImage}`
+    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
+    const hasImage = Boolean(imageSource)
     this.shadowRoot.innerHTML =
       '<style>' +
       TYPE +
@@ -593,13 +595,22 @@ class RMShader extends RMElement {
       SHADER_ICON +
       ') center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:' +
       dots +
-      ';}</style><div class="asset anim"><canvas aria-hidden="true"></canvas><div class="lockup"><i class="mark" aria-hidden="true"></i><h2>' +
-      title +
-      '</h2>' +
-      (subtitle ? '<p>' + this.esc(subtitle) + '</p>' : '') +
-      '</div></div>'
+      ';}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:' +
+      dots +
+      ';font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">' +
+      (hasImage
+        ? '<canvas aria-hidden="true"></canvas>' +
+          (showOverlay
+            ? '<div class="lockup"><i class="mark" aria-hidden="true"></i>' +
+              (title ? '<h2>' + title + '</h2>' : '') +
+              (subtitle ? '<p>' + this.esc(subtitle) + '</p>' : '') +
+              '</div>'
+            : '')
+        : '<div class="empty"><span>Choose or upload an image to make a halftone</span></div>') +
+      '</div>'
 
     const canvas = this.shadowRoot.querySelector('canvas')
+    if (!canvas) return
     const gl = canvas.getContext('webgl', { alpha: false, antialias: false })
     const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
     const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, SHADER_FRAGMENT)
@@ -834,14 +845,47 @@ define('rm-year', RMYear)
 
 /** A list that builds. Each `<li>` gets `stagger` ms after the one before it. */
 class RMBullets extends RMElement {
-  static fields = ['stagger', 'at', 'for', 'heading']
+  static fields = ['heading', 'items', 'stagger', 'x', 'y', 'w', 'at', 'for']
   render() {
-    const items = [...this.querySelectorAll('li')].map((li) => li.textContent.trim())
+    /*
+     * Items from an attribute, falling back to light-DOM <li>.
+     *
+     * They could only ever come from child <li> elements, and the Scenes builder
+     * emits every part as `<tag attrs></tag>` with no children — so a bullets
+     * part built in the panel had no bullets at all, just a heading over an
+     * empty list. Authored markup with real <li> still works and still wins;
+     * this is the half the builder can express.
+     *
+     * Split on newline or pipe, because a text field cannot hold a newline and a
+     * textarea can.
+     */
+    const written = [...this.querySelectorAll('li')].map((li) => li.textContent.trim()).filter(Boolean)
+    const items = written.length
+      ? written
+      : String(this.attr('items', ''))
+          .split(/\r?\n|\|/)
+          .map((t) => t.trim())
+          .filter(Boolean)
     const stagger = Number(this.attr('stagger', 420))
+    /*
+     * Placed like every other part, from its centre.
+     *
+     * It had no position, so the stage's own `::slotted(*) { position:absolute }`
+     * dropped it in the top-left corner and the only way to move it was an inline
+     * style on the tag — which is why the gallery carries one, and why the Scenes
+     * panel offered no sliders: those come from `static fields`.
+     */
+    const x = Number(this.attr('x', 50))
+    const y = Number(this.attr('y', 50))
+    // A list needs a measure. Without one it is as wide as its longest line.
+    const w = Number(this.attr('w', 58))
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
-        :host { display:block; --rise:12px; }
+        :host { display:block; position:absolute; left:${x}%; top:${y}%; width:${w}cqw; --rise:12px; }
+        /* Centred on its own point, carrying the entrance with it — the same
+           reason every other part writes the translate into its animated rule. */
+        .wrap { transform: translate(-50%, -50%); }
         h3 { margin:0 0 1.4cqw; font-size:2.2cqw; font-weight:750; letter-spacing:-.02em; color:var(--fg); }
         ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:1cqw; }
         li { display:flex; gap:.9cqw; align-items:flex-start; font-size:1.6cqw; color:var(--fg); line-height:1.4;
@@ -850,8 +894,10 @@ class RMBullets extends RMElement {
         li::before { content:""; flex:0 0 auto; width:.72cqw; height:.72cqw; border-radius:.16cqw;
                      background:var(--brand); margin-top:.5cqw; }
       </style>
-      ${this.attr('heading') ? `<h3 class="anim">${this.esc(this.attr('heading'))}</h3>` : ''}
-      <ul>${items.map((t, i) => `<li style="animation-delay:calc(var(--at) + ${i * stagger}ms - var(--t))">${this.esc(t)}</li>`).join('')}</ul>`
+      <div class="wrap">
+        ${this.attr('heading') ? `<h3 class="anim">${this.esc(this.attr('heading'))}</h3>` : ''}
+        <ul>${items.map((t, i) => `<li style="animation-delay:calc(var(--at) + ${i * stagger}ms - var(--t))">${this.esc(t)}</li>`).join('')}</ul>
+      </div>`
   }
 }
 define('rm-bullets', RMBullets)
