@@ -3173,6 +3173,90 @@ textarea.fills.form-control {
   display: none !important;
 }
 
+/* ── Paper edit ─────────────────────────────────────────────────────────── */
+
+.paper-edit__title {
+  font-size: var(--op-font-large);
+  font-weight: var(--op-font-weight-semi-bold);
+  margin-block-end: var(--op-space-2x-small);
+}
+
+.paper-edit__beat {
+  border-block-start: 1px solid var(--line);
+  padding-block: var(--op-space-small);
+}
+
+.paper-edit__beat-name {
+  color: var(--op-color-primary-base);
+  font-size: var(--op-font-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  margin-block-end: var(--op-space-3x-small);
+}
+
+.paper-edit__beats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-3x-small);
+  margin-block: var(--op-space-small);
+}
+
+.paper-edit__beat-chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: var(--op-color-neutral-plus-three);
+  font: inherit;
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
+}
+
+.paper-edit__beat-chip--active {
+  background: var(--op-color-primary-minus-eight);
+  border-color: var(--op-color-primary-base);
+  color: inherit;
+}
+
+.paper-edit__lines {
+  border-block: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-edit__line {
+  background: transparent;
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  border-inline-start: 3px solid transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: var(--op-line-height-loose);
+  padding: var(--op-space-2x-small) var(--op-space-small);
+  text-align: start;
+}
+
+.paper-edit__line:last-child {
+  border-block-end: 0;
+}
+
+.paper-edit__line:hover,
+.paper-edit__line:focus-visible {
+  background: var(--op-color-primary-minus-eight);
+  outline: none;
+}
+
+.paper-edit__line--assigned {
+  border-inline-start-color: var(--op-color-primary-base);
+}
+
+.paper-edit__line--active {
+  background: var(--op-color-primary-minus-eight);
+}
+
+.paper-edit__line:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 /* ── Storyboard ────────────────────────────────────────────────────────────
    A canvas, not a list.
 
@@ -3218,16 +3302,175 @@ textarea.fills.form-control {
   user-select: none;
 }
 
+/* The canvas proper: a fixed coordinate space, scaled as a unit.
+
+   `position: relative` makes it the containing block every node is positioned
+   against, so a node's `left`/`top` are canvas units and nothing has to convert
+   them. Both layers sit inside this one transform, which is what keeps a node
+   and the wire leaving it from ever disagreeing about where its port is. */
 .board__surface {
-  align-items: start;
-  display: flex;
-  gap: var(--op-space-large);
-  padding: var(--op-space-large);
+  block-size: 9000px;
+  inline-size: 12000px;
+  position: relative;
   transform-origin: 0 0;
-  /* Fits the content rather than the box: a row of columns must be able to
-     exceed the scroller, which is what makes it a canvas and not a grid. */
-  inline-size: max-content;
-  min-inline-size: 100%;
+}
+
+/* Underneath the nodes, and never in the way of a pointer except on a wire
+   itself — `pointer-events: none` here with `auto` on the hit paths. Without
+   that, an SVG the size of the canvas swallows every click on the board. */
+.board__wires {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.board__nodes {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.board__nodes > * {
+  pointer-events: auto;
+}
+
+.board__wire {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.board__wire-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+/* A fat transparent path over the thin visible one. A 3px line is a 3px click
+   target, which is not one — this makes the wire grabbable without drawing
+   anything. */
+.board__wire-hit {
+  fill: none;
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 22;
+}
+
+.board__wire:hover .board__wire-line {
+  stroke: var(--danger);
+  stroke-width: 4;
+}
+
+/* The wire in the air. Dashed, because it is a proposal rather than a
+   connection, and red the moment it is over something it cannot land on. */
+.board__wire-draft {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 10 8;
+  stroke-width: 3;
+}
+
+.board__wire-draft--bad {
+  stroke: var(--danger);
+}
+
+/* ── a node ── */
+
+.board__node {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  block-size: 260px;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-2x-small);
+  inline-size: 360px;
+  padding: var(--op-space-small);
+  position: absolute;
+  /* Not `transition: left/top` — a dragged node must track the pointer exactly,
+     and easing its position puts the card behind the cursor. */
+}
+
+.board__node:active {
+  cursor: grabbing;
+}
+
+.board__node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.board__node-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+}
+
+.board__node-name {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+  line-height: 1.2;
+}
+
+.board__node-intent {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board__node-shot {
+  aspect-ratio: var(--video-ar);
+  overflow: hidden;
+  background-color: var(--sunk);
+  background-position: center;
+  background-size: cover;
+  border-radius: var(--op-radius-small);
+  flex: 1;
+  min-block-size: 0;
+  position: relative;
+}
+
+.board__node-empty {
+  align-items: center;
+  background: var(--panel2);
+  border-radius: var(--op-radius-small);
+  color: var(--muted);
+  display: flex;
+  flex: 1;
+  font-size: var(--op-font-2x-small);
+  justify-content: center;
+}
+
+/* ── ports ── */
+
+/* Half outside the card, so a wire visibly leaves the edge rather than starting
+   inside it. Vertically centred, which is what makes the horizontal Bézier read
+   as a cable. */
+.board__port {
+  background: var(--panel2);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  block-size: 18px;
+  inline-size: 18px;
+  inset-block-start: calc(50% - 9px);
+  position: absolute;
+}
+
+.board__port--in {
+  inset-inline-start: -9px;
+}
+
+.board__port--out {
+  cursor: crosshair;
+  inset-inline-end: -9px;
+}
+
+.board__port--out:hover {
+  background: var(--accent);
+  transform: scale(1.25);
 }
 
 /* ── a shot ── */
@@ -3596,4 +3839,30 @@ textarea.form-control.board__brief {
 .board__brief + .hint,
 .form-group + .hint {
   white-space: pre-line;
+}
+
+/* The selected node, at the top of the rail — the node says what the shot IS,
+   the rail is where its alternatives are compared. */
+.board__picked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  margin-block-end: var(--op-space-small);
+}
+
+.board__picked-name {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.board__rail-sep {
+  border-block-start: var(--op-border-width) solid var(--line);
+  margin-block: var(--op-space-small);
+}
+
+/* Gives the scroller its extent. The surface is transformed, and a transform
+   does not change layout — without this the board scrolls as if it were always
+   at 100% however far you zoom out. */
+.board__spacer {
+  pointer-events: none;
 }

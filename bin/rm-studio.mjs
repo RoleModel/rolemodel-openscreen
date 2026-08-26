@@ -31,10 +31,13 @@ import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
+import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
+import { connect as graphConnect, disconnect as graphDisconnect, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
 	boardProgress,
+	graphFor,
 	boardToDocument,
 	chosenTake,
 	slotsFromBrief,
@@ -178,6 +181,83 @@ let previewSeq = 0;
 const PREVIEWS_KEPT = 8;
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
+const paperEditDir = (id) => join(projectDir(id), "paper-edits");
+
+/*
+ * A paper edit belongs to one source recording.  The filename is derived from
+ * its project-relative path instead of the display name, so two folders can
+ * each hold a `take.mp4` without sharing a transcript by accident.
+ */
+const paperEditPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.json`);
+const paperEditSelectionPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.selection.json`);
+const paperEditTranscriptPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.vtt`);
+
+const paperEditMedia = async (id, rel) => {
+  const safeRel = String(rel ?? "");
+  const root = resolve(mediaDir(id));
+  const file = resolve(root, safeRel);
+  if (!safeRel || !(file === root || file.startsWith(root + sep))) throw new Error("that recording is outside this project");
+  if (!(await stat(file).catch(() => null))) throw new Error("that recording is not in this project");
+  return file;
+};
+
+/** Turn an SRT or VTT into the word-timed shape paper-edit.mjs validates. */
+function transcriptFromCaptions(raw) {
+  const text = String(raw ?? "").replace(/^WEBVTT[^\n]*\n?/i, "").replace(/\r/g, "");
+  const blocks = text.split(/\n\s*\n/);
+  const parseTime = (value) => {
+    const m = String(value).trim().match(/(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{1,3})/);
+    if (!m) return null;
+    return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4].padEnd(3, "0")) / 1000;
+  };
+  const cues = [];
+  const words = [];
+  let wordNo = 0;
+  for (const block of blocks) {
+    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+    const timing = lines.findIndex((line) => line.includes("-->"));
+    if (timing === -1) continue;
+    const [startRaw, endRaw] = lines[timing].split("-->");
+    const startSec = parseTime(startRaw);
+    // Whisper writes ` --> 00:00:01.360`: split before trimming makes the first
+    // token empty, then every otherwise-valid cue gets discarded.
+    const endSec = parseTime(endRaw?.trim().split(/\s+/)[0]);
+    const spoken = lines.slice(timing + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    const tokens = spoken.match(/[^\s]+/g) ?? [];
+    if (startSec == null || endSec == null || endSec <= startSec || !tokens.length) continue;
+    const firstId = `w${wordNo + 1}`;
+    const span = (endSec - startSec) / tokens.length;
+    for (const [index, token] of tokens.entries()) {
+      wordNo++;
+      words.push({ id: `w${wordNo}`, text: token, startSec: +(startSec + index * span).toFixed(3), endSec: +(startSec + (index + 1) * span).toFixed(3) });
+    }
+    cues.push({ from: firstId, to: `w${wordNo}`, text: spoken, startSec, endSec });
+  }
+  if (!words.length) throw new Error("that subtitle file has no timed spoken text — use an .srt or .vtt with caption cues");
+  return { version: 1, importedAt: new Date().toISOString(), timing: "caption", words, cues };
+}
+
+async function readPaperEdit(id, rel) {
+  const raw = await readFile(paperEditPath(id, rel), "utf8").catch(() => null);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { throw new Error("the saved paper edit is not readable"); }
+}
+
+async function writePaperEdit(id, rel, state) {
+  await mkdir(paperEditDir(id), { recursive: true });
+  await writeFile(paperEditPath(id, rel), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+/** A completed VTT is already an attachment of this recording, not a loose file. */
+async function paperEditForRecording(id, rel) {
+  const saved = await readPaperEdit(id, rel);
+  if (saved) return saved;
+  const captions = await readFile(paperEditTranscriptPath(id, rel), "utf8").catch(() => null);
+  if (!captions) return null;
+  const state = { version: 1, rel, transcript: transcriptFromCaptions(captions), plan: { shots: [] }, selection: null, updatedAt: new Date().toISOString() };
+  await writePaperEdit(id, rel, state);
+  return state;
+}
 
 /**
  * A name safe to write to disk, keeping everything a disk can actually take.
@@ -3605,6 +3685,150 @@ async function fetchVoiceList() {
     }
 
     /*
+     * ─────────────────────────── the paper edit ──────────────────────────
+     *
+     * A transcript is deliberately kept next to the project, not inside the
+     * browser.  That lets a teammate open the same review, and means the source
+     * words, Claude's selection and the resulting cut remain one inspectable
+     * record rather than three ephemeral UI states.
+     */
+    if (p === "/api/paper-edit" && req.method === "GET") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const id = String(q.get("project") ?? "");
+      const rel = String(q.get("rel") ?? "");
+      if (!id || !rel) return json(res, 400, { error: "choose a recording" });
+      try {
+        await paperEditMedia(id, rel);
+        const state = await paperEditForRecording(id, rel);
+        return json(res, 200, { state });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/transcript" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        await paperEditMedia(id, rel);
+        const prior = await readPaperEdit(id, rel);
+        const captions = body.fromFile ? await readFile(paperEditTranscriptPath(id, rel), "utf8") : body.captions;
+        const transcript = transcriptFromCaptions(captions);
+        const state = { version: 1, rel, transcript, plan: prior?.plan ?? { shots: [] }, selection: null, updatedAt: new Date().toISOString() };
+        await writePaperEdit(id, rel, state);
+        return json(res, 200, { state });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/transcribe" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        const file = await paperEditMedia(id, rel);
+        await mkdir(paperEditDir(id), { recursive: true });
+        const out = paperEditTranscriptPath(id, rel);
+        // `rel`, not basename: `talk.mp4` in two folders is two recordings and
+        // must not make one another look like an already-running job.
+        const label = `transcribe ${rel}`;
+        const existing = jobs.list().find((job) => job.running && job.label === label);
+        if (existing) return json(res, 200, { job: existing, alreadyRunning: true });
+        const step = ownStep("rm-transcribe", ["--input", file, "--output", out, "--language", String(body.language ?? "en")], { label, cwd: paperEditDir(id), project: id, note: "First transcription downloads a local speech model (about 142 MB). Later recordings reuse it." });
+        return json(res, 200, { out, step });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/plan" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        await paperEditMedia(id, rel);
+        const state = await readPaperEdit(id, rel);
+        if (!state?.transcript) throw new Error("add a transcript first");
+        const shots = Array.isArray(body.plan?.shots) ? body.plan.shots.map((shot) => ({ name: String(shot.name ?? "").trim(), intent: String(shot.intent ?? "").trim(), seconds: Number(shot.seconds) || null })).filter((shot) => shot.name) : [];
+        if (!shots.length) throw new Error("add at least one beat for the first assembly");
+        state.plan = { shots, drafted: new Date().toISOString() };
+        state.selection = null;
+        state.updatedAt = new Date().toISOString();
+        await writePaperEdit(id, rel, state);
+        return json(res, 200, { state });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/draft" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        await paperEditMedia(id, rel);
+        const state = await readPaperEdit(id, rel);
+        if (!state?.transcript || !state?.plan?.shots?.length) throw new Error("add the transcript and the beats before asking Claude");
+        const dest = paperEditSelectionPath(id, rel);
+        const prompt = `${buildPaperEditPrompt({ plan: state.plan, transcript: state.transcript, notes: String(body.notes ?? "") })}\n\nWrite that JSON to ${dest}. Do not alter the recording or the transcript.`;
+        await mkdir(paperEditDir(id), { recursive: true });
+        await writeFile(join(paperEditDir(id), `${Buffer.from(rel).toString("base64url")}.prompt.txt`), `${prompt}\n`, "utf8");
+        return json(res, 200, { prompt, step: { ...agentStep(await agentChoice(), { prompt, cwd: paperEditDir(id), label: `paper edit ${basename(rel)}` }), project: id } });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/selection" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        await paperEditMedia(id, rel);
+        const state = await readPaperEdit(id, rel);
+        if (!state?.transcript || !state?.plan?.shots?.length) throw new Error("add the transcript and beats first");
+        const raw = body.fromFile ? await readFile(paperEditSelectionPath(id, rel), "utf8") : body.selection;
+        const selected = typeof raw === "string" ? parseSelection(raw) : raw;
+        const checked = validateSelection(selected, { transcript: state.transcript, plan: state.plan });
+        if (!checked.ranges.length) throw new Error(checked.problems[0] ?? "the selection has no usable passages");
+        state.selection = { ...selected, checked, savedAt: new Date().toISOString() };
+        state.updatedAt = new Date().toISOString();
+        await writePaperEdit(id, rel, state);
+        return json(res, 200, { state, coverage: paperEditCoverage(checked, { plan: state.plan }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/cut" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      try {
+        const file = await paperEditMedia(id, rel);
+        const state = await readPaperEdit(id, rel);
+        const checked = state?.selection?.checked;
+        if (!state?.transcript || !state?.plan || !checked?.ranges?.length) throw new Error("load or edit Claude's selection before making the cut");
+        // The transcript's final word is a safe upper bound when the catalog has
+        // not probed this file yet; `selectionToCutlist` already clamps to it.
+        const durationSec = state.transcript.words.at(-1)?.endSec;
+        const clips = selectionToCutlist(checked, { transcript: state.transcript, plan: state.plan, rel, durationSec });
+        const name = wpSlug(String(body.name ?? "paper-edit"));
+        const outDir = join(projectDir(id), "media", "Renders", name);
+        await mkdir(outDir, { recursive: true });
+        const doc = cutlistToDocument({ id: `${id}-${name}`, title: `${basename(rel)} — paper edit`, createdAt: new Date().toISOString(), clips: clips.map((clip) => ({ ...clip, path: file })) });
+        const document = join(outDir, `${name}.openscreen`);
+        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        await writeFile(join(outDir, "paper-edit.json"), `${JSON.stringify({ rel, plan: state.plan, selection: state.selection, clips }, null, 2)}\n`, "utf8");
+        return json(res, 200, { document, clips: doc.timeline.clips.length, durationSec: doc.timeline.clips.at(-1)?.timelineEndSec ?? 0 });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
      * ────────────────────────── the storyboard ──────────────────────────
      *
      * One board per project, read whole and written whole. Every mutating route
@@ -3624,6 +3848,9 @@ async function fetchVoiceList() {
         const board = await readBoard(projectDir(id), { projectId: id, title: m?.name ?? "" });
         return json(res, 200, {
           board,
+          // Derived rather than stored-only: a board saved before the canvas
+          // existed has no graph, and should open showing the plan it already had.
+          graph: graphFor(board),
           progress: boardProgress(board),
           ratings: RATINGS,
           me: await reviewerName(),
@@ -3799,9 +4026,77 @@ async function fetchVoiceList() {
       return json(res, 200, await sharingState());
     }
 
+    if (p === "/api/board/signup" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const r = await SUPABASE_SYNC.signUp({ email: String(body.email ?? ""), password: String(body.password ?? "") });
+        // An account awaiting confirmation is not a failure, and saying so is the
+        // whole message — "check your email" and "that did not work" are
+        // different instructions.
+        return json(res, 200, { ...(await sharingState()), needsConfirmation: r.needsConfirmation, email: r.email });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/board/signout" && req.method === "POST") {
       await SUPABASE_SYNC.signOut();
       return json(res, 200, await sharingState());
+    }
+
+    /*
+     * The canvas: where a node sits, and what follows what.
+     *
+     * Three routes rather than one "save the graph", because each is a different
+     * edit with a different failure. Moving cannot fail; connecting can, and the
+     * reason is the useful part; disconnecting is always allowed. A single
+     * whole-graph PUT would have let a stale canvas overwrite somebody else's
+     * rewiring with its own idea of the layout.
+     */
+    if (p === "/api/board/node/move" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "move", at, by, nodeId: body.nodeId }, (b) => {
+        b.graph = moveNode(graphFor(b), String(body.nodeId ?? ""), body.x, body.y);
+        return b;
+      });
+      return json(res, 200, { graph: graphFor(next), progress: boardProgress(next) });
+    }
+
+    if (p === "/api/board/wire" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const attempt = graphConnect(graphFor(board), String(body.from ?? ""), String(body.to ?? ""));
+      // The refusal is an ordinary outcome with a reason, not a 500. The canvas
+      // shows `why` where the wire was dropped.
+      if (!attempt.ok) return json(res, 200, { ok: false, why: attempt.why, graph: graphFor(board) });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "wire", at, by, from: body.from, to: body.to }, (b) => {
+        b.graph = attempt.graph;
+        return b;
+      });
+      return json(res, 200, { ok: true, graph: graphFor(next), board: next, progress: boardProgress(next) });
+    }
+
+    if (p === "/api/board/wire/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const dir = projectDir(id);
+      const board = await readBoard(dir, { projectId: id });
+      const at = new Date().toISOString();
+      const by = await reviewerName();
+      const next = await applyToBoard(dir, board, { type: "unwire", at, by, wireId: body.wireId }, (b) => {
+        b.graph = graphDisconnect(graphFor(b), String(body.wireId ?? ""));
+        return b;
+      });
+      return json(res, 200, { ok: true, graph: graphFor(next), board: next, progress: boardProgress(next) });
     }
 
     /** What happened, in order. The board is state; this is the record. */
