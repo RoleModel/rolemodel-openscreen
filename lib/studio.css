@@ -709,6 +709,19 @@ button.btn:disabled {
 .colormenu {
   position: relative;
   display: block;
+  /*
+   * Allowed to be narrower than its content.
+   *
+   * A grid or flex item is `min-width: auto` by default, which means it refuses
+   * to shrink below the width its contents want. The trigger wants a swatch, a
+   * label, a caret and a 40px gutter for the chevron — about 180px — so in the
+   * Scenes part grid, whose cells are 11rem, the Ink and Paper menus overflowed
+   * their cells and drew straight over the control beside them.
+   *
+   * The label already truncates; it never got the chance, because the box around
+   * it was never made to give way.
+   */
+  min-inline-size: 0;
 }
 
 .colormenu__trigger {
@@ -3003,7 +3016,6 @@ textarea.form-control.script-body {
 
 .panel-config .stop > .colormenu {
   grid-area: color;
-  min-inline-size: 0;
 }
 
 .panel-config .stop > input[type='range'] {
@@ -3150,6 +3162,12 @@ textarea.fills.form-control {
 .brandmark--photo {
   block-size: 82%;
   inline-size: 82%;
+}
+
+/* A field whose value is a name rather than a number: two cells of the part
+   grid, so the name is readable instead of truncated to its first letter. */
+.form-group--wide {
+  grid-column: span 2;
 }
 
 [hidden] {

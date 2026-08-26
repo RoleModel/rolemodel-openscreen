@@ -552,7 +552,7 @@ const compileShader = (gl, type, source) => {
 }
 
 class RMShader extends RMElement {
-  static fields = ['title', 'subtitle', 'image', 'overlay', 'theme', 'accent', 'density', 'dot', 'black', 'white', 'gamma', 'motion', 'at', 'for']
+  static fields = ['title', 'subtitle', 'image', 'overlay', 'mark', 'ink', 'paper', 'theme', 'accent', 'density', 'dot', 'black', 'white', 'gamma', 'motion', 'at', 'for']
 
   disconnectedCallback() {
     this._dispose?.()
@@ -562,7 +562,6 @@ class RMShader extends RMElement {
   render() {
     this._dispose?.()
     const dark = this.attr('theme', 'dark') === 'dark'
-    const accent = shaderColour(this.attr('accent'), 'var(--op-color-primary-base, #3a70b3)')
     const density = shaderClamp(Number(this.attr('density', 1)) || 1, 0.4, 2.2)
     const dot = shaderClamp(Number(this.attr('dot', 2)) || 2, 1, 12)
     const black = shaderClamp(Number(this.attr('black', 0.02)) || 0, 0, 0.4)
@@ -571,10 +570,13 @@ class RMShader extends RMElement {
     const drifting = this.attr('motion', 'still') === 'drift'
     const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
     const dots = dark ? 'var(--op-color-neutral-minus-seven, #caccce)' : 'var(--op-color-neutral-plus-seven, #333333)'
-    const ink = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
+    const text = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
+    const shaderInk = shaderColour(this.attr('ink') || this.attr('accent'), 'var(--brand, var(--op-color-primary-base, #3a70b3))')
+    const paper = shaderColour(this.attr('paper'), background)
     const title = this.esc(this.attr('title'))
     const subtitle = this.attr('subtitle')
     const showOverlay = this.attr('overlay', 'on') === 'on'
+    const showMark = showOverlay && this.attr('mark', 'off') === 'on'
     const rawImage = this.attr('image')
     const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
@@ -586,9 +588,9 @@ class RMShader extends RMElement {
       ':host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:' +
       background +
       ';}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:' +
-      ink +
+      text +
       ';text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:' +
-      accent +
+      shaderInk +
       ';mask:url(' +
       SHADER_ICON +
       ') center/contain no-repeat;-webkit-mask:url(' +
@@ -601,7 +603,8 @@ class RMShader extends RMElement {
       (hasImage
         ? '<canvas aria-hidden="true"></canvas>' +
           (showOverlay
-            ? '<div class="lockup"><i class="mark" aria-hidden="true"></i>' +
+            ? '<div class="lockup">' +
+              (showMark ? '<i class="mark" aria-hidden="true"></i>' : '') +
               (title ? '<h2>' + title + '</h2>' : '') +
               (subtitle ? '<p>' + this.esc(subtitle) + '</p>' : '') +
               '</div>'
@@ -637,8 +640,8 @@ class RMShader extends RMElement {
     gl.uniform1f(uniform('gamma'), gamma)
     gl.uniform1f(uniform('black'), black)
     gl.uniform1f(uniform('white'), white)
-    gl.uniform3fv(uniform('paper'), shaderVector(this.shadowRoot, background, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
-    gl.uniform3fv(uniform('ink'), shaderVector(this.shadowRoot, accent, dark ? [0.23, 0.44, 0.7] : [0.23, 0.44, 0.7]))
+    gl.uniform3fv(uniform('paper'), shaderVector(this.shadowRoot, paper, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
+    gl.uniform3fv(uniform('ink'), shaderVector(this.shadowRoot, shaderInk, dark ? [0.23, 0.44, 0.7] : [0.23, 0.44, 0.7]))
 
     const texture = gl.createTexture()
     gl.activeTexture(gl.TEXTURE0)
