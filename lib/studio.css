@@ -2997,6 +2997,18 @@ textarea.form-control.script-body {
   place-items: center;
 }
 
+/*
+ * The end-aligned block, off the floor.
+ *
+ * Optics pushes it to the bottom and stops there, so the button's edge sits flush
+ * against the window with nothing under it — which reads as clipped rather than
+ * as anchored. The same spacing the content above it uses between items.
+ */
+.sidebar__content--end {
+  flex-grow: 0;
+  padding-block-end: var(--op-space-small);
+}
+
 [hidden] {
   display: none !important;
 }

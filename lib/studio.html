@@ -62,15 +62,26 @@
             <button class="btn btn--no-border" data-v="components">Components</button>
             <button class="btn btn--no-border" data-v="storage">Storage</button>
             <button class="btn btn--no-border" data-v="console">Console<span class="badge" id="jobn"></span></button>
-            <!--
-               Docs leave the app rather than being a view, because they are a
-               site rather than a panel. `data-v` is deliberately absent: the
-               router would try to render a view called "docs" and the nav
-               painters would mark it current, which is wrong for a link that
-               opens somewhere else.
-            -->
-            <button class="btn btn--no-border" id="docs">Docs</button>
             <div class="tools" id="tools"></div>
+         </div>
+         <!--
+            Docs sit at the bottom, under the tool indicators, in Optics' own
+            end-aligned block.
+            ============================================================
+            A second `.sidebar__content` rather than one more button in the first:
+            the base class carries `flex-grow: 1`, so two of them share the free
+            space and `--end` pushes this one's content to the floor of the
+            sidebar. That is the difference between "last in the list" and "at the
+            bottom", and Docs is the second thing — it is not another destination
+            in the pipeline, it is where you go when the pipeline has not helped.
+
+            It leaves the app rather than being a view, so `data-v` is deliberately
+            absent: the router would try to render a view called "docs" and the nav
+            painters would mark it current, leaving the sidebar highlighting a page
+            you are not on.
+         -->
+         <div class="sidebar__content sidebar__content--end">
+            <button class="btn btn--no-border" id="docs">Docs</button>
          </div>
       </nav>
    </div>
