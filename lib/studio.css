@@ -835,9 +835,10 @@ button.btn:disabled {
 }
 
 .colormenu__swatch[aria-selected='true'] {
+  /* Inside the swatch: touching swatches mean an outline drawn outside covers
+     the two either side of it. */
+  outline: 2px solid var(--op-color-neutral-plus-max);
   outline-offset: -2px;
-  outline: 2px solid var(--op-color-neutral-minus-max);
-  outline-offset: 2px;
 }
 
 /* A token that does not resolve paints the inherited colour, so every swatch
@@ -1019,10 +1020,14 @@ button.btn:disabled {
 .path,
 .card .path {
   font-family: var(--m);
-  font-size: var(--op-font-2x-small);
+  font-size: var(--op-font-x-small);
   color: var(--muted);
   word-break: break-all;
   grid-column: span 2;
+}
+
+.path:not(.card .path) {
+  margin-block: var(--op-space-small);
 }
 
 .meta {
@@ -1048,7 +1053,7 @@ button.btn:disabled {
   font-size: var(--op-font-2x-small);
   text-transform: uppercase;
   letter-spacing: var(--track-wide);
-  padding: var(--op-space-3x-small) var(--op-space-2x-small);
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
   border-radius: var(--op-radius-pill);
   font-family: var(--m);
   background: var(--scrim);
@@ -1826,7 +1831,17 @@ pre {
   margin-bottom: var(--op-space-x-small);
 }
 
-.stop button {
+/*
+ * The stop's remove button — and only that.
+ *
+ * Written as `.stop button` when a stop held one button. The colour menu moved
+ * into these rows since, and its trigger is a button too: at (0,1,1) this beat
+ * `.colormenu__trigger` at (0,1,0) and stripped its padding, fill and border, so
+ * the same control looked like a different kind of thing in a stop than it did
+ * two rows above in Base. The child combinator scopes it back to what it meant —
+ * the trigger is inside `.colormenu`, not a direct child of `.stop`.
+ */
+.stop > button {
   background: none;
   border: var(--op-border-width) solid var(--line);
   color: var(--muted);
@@ -2049,10 +2064,11 @@ pre {
 }
 
 .hint {
-  font-size: var(--op-font-x-small);
+  font-size: var(--op-font-small);
   line-height: var(--op-line-height-loose);
   /* Same reason as .lede — a hint is a sentence, not a layout. */
   max-inline-size: 80ch;
+  margin-block: var(--op-space-small);
 }
 
 .hint.ok {

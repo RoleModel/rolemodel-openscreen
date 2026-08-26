@@ -3484,7 +3484,9 @@ async function fetchVoiceList() {
         components: await readComponentCatalogue(TOOLKIT),
     colors: {
       scales,
-      // Optics' own ladder, darkest to lightest. `base` is the seed itself.
+      // Optics' own ladder, lightest to darkest — `minus-max` is near-white and
+      // `plus-max` near-black, which is the opposite of what the names suggest.
+      // `base` is the seed itself.
       steps: [
         "minus-max", "minus-eight", "minus-seven", "minus-six", "minus-five",
         "minus-four", "minus-three", "minus-two", "minus-one",
