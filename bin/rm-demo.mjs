@@ -55,8 +55,14 @@ const STEP_TIMEOUT_MS = 15_000;
 const SETTLE_MS = 350;
 /** How long the sentinel title needs to reach the window manager. */
 const TITLE_SETTLE_MS = 400;
-/** How long to let the recorder fail before trusting it. */
-const RECORDER_SETTLE_MS = 2500;
+/**
+ * How long to let the recorder fail before trusting it.
+ *
+ * Tunable because it is a property of the machine, not of this script: the app
+ * has to start, ask the OS for its window list and match a title, and a laptop
+ * that has just woken up takes longer than a warm one.
+ */
+const RECORDER_SETTLE_MS = Number(process.env.RM_RECORDER_SETTLE_MS) || 2500;
 /** Held frames after the last step, so the cut is not on the click. */
 const TAIL_HOLD_MS = 900;
 
@@ -455,6 +461,52 @@ async function captureCommand() {
 		await page.waitForTimeout(TITLE_SETTLE_MS);
 	}
 
+	/*
+	 * The sentinel has to survive navigation, because the recorder looks when it
+	 * is ready rather than when we are.
+	 *
+	 * It was set once, on about:blank. The first `goto` in the script replaces
+	 * `document.title` with the page's own — and the window title goes with it,
+	 * because on every desktop the window IS the page title. If the recorder
+	 * enumerated after that, it found no RM-CAPTURE-… and listed a screen full of
+	 * windows named after the page it had just navigated to, which is exactly the
+	 * failure: three windows called "RoleModel Studio" and no sentinel.
+	 *
+	 * Re-asserted on `load`, which runs after the document's own <title> is
+	 * parsed, so it wins rather than racing it. The page's real title is kept and
+	 * put back the moment the recorder is trusted, so the capture shows the title
+	 * bar a viewer expects rather than a marker meant for the window manager.
+	 */
+	let holdSentinel = !ownWindow;
+	let realTitle = "";
+	const keepSentinel = async () => {
+		if (!holdSentinel) return;
+		try {
+			realTitle = await page.title();
+			if (realTitle === title) return;
+			await page.evaluate((t) => {
+				document.title = t;
+			}, title);
+		} catch {
+			// Navigating, or torn down. The next load re-asserts it.
+		}
+	};
+	page.on("load", keepSentinel);
+
+	const releaseSentinel = async () => {
+		if (!holdSentinel) return;
+		holdSentinel = false;
+		page.off("load", keepSentinel);
+		if (!realTitle || realTitle === title) return;
+		try {
+			await page.evaluate((t) => {
+				document.title = t;
+			}, realTitle);
+		} catch {
+			// The page moved on and set its own title, which is the same outcome.
+		}
+	};
+
 	const bin = typeof flag("openscreen") === "string" ? String(flag("openscreen")) : "openscreen";
 	console.log("");
 	console.log(`  recorder  ${bin} ${recArgs.join(" ")}`);
@@ -474,8 +526,15 @@ async function captureCommand() {
 	const early = rec.problem();
 	if (early) {
 		await browser.close();
-		die(early);
+		die(
+			/No window title contains/.test(early)
+				? `${early}\n\n  The window this drives is titled "${title}" until the recorder has it.\n  Every window above is a page title, so the recorder looked before this one\n  existed — give it longer with RM_RECORDER_SETTLE_MS, or record a display.`
+				: early,
+		);
 	}
+	// The recorder had its window and did not complain, so the page can have its
+	// own title back before a single step runs.
+	await releaseSentinel();
 
 	let failed = null;
 	const started = Date.now();

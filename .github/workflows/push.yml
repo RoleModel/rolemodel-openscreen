@@ -1,0 +1,122 @@
+name: Check and release
+
+# What lands on main gets checked, and if it changed anything that ships, it gets
+# a version and a release without anybody remembering to tag.
+#
+# WHY THIS EXISTS
+#
+# Releasing was `npm version patch && git push --follow-tags`, run by hand. It
+# was run twice in the life of this repo, and one of those produced nothing
+# because the release workflow was broken. Meanwhile the tap served a tarball
+# from a tag nobody had rebuilt since, so an install predated `assets/` being
+# published and showed blank cards on the New video page.
+#
+# Nothing here checked a push either: `npm run check` ran only inside the tag
+# workflow, so main could go red and stay red until somebody cut a release.
+#
+# WHAT IT DOES
+#
+#   1. Runs the full gate on every push to main.
+#   2. If the gate passes AND the push changed something that ships, bumps the
+#      patch version, commits it, and pushes the tag.
+#   3. release.yml sees the tag and does the publishing.
+#
+# The version bump is a real commit on main. That is deliberate: package.json is
+# what `sync-tap` and the Studio's own version line read, so a tag without it
+# would leave three places disagreeing about what is installed.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# A second push while one is mid-release would race on the tag. Queue rather than
+# cancel: the first run may already have tagged, and cancelling it half way is how
+# you get a tag with no release behind it.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: The gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      # `npm ci` needs a lockfile; this repo ships two runtime deps and CI only
+      # needs the dev ones the checks use.
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check
+
+  release:
+    name: Version and tag
+    needs: check
+    runs-on: ubuntu-latest
+    # Three ways not to release, all of them deliberate:
+    #
+    #   - the bot's own version commit, or main would release itself forever
+    #   - a commit that says not to
+    #   - a push that changed nothing anybody installs
+    #
+    # The last is checked in the step below rather than with `paths:` on the
+    # trigger, because the gate should run on every push even when the release
+    # does not.
+    if: >-
+      github.actor != 'github-actions[bot]'
+      && !contains(github.event.head_commit.message, '[skip release]')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Did anything that ships change?
+        id: shipped
+        run: |
+          # The same directories package.json publishes, plus the manifest
+          # itself. Docs, CI and the verify suite are not installed by anybody,
+          # so a change to them is not a release — it would put a version number
+          # on a tarball identical to the one before it.
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          CHANGED="$(git diff --name-only "$BEFORE" HEAD -- assets bin lib presets brand components skill package.json || true)"
+          # lib/verify.mjs is the suite, not the product. A push that only moves
+          # assertions is not a new version of anything.
+          CHANGED="$(printf '%s\n' "$CHANGED" | grep -v '^lib/verify\.mjs$' || true)"
+          if [ -z "$CHANGED" ]; then
+            echo "nothing that ships changed — no release"
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "$CHANGED"
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump, commit and tag
+        if: steps.shipped.outputs.go == 'yes'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If package.json already names a version with no tag, that version is
+          # the release and nothing needs bumping — which is how a deliberate
+          # `npm version minor` on a branch reaches main and means what it says.
+          CURRENT="$(node -p "require('./package.json').version")"
+          if git rev-parse "v$CURRENT" >/dev/null 2>&1; then
+            npm version patch --no-git-tag-version >/dev/null
+            CURRENT="$(node -p "require('./package.json').version")"
+            git add package.json package-lock.json
+            git commit -m "v$CURRENT [skip release]"
+            git push origin HEAD:main
+          fi
+
+          git tag -a "v$CURRENT" -m "v$CURRENT"
+          # The tag is what release.yml watches; pushing it is the whole handover.
+          git push origin "v$CURRENT"
+          echo "tagged v$CURRENT"
