@@ -235,7 +235,6 @@ body.op-page {
     .op-page__main-content {
       /* Optics sets --op-breakpoint-medium here; see `main` above. */
       max-inline-size: none;
-      min-height: 100vh;
     }
   }
 }
@@ -1079,8 +1078,8 @@ button.btn:disabled {
 
 .kind {
   position: absolute;
-  top: var(--op-space-x-small);
-  left: var(--op-space-x-small);
+  bottom: var(--op-space-x-small);
+  right: var(--op-space-x-small);
   font-size: var(--op-font-2x-small);
   text-transform: uppercase;
   letter-spacing: var(--track-wide);
