@@ -161,6 +161,6 @@ console.log(`\n  wrote ${caskPath.replace(`${ROOT}/`, "")} at ${version}`);
 if (caskPath.includes("/packaging/")) {
 	// packaging/ is the source; the tap is a build output. Saying so here is cheaper
 	// than finding out from sync-tap:check on the next run.
-	console.log("  now run `npm run sync-tap` to publish it\n");
+	console.log("  now run `pnpm run sync-tap` to publish it\n");
 }
 console.log(`  check it: brew audit --cask --online ${name}\n`);

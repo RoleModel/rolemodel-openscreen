@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.20.0",
   "description": "RoleModel brand layer for OpenScreen — presets, wallpapers, annotation builders, and an agent skill.",
   "bin": {
     "rm-align-audio": "./bin/rm-align-audio.mjs",
+    "rm-render-alignment": "./bin/rm-render-alignment.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-insert": "./bin/rm-insert.mjs",
@@ -20,8 +22,8 @@
     "rm-voice": "./bin/rm-voice.mjs"
   },
   "scripts": {
-    "build": "npm run sync-brand && npm run optics && npm run wallpapers",
-    "check": "npm run sync-brand:check && npm run optics:check && npm run optics-tokens:check && npm run icons:check && npm run imagery:check && npm run bem:check && npm run verify && npm run sync-tap:check && npm run sync-docs:check",
+    "build": "pnpm run sync-brand && pnpm run optics && pnpm run wallpapers",
+    "check": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify && pnpm run sync-tap:check && pnpm run sync-docs:check",
     "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
     "studio": "node bin/rm-studio.mjs",
     "presets": "node bin/rm-video.mjs presets",
@@ -57,7 +59,7 @@
     "app": "node lib/launch-app.mjs",
     "bem": "node lib/bem-check.mjs",
     "bem:check": "node lib/bem-check.mjs --check",
-    "check:ci": "npm run sync-brand:check && npm run optics:check && npm run optics-tokens:check && npm run icons:check && npm run imagery:check && npm run bem:check && npm run verify"
+    "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
   },
   "devDependencies": {
     "gsap": "^3.14.2"

@@ -45,7 +45,7 @@
   --on-accent: var(--op-color-academy-primary-on-base);
   --blue: var(--op-color-primary-base);
   --danger: var(--op-color-alerts-danger-base);
-  --danger-fg: var(--op-color-alerts-danger-base);
+  --danger-fg: var(--op-color-alerts-danger-minus-four);
   --info-bg: var(--op-color-academy-primary-plus-four);
   --info-fg: var(--op-color-academy-primary-on-plus-four);
   --d: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
@@ -481,25 +481,36 @@ nav button[data-v][aria-current='true'] .navicon {
  * second line across the page.
  */
 .project-capture-import {
-  display: flex;
-  align-items: center;
-  gap: var(--op-space-x-small);
   margin-block: var(--op-space-small);
 }
 
-.project-capture-import > select {
+.project-capture-import > summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--op-font-small);
+}
+
+.project-capture-import__controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin-block-start: var(--op-space-x-small);
+}
+
+.project-capture-import__controls > select {
   flex: 1 1 28rem;
   min-inline-size: 0;
   max-inline-size: 42rem;
 }
 
-.project-capture-import > .btn {
+.project-capture-import__controls > .btn {
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
 .project-capture-import__status {
-  margin-block: 0 var(--op-space-small);
+  margin-block: var(--op-space-x-small) 0;
 }
 
 input,
@@ -3696,7 +3707,7 @@ textarea.fills.form-control {
 .multi-assembly__alignment-cuts {
   border: 1px solid var(--line);
   border-radius: var(--op-radius-medium);
-  max-block-size: 24rem;
+  max-block-size: '100%';
   overflow: auto;
 }
 

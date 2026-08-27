@@ -504,7 +504,7 @@ async function recordCommand() {
 	try {
 		({ chromium } = await import("playwright"));
 	} catch {
-		die("playwright is not installed here — npm install");
+		die("playwright is not installed here — pnpm install");
 	}
 
 	const width = Number(flag("width", DEFAULT_W));
@@ -600,7 +600,7 @@ async function captureCommand() {
 	try {
 		({ chromium } = await import("playwright"));
 	} catch {
-		die("playwright is not installed here — npm install");
+		die("playwright is not installed here — pnpm install");
 	}
 
 	/*
@@ -993,7 +993,7 @@ async function runCommand() {
 	try {
 		({ chromium } = await import("playwright"));
 	} catch {
-		die("playwright is not installed here — npm install");
+		die("playwright is not installed here — pnpm install");
 	}
 
 	const name = basename(String(file)).replace(/\.demo\.md$|\.md$/i, "");

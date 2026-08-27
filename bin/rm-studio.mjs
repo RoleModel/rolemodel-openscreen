@@ -124,7 +124,7 @@ const SHELL = argv.includes("--shell");
 /*
  * Reload the page when the toolkit's own files change.
  *
- * `npm run dev` passes --watch. It is also on by default whenever the toolkit is
+ * `pnpm run dev` passes --watch. It is also on by default whenever the toolkit is
  * a git checkout, which is the case this exists for: the app launches the Studio
  * with neither --watch nor a terminal, so editing lib/studio.js changed the file
  * the server hands out and nothing told the page — the tab kept running the JS it
@@ -142,7 +142,7 @@ const LIB = defaultRoot();
 /*
  * Brand assets somebody added, kept in the library rather than in the toolkit.
  *
- * Not brand/imagery/: `npm run imagery` rewrites that index from its own WANTED
+ * Not brand/imagery/: `pnpm run imagery` rewrites that index from its own WANTED
  * list, so an uploaded entry would be erased on the next run and would fail
  * `imagery:check` in the meantime. And TOOLKIT is the installed package — on a
  * `brew upgrade` it is replaced, which would take a client's logo with it.
@@ -677,20 +677,12 @@ async function audioAlignmentRenderSteps(id, state) {
   const outDir = dirname(state.document);
   const alignmentFile = join(outDir, "alignment.json");
   return {
-    prepareRenderStep: ownStep("rm-align-audio", ["--input", sources.audio, "--alignment", alignmentFile, "--output", state.alignedAudio], {
-      label: "build aligned narration",
+    renderStep: ownStep("rm-render-alignment", ["--alignment", alignmentFile, "--narration", sources.audio, "--audio-output", state.alignedAudio, "--output", state.renderedVideo], {
+      label: "render aligned review video",
       cwd: outDir,
       project: id,
-      note: "Cuts and joins only the narration ranges that were mapped to the visual edit.",
+      note: "Renders the chosen screen cuts and their matching narration into one reviewable MP4 with audio.",
     }),
-    renderStep: {
-      bin: "openscreen",
-      args: ["export", state.document, "-o", state.renderedVideo, "--audio", state.alignedAudio, "--audio-mode", "replace"],
-      label: "render visual narration alignment",
-      cwd: outDir,
-      project: id,
-      note: "Renders the reviewed visual cut, then adds its matching segmented narration track.",
-    },
     rendered: existsSync(state.renderedVideo),
   };
 }
@@ -1088,6 +1080,10 @@ async function state() {
       // every project looking empty.
       const catalog = await reindex(p.id).catch(() => null);
       if (catalog) p.catalog = catalog;
+      // The Library needs to distinguish a bare media folder from a video a
+      // person has already started. Keep the small workflow thread beside the
+      // catalog so returning to the project has an honest continuation signal.
+      p.workflow = await readWorkflow(p.id).catch(() => null);
     }),
   );
   const [wallpapers, scripts, tokens, motion, logos, imagery, added] = await Promise.all([
@@ -2455,7 +2451,23 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      const current = doc?.media?.screenVideoPath;
+      /*
+       * Newer multi-clip documents name their footage through `assets` and the
+       * timeline, while the editor handoff still asks the legacy `media` block
+       * which file it should mount first.  Those are the same source in a cut
+       * list; teaching the handoff that bridge makes an editable multi-clip
+       * document open instead of claiming it has no video.
+       */
+      let current = doc?.media?.screenVideoPath;
+      if (!current) {
+        const primary = doc?.assets?.find((asset) => asset?.id === doc?.project?.primaryAssetId)
+          ?? doc?.assets?.find((asset) => asset?.kind === "video");
+        if (primary?.originalPath) {
+          doc.media = { ...(doc.media ?? {}), screenVideoPath: primary.originalPath };
+          current = doc.media.screenVideoPath;
+          await writeFile(docPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        }
+      }
       if (!current) return { repaired: false, reason: "the document names no video" };
       if (await stat(current).catch(() => null)) {
         /*
@@ -3294,7 +3306,7 @@ async function fetchVoiceList() {
       const out = join(outDir, `${slug}.${format}`);
 
       // Prefer the version we pinned. npx is the fallback for a checkout that
-      // has not run `npm install` yet, but a pinned local binary is the point of
+      // has not run `pnpm install` yet, but a pinned local binary is the point of
       // depending on it rather than resolving whatever npm serves today.
       const local = join(TOOLKIT, "node_modules", ".bin", "playwright-recast");
       const haveLocal = await stat(local).then(() => true).catch(() => false);
@@ -3981,11 +3993,32 @@ async function fetchVoiceList() {
         // `project` is advisory and validated below — it only ever selects which
         // project gets re-read, never what runs.
         const project = typeof b.project === "string" ? b.project : null;
-        const j = jobs.run({
+        let step = {
           bin: String(b.bin),
           args: Array.isArray(b.args) ? b.args.map(String) : [],
           label: b.label,
           cwd: b.cwd,
+        };
+
+        /*
+         * A Studio tab can survive a server update. Older tabs held an export
+         * command for the visual-only .openscreen cut list, which OpenScreen's
+         * CLI cannot read and which could never carry the aligned narration.
+         *
+         * Translate that exact retired job at the server boundary. A reload is
+         * still useful for the clearer labels, but an already-open tab can no
+         * longer send someone into the invalid-document failure loop.
+         */
+        if (project && step.label === "render visual narration alignment") {
+          const alignment = await readAudioAlignment(project).catch(() => null);
+          const replacement = await audioAlignmentRenderSteps(project, alignment).catch(() => ({}));
+          if (replacement.renderStep) step = replacement.renderStep;
+        }
+        const j = jobs.run({
+          bin: step.bin,
+          args: step.args,
+          label: step.label,
+          cwd: step.cwd,
           onDone: project
             ? async () => {
                 if (await readManifest(projectDir(project)).catch(() => null)) await reindex(project);
@@ -4177,7 +4210,7 @@ async function fetchVoiceList() {
      */
     if (p === "/hugeicons.css") {
       const css = await readFile(join(TOOLKIT, "brand/icons/hugeicons.css"), "utf8").catch(() => null);
-      if (css == null) return json(res, 404, { error: "no icon set — run `npm run icons`" });
+      if (css == null) return json(res, 404, { error: "no icon set — run `pnpm run icons`" });
       res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
       return res.end(css);
     }
@@ -4201,7 +4234,7 @@ async function fetchVoiceList() {
         const dir = p.startsWith("/icons/") ? "brand/icons" : "brand/fonts";
         if (!FONT_FILES.has(name)) return json(res, 404, { error: "no such font" });
         const bytes = await readFile(join(TOOLKIT, dir, name)).catch(() => null);
-        if (!bytes) return json(res, 404, { error: `${name} is missing — run \`npm run icons\`` });
+        if (!bytes) return json(res, 404, { error: `${name} is missing — run \`pnpm run icons\`` });
         res.writeHead(200, {
           "content-type": "font/woff2",
           // Immutable: the filename changes when the file does, because both are
@@ -4217,7 +4250,7 @@ async function fetchVoiceList() {
       for (const f of ["brand/optics/optics.css", "brand/optics/rolemodel-scales.css"]) {
         const css = await readFile(join(TOOLKIT, f), "utf8").catch(() => null);
         if (css != null) parts.push(css);
-        else parts.push(`/* ${f} missing — run \`npm run optics\` */\n`);
+        else parts.push(`/* ${f} missing — run \`pnpm run optics\` */\n`);
       }
       res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
       return res.end(parts.join("\n"));
@@ -4505,7 +4538,11 @@ async function fetchVoiceList() {
       if (!manifest) return json(res, 404, { error: "pick a project" });
       const state = { version: 1, turns: [{ question: FIRST_QUESTION, answer: "" }], plan: null, pendingReply: false };
       await writeInterview(id, state);
-      return json(res, 200, { state, phase: interviewState(state) });
+      // An interview is the beginning of a video, even before the first answer.
+      // Persist that fact here rather than waiting for a later navigation event:
+      // leaving and returning should continue the work, not invite a restart.
+      const workflow = await markWorkflowStage(id, "plan");
+      return json(res, 200, { state, workflow, phase: interviewState(state) });
     }
 
     if (p === "/api/interview/answer" && req.method === "POST") {
@@ -4543,7 +4580,12 @@ async function fetchVoiceList() {
       try {
         const state = await readInterview(id);
         if (!state.pendingReply) throw new Error("answer the current question before loading Claude's reply");
-        const raw = await readFile(interviewReplyPath(id), "utf8");
+        const raw = await readFile(interviewReplyPath(id), "utf8").catch((err) => {
+          if (err?.code === "ENOENT") {
+            throw new Error("Claude has not saved the next question yet. Keep this page open while it finishes, then try Load Claude’s reply again.");
+          }
+          throw err;
+        });
         const next = readTurn(parseTurn(raw));
         if (next.kind === "ambiguous") throw new Error(next.problem);
         if (next.kind === "ask") {

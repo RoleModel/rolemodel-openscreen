@@ -5,7 +5,7 @@ name: Check and release
 #
 # WHY THIS EXISTS
 #
-# Releasing was `npm version patch && git push --follow-tags`, run by hand. It
+# Releasing was `pnpm version patch && git push --follow-tags`, run by hand. It
 # was run twice in the life of this repo, and one of those produced nothing
 # because the release workflow was broken. Meanwhile the tap served a tarball
 # from a tag nobody had rebuilt since, so an install predated `assets/` being
@@ -46,12 +46,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.20.0 }
       - uses: actions/setup-node@v4
-        with: { node-version: "22" }
-      # `npm ci` needs a lockfile; this repo ships two runtime deps and CI only
+        with: { node-version: "22", cache: "pnpm" }
+      # The frozen pnpm lock keeps CI on the exact dependency graph contributors use.
       # needs the dev ones the checks use.
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       # `check:ci`, not `check`.
       #
       # The full gate ends with sync-tap:check and sync-docs:check, and both
@@ -61,7 +63,7 @@ jobs:
       # push. Those two are about cross-repo publication and are checked where
       # publication happens: release.yml for the tap, the fork's own Docs
       # workflow for the site.
-      - run: npm run check:ci
+      - run: pnpm run check:ci
 
   release:
     name: Version and tag
@@ -116,12 +118,12 @@ jobs:
 
           # If package.json already names a version with no tag, that version is
           # the release and nothing needs bumping — which is how a deliberate
-          # `npm version minor` on a branch reaches main and means what it says.
+          # `pnpm version minor` on a branch reaches main and means what it says.
           CURRENT="$(node -p "require('./package.json').version")"
           if git rev-parse "v$CURRENT" >/dev/null 2>&1; then
-            npm version patch --no-git-tag-version >/dev/null
+            pnpm version patch --no-git-tag-version >/dev/null
             CURRENT="$(node -p "require('./package.json').version")"
-            git add package.json package-lock.json
+            git add package.json pnpm-lock.yaml
             git commit -m "v$CURRENT [skip release]"
             git push origin HEAD:main
           fi

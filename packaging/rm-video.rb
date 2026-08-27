@@ -16,21 +16,22 @@ class RmVideo < Formula
   # Playwright at runtime, so install the production dependency tree into
   # libexec before linking the CLIs.
   depends_on "node"
+  depends_on "pnpm" => :build
 
   # Every CLI in the toolkit, not just one.
   #
   # `rm-video` was the only entry point linked, which meant `rm-studio` — the
   # thing you actually open — was reachable only by typing a path into libexec.
   # `rm-demo` is newer than that and had never been linked at all.
-  # Every entry point in bin/, and `npm run check` asserts this list matches both
+  # Every entry point in bin/, and `pnpm run check` asserts this list matches both
   # the directory and package.json's bin map. It drifted twice: `rm-setup` was in
   # neither, so `install.sh` — whose last step hands off to it — died at the
   # finish line on a clean machine, and `rm-share` was in the bin map but not
   # here, so brew shipped six of eight commands while the docs promised seven.
-  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-insert].freeze
+  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-insert rm-align-audio rm-render-alignment rm-visual-beats].freeze
 
   def install
-    system "npm", "ci", "--omit=dev"
+    system "pnpm", "install", "--prod", "--frozen-lockfile"
 
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
     # so the whole thing goes to libexec and only the entry points are linked.

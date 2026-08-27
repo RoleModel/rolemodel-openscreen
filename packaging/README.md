@@ -5,7 +5,7 @@ The formula and casks live here, and this is the only copy anyone edits.
 They *ship* from `RoleModel/homebrew-tap`, because Homebrew resolves
 `brew tap rolemodel/tap` to a repository named `homebrew-tap` and nothing else —
 that naming rule is the entire reason a second repository exists. So the tap is a
-publishing target, not a place to work: `npm run sync-tap` copies these files
+publishing target, not a place to work: `pnpm run sync-tap` copies these files
 across and commits them.
 
 Editing the tap directly is how the formula and the code it describes drift
@@ -33,7 +33,7 @@ gh workflow run build-whisper-stt.yml --repo RoleModel/openscreen
 node packaging/update-cask.mjs rolemodel-openscreen v1.9.6-rm.2
 
 # 4. publish
-npm run sync-tap
+pnpm run sync-tap
 ```
 
 Step 2 is not optional and not obvious: the macOS job stages whisper binaries

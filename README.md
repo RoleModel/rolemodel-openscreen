@@ -25,7 +25,7 @@ browser on :4600 — that is the developer path, and it is in
 
 ```sh
 brew trust --tap rolemodel/tap
-brew install rolemodel/tap/rm-video                    # the eleven commands
+brew install rolemodel/tap/rm-video                    # the fourteen commands
 brew install --cask rolemodel/tap/rolemodel-openscreen # the app, "RoleModel Studio"
 rm-setup                                               # the rest, idempotent
 ```
@@ -128,20 +128,20 @@ openscreen export demo.openscreen -o demo.mp4 --auto-zoom --json
 ## Build chain
 
 ```bash
-npm run build     # sync-brand -> optics.css -> wallpapers
-npm run check     # every one-way copy as an assertion — this is what CI runs
-npm run icons     # re-fetch the HugeIcons set into brand/icons
-npm run icon      # rebuild the app icon from brand/icon/source
-npm run app       # launch the app from the fork beside this repo
-npm run dev       # Studio with live reload
-npm run studio    # Studio, plain
+pnpm run build     # sync-brand -> optics.css -> wallpapers
+pnpm run check     # every one-way copy as an assertion — this is what CI runs
+pnpm run icons     # re-fetch the HugeIcons set into brand/icons
+pnpm run icon      # rebuild the app icon from brand/icon/source
+pnpm run app       # launch the app from the fork beside this repo
+pnpm run dev       # Studio with live reload
+pnpm run studio    # Studio, plain
 ```
 
 `check` is the gate: it fails on a hand-edited generated file, a stale one-way copy,
 an icon name the UI asks for that the set does not have, a picker asking for a file
 flag the server never sends, and a few hundred other things. 649 assertions.
 
-`npm run dev` is `node --watch` over `bin/` and `lib/` plus a live-reload stream
+`pnpm run dev` is `node --watch` over `bin/` and `lib/` plus a live-reload stream
 to the browser, so editing a panel and seeing it are the same motion. Changes to
 `presets/` and `brand/` reload too. Nothing is watched in a normal run.
 
@@ -213,7 +213,7 @@ process. No system Python, no pip, no shell profile to edit. It runs on first
 use, or explicitly:
 
 ```bash
-npm run voice -- --setup          # --force to rebuild
+pnpm run voice -- --setup          # --force to rebuild
 ```
 
 The Studio shows a **Set up voice** button on the Voice panel when it is missing,
@@ -287,7 +287,7 @@ steps seek and grabs frames; nothing depends on when it happened to look.
 That is also why the two animations on a component write to different registered
 custom properties rather than both to `opacity` — with `fill-mode: both`, the
 exit animation's backwards fill silently wins, and every component renders
-visible from frame 0. `npm run check` asserts the contract: paused animations,
+visible from frame 0. `pnpm run check` asserts the contract: paused animations,
 no transitions, every delay positioned by `--t`, and no colour that isn't an
 Optics token.
 
@@ -314,7 +314,7 @@ the recipe. No Playwright needed on a designer's machine.
 Batch-render the whole set (CI, or after editing `brand/tokens.json`):
 
 ```bash
-npm install playwright
+pnpm add playwright
 node lib/make-wallpapers.mjs            # render brand/wallpapers.json
 node lib/make-wallpapers.mjs --reset    # re-derive recipes from tokens first
 ```
@@ -325,7 +325,7 @@ is `@rolemodel/optics` verbatim, vendored by `lib/optics-css.mjs` and pinned in
 every ramp is computed in CSS from `--op-color-primary-h/s/l` with
 `light-dark()`, so setting one hue re-tints all 486 tokens. `rolemodel-scales.css`
 carries only the sub-brand scales the open-source release does not publish. The
-Studio and the wallpapers consume those tokens, and `npm run check` fails if the
+Studio and the wallpapers consume those tokens, and `pnpm run check` fails if the
 vendored copy was hand-edited, if the supplement is stale or shadows a published
 token, if an `--op-` token the UI spends resolves nowhere, or if `lib/studio.html`
 or `lib/studio.js` grows a hand-written hex.

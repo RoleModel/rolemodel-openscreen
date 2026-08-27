@@ -1,7 +1,7 @@
 name: Release
 
 # Tag it, and the tap updates itself:
-#   npm version patch && git push --follow-tags
+#   pnpm version patch && git push --follow-tags
 #
 # Without this the formula's sha256 is hand-maintained, which is the step
 # everyone forgets — and a stale sha fails the install with a checksum

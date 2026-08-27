@@ -12,21 +12,21 @@ pipeline. This is about changing it.
 ```sh
 git clone https://github.com/RoleModel/rolemodel-openscreen.git
 cd rolemodel-openscreen
-npm install          # playwright and playwright-recast; nothing else
-npm run dev          # the Studio on :4600, reloading on change
-npm run check        # 390 assertions
+pnpm install         # playwright and playwright-recast; nothing else
+pnpm run dev         # the Studio on :4600, reloading on change
+pnpm run check       # 390 assertions
 ```
 
 That is the whole loop for most work. **No code is compiled** — the toolkit is
 plain ESM JavaScript, the Studio is plain DOM, and `lib/studio.js` is served to
 the browser as-is. Save a file, the page reloads.
 
-`npm run build` exists but builds *assets*, not code: it syncs the brand tokens,
+`pnpm run build` exists but builds *assets*, not code: it syncs the brand tokens,
 regenerates the Optics CSS and re-renders the wallpapers. You need it after
 changing `brand/`, and never for a change to `lib/` or `bin/`.
 
 The other two repositories are only needed to change the app or the review
-instance: `npm run forks` fetches them.
+instance: `pnpm run forks` fetches them.
 
 ---
 
@@ -64,12 +64,12 @@ The toolkit has no test framework. `lib/verify.mjs` is a single file of 390
 assertions that runs in about two seconds:
 
 ```sh
-npm run check     # brand sync, Optics pin, the assertions, tap drift
-npm run verify    # just the assertions
+pnpm run check     # brand sync, Optics pin, the assertions, tap drift
+pnpm run verify    # just the assertions
 ```
 
 It is deliberately not a unit-test suite. Most of what breaks here is a contract
-between two things — a formula that promises eleven commands, a client that builds
+between two things — a formula that promises fourteen commands, a client that builds
 a path the server resolves differently, a cask whose checksums no longer match
 its release — and those are the assertions worth having. Several exist because
 something shipped broken:
@@ -96,7 +96,7 @@ someone else's bug as mine.
 ### The Studio, on its own
 
 ```sh
-npm run dev            # :4600, reloads on change
+pnpm run dev           # :4600, reloads on change
 ```
 
 `--watch` never opens a browser: the tab you have reloads itself, and opening a
@@ -137,9 +137,8 @@ These are all environment, and all of them cost someone an hour already.
 
 | symptom | cause |
 |---|---|
-| `npm install` installs no dev dependencies | `NODE_ENV=production` in your shell. npm omits them **silently**. |
+| `pnpm install` installs no dev dependencies | `NODE_ENV=production` in your shell. Remove it, then run `pnpm install` again. |
 | Electron dies on `Cannot find module …/record` | `ELECTRON_RUN_AS_NODE` leaked from an editor terminal. The toolkit strips it for children; a shell you ran it in yourself does not. |
-| Electron is missing after a clean install | npm 11 blocks install scripts by default. `npm install-scripts approve electron` |
 | `cargo not found` with Rust installed | The build script looked only in rustup's `~/.cargo/bin`. Fixed in our fork; it checks `$CARGO`, rustup, then PATH. |
 | A spawn works in your terminal and fails from the app | A GUI app launched from Finder does not inherit your shell's PATH, so `/opt/homebrew/bin` is not on it. |
 | The first release build fails | whisper-stt artifacts expire, and the macOS job refuses to package without them. Run `build-whisper-stt.yml` first. |
@@ -154,7 +153,7 @@ purpose, and keeping them small is the whole reason `git pull upstream main`
 stays a non-event. Check yours before you push:
 
 ```sh
-npm run forks           # also reports how far each is from upstream
+pnpm run forks          # also reports how far each is from upstream
 ```
 
 The pattern, everywhere we have touched their code:

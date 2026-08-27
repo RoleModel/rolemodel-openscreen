@@ -20,20 +20,20 @@ Clone this one. It is the only one you edit.
 ```sh
 git clone https://github.com/RoleModel/rolemodel-openscreen.git
 cd rolemodel-openscreen
-npm run forks          # only if you need to build the app or run the review instance
+pnpm run forks         # only if you need to build the app or run the review instance
 ```
 
 The other three are not places to work:
 
 - **`homebrew-tap`** is a publish target. Homebrew resolves `rolemodel/tap` to a
   repository named `homebrew-tap` and nothing else, which is the whole reason it
-  exists. The formula and casks live in `packaging/` here; `npm run sync-tap`
-  copies them across, and `npm run check` fails if the two drift.
+  exists. The formula and casks live in `packaging/` here; `pnpm run sync-tap`
+  copies them across, and `pnpm run check` fails if the two drift.
 - **the two forks** stay forks, deliberately. Our diff on OpenScreen is 661 lines
   on top of 2260 upstream commits, and it is small on purpose — that is what makes
   `git pull upstream main` a non-event. Folding them into a monorepo would turn
   every upstream release into a manual merge of somebody else's project, which is
-  a bill you pay forever to save a clone you do once. `npm run forks` fetches them
+  a bill you pay forever to save a clone you do once. `pnpm run forks` fetches them
   as siblings when you need them, with the upstream remote already set up.
 
 ## What exists, and why there are three repos
@@ -64,7 +64,7 @@ brew trust --tap rolemodel/tap
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and eleven commands:
+That installs Node and fourteen commands:
 
 | command | does |
 |---|---|
@@ -80,7 +80,7 @@ That installs Node and eleven commands:
 | `rm-share` | sends a finished video for review |
 | `rm-setup` | checks every piece of the install and repairs what it can |
 
-`npm run check` asserts that this table, `bin/`, `package.json` and the formula
+`pnpm run check` asserts that this table, `bin/`, `package.json` and the formula
 all name the same set. They drifted three times before it did: `rm-setup` was in
 neither list even though `install.sh` ends by handing off to it — so the
 one-command install died at the finish line on a clean machine — and `rm-share`
@@ -109,7 +109,7 @@ panel says so with a link to the original.
 > 2. Click **"I understand my workflows, go ahead and enable them"**
 > 3. The `v1.9.6-rm.1` tag is already pushed, so the build starts on its own
 > 4. Then, in the tap: `node scripts/update-cask.mjs rolemodel-openscreen <tag>`
->    (same file as `packaging/update-cask.mjs` here — `npm run sync-tap` copies it)
+>    (same file as `packaging/update-cask.mjs` here — `pnpm run sync-tap` copies it)
 >
 > That last command reads the release's DMGs, hashes them, and writes the version
 > and checksums into the cask. Until it runs, the cask's version is
@@ -285,10 +285,10 @@ Worth knowing before you promise any of it to anyone.
 |---|---|
 | `openscreen: not found on PATH` | the formula installs a shim; the upstream cask's symlink breaks Electron's helper resolution. Uninstall the upstream cask. |
 | The Studio opens OpenScreen but not the editor | you are on upstream's build, which has no `open` verb. Install the fork: `brew install --cask rolemodel/tap/rolemodel-openscreen`. From a checkout, `npm run app` in the fork does the same thing. |
-| `npm install` installs no dev dependencies | `NODE_ENV=production` is set in your shell. npm omits them silently. |
+| `pnpm install` installs no dev dependencies | `NODE_ENV=production` is set in your shell. Remove it, then run `pnpm install` again. |
 | Electron dies on `Cannot find module …/record` | `ELECTRON_RUN_AS_NODE` leaked from an editor terminal. The toolkit strips it for children; a shell you ran it in yourself will not. |
 | A capture has a black band under it | the recorder padded a window into a display-sized buffer. `rm-video brand` detects it and writes a crop; no re-encode. |
 | A thumbnail looks like a zoomed crop | it was, and it is fixed — poster frames are chosen by measuring candidates, because `--auto-zoom` holds a zoom for seconds. |
 
-`npm run check` runs 354 assertions across the toolkit. It is the fastest way to
+`pnpm run check` runs 354 assertions across the toolkit. It is the fastest way to
 find out whether something you changed broke something you were not looking at.
