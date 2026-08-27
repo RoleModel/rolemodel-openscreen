@@ -64,7 +64,7 @@ brew trust --tap rolemodel/tap
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and ten commands:
+That installs Node and eleven commands:
 
 | command | does |
 |---|---|
@@ -72,6 +72,7 @@ That installs Node and ten commands:
 | `rm-video` | applies a brand preset to a document |
 | `rm-demo` | drives a browser from a script, or records one |
 | `rm-voice` | narration → audio + an exact SRT |
+| `rm-transcribe` | recording → local timed VTT transcript |
 | `rm-mux` | reconciles narration timing against a recast render |
 | `rm-library` | builds the library index |
 | `rm-compose` | cuts scenes and footage into one document the editor opens |

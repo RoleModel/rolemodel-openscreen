@@ -5,6 +5,7 @@
   "type": "module",
   "description": "RoleModel brand layer for OpenScreen — presets, wallpapers, annotation builders, and an agent skill.",
   "bin": {
+    "rm-align-audio": "./bin/rm-align-audio.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-insert": "./bin/rm-insert.mjs",
@@ -13,6 +14,8 @@
     "rm-setup": "./bin/rm-setup.mjs",
     "rm-share": "./bin/rm-share.mjs",
     "rm-studio": "./bin/rm-studio.mjs",
+    "rm-transcribe": "./bin/rm-transcribe.mjs",
+    "rm-visual-beats": "./bin/rm-visual-beats.mjs",
     "rm-video": "./bin/rm-video.mjs",
     "rm-voice": "./bin/rm-voice.mjs"
   },

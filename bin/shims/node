@@ -1,0 +1,6 @@
+#!/bin/sh
+# Studio jobs run with this folder first on PATH. Electron can launch the Studio
+# without the Homebrew Node directory, even though the Studio itself was started
+# by that Node. Rebuild a small, known macOS PATH here rather than recursively
+# resolving this shim again through `env node`.
+exec /usr/bin/env -i PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" HOME="${HOME:-}" node "$@"

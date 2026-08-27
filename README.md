@@ -25,7 +25,7 @@ browser on :4600 — that is the developer path, and it is in
 
 ```sh
 brew trust --tap rolemodel/tap
-brew install rolemodel/tap/rm-video                    # the ten commands
+brew install rolemodel/tap/rm-video                    # the eleven commands
 brew install --cask rolemodel/tap/rolemodel-openscreen # the app, "RoleModel Studio"
 rm-setup                                               # the rest, idempotent
 ```

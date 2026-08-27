@@ -23,10 +23,11 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { pipeline } from "node:stream/promises";
-import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
@@ -92,10 +93,17 @@ import { stageRenderAssets } from "../lib/render-assets.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
+jobs.setNodeExecutable(process.execPath);
 // bin/shims ahead of PATH for everything we spawn. openscreen is the reason:
 // launched through the cask's symlink, Electron cannot find its helper apps and
 // every command that forks dies with "Unable to find helper app".
 jobs.addPath(join(TOOLKIT, "bin", "shims"));
+// The Studio process is already running under Node, but Finder/Electron can
+// launch it with a PATH that omits that same executable. Own toolkit jobs are
+// deliberately `node <toolkit>/bin/*.mjs`; make the Node that started Studio
+// available to those background jobs instead of requiring a separately linked
+// `node` command in the user's shell.
+jobs.addPath(dirname(process.execPath));
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => {
@@ -180,12 +188,253 @@ const SCRIPTS = join(LIB, "_scripts");
 const previews = new Map();
 let previewSeq = 0;
 const PREVIEWS_KEPT = 8;
+/* Project-to-storage copies are quiet background work, not Console jobs. */
+const projectTransfers = new Map();
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
+/*
+ * Captures made by OpenScreen before Studio knew which project was active.
+ *
+ * These are deliberately explicit directories rather than a search across a
+ * person's home folder. The picker should make our own recent captures easy to
+ * adopt, not become a surprising file browser. New HUD captures go directly to
+ * the active project; this is the bridge for captures that already exist here.
+ */
+const OPENSCREEN_RECORDING_DIRS = [...new Set([
+  join(homedir(), "Library", "Application Support", "openscreen", "recordings"),
+  join(homedir(), "Library", "Application Support", "Openscreen", "recordings"),
+])];
+const OPENSCREEN_VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v", ".mkv", ".avi"]);
+const isOpenScreenRecording = (file) => {
+  const absolute = resolve(file);
+  return OPENSCREEN_RECORDING_DIRS.some((dir) => dirname(absolute) === resolve(dir));
+};
+const recentOpenScreenRecordings = async () => {
+  const groups = await Promise.all(OPENSCREEN_RECORDING_DIRS.map(async (dir) => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    return Promise.all(entries
+      .filter((entry) => entry.isFile() && OPENSCREEN_VIDEO_EXT.has(extname(entry.name).toLowerCase()))
+      .map(async (entry) => {
+        const file = join(dir, entry.name);
+        const info = await stat(file).catch(() => null);
+        return info?.isFile() ? {
+          file,
+          name: entry.name,
+          bytes: info.size,
+          modifiedAt: info.mtime.toISOString(),
+        } : null;
+      }));
+  }));
+  // macOS volumes are usually case-insensitive, so the legacy `openscreen`
+  // and title-cased `Openscreen` locations can be the same folder. Collapse
+  // those aliases before showing the picker.
+  const unique = new Map();
+  for (const recording of groups.flat().filter(Boolean)) {
+    unique.set(`${recording.name}\u0000${recording.bytes}\u0000${recording.modifiedAt}`, recording);
+  }
+  return [...unique.values()].sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)).slice(0, 30);
+};
 const paperEditDir = (id) => join(projectDir(id), "paper-edits");
 const interviewDir = (id) => join(projectDir(id), "interview");
 const interviewPath = (id) => join(interviewDir(id), "interview.json");
 const interviewReplyPath = (id) => join(interviewDir(id), "next-turn.json");
+const WORKFLOW_FILE = "video-workflow.json";
+const WORKFLOW_STAGES = ["plan", "script", "canvas", "record", "assembly", "edit", "review"];
+const workflowPath = (id) => join(projectDir(id), WORKFLOW_FILE);
+
+const freshWorkflow = () => ({
+  version: 1,
+  startedAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  currentStage: "plan",
+  stages: {},
+  events: [],
+});
+
+/** The project-level thread joining its otherwise separate working files together. */
+async function readWorkflow(id) {
+  const raw = await readFile(workflowPath(id), "utf8").catch(() => null);
+  if (!raw) return null;
+  try {
+    const saved = JSON.parse(raw);
+    return {
+      ...freshWorkflow(),
+      ...saved,
+      currentStage: WORKFLOW_STAGES.includes(saved?.currentStage) ? saved.currentStage : "plan",
+      stages: saved?.stages && typeof saved.stages === "object" ? saved.stages : {},
+      events: Array.isArray(saved?.events) ? saved.events.slice(-100) : [],
+    };
+  } catch {
+    throw new Error("the saved video progress is not readable");
+  }
+}
+
+/** Atomic, because this is the one file a restart uses to know where work belongs. */
+async function writeWorkflow(id, state) {
+  const path = workflowPath(id);
+  const next = { ...state, version: 1, updatedAt: new Date().toISOString() };
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  await mkdir(projectDir(id), { recursive: true });
+  await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await rename(tmp, path);
+  return next;
+}
+
+async function markWorkflowStage(id, stage) {
+  if (!WORKFLOW_STAGES.includes(stage)) throw new Error("that is not a video stage");
+  const now = new Date().toISOString();
+  const workflow = (await readWorkflow(id)) ?? freshWorkflow();
+  const prior = workflow.stages[stage] ?? {};
+  workflow.currentStage = stage;
+  workflow.stages[stage] = { ...prior, startedAt: prior.startedAt ?? now, openedAt: now };
+  workflow.events = [...workflow.events, { stage, action: "opened", at: now }].slice(-100);
+  return writeWorkflow(id, workflow);
+}
+
+/* Start over is recoverable: creative working files move aside, raw media stays put. */
+async function restartWorkflow(id) {
+  const dir = projectDir(id);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const archive = join(dir, "archive", "restarts", stamp);
+  const work = ["interview", "scripts", "scenes", "paper-edits", "storyboard.json", "history.jsonl", WORKFLOW_FILE];
+  const moved = [];
+  for (const name of work) {
+    const source = join(dir, name);
+    if (!(await lstat(source).catch(() => null))) continue;
+    await mkdir(archive, { recursive: true });
+    await rename(source, join(archive, name));
+    moved.push(name);
+  }
+  const workflow = await writeWorkflow(id, freshWorkflow());
+  return { workflow, moved, archive: moved.length ? relative(dir, archive) : null };
+}
+
+/*
+ * Studio skills belong to the toolkit, not to an individual video project.
+ * Claude may be working from a library child folder, so pass this directory as
+ * an allowed location and explicitly ask it to read the relevant instructions.
+ */
+const GLOBAL_SKILL_DIR = join(TOOLKIT, "skill");
+/*
+ * Standard is an optional neighboring checkout. Studio must keep working in a
+ * standalone install, so this is deliberately an allowed source, never a
+ * required dependency or a symlink written into somebody's home folder.
+ */
+const STANDARD_ROOT = process.env.RM_STANDARD || join(dirname(dirname(TOOLKIT)), "standard");
+const STANDARD_HYPERFRAMES_SKILL = join(STANDARD_ROOT, "marketing", "skills", "hyperframes-helper", "SKILL.md");
+const standardAvailable = () => existsSync(STANDARD_HYPERFRAMES_SKILL);
+const globalSkillMeta = (source, key) => String(source).match(new RegExp(`^${key}:\\s*['\"]?(.+?)['\"]?\\s*$`, "mi"))?.[1]?.trim() ?? null;
+const globalSkillId = (value) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(value) ? value : null;
+
+function safeZipEntry(entry) {
+  const path = String(entry ?? "").replace(/\/$/, "");
+  if (!path || path.startsWith("/") || path.includes("\\")) return null;
+  return path.split("/").some((part) => !part || part === "." || part === "..") ? null : path;
+}
+
+/** Install a zipped skill bundle into the shared toolkit source of truth. */
+async function installGlobalSkillZip(archive, { replace = false } = {}) {
+  const scratch = join(TOOLKIT, `.skill-upload-${randomUUID()}`);
+  const zip = join(scratch, "upload.zip");
+  const extracted = join(scratch, "unpacked");
+  try {
+    await mkdir(scratch, { recursive: true });
+    await writeFile(zip, archive);
+    const listing = await capture("unzip", ["-Z1", zip]);
+    if (!listing.ok) throw new Error("that file is not a readable skill zip");
+    const entries = listing.out.split(/\r?\n/).filter(Boolean);
+    if (!entries.length || entries.some((entry) => !safeZipEntry(entry))) throw new Error("the skill zip contains an unsafe file path");
+    const skillFiles = entries.filter((entry) => entry === "SKILL.md" || entry.endsWith("/SKILL.md"));
+    if (!skillFiles.length) throw new Error("the zip needs at least one SKILL.md file");
+
+    const unpack = await capture("unzip", ["-qq", zip, "-d", extracted]);
+    if (!unpack.ok) throw new Error("the skill zip could not be unpacked");
+    const root = resolve(extracted);
+    for (const entry of entries) {
+      const safe = safeZipEntry(entry);
+      if (!safe) continue;
+      const unpacked = resolve(extracted, safe);
+      if (!unpacked.startsWith(`${root}${sep}`) && unpacked !== root) throw new Error("the skill zip points outside its folder");
+      if ((await lstat(unpacked)).isSymbolicLink()) throw new Error("skill zips cannot contain symbolic links");
+    }
+    const found = [];
+    for (const entry of skillFiles) {
+      const safe = safeZipEntry(entry);
+      if (!safe) continue;
+      const sourceFile = resolve(extracted, safe);
+      if (!sourceFile.startsWith(`${root}${sep}`) && sourceFile !== join(root, "SKILL.md")) throw new Error("the skill zip points outside its folder");
+      const source = await readFile(sourceFile, "utf8").catch(() => null);
+      const declaredName = source ? globalSkillMeta(source, "name") : null;
+      const name = globalSkillId(wpSlug(declaredName ?? "").slice(0, 64));
+      if (!name) throw new Error(`${safe} needs a simple name in its front matter`);
+      const sourceDir = dirname(sourceFile);
+      const sourceStat = await lstat(sourceDir);
+      if (sourceStat.isSymbolicLink()) throw new Error("skill folders cannot be symbolic links");
+      found.push({ name, sourceDir });
+    }
+    const clashes = found.filter(({ name }) => existsSync(join(GLOBAL_SKILL_DIR, name))).map(({ name }) => name);
+    if (clashes.length && !replace) {
+      const error = new Error(`A shared skill already exists: ${clashes.join(", ")}. Replace it?`);
+      error.code = "SKILL_EXISTS";
+      error.skills = clashes;
+      throw error;
+    }
+    for (const { name, sourceDir } of found) {
+      const destination = join(GLOBAL_SKILL_DIR, name);
+      if (replace) await rm(destination, { recursive: true, force: true });
+      await cp(sourceDir, destination, { recursive: true, force: replace, errorOnExist: !replace });
+    }
+    return found.map(({ name }) => name);
+  } finally {
+    await rm(scratch, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function globalStudioSkills() {
+  const files = [];
+  const visit = async (dir) => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const file = join(dir, entry.name);
+      if (entry.isDirectory()) await visit(file);
+      else if (entry.isFile() && entry.name === "SKILL.md") files.push(file);
+    }
+  };
+  await visit(GLOBAL_SKILL_DIR);
+  return (await Promise.all(files.map(async (file) => {
+    const source = await readFile(file, "utf8");
+    return {
+      name: globalSkillMeta(source, "name") || basename(dirname(file)),
+      description: globalSkillMeta(source, "description"),
+      file,
+      path: relative(TOOLKIT, file),
+    };
+  }))).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function globalSkillDirection() {
+  const skills = await globalStudioSkills();
+  return [
+    "",
+    "RoleModel Studio's global skills apply to this work. Before starting, read and follow the relevant SKILL.md file(s):",
+    ...skills.map((skill) => `- ${skill.name}: ${skill.file}`),
+    ...(standardAvailable()
+      ? [
+          "",
+          "The optional Standard checkout is available. For a HyperFrames composition, also read:",
+          `- ${STANDARD_HYPERFRAMES_SKILL}`,
+        ]
+      : []),
+  ].join("\n");
+}
+
+const studioAgentStep = async ({ prompt, cwd, label }) => agentStep(await agentChoice(), {
+  prompt,
+  cwd,
+  label,
+  additionalDirectories: [GLOBAL_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
+});
 
 /*
  * A paper edit belongs to one source recording.  The filename is derived from
@@ -286,6 +535,202 @@ async function paperEditForRecording(id, rel) {
   const state = { version: 1, rel, transcript: transcriptFromCaptions(captions), plan: { shots: [] }, selection: null, updatedAt: new Date().toISOString() };
   await writePaperEdit(id, rel, state);
   return state;
+}
+
+/*
+ * Completed transcription is a property of a recording, so Assembly needs a
+ * way to find it again when the page opens. A job can finish after its page has
+ * been left; in that case only the VTT exists. Recover that VTT into the same
+ * paper-edit state here so a finished job never looks like work that vanished.
+ */
+async function paperEditRecordings(id) {
+  const entries = await readdir(paperEditDir(id), { withFileTypes: true }).catch(() => []);
+  const recordings = new Map();
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json") || entry.name.endsWith(".selection.json")) continue;
+    const state = await readFile(join(paperEditDir(id), entry.name), "utf8").then(JSON.parse).catch(() => null);
+    if (!state?.transcript || !state?.rel) continue;
+    if (!(await paperEditMedia(id, state.rel).catch(() => null))) continue;
+    const info = await stat(join(paperEditDir(id), entry.name)).catch(() => null);
+    recordings.set(state.rel, { rel: state.rel, updatedAt: state.updatedAt ?? info?.mtime?.toISOString() ?? null });
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".vtt")) continue;
+    const rel = Buffer.from(entry.name.slice(0, -4), "base64url").toString("utf8");
+    if (!rel || recordings.has(rel) || !(await paperEditMedia(id, rel).catch(() => null))) continue;
+    const state = await paperEditForRecording(id, rel).catch(() => null);
+    if (!state?.transcript) continue;
+    const info = await stat(join(paperEditDir(id), entry.name)).catch(() => null);
+    recordings.set(rel, { rel, updatedAt: state.updatedAt ?? info?.mtime?.toISOString() ?? null });
+  }
+  return [...recordings.values()].sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")));
+}
+
+/* ── Multi-clip assembly ──────────────────────────────────────────────── */
+
+const multiAssemblyDir = (id) => join(projectDir(id), "assemblies");
+const multiAssemblyPath = (id) => join(multiAssemblyDir(id), "multi-clip.json");
+const multiAssemblySelectionPath = (id) => join(multiAssemblyDir(id), "multi-clip.selection.json");
+const visualBeatDir = (id, rel) => join(multiAssemblyDir(id), "visual-beats", Buffer.from(String(rel)).toString("base64url"));
+const visualBeatPath = (id, rel) => join(visualBeatDir(id, rel), "visual-beats.json");
+const audioAlignmentPath = (id) => join(multiAssemblyDir(id), "audio-alignment.json");
+const audioAlignmentSelectionPath = (id) => join(multiAssemblyDir(id), "audio-alignment.selection.json");
+const readMultiAssembly = async (id) => JSON.parse(await readFile(multiAssemblyPath(id), "utf8").catch(() => "null"));
+const readVisualBeats = async (id, rel) => JSON.parse(await readFile(visualBeatPath(id, rel), "utf8").catch(() => "null"));
+const readAudioAlignment = async (id) => JSON.parse(await readFile(audioAlignmentPath(id), "utf8").catch(() => "null"));
+const writeMultiAssembly = async (id, state) => {
+  await mkdir(multiAssemblyDir(id), { recursive: true });
+  await writeFile(multiAssemblyPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+};
+const writeAudioAlignment = async (id, state) => {
+  await mkdir(multiAssemblyDir(id), { recursive: true });
+  await writeFile(audioAlignmentPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+};
+const multiPickKey = (pick) => Buffer.from(`${pick.source}:${pick.inSec}:${pick.outSec}`).toString("base64url").slice(-18);
+
+async function multiAssemblySources(id, rawRels) {
+  const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
+  if (!rels.length) throw new Error("choose at least one project recording");
+  const sources = [];
+  const missing = [];
+  for (const rel of rels) {
+    const file = await paperEditMedia(id, rel);
+    if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) throw new Error(`${basename(rel)} is not a video recording`);
+    const paper = await paperEditForRecording(id, rel);
+    const visual = await readVisualBeats(id, rel);
+    if (!paper?.transcript) missing.push(basename(rel));
+    else if (!visual?.frames?.length) missing.push(`${basename(rel)} (analyze screen)`);
+    else sources.push({ projectId: id, rel, file, transcript: paper.transcript, visual });
+  }
+  if (missing.length) throw new Error(`prepare these recordings first (transcript and screen analysis): ${missing.join(", ")}`);
+  return sources;
+}
+
+function multiAssemblyPrompt({ sources, notes = "" }) {
+  const catalog = sources.map((source) => {
+    const lines = source.transcript.cues.map((cue) => `${Number(cue.startSec).toFixed(2)}-${Number(cue.endSec).toFixed(2)} | ${cue.text}`).join("\n");
+    const frames = source.visual.frames.map((frame) => `${Number(frame.atSec).toFixed(2)}s | ${join(visualBeatDir(source.projectId, source.rel), frame.file)}`).join("\n");
+    return `SOURCE: ${source.rel}\nTIMED SPOKEN PASSAGES:\n${lines}\n\nVISUAL BEATS — inspect these actual timestamped screen frames before choosing:\n${frames}`;
+  }).join("\n\n---\n\n");
+  return [
+    "You are building the first rough assembly from several real recordings.",
+    "Choose the strongest passages across the sources. You may use a source more than once, but only name a source and times that appear below.",
+    "You MUST inspect the visual-beat image files. Select a passage only when its screen state supports what the chosen words say; a transcript match alone is not enough.",
+    "Return JSON only, with this exact shape:",
+    '{"version":1,"picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
+    "Keep the order that tells the clearest story. Do not invent footage, narration, titles, or timecodes.",
+    notes ? `EDITOR NOTES:\n${notes}` : "",
+    "SOURCE CATALOG:",
+    catalog,
+  ].filter(Boolean).join("\n\n");
+}
+
+function parseMultiAssemblySelection(raw) {
+  const text = String(raw ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const parsed = JSON.parse(text);
+  return { version: 1, picks: Array.isArray(parsed?.picks) ? parsed.picks : [] };
+}
+
+function validateMultiAssemblySelection(selection, sources) {
+  const byRel = new Map(sources.map((source) => [source.rel, source]));
+  const picks = [];
+  const problems = [];
+  for (const item of selection.picks ?? []) {
+    const source = byRel.get(String(item?.source ?? ""));
+    const inSec = Number(item?.inSec);
+    const outSec = Number(item?.outSec);
+    const last = source?.transcript?.words?.at(-1)?.endSec ?? 0;
+    if (!source) problems.push(`unknown source: ${String(item?.source ?? "")}`);
+    else if (!Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec || inSec < 0 || outSec > last + 0.15) problems.push(`invalid range for ${basename(source.rel)}`);
+    else picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), id: multiPickKey({ source: source.rel, inSec, outSec }) });
+  }
+  if (!picks.length) throw new Error(problems[0] ?? "Claude did not choose any usable passages");
+  return { version: 1, picks, problems };
+}
+
+async function audioAlignmentSources(id, videoRel, audioRel) {
+  const video = await paperEditMedia(id, videoRel);
+  const audio = await paperEditMedia(id, audioRel);
+  if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(video)) throw new Error("choose a screen recording");
+  if (!/\.(wav|mp3|m4a|aac|flac|ogg|opus|aiff)$/i.test(audio)) throw new Error("choose a project audio recording");
+  const visual = await readVisualBeats(id, videoRel);
+  if (!visual?.frames?.length) throw new Error("analyze the screen recording before mapping the narration");
+  const paper = await paperEditForRecording(id, audioRel);
+  if (!paper?.transcript?.cues?.length) throw new Error("transcribe the narration before mapping it to the screen");
+  return { id, videoRel, audioRel, video, audio, visual, transcript: paper.transcript };
+}
+
+function audioAlignmentPrompt({ sources, script = "", notes = "" }) {
+  const frames = sources.visual.frames
+    .map((frame) => `${Number(frame.atSec).toFixed(2)}s | ${join(visualBeatDir(sources.id, sources.videoRel), frame.file)}`)
+    .join("\n");
+  const narration = sources.transcript.cues
+    .map((cue) => `${Number(cue.startSec).toFixed(2)}-${Number(cue.endSec).toFixed(2)} | ${cue.text}`)
+    .join("\n");
+  return [
+    "You are aligning a narration recording to a screen demo. This is an EDIT, not an audio overlay.",
+    "Inspect the visual-beat images before deciding which screen range proves each narration range.",
+    "Return JSON only with this exact shape:",
+    '{"version":1,"segments":[{"audioInSec":0,"audioOutSec":3.2,"screenInSec":12.4,"screenOutSec":15.6,"reason":"the screen visibly performs the narrated action"}]}',
+    "Segments must be in narration order, cover every spoken cue from the first cue to the last, and use only screen times within the source video.",
+    "Each screen range must be within 0.35 seconds of its narration range. Cut dead time; do not stretch the whole recording or hold the final frame.",
+    "If a narration line has no supporting screen moment, still return a segment but set reason to 'MISSING VISUAL: ...'. Never pretend unrelated footage demonstrates it.",
+    script ? `ORIGINAL SCRIPT — use this to correct wording when the automatic transcript is imperfect:\n${script}` : "",
+    notes ? `EDITOR NOTES:\n${notes}` : "",
+    `SCREEN RECORDING: ${sources.videoRel} (${Number(sources.visual.durationSec).toFixed(2)}s)`,
+    `VISUAL BEATS — inspect these local image files:\n${frames}`,
+    `NARRATION: ${sources.audioRel}\nTIMED SPOKEN CUES:\n${narration}`,
+  ].filter(Boolean).join("\n\n");
+}
+
+function parseAudioAlignment(raw) {
+  const text = String(raw ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const parsed = JSON.parse(text);
+  return { version: 1, segments: Array.isArray(parsed?.segments) ? parsed.segments : [] };
+}
+
+function validateAudioAlignment(selection, sources) {
+  const lastAudioSec = sources.transcript.words?.at(-1)?.endSec ?? sources.transcript.cues?.at(-1)?.endSec ?? 0;
+  const videoDurationSec = Number(sources.visual.durationSec ?? 0);
+  const segments = [];
+  const problems = [];
+  let previousAudioEnd = 0;
+  for (const item of selection.segments ?? []) {
+    const audioInSec = Number(item?.audioInSec);
+    const audioOutSec = Number(item?.audioOutSec);
+    const screenInSec = Number(item?.screenInSec);
+    const screenOutSec = Number(item?.screenOutSec);
+    const audioDuration = audioOutSec - audioInSec;
+    const screenDuration = screenOutSec - screenInSec;
+    if (![audioInSec, audioOutSec, screenInSec, screenOutSec].every(Number.isFinite) || audioOutSec <= audioInSec || screenOutSec <= screenInSec) {
+      problems.push("an alignment segment has invalid times");
+      continue;
+    }
+    if (audioInSec < previousAudioEnd - 0.12 || audioInSec > previousAudioEnd + 0.5 || audioInSec < -0.05 || audioOutSec > lastAudioSec + 0.2) {
+      problems.push("narration segments must stay in order and cover the recorded narration");
+      continue;
+    }
+    if (screenInSec < 0 || screenOutSec > videoDurationSec + 0.1) {
+      problems.push("an alignment segment points outside the screen recording");
+      continue;
+    }
+    if (Math.abs(audioDuration - screenDuration) > 0.1) {
+      problems.push("a screen segment does not match its narration duration");
+      continue;
+    }
+    previousAudioEnd = audioOutSec;
+    segments.push({
+      id: multiPickKey({ source: sources.videoRel, inSec: screenInSec, outSec: screenOutSec }),
+      audioInSec: +audioInSec.toFixed(3), audioOutSec: +audioOutSec.toFixed(3),
+      screenInSec: +screenInSec.toFixed(3), screenOutSec: +screenOutSec.toFixed(3),
+      reason: String(item?.reason ?? "").trim(),
+    });
+  }
+  if (!segments.length) throw new Error(problems[0] ?? "Claude did not map any narration to the screen recording");
+  if (segments[0].audioInSec > 0.5 || lastAudioSec - segments.at(-1).audioOutSec > 0.5) {
+    throw new Error("Claude did not cover the full narration");
+  }
+  return { version: 1, segments, problems };
 }
 
 /**
@@ -787,6 +1232,25 @@ const server = createServer(async (req, res) => {
 
     if (p === "/api/state") return json(res, 200, await state());
 
+    /*
+     * The capture HUD lives in OpenScreen, outside this web page, so it cannot
+     * infer the current library project from the file currently open in the
+     * editor. This is the one narrow handoff it needs: the selected project's
+     * Footage directory, resolved by the server rather than guessed by the page.
+     */
+    if (p === "/api/capture-target") {
+      const id = await currentProject();
+      const m = id ? await readManifest(projectDir(id)).catch(() => null) : null;
+      if (!id || !m) return json(res, 200, { target: null });
+      return json(res, 200, {
+        target: {
+          directory: join(mediaDir(id), "Footage"),
+          projectId: id,
+          projectName: m.name || id,
+        },
+      });
+    }
+
     if (p === "/api/project" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       if (!body.name?.trim()) return json(res, 400, { error: "name is required" });
@@ -903,6 +1367,57 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: safe, file });
     }
 
+    /* A script is a project deliverable, so delete it from the same scoped menu. */
+    if (p === "/api/script/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const safe = safeName(body.name, "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      if (!safe) return json(res, 400, { error: "pick a script" });
+
+      const dir = join(projectDir(id), "scripts");
+      const script = join(dir, `${safe}.md`);
+      if (!(await stat(script).catch(() => null))) return json(res, 404, { error: "that script is no longer in this project" });
+
+      // Keep the brief with its script and make this recoverable like media
+      // deletion. A generated brief without its script is just stale intent.
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const trash = join(LIB, ".trash", `${stamp}-${id}-${safe}-script`);
+      await mkdir(trash, { recursive: true });
+      await rename(script, join(trash, `${safe}.md`));
+      const brief = join(dir, `${safe}.brief.json`);
+      if (await stat(brief).catch(() => null)) await rename(brief, join(trash, `${safe}.brief.json`));
+      return json(res, 200, { ok: true, note: `Moved ${safe} to the Studio trash.` });
+    }
+
+    /*
+     * A named script is a deliberate deliverable. The work before it has a name
+     * still needs to survive a reload, so keep an editor draft beside Studio's
+     * other local state rather than asking a browser-origin store to remember it.
+     */
+    if (p === "/api/script/draft-state" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!id) return json(res, 400, { error: "need a project" });
+      try {
+        return json(res, 200, { draft: await readScriptDraft(id) });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+
+    if (p === "/api/script/draft-state" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!id) return json(res, 400, { error: "need a project" });
+      try {
+        const draft = await writeScriptDraft(id, body);
+        return json(res, 200, { ok: true, draft });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+
     /**
      * Make: writes a brief INTO the project, then hands back the prompt.
      *
@@ -972,12 +1487,31 @@ const server = createServer(async (req, res) => {
       }
       const wallpaper = pick("wallpaper", body.wallpaper);
       if (wallpaper && wallpaper !== "none") {
-        wants.push(`Use brand/wallpapers/${wallpaper} as the scene background.`);
+        // A renderer works in this project's Renders folder, not in the toolkit.
+        // Telling Claude about `brand/wallpapers/...` without staging that image
+        // left it to invent a substitute. The selected background is a required
+        // local asset, just like the selected audio.
+        const wallpaperName = basename(String(wallpaper));
+        const wallpaperSource = join(TOOLKIT, "brand", "wallpapers", wallpaperName);
+        if (!(await stat(wallpaperSource).catch(() => null))) {
+          return json(res, 400, { error: `the selected background is not installed: ${wallpaperName}` });
+        }
+        const wallpaperDest = join(outDir, "assets", "wallpapers", wallpaperName);
+        await mkdir(dirname(wallpaperDest), { recursive: true });
+        await copyFile(wallpaperSource, wallpaperDest);
+        wants.push(
+          `Use this exact RoleModel background in every scene: "${wallpaperDest}". ` +
+            "Do not substitute a gradient, a generated background, or a different image.",
+        );
       } else {
         wants.push("No wallpaper behind the scene — a flat background from the brand palette.");
       }
       const captions = pick("captions", body.captions ? "on" : "off");
       if (captions === "on" || captions === true) wants.push("Burn captions in, synced to the narration.");
+      wants.push(
+        "Keep continuous visual coverage: there must be no blank or background-only frame between scenes. " +
+          "The next scene is visible at its start time, even while it is entering; overlap or crossfade transitions instead of leaving a gap.",
+      );
 
       // Motion. Claude writes the render's GSAP timeline itself, so without these
       // sentences it picks an easing and a travel distance per run — which is why
@@ -1024,7 +1558,7 @@ const server = createServer(async (req, res) => {
             `"${titleCard}"${eyebrow ? `, and the eyebrow above it reads "${eyebrow}"` : `, and remove the eyebrow`}.`,
         );
       } else {
-        wants.push("No title card — open on the content.");
+        wants.push("No title card — open on the content and do not invent a title, heading, or standalone text scene.");
       }
 
       /*
@@ -1110,6 +1644,11 @@ const server = createServer(async (req, res) => {
 
       const docVoice = fromDoc.voice === "none" ? "" : fromDoc.voice;
       const voiceId = String(docVoice ?? body.voice ?? "").trim();
+      // A script can carry its own voice choice. This matters for shared scripts:
+      // a saved ElevenLabs voice must not turn back into Kokoro just because the
+      // next person opens the panel with its local default selected.
+      const docVoiceProvider = fromDoc["voice-provider"];
+      const voiceProvider = docVoiceProvider === "elevenlabs" || (!docVoiceProvider && body.voiceProvider === "elevenlabs") ? "elevenlabs" : "kokoro";
       const audioIsNarration = audio && !(fromDoc.music || String(pick("audioRole", body.audioRole) || "narration") === "music");
 
       /*
@@ -1138,7 +1677,9 @@ const server = createServer(async (req, res) => {
       }
       if (voiceId && !audioIsNarration) {
         wants.push(
-          `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
+          voiceProvider === "elevenlabs"
+            ? `Narrate with the selected ElevenLabs voice, id "${voiceId}", for every spoken line. Use ElevenLabs for the spoken track; do not substitute a local voice.`
+            : `Narrate with \`hyperframes tts --voice ${voiceId}\` — that exact voice id, for every spoken line.`,
         );
       } else if (audioIsNarration) {
         // Recorded narration wins. Saying both would ask for two spoken tracks.
@@ -1173,14 +1714,16 @@ const server = createServer(async (req, res) => {
             templateAudio
               ? `Use the selected ${audioIsNarration ? "narration" : "music"} as a separate <audio> track with src=\"${templateAudio}\". It is the real selected file: do not replace or synthesise it.${audioIsNarration ? " Build the visual pacing around it." : " Keep it under any speech."}`
               : voiceId
-                ? `Create .template-media/narration.wav with hyperframes tts using voice ${voiceId}, then use it as a separate <audio> track. Do not render the video yet.`
+                ? voiceProvider === "elevenlabs"
+                  ? `Create .template-media/narration.wav with the selected ElevenLabs voice, id "${voiceId}", then use it as a separate <audio> track. Do not render the video yet.`
+                  : `Create .template-media/narration.wav with hyperframes tts using voice ${voiceId}, then use it as a separate <audio> track. Do not render the video yet.`
                 : "There is no audio track. Keep the template silent.",
             templateWebcam ? `Use this exact webcam clip when a picture-in-picture is called for: \"${templateWebcam}\".` : "",
             templateAssets.length ? `Use these staged project assets where they help, rather than placeholders:\n${templateAssets.map((file) => `  ${file}`).join("\n")}` : "",
             "The next human step is HyperFrames lint and review, then a manual render from this folder.",
           ].filter(Boolean).join("\n")
         : `Using /hyperframes, make ${subject}.\nRender the MP4 into ${outDir}.`;
-      const prompt = `${templateDirection}${direction}${isUrl ? "" : `\n\n${spokenSrc}`}`;
+      const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${isUrl ? "" : `\n\n${spokenSrc}`}`;
 
       const brief = [
         `# ${body.title || slug}`,
@@ -1194,7 +1737,7 @@ const server = createServer(async (req, res) => {
         `- background: ${body.wallpaper && body.wallpaper !== "none" ? body.wallpaper : "none"}`,
         `- captions: ${body.captions ? "yes" : "no"}`,
         `- motion: ${motionPick ? motionPick.label : "none"}`,
-        `- voice: ${audioIsNarration ? "recorded track" : voiceId || "none (silent)"}`,
+        `- voice: ${audioIsNarration ? "recorded track" : voiceId ? `${voiceProvider}/${voiceId}` : "none (silent)"}`,
         `- title card: ${titleCard || "none"}`,
         `- assets: ${assets.length ? assets.map((a) => a.rel).join(", ") : "none"}`,
         `- webcam: ${webcam || "none"}`,
@@ -1239,7 +1782,7 @@ const server = createServer(async (req, res) => {
         // Headless agent, run from the render directory so relative paths in the
         // prompt land where the brief says they will. Which agent, and the argv
         // that goes with it, is lib/agents.mjs — one decision, not two copies.
-        step: { ...agentStep(await agentChoice(), { prompt, cwd: outDir, label: `make ${slug}` }), project: id },
+        step: { ...await studioAgentStep({ prompt, cwd: outDir, label: `make ${slug}` }), project: id },
       });
     }
 
@@ -1354,6 +1897,40 @@ const server = createServer(async (req, res) => {
       }
       return { folder, dest, renamed: basename(dest) !== `${stem}${ext}` ? basename(dest) : null };
     };
+
+    /*
+     * Existing HUD captures are easy to lose because they land in OpenScreen's
+     * recording shelf, not a Studio project. Give the project page a precise
+     * list of those captures and a safe, one-click copy into media/Footage.
+     *
+     * This intentionally accepts only a file returned from OpenScreen's known
+     * recording directories. The older generic import endpoint remains useful
+     * for a deliberate local-path import, but this endpoint must not turn a
+     * small "recent recordings" UI into arbitrary filesystem access.
+     */
+    if (p === "/api/openscreen-recordings" && req.method === "GET") {
+      return json(res, 200, { recordings: await recentOpenScreenRecordings() });
+    }
+
+    if (p === "/api/openscreen-recordings/import" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      if (!m) return json(res, 404, { error: "pick a project" });
+
+      const src = resolve(String(body.file ?? ""));
+      if (!isOpenScreenRecording(src)) return json(res, 403, { error: "that is not a recent OpenScreen recording" });
+      const st = await stat(src).catch(() => null);
+      if (!st?.isFile() || !OPENSCREEN_VIDEO_EXT.has(extname(src).toLowerCase())) {
+        return json(res, 404, { error: "that OpenScreen recording is no longer available" });
+      }
+
+      const spot = await mediaSpot(id, src);
+      if (spot.error) return json(res, 400, { error: spot.error });
+      await copyFile(src, spot.dest);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { ok: true, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: st.size });
+    }
 
     if (p === "/api/import" && req.method === "POST") {
       const body = JSON.parse(await text(req));
@@ -1651,8 +2228,7 @@ const server = createServer(async (req, res) => {
     if (p === "/api/record/draft" && req.method === "GET") {
       const id = url.searchParams.get("project");
       if (!id) return json(res, 400, { error: "need a project" });
-      const rows = await readDraft(id);
-      return json(res, 200, { rows });
+      return json(res, 200, await readDraft(id));
     }
 
     if (p === "/api/record/draft" && req.method === "POST") {
@@ -1660,7 +2236,7 @@ const server = createServer(async (req, res) => {
       const id = String(body.projectId ?? "");
       if (!id) return json(res, 400, { error: "need a project" });
       try {
-        const file = await writeDraft(id, body.rows);
+        const file = await writeDraft(id, body);
         return json(res, 200, { ok: true, saved: file });
       } catch (err) {
         return json(res, 500, { error: err.message });
@@ -1950,6 +2526,25 @@ const server = createServer(async (req, res) => {
       const proj = join(dest, `${slug}.openscreen`);
 
       /*
+       * A narrated recording is an export choice, not a destructive edit to the
+       * capture. The source video stays intact; the final project video receives
+       * the selected track, either mixed with or replacing the capture audio.
+       */
+      let attachedAudio = null;
+      if (body.audioRel) {
+        const rel = String(body.audioRel);
+        const candidate = resolve(mediaDir(id), rel);
+        const audioRoot = resolve(mediaDir(id));
+        if (!candidate.startsWith(audioRoot + sep)) return json(res, 403, { error: "that audio is outside this project" });
+        if (!/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(candidate)) return json(res, 400, { error: "pick an audio file from this project" });
+        if (!(await stat(candidate).catch(() => null))?.isFile()) return json(res, 404, { error: "that audio file is no longer in this project" });
+        attachedAudio = candidate;
+      }
+      const audioMode = body.audioMode === "mix" ? "mix" : "replace";
+      const requestedAudioOffset = Number(body.audioOffset ?? 0);
+      const audioOffset = Number.isFinite(requestedAudioOffset) ? Math.max(0, requestedAudioOffset) : 0;
+
+      /*
        * A script turns this from "capture whatever happens" into a demo.
        *
        * Without one the recorder runs for --duration and hopes somebody is driving,
@@ -2036,11 +2631,25 @@ const server = createServer(async (req, res) => {
         {
           label: "export",
           bin: "openscreen",
-          args: ["export", proj, "-o", join(dest, `${slug}.mp4`), "--auto-zoom", "--json"],
+          args: [
+            "export", proj,
+            "-o", join(dest, `${slug}.mp4`),
+            "--auto-zoom",
+            ...(attachedAudio ? ["--audio", attachedAudio, "--audio-mode", audioMode, "--audio-offset", String(audioOffset)] : []),
+            "--json",
+          ],
         },
       ];
 
-      return json(res, 200, { dest, project: proj, steps, editable: proj, script: scriptPath });
+      return json(res, 200, {
+        dest,
+        project: proj,
+        video: join(dest, `${slug}.mp4`),
+        steps,
+        editable: proj,
+        script: scriptPath,
+        audio: attachedAudio ? { rel: String(body.audioRel), mode: audioMode, offset: audioOffset } : null,
+      });
     }
 
     /**
@@ -2139,12 +2748,29 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: Boolean(where), path: where, app, version, why });
     }
 
+    if (p === "/api/skills/upload" && req.method === "POST") {
+      try {
+        const replace = new URL(req.url, "http://studio.local").searchParams.get("replace") === "1";
+        const archive = await bytes(req, 64 * 1024 * 1024);
+        const installed = await installGlobalSkillZip(archive, { replace });
+        return json(res, 200, { installed, studio: await globalStudioSkills() });
+      } catch (err) {
+        return json(res, err.code === "SKILL_EXISTS" ? 409 : 400, { error: String(err.message), skills: err.skills ?? [] });
+      }
+    }
+
     if (p === "/api/skills") {
+      const studio = await globalStudioSkills();
+      const standard = {
+        available: standardAvailable(),
+        root: STANDARD_ROOT,
+        hyperframesSkill: standardAvailable() ? relative(STANDARD_ROOT, STANDARD_HYPERFRAMES_SKILL) : null,
+      };
       const r = await capture("npx", ["--no-install", "hyperframes", "skills", "check"]);
       // Strip the ANSI the CLI paints its counts with.
       const text = `${r.out}${r.err}`.replace(/\x1b\[[0-9;]*m/g, "");
       if (!r.ok && !text.includes("skills")) {
-        return json(res, 200, { ok: false, why: "hyperframes is not reachable — it is fetched with npx on first use" });
+        return json(res, 200, { studio, standard, ok: false, why: "hyperframes is not reachable — it is fetched with npx on first use" });
       }
       const num = (label) => {
         const m = text.match(new RegExp(`(\\d+)\\s+${label}`));
@@ -2154,6 +2780,8 @@ const server = createServer(async (req, res) => {
       const outdated = num("outdated");
       const missing = num("core not installed");
       return json(res, 200, {
+        studio,
+        standard,
         ok: true,
         location: loc?.[1] ?? null,
         tool: loc?.[2] ?? null,
@@ -2879,6 +3507,7 @@ async function fetchVoiceList() {
         "- No headings beyond a single H1, no bullets, no code blocks: everything else is spoken aloud.",
         `- About ${Math.round((body.seconds || 30) * 2.4)} words total. Narration runs ~2.4 words a second.`,
         "- Say what the product does for the person watching. No hype, no superlatives.",
+        await globalSkillDirection(),
         "",
         `Write it to ${dest} and print nothing else.`,
       ].join("\n");
@@ -2922,7 +3551,7 @@ async function fetchVoiceList() {
       return json(res, 200, {
         dest,
         prompt,
-        step: { ...agentStep(await agentChoice(), { prompt, cwd: dir, label: `draft ${nm}` }), project: id },
+        step: { ...await studioAgentStep({ prompt, cwd: dir, label: `draft ${nm}` }), project: id },
       });
     }
 
@@ -3052,6 +3681,65 @@ async function fetchVoiceList() {
       if (clean.split("/").some((seg) => seg === ".." || seg === "." || seg.startsWith("-"))) return null;
       return `${name}:${clean}`;
     };
+
+    /*
+     * Copy a complete project to its shared-storage home.
+     *
+     * A project is more than the media files shown in the Library: its manifest,
+     * scripts, scenes, board and interview all make the work usable by somebody
+     * else. `rclone copy` sends that whole directory in the background and leaves
+     * the local project in place, because removing the working copy would turn a
+     * successful upload into an editor full of missing files.
+     */
+    if (p === "/api/project/storage" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const remote = String(body.remote ?? "");
+      if (!id || !REMOTE_NAME.test(remote)) return json(res, 400, { error: "choose a project and a storage destination" });
+      const dir = projectDir(id);
+      const manifest = await readManifest(dir).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "that project is no longer in this library" });
+      const destination = remotePath(remote, `openscreen/projects/${id}`);
+      if (!destination) return json(res, 400, { error: "that storage destination is not valid" });
+      const active = projectTransfers.get(id);
+      if (active?.state === "sending") return json(res, 202, active);
+
+      const transfer = {
+        state: "sending",
+        destination,
+        project: manifest.name,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        error: null,
+      };
+      projectTransfers.set(id, transfer);
+      const copy = spawn("rclone", ["copy", dir, destination, "--create-empty-src-dirs", "--stats-one-line", "--stats", "2s"], {
+        cwd: dir,
+        stdio: "ignore",
+      });
+      copy.on("error", (err) => {
+        projectTransfers.set(id, { ...transfer, state: "failed", finishedAt: new Date().toISOString(), error: String(err.message) });
+      });
+      copy.on("close", (code) => {
+        projectTransfers.set(id, {
+          ...transfer,
+          state: code === 0 ? "sent" : "failed",
+          finishedAt: new Date().toISOString(),
+          error: code === 0 ? null : "Storage could not finish the transfer.",
+        });
+      });
+      return json(res, 200, {
+        destination,
+        ...transfer,
+      });
+    }
+
+    if (p === "/api/project/storage" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, projectTransfers.get(id) ?? { state: "idle", destination: null, project: manifest.name, startedAt: null, finishedAt: null, error: null });
+    }
 
     const storageOp = p.startsWith("/api/storage/") ? p.slice("/api/storage/".length).split("/") : [];
     const opRemote = storageOp.length > 1 ? decodeURIComponent(storageOp[0]) : null;
@@ -3714,6 +4402,49 @@ async function fetchVoiceList() {
     }
 
     /*
+     * ───────────────────── durable video progress ────────────────────────
+     *
+     * The files a stage creates already live in the project. This compact record
+     * answers the complementary question: which stage a person was in when they
+     * left, so a reopened project can continue instead of looking like a blank
+     * collection of unrelated tools.
+     */
+    if (p === "/api/workflow" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        return json(res, 200, { workflow: await readWorkflow(id) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/workflow/stage" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        return json(res, 200, { workflow: await markWorkflowStage(id, String(body.stage ?? "")) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/workflow/restart" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        return json(res, 200, await restartWorkflow(id));
+      } catch (err) {
+        return json(res, 500, { error: String(err.message) });
+      }
+    }
+
+    /*
      * ──────────────────────────── the interview ──────────────────────────
      *
      * The interview is durable project work, not an in-browser chat.  A person
@@ -3726,7 +4457,7 @@ async function fetchVoiceList() {
       if (!manifest) return json(res, 404, { error: "pick a project" });
       try {
         const state = await readInterview(id);
-        return json(res, 200, { state, phase: interviewState(state) });
+        return json(res, 200, { state, phase: interviewState(state), skills: await globalStudioSkills() });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -3758,11 +4489,11 @@ async function fetchVoiceList() {
         state.pendingReply = true;
         await writeInterview(id, state);
         const seconds = Number(body.seconds) || null;
-        const prompt = `${buildTurnPrompt({ turns: state.turns, seconds, project: manifest.name })}\n\nWrite only that JSON to ${interviewReplyPath(id)}.`;
+        const prompt = `${buildTurnPrompt({ turns: state.turns, seconds, project: manifest.name })}${await globalSkillDirection()}\n\nUse the relevant shared skills to shape the interview's next question and the resulting video plan. Do not mention the skills to the person answering.\n\nWrite only that JSON to ${interviewReplyPath(id)}.`;
         await writeFile(join(interviewDir(id), "prompt.txt"), `${prompt}\n`, "utf8");
         return json(res, 200, {
           state,
-          step: { ...agentStep(await agentChoice(), { prompt, cwd: interviewDir(id), label: `interview ${manifest.name}` }), project: id },
+          step: { ...await studioAgentStep({ prompt, cwd: interviewDir(id), label: `interview ${manifest.name}` }), project: id },
         });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -3794,7 +4525,26 @@ async function fetchVoiceList() {
         }
         state.pendingReply = false;
         await writeInterview(id, state);
-        return json(res, 200, { state, phase: interviewState(state) });
+        /* The completed interview already names the video scenes. Materialize
+         * those canvas nodes here, through the normal board writer, so the
+         * interview immediately leaves something editable rather than asking a
+         * person to repeat "build canvas" on the next page. */
+        let board = null;
+        if (state.plan?.shots?.length) {
+          const dir = projectDir(id);
+          const prior = await readBoard(dir, { projectId: id, title: manifest.name });
+          board = await applyToBoard(
+            dir,
+            prior,
+            { type: "slots", at: new Date().toISOString(), by: await reviewerName(), count: state.plan.shots.length, source: "interview" },
+            (nextBoard) => {
+              nextBoard.brief = state.plan;
+              nextBoard.slots = slotsFromBrief(id, state.plan);
+              return nextBoard;
+            },
+          );
+        }
+        return json(res, 200, { state, board, phase: interviewState(state) });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -3808,6 +4558,235 @@ async function fetchVoiceList() {
      * words, Claude's selection and the resulting cut remain one inspectable
      * record rather than three ephemeral UI states.
      */
+    if (p === "/api/multi-assembly" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { state: await readMultiAssembly(id).catch(() => null) });
+    }
+
+    if (p === "/api/multi-assembly/audio-align" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { state: await readAudioAlignment(id).catch(() => null) });
+    }
+
+    if (p === "/api/multi-assembly/analyze" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const rels = [...new Set((Array.isArray(body.rels) ? body.rels : []).map(String).filter(Boolean))];
+        if (!rels.length) throw new Error("choose at least one screen recording");
+        const steps = [];
+        for (const rel of rels) {
+          const file = await paperEditMedia(id, rel);
+          if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) throw new Error(`${basename(rel)} is not a video recording`);
+          const output = visualBeatDir(id, rel);
+          steps.push({ rel, step: ownStep("rm-visual-beats", ["--input", file, "--output", output, "--source", rel], { label: `analyze screen ${rel}`, cwd: multiAssemblyDir(id), project: id, note: "Samples timestamped screen frames for Claude to inspect before it chooses a cut." }) });
+        }
+        return json(res, 200, { steps });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/transcribe" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const rels = [...new Set((Array.isArray(body.rels) ? body.rels : []).map(String).filter(Boolean))];
+        if (!rels.length) throw new Error("choose at least one recording");
+        const prior = await readMultiAssembly(id);
+        // Source choice is work too. Persist it before the jobs start so a
+        // refresh while Whisper is running does not make a person reselect a
+        // handful of camera angles just to see their progress.
+        const sameSources = JSON.stringify(prior?.sources ?? []) === JSON.stringify(rels);
+        await writeMultiAssembly(id, { version: 1, sources: rels, notes: prior?.notes ?? "", picks: sameSources ? prior?.picks ?? [] : [], comments: sameSources ? prior?.comments ?? {} : {} });
+        const steps = [];
+        for (const rel of rels) {
+          const file = await paperEditMedia(id, rel);
+          if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) throw new Error(`${basename(rel)} is not a video recording`);
+          await mkdir(paperEditDir(id), { recursive: true });
+          steps.push({ rel, step: ownStep("rm-transcribe", ["--input", file, "--output", paperEditTranscriptPath(id, rel), "--language", String(body.language ?? "en")], { label: `transcribe ${rel}`, cwd: paperEditDir(id), project: id, note: "Creates a timed transcript for this Assembly source in the background." }) });
+        }
+        return json(res, 200, { steps });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/draft" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const sources = await multiAssemblySources(id, body.rels);
+        const prior = await readMultiAssembly(id);
+        const feedback = Object.entries(prior?.comments ?? {}).map(([pickId, comment]) => {
+          const pick = prior?.picks?.find((item) => item.id === pickId);
+          return pick ? `${pick.source} ${pick.inSec}-${pick.outSec}: ${comment}` : null;
+        }).filter(Boolean).join("\n");
+        const notes = [String(body.notes ?? "").trim(), feedback ? `REVIEW COMMENTS TO APPLY:\n${feedback}` : ""].filter(Boolean).join("\n\n");
+        const prompt = `${multiAssemblyPrompt({ sources, notes })}${await globalSkillDirection()}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Do not alter source recordings or transcripts.`;
+        await mkdir(multiAssemblyDir(id), { recursive: true });
+        await writeFile(join(multiAssemblyDir(id), "multi-clip.prompt.txt"), `${prompt}\n`, "utf8");
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), picks: prior?.picks ?? [], comments: prior?.comments ?? {} });
+        return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "multi-clip assembly" }), project: id } });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/selection" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const prior = await readMultiAssembly(id);
+        const sources = await multiAssemblySources(id, body.rels ?? prior?.sources);
+        const raw = body.fromFile ? await readFile(multiAssemblySelectionPath(id), "utf8") : JSON.stringify(body.selection ?? {});
+        const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources);
+        const comments = prior?.comments ?? {};
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: prior?.notes ?? "", picks: checked.picks, comments });
+        return json(res, 200, { state: await readMultiAssembly(id), problems: checked.problems });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/comments" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        if (!state?.picks?.some((pick) => pick.id === body.pickId)) throw new Error("that assembly pick is no longer available");
+        const comments = { ...(state.comments ?? {}) };
+        const value = String(body.comment ?? "").trim();
+        if (value) comments[String(body.pickId)] = value;
+        else delete comments[String(body.pickId)];
+        await writeMultiAssembly(id, { ...state, comments });
+        return json(res, 200, { state: await readMultiAssembly(id) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/build" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        if (!state?.picks?.length) throw new Error("ask Claude to choose clips first");
+        const files = new Map();
+        for (const rel of state.sources ?? []) files.set(rel, await paperEditMedia(id, rel));
+        const clips = state.picks.map((pick) => ({ path: files.get(pick.source), inSec: pick.inSec, outSec: pick.outSec, reason: pick.reason, label: basename(pick.source) }));
+        if (clips.some((clip) => !clip.path)) throw new Error("one of the selected recordings is no longer in this project");
+        const outDir = join(mediaDir(id), "Renders", "multi-clip-assembly");
+        await mkdir(outDir, { recursive: true });
+        const document = join(outDir, "multi-clip-assembly.openscreen");
+        const doc = cutlistToDocument({ id: `${id}-multi-clip-assembly`, title: "Multi-clip assembly", clips, createdAt: new Date().toISOString() });
+        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ ...state, document, clips }, null, 2)}\n`, "utf8");
+        await writeMultiAssembly(id, { ...state, document, builtAt: new Date().toISOString() });
+        return json(res, 200, { document, clips: doc.timeline.clips.length, durationSec: doc.timeline.clips.at(-1)?.timelineEndSec ?? 0 });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/audio-align/prepare" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const videoRel = String(body.videoRel ?? "");
+        const audioRel = String(body.audioRel ?? "");
+        const video = await paperEditMedia(id, videoRel);
+        const audio = await paperEditMedia(id, audioRel);
+        if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(video)) throw new Error("choose a screen recording");
+        if (!/\.(wav|mp3|m4a|aac|flac|ogg|opus|aiff)$/i.test(audio)) throw new Error("choose a project audio recording");
+        await mkdir(multiAssemblyDir(id), { recursive: true });
+        return json(res, 200, { steps: [
+          { step: ownStep("rm-visual-beats", ["--input", video, "--output", visualBeatDir(id, videoRel), "--source", videoRel], { label: `analyze screen ${basename(videoRel)}`, cwd: multiAssemblyDir(id), project: id, note: "Creates visual evidence for the narration alignment." }) },
+          { step: ownStep("rm-transcribe", ["--input", audio, "--output", paperEditTranscriptPath(id, audioRel), "--language", String(body.language ?? "en")], { label: `transcribe narration ${basename(audioRel)}`, cwd: paperEditDir(id), project: id, note: "Creates timed spoken cues for the narration recording." }) },
+        ] });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/audio-align/draft" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const sources = await audioAlignmentSources(id, String(body.videoRel ?? ""), String(body.audioRel ?? ""));
+        const scriptName = safeName(body.scriptName, "");
+        const script = scriptName ? await readFile(join(projectDir(id), "scripts", `${scriptName}.md`), "utf8").catch(() => "") : "";
+        const prompt = `${audioAlignmentPrompt({ sources, script, notes: String(body.notes ?? "").trim() })}${await globalSkillDirection()}\n\nWrite the JSON to ${audioAlignmentSelectionPath(id)}. Do not alter source media, transcripts, or visual beat frames.`;
+        await mkdir(multiAssemblyDir(id), { recursive: true });
+        await writeFile(join(multiAssemblyDir(id), "audio-alignment.prompt.txt"), `${prompt}\n`, "utf8");
+        await writeAudioAlignment(id, { version: 1, videoRel: sources.videoRel, audioRel: sources.audioRel, scriptName: scriptName || null, notes: String(body.notes ?? ""), segments: [] });
+        return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "visual narration alignment" }), project: id } });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/audio-align/selection" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const prior = await readAudioAlignment(id);
+        const sources = await audioAlignmentSources(id, String(body.videoRel ?? prior?.videoRel ?? ""), String(body.audioRel ?? prior?.audioRel ?? ""));
+        const raw = body.fromFile ? await readFile(audioAlignmentSelectionPath(id), "utf8") : JSON.stringify(body.selection ?? {});
+        const checked = validateAudioAlignment(parseAudioAlignment(raw), sources);
+        const state = { ...(prior ?? {}), version: 1, videoRel: sources.videoRel, audioRel: sources.audioRel, segments: checked.segments };
+        await writeAudioAlignment(id, state);
+        return json(res, 200, { state: await readAudioAlignment(id), problems: checked.problems });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/multi-assembly/audio-align/build" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readAudioAlignment(id);
+        if (!state?.segments?.length) throw new Error("map the narration to screen moments first");
+        const sources = await audioAlignmentSources(id, state.videoRel, state.audioRel);
+        const clips = state.segments.map((segment) => ({ path: sources.video, inSec: segment.screenInSec, outSec: segment.screenOutSec, reason: segment.reason, label: basename(sources.videoRel) }));
+        const outDir = join(mediaDir(id), "Renders", "audio-alignment");
+        await mkdir(outDir, { recursive: true });
+        const stem = `${wpSlug(basename(sources.videoRel, extname(sources.videoRel)))}-aligned-to-${wpSlug(basename(sources.audioRel, extname(sources.audioRel)))}`;
+        const document = join(outDir, `${stem}.openscreen`);
+        const renderedVideo = join(outDir, `${stem}.mp4`);
+        const alignedAudio = join(outDir, `${stem}.wav`);
+        const doc = cutlistToDocument({ id: `${id}-audio-alignment`, title: "Visual narration alignment", clips, createdAt: new Date().toISOString() });
+        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        const alignmentFile = join(outDir, "alignment.json");
+        await writeFile(alignmentFile, `${JSON.stringify({ ...state, document, renderedVideo, alignedAudio, clips }, null, 2)}\n`, "utf8");
+        await writeAudioAlignment(id, { ...state, document, renderedVideo, alignedAudio, builtAt: new Date().toISOString() });
+        return json(res, 200, {
+          document,
+          clips: clips.length,
+          prepareRenderStep: ownStep("rm-align-audio", ["--input", sources.audio, "--alignment", alignmentFile, "--output", alignedAudio], { label: "build aligned narration", cwd: outDir, project: id, note: "Cuts and joins only the narration ranges that were mapped to the visual edit." }),
+          renderStep: { bin: "openscreen", args: ["export", document, "-o", renderedVideo, "--audio", alignedAudio, "--audio-mode", "replace"], label: "render visual narration alignment", cwd: outDir, project: id, note: "Renders the reviewed visual cut, then adds its matching segmented narration track." },
+        });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/paper-edit/recordings" && req.method === "GET") {
+      const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        return json(res, 200, { recordings: await paperEditRecordings(id) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/paper-edit" && req.method === "GET") {
       const q = new URL(req.url, "http://studio.local").searchParams;
       const id = String(q.get("project") ?? "");
@@ -3888,10 +4867,10 @@ async function fetchVoiceList() {
         const state = await readPaperEdit(id, rel);
         if (!state?.transcript || !state?.plan?.shots?.length) throw new Error("add the transcript and the beats before asking Claude");
         const dest = paperEditSelectionPath(id, rel);
-        const prompt = `${buildPaperEditPrompt({ plan: state.plan, transcript: state.transcript, notes: String(body.notes ?? "") })}\n\nWrite that JSON to ${dest}. Do not alter the recording or the transcript.`;
+        const prompt = `${buildPaperEditPrompt({ plan: state.plan, transcript: state.transcript, notes: String(body.notes ?? "") })}${await globalSkillDirection()}\n\nWrite that JSON to ${dest}. Do not alter the recording or the transcript.`;
         await mkdir(paperEditDir(id), { recursive: true });
         await writeFile(join(paperEditDir(id), `${Buffer.from(rel).toString("base64url")}.prompt.txt`), `${prompt}\n`, "utf8");
-        return json(res, 200, { prompt, step: { ...agentStep(await agentChoice(), { prompt, cwd: paperEditDir(id), label: `paper edit ${basename(rel)}` }), project: id } });
+        return json(res, 200, { prompt, step: { ...await studioAgentStep({ prompt, cwd: paperEditDir(id), label: `paper edit ${basename(rel)}` }), project: id } });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -4972,33 +5951,89 @@ function npxWhy(r) {
  */
 const DRAFT_DIR = join(STATE_DIR, "drafts");
 const draftPath = (id) => (/^[a-z0-9][a-z0-9._-]*$/i.test(id) ? join(DRAFT_DIR, `${id}.json`) : null);
+const SCRIPT_DRAFT_DIR = join(STATE_DIR, "script-drafts");
+const scriptDraftPath = (id) => (/^[a-z0-9][a-z0-9._-]*$/i.test(id) ? join(SCRIPT_DRAFT_DIR, `${id}.json`) : null);
 
 async function readDraft(id) {
 	const file = draftPath(id);
-	if (!file) return [];
+	if (!file) return { rows: [], script: "", handEdited: false };
 	const raw = await readFile(file, "utf8").catch(() => null);
-	if (!raw) return [];
+	if (!raw) return { rows: [], script: "", handEdited: false };
 	try {
-		const rows = JSON.parse(raw);
-		return Array.isArray(rows) ? rows.filter((r) => r && typeof r.verb === "string") : [];
+		const saved = JSON.parse(raw);
+		// Drafts written before the editable Script field existed were just an
+		// array of rows. Keep them readable while new drafts hold both forms.
+		const rows = Array.isArray(saved) ? saved : saved?.rows;
+		return {
+			rows: Array.isArray(rows) ? rows.filter((r) => r && typeof r.verb === "string") : [],
+			script: typeof saved?.script === "string" ? saved.script : "",
+			handEdited: Boolean(saved?.handEdited),
+		};
 	} catch {
 		// A draft that will not parse is a draft nobody can use. Say nothing and
 		// start clean rather than failing the page that asked for it.
-		return [];
+		return { rows: [], script: "", handEdited: false };
 	}
 }
 
-async function writeDraft(id, rows) {
+async function writeDraft(id, body) {
 	const file = draftPath(id);
 	if (!file) throw new Error("that is not a project id");
 	await mkdir(DRAFT_DIR, { recursive: true });
-	// An empty list means "there is no draft", not "write an empty one".
-	if (!Array.isArray(rows) || !rows.length) {
+	const rows = Array.isArray(body?.rows) ? body.rows.filter((r) => r && typeof r.verb === "string") : [];
+	const script = typeof body?.script === "string" ? body.script : "";
+	const next = { rows, script, handEdited: Boolean(body?.handEdited), updatedAt: new Date().toISOString() };
+	// Empty rows and an empty script mean there is no draft. A hand-written script
+	// without rows is still real work and must survive a return to this page.
+	if (!rows.length && !script.trim()) {
 		await rm(file, { force: true });
 		return null;
 	}
-	await writeFile(file, `${JSON.stringify(rows, null, 2)}\n`, "utf8");
+	const tmp = `${file}.${randomUUID()}.tmp`;
+	await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+	await rename(tmp, file);
 	return file;
+}
+
+/** The Script page's incomplete document, one per project and safe across restarts. */
+async function readScriptDraft(id) {
+	const file = scriptDraftPath(id);
+	if (!file) throw new Error("that is not a project id");
+	const raw = await readFile(file, "utf8").catch(() => null);
+	if (!raw) return null;
+	try {
+		const saved = JSON.parse(raw);
+		if (!saved || typeof saved !== "object") return null;
+		return {
+			name: typeof saved.name === "string" ? saved.name : "",
+			about: typeof saved.about === "string" ? saved.about : "",
+			body: typeof saved.body === "string" ? saved.body : "",
+			seconds: Number.isFinite(Number(saved.seconds)) ? Number(saved.seconds) : 30,
+			shelf: saved.shelf === "shared" ? "shared" : "project",
+			updatedAt: typeof saved.updatedAt === "string" ? saved.updatedAt : null,
+		};
+	} catch {
+		return null;
+	}
+}
+
+/** Atomic so an app restart cannot leave the only copy of a half-written script invalid. */
+async function writeScriptDraft(id, body) {
+	const file = scriptDraftPath(id);
+	if (!file) throw new Error("that is not a project id");
+	const next = {
+		name: String(body.name ?? ""),
+		about: String(body.about ?? ""),
+		body: String(body.body ?? ""),
+		seconds: Number.isFinite(Number(body.seconds)) ? Number(body.seconds) : 30,
+		shelf: body.shelf === "shared" ? "shared" : "project",
+		updatedAt: new Date().toISOString(),
+	};
+	await mkdir(SCRIPT_DRAFT_DIR, { recursive: true });
+	const tmp = `${file}.${randomUUID()}.tmp`;
+	await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+	await rename(tmp, file);
+	return next;
 }
 
 /**
@@ -5019,7 +6054,7 @@ async function writeDraft(id, rows) {
 function ownStep(name, args, extra = {}) {
 	const script = join(TOOLKIT, "bin", `${name}.mjs`);
 	return existsSync(script)
-		? { bin: "node", args: [script, ...args], ...extra }
+		? { bin: process.execPath, args: [script, ...args], ...extra }
 		: { bin: name, args, ...extra };
 }
 

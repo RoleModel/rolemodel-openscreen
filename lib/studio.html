@@ -49,18 +49,10 @@
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>
 
             <h2 class="navgroup" data-group="make">Make a video</h2>
-            <button class="btn btn--no-border" data-group="make" data-v="create">New video</button>
-            <button class="btn btn--no-border" data-group="make" data-v="scripts">Scripts</button>
-            <button class="btn btn--no-border" data-group="make" data-v="interview">Interview</button>
+            <button class="btn btn--no-border" data-group="make" data-v="workflow">Video</button>
             <button class="btn btn--no-border" data-group="make" data-v="voice">Voice</button>
-            <button class="btn btn--no-border" data-group="make" data-v="scenes">Scenes</button>
-            <button class="btn btn--no-border" data-group="make" data-v="compose">Compose</button>
-            <button class="btn btn--no-border" data-group="make" data-v="storyboard">Storyboard</button>
-            <button class="btn btn--no-border" data-group="make" data-v="paperedit">Paper edit</button>
-            <button class="btn btn--no-border" data-group="make" data-v="cut">Cut</button>
-            <button class="btn btn--no-border" data-group="make" data-v="editor">Editor</button>
-            <button class="btn btn--no-border" data-group="make" data-v="review">Review</button>
             <h2 class="navgroup">Toolkit</h2>
+            <button class="btn btn--no-border" data-v="skills">Skills</button>
             <button class="btn btn--no-border" data-v="brand">Brand</button>
             <button class="btn btn--no-border" data-v="components">Components</button>
             <button class="btn btn--no-border" data-v="storage">Storage</button>
@@ -85,12 +77,30 @@
          -->
          <div class="sidebar__content sidebar__content--end">
             <button class="btn btn--no-border" id="docs">Docs</button>
+            <!--
+               Signing out is an account action, not a storyboard one.
+               ============================================================
+               It lived in the Storyboard's right-hand rail, beside the sharing
+               dial that put it there — which meant the way to sign out was to
+               open one particular panel and scroll to the bottom of its
+               settings. Who you are is app-wide, so it belongs with the other
+               app-wide thing at the floor of the sidebar.
+
+               `hidden` until somebody is signed in: a sign-out button with no
+               session behind it is a control that does nothing, permanently.
+
+               No `data-v`, for the same reason Docs has none — the router would
+               render a view called "signout" and the nav painters would mark it
+               current.
+            -->
+            <button class="btn btn--no-border" id="signout" hidden>Sign out</button>
          </div>
       </nav>
    </div>
 
    <div class="op-page__main">
       <header class="op-page__main-header" id="crumbs"></header>
+      <aside class="activity" id="activity" aria-live="polite" hidden></aside>
       <main class="op-page__main-content" id="main"></main>
       <footer class="op-page__main-footer"></footer>
 
@@ -301,6 +311,7 @@
          <div data-el="status" class="hint"></div>
          <button data-el="draft" class="btn ghost">Draft it with Claude</button>
          <button data-el="save" class="btn">Save script</button>
+         <button data-el="build" class="btn btn--primary">Build with Claude</button>
       </div>
    </template>
 

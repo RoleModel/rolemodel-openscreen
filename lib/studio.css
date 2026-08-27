@@ -45,7 +45,7 @@
   --on-accent: var(--op-color-academy-primary-on-base);
   --blue: var(--op-color-primary-base);
   --danger: var(--op-color-alerts-danger-base);
-  --danger-fg: var(--op-color-alerts-danger-minus-two);
+  --danger-fg: var(--op-color-alerts-danger-base);
   --info-bg: var(--op-color-academy-primary-plus-four);
   --info-fg: var(--op-color-academy-primary-on-plus-four);
   --d: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
@@ -474,6 +474,34 @@ nav button[data-v][aria-current='true'] .navicon {
   margin-bottom: var(--op-space-medium);
 }
 
+/*
+ * Adopting an existing OpenScreen recording is an occasional project action,
+ * not a form. Keep the chooser and its two actions in one short row instead of
+ * borrowing Optics' label/control grid, which made each button occupy a full
+ * second line across the page.
+ */
+.project-capture-import {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  margin-block: var(--op-space-small);
+}
+
+.project-capture-import > select {
+  flex: 1 1 28rem;
+  min-inline-size: 0;
+  max-inline-size: 42rem;
+}
+
+.project-capture-import > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.project-capture-import__status {
+  margin-block: 0 var(--op-space-small);
+}
+
 input,
 select,
 textarea {
@@ -578,6 +606,24 @@ textarea {
   color: transparent;
   caret-color: var(--fg);
   border-color: var(--line);
+}
+
+/* Optics makes a focused form control ink its own text. That is normally the
+   right default, but this textarea is deliberately transparent because the
+   layer behind it is the visible text. If it wins here, every directive is
+   painted twice while typing. Put one clear focus ring on the wrapper instead
+   of stacking the input's focus shadow over the layer's border. */
+.hl-wrap:focus-within {
+  border-radius: var(--op-radius-large);
+  outline: var(--op-border-width-large) solid var(--accent);
+  outline-offset: calc(var(--op-border-width) * -1);
+}
+
+.hl-wrap > textarea.form-control:not([type='radio'], [type='checkbox']):focus-visible:not([readonly]) {
+  background-color: transparent;
+  box-shadow: none;
+  color: transparent;
+  outline: none;
 }
 
 /*
@@ -948,6 +994,22 @@ button.btn:disabled {
   max-inline-size: 60ch;
 }
 
+/* Background work belongs to the current task, not on a different page. This
+   stays just below the trail so it is visible while someone moves between stages
+   without becoming a second navigation surface. */
+.activity {
+  border-block-end: var(--op-border-width) solid var(--line);
+  padding: var(--op-space-x-small) var(--op-space-large);
+}
+
+.activity__status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin: 0;
+}
+
 /* Under the two-column breakpoint the rail would leave the stage no room, so
          it becomes a normal block under the content instead of a column. */
 @media (max-width: 64rem) {
@@ -1112,7 +1174,17 @@ button.btn:disabled {
      are, the switcher says which space you are in. */
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--op-space-small);
+}
+
+.breadcrumbs {
+  align-items: center;
+  display: flex;
+  flex: 1 1 28rem;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
 }
 
 .breadcrumbs__link {
@@ -1122,6 +1194,7 @@ button.btn:disabled {
   border: 0;
   font: inherit;
   padding: 0;
+  white-space: nowrap;
 }
 
 .breadcrumbs__link:hover {
@@ -1130,11 +1203,47 @@ button.btn:disabled {
 
 .breadcrumbs__text {
   color: var(--fg);
+  white-space: nowrap;
 }
 
 /* Ours, not Optics'. See crumbs() in studio.js — Optics ships no separator. */
 .crumb-sep {
   color: var(--muted);
+}
+
+/* The project trail says where you are; this strip is the direct route between
+   the video stages. It has its own row so it cannot squeeze the project name
+   or disappear at the right edge of the header. */
+.workflow-nav {
+  display: flex;
+  flex: 1 0 100%;
+  gap: var(--op-space-2x-small);
+  overflow-x: auto;
+  padding-block-start: var(--op-space-2x-small);
+  scrollbar-width: thin;
+}
+
+.workflow-nav__stage {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--op-radius-small);
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
+}
+
+.workflow-nav__stage:hover {
+  border-color: var(--line);
+  color: var(--fg);
+}
+
+.workflow-nav__stage--current {
+  background: color-mix(in oklch, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--fg);
 }
 
 /* ── the library index ────────────────────────────────────
@@ -2050,6 +2159,64 @@ pre {
   word-break: break-all;
 }
 
+.runrow__status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* Voice is deliberately a single work surface. The script is the thing being
+   reviewed; provider and voice live in the rail, and progress belongs below the
+   lines instead of turning the page into a terminal transcript. */
+.voice {
+  display: grid;
+  gap: var(--op-space-medium);
+  max-inline-size: none;
+}
+
+.voice__script {
+  display: grid;
+  gap: var(--op-space-small);
+  padding: var(--op-space-large);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
+.voice__label {
+  margin: 0;
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.voice__lines {
+  max-block-size: min(48vh, 32rem);
+  min-block-size: 14rem;
+  overflow: auto;
+}
+
+.voice__estimate,
+.voice__status,
+.voice__output {
+  margin: 0;
+}
+
+.voice__estimate,
+.voice__output {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}
+
+.voice__result {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.voice__status {
+  font-style: normal;
+  line-height: var(--op-line-height-base);
+}
+
 /* ── path picking ──────────────────────────────────────────
    A trace lives wherever its repo lives, so these fields take a real path. The
    file list reuses .joblist/.job rather than inventing a second scrollable
@@ -2560,6 +2727,20 @@ textarea.form-control.script-body {
  * Top-right of the body and out of the reading order of the name and the meta,
  * because it is a control ABOUT the card rather than part of what the card says.
  */
+.project-head {
+  position: relative;
+  min-block-size: 3.2rem;
+  padding-inline-end: calc(3.2rem + var(--op-space-small));
+}
+
+.project-head > .lede {
+  margin-block: 0 var(--op-space-small);
+}
+
+.project-head > .hint {
+  margin-block: 0;
+}
+
 /*
  * The card stops clipping while its menu is open.
  *
@@ -3173,6 +3354,198 @@ textarea.fills.form-control {
   display: none !important;
 }
 
+/* ── Guided video workflow ──────────────────────────────────────────────── */
+
+.workflow {
+  display: grid;
+  gap: var(--op-space-large);
+  grid-template-columns: minmax(0, 1fr);
+  margin-block-start: var(--op-space-medium);
+}
+
+/* The stage strip lives in the persistent header. The workflow landing view is
+   intentionally just the next action, not a second large navigation card. */
+.workflow--next {
+  gap: 0;
+  max-inline-size: 48rem;
+}
+
+.workflow__timeline {
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workflow__stage {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  padding: var(--op-space-small);
+  position: relative;
+}
+
+.workflow__stage:last-child {
+  padding-block-end: var(--op-space-small);
+}
+
+.workflow__stage-button {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--op-space-small);
+  inline-size: 100%;
+  min-block-size: 5.25rem;
+  padding: 0;
+  text-align: start;
+}
+
+.workflow__marker {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+  block-size: var(--op-space-x-large);
+  inline-size: var(--op-space-x-large);
+  min-inline-size: var(--op-space-x-large);
+  position: static;
+}
+
+.workflow__stage-copy {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  min-inline-size: 0;
+}
+
+.workflow__stage-copy strong {
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.workflow__stage-copy span {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.workflow__stage--done .workflow__marker {
+  background: color-mix(in oklch, var(--accent) 18%, var(--panel));
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.workflow__stage--active .workflow__marker {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.workflow__stage--active .workflow__stage-copy strong {
+  color: var(--accent);
+}
+
+.workflow__panel {
+  align-content: start;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  gap: var(--op-space-small);
+  padding: var(--op-space-medium);
+  background-color: var(--panel);
+  border-radius: var(--op-radius-large);
+  box-shadow: 0 0 0 var(--op-border-width) var(--line) inset;
+}
+
+.workflow__eyebrow {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.workflow__title {
+  font-size: var(--op-font-large);
+  margin: 0;
+  text-wrap: balance;
+}
+
+.workflow__body {
+  color: var(--muted);
+  margin: 0;
+  max-inline-size: 44rem;
+  text-wrap: pretty;
+}
+
+.workflow__status {
+  border-block-start: 1px solid var(--line);
+  color: var(--muted);
+  margin: 0;
+  padding-block-start: var(--op-space-medium);
+}
+
+.workflow__action-note {
+  color: var(--muted);
+  margin: 0;
+  min-block-size: 1.5em;
+}
+
+.canvas-script {
+  border: 1px solid var(--line);
+  border-left-color: var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--op-radius-medium);
+  display: grid;
+  gap: var(--op-space-small);
+  margin-block: var(--op-space-medium);
+  padding: var(--op-space-medium);
+}
+
+.canvas-script__eyebrow {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  text-transform: uppercase;
+}
+
+.canvas-script__body {
+  margin: 0;
+  max-block-size: 8rem;
+  overflow: auto;
+  white-space: pre-line;
+}
+
+@media (max-width: 780px) {
+  .workflow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workflow__timeline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflow__stage-button {
+    min-block-size: 4.5rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .workflow__timeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ── Interview ──────────────────────────────────────────────────────────── */
 
 .interview__question,
@@ -3210,24 +3583,232 @@ textarea.fills.form-control {
 
 /* ── Paper edit ─────────────────────────────────────────────────────────── */
 
+/* ── Multi-clip assembly ────────────────────────────────────────────────── */
+
+.multi-assembly__sources {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  margin-block: var(--op-space-small);
+}
+
+.multi-assembly__source {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  cursor: pointer;
+  display: grid;
+  gap: var(--op-space-x-small);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-block-size: 2.75rem;
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+}
+
+.multi-assembly__source:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.multi-assembly__source-name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-assembly__source-meta {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.multi-assembly__setup {
+  display: grid;
+  gap: var(--op-space-small);
+  margin-block: var(--op-space-small);
+  max-inline-size: 60rem;
+}
+
+.multi-assembly__setup textarea {
+  min-block-size: 5.25rem;
+}
+
+.multi-assembly__align {
+  border-block: 1px solid var(--line);
+  margin-block: var(--op-space-medium);
+  padding-block: var(--op-space-small);
+}
+
+.multi-assembly__align summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--op-font-small);
+}
+
+.multi-assembly__align-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin-block-start: var(--op-space-small);
+}
+
+.multi-assembly__align-row select {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+}
+
+.multi-assembly__review {
+  margin-block-start: var(--op-space-large);
+}
+
+.multi-assembly__review-head {
+  align-items: baseline;
+  display: flex;
+  gap: var(--op-space-small);
+  justify-content: space-between;
+  margin-block-end: var(--op-space-small);
+}
+
+.multi-assembly__review-head .hint {
+  margin: 0;
+}
+
+.multi-assembly__picks {
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.multi-assembly__pick {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  display: grid;
+  gap: var(--op-space-x-small);
+  overflow: hidden;
+  padding: var(--op-space-x-small);
+}
+
+.multi-assembly__pick-video {
+  aspect-ratio: 16 / 9;
+  background: var(--op-color-neutral-plus-max);
+  border-radius: calc(var(--op-radius-medium) - var(--op-space-3x-small));
+  inline-size: 100%;
+  object-fit: cover;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+}
+
+.multi-assembly__pick-title {
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.multi-assembly__pick-reason {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  margin: 0;
+}
+
+.multi-assembly__comment {
+  min-block-size: 4.5rem;
+}
+
 .paper-edit {
   align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-large);
   display: grid;
-  gap: var(--op-space-large);
-  grid-template-columns: minmax(20rem, 28rem) minmax(0, 1fr);
+  gap: 0;
+  grid-template-columns: minmax(18rem, var(--paper-edit-transcript-width, 26rem)) 0.5rem minmax(0, 1fr);
   min-block-size: calc(100dvh - 12rem);
+  overflow: hidden;
 }
 
 .paper-edit__setup.form {
   align-content: start;
   max-inline-size: none;
+  padding: var(--op-space-small);
 }
 
+.paper-edit__transcript,
 .paper-edit__review {
   display: flex;
   flex-direction: column;
   min-block-size: 0;
   min-inline-size: 0;
+}
+
+.paper-edit__transcript {
+  background: var(--panel);
+  border-inline-end: 1px solid var(--line);
+}
+
+/* A visible, keyboard-reachable divider — not a hidden drag target. */
+.paper-edit__splitter {
+  background: var(--line);
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.paper-edit__splitter::before {
+  /* The divider stays visually quiet but has a dependable desktop hit target. */
+  content: '';
+  inset: 0 -1rem;
+  position: absolute;
+}
+
+.paper-edit__splitter::after {
+  background: var(--accent);
+  content: '';
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 120ms ease;
+  z-index: 1;
+}
+
+.paper-edit__splitter:hover::after,
+.paper-edit__splitter:focus-visible::after,
+.paper-edit--resizing .paper-edit__splitter::after {
+  opacity: 1;
+}
+
+.paper-edit__splitter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.paper-edit__transcript .form {
+  background: var(--panel);
+  border: none;
+}
+.paper-edit__transcript {
+  background: var(--panel);
+  border-inline-end: 1px solid var(--line);
+}
+
+.paper-edit__controls {
+  border-block-end: 1px solid var(--line);
+  flex: none;
+}
+
+.paper-edit__controls-summary {
+  align-items: center;
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--op-font-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  min-block-size: 2.75rem;
+  padding-inline: var(--op-space-small);
+}
+
+.paper-edit__controls-summary::marker {
+  color: var(--muted);
 }
 
 .paper-edit__title {
@@ -3253,6 +3834,108 @@ textarea.fills.form-control {
   flex-wrap: wrap;
   gap: var(--op-space-3x-small);
   margin-block: var(--op-space-small) var(--op-space-x-small);
+}
+
+.paper-edit__picks {
+  border-block-end: 1px solid var(--line);
+  margin-block: 0 var(--op-space-small);
+  padding-block-end: var(--op-space-small);
+}
+
+.paper-edit__picks-title,
+.paper-edit__pick-shot {
+  color: var(--fg);
+  font-size: var(--op-font-small);
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.paper-edit__picks > .hint {
+  margin-block: var(--op-space-3x-small) var(--op-space-x-small);
+}
+
+.paper-edit__pick-grid {
+  display: grid;
+  gap: var(--op-space-x-small);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.paper-edit__pick {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  display: grid;
+  gap: var(--op-space-x-small);
+  overflow: hidden;
+  padding: var(--op-space-x-small);
+  transition-property: border-color, opacity, background-color;
+  transition-duration: 140ms;
+}
+
+.paper-edit__pick--active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.paper-edit__pick--removed {
+  opacity: 0.58;
+}
+
+.paper-edit__pick-preview {
+  background: var(--op-color-neutral-plus-six);
+  border: 0;
+  border-radius: calc(var(--op-radius-medium) - var(--op-space-3x-small));
+  cursor: pointer;
+  display: block;
+  min-block-size: 7rem;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.paper-edit__pick-preview:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.paper-edit__pick-thumb {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  min-block-size: 7rem;
+  object-fit: cover;
+}
+
+.paper-edit__pick-time {
+  background: color-mix(in oklch, var(--panel) 84%, transparent);
+  bottom: var(--op-space-3x-small);
+  color: var(--fg);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  inset-inline-end: var(--op-space-3x-small);
+  padding: 0.15rem 0.3rem;
+  position: absolute;
+}
+
+.paper-edit__pick-copy {
+  display: grid;
+  gap: var(--op-space-3x-small);
+}
+
+.paper-edit__pick-text,
+.paper-edit__pick-why {
+  margin: 0;
+}
+
+.paper-edit__pick-text {
+  color: var(--fg);
+  font-size: var(--op-font-x-small);
+  line-height: var(--op-line-height-base);
+}
+
+.paper-edit__pick-why {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  font-style: italic;
 }
 
 .paper-edit__beat-chip {
@@ -3283,6 +3966,11 @@ textarea.fills.form-control {
   flex: 1;
   max-block-size: none;
   min-block-size: 0;
+}
+
+.paper-edit__review {
+  flex: 1;
+  padding: var(--op-space-small);
 }
 
 .paper-edit__line {
@@ -3321,6 +4009,10 @@ textarea.fills.form-control {
   background: color-mix(in oklch, var(--accent) 18%, var(--panel));
 }
 
+.paper-edit__line--playing {
+  box-shadow: inset 2px 0 var(--op-color-primary-base);
+}
+
 .paper-edit__line[aria-disabled='true'] {
   cursor: default;
 }
@@ -3336,10 +4028,61 @@ textarea.fills.form-control {
   min-inline-size: 0;
 }
 
+.paper-edit__preview {
+  align-items: stretch;
+  background: var(--op-color-neutral-plus-six);
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+  justify-content: flex-start;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  padding: var(--op-space-large);
+}
+
+.paper-edit__preview-name {
+  align-self: flex-start;
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  margin: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-edit__video {
+  align-self: flex-start;
+  background: #000;
+  border-radius: var(--op-radius-medium);
+  box-shadow: var(--op-shadow-large);
+  inline-size: 100%;
+  max-block-size: calc(100dvh - 17rem);
+  max-inline-size: 100%;
+  min-block-size: 0;
+  object-fit: contain;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+}
+
 @media (max-width: 980px) {
   .paper-edit {
     grid-template-columns: minmax(0, 1fr);
     min-block-size: auto;
+  }
+
+  .paper-edit__splitter {
+    display: none;
+  }
+
+  .paper-edit__transcript {
+    border-block-end: 1px solid var(--line);
+    border-inline-end: 0;
+  }
+
+  .paper-edit__preview {
+    min-block-size: 20rem;
   }
 
   .paper-edit__review .paper-edit__lines {
@@ -3510,6 +4253,39 @@ textarea.fills.form-control {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.board__node-actions {
+  display: flex;
+  gap: var(--op-space-2x-small);
+}
+
+.board__node-select,
+.board__node-edit {
+  flex: 1 1 0;
+  background: transparent;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--op-font-2x-small);
+  min-block-size: 2.5rem;
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
+}
+
+.board__node-select[aria-pressed='true'] {
+  background: color-mix(in oklch, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.board__node-select:hover,
+.board__node-select:focus-visible,
+.board__node-edit:hover,
+.board__node-edit:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .board__node-shot {
@@ -3721,6 +4497,39 @@ textarea.fills.form-control {
   white-space: nowrap;
 }
 
+/* A canvas card is a summary. This is where a person says what it means and
+   attaches the footage that can fulfil it, without competing with pan and drag. */
+.board-scene {
+  display: grid;
+  gap: var(--op-space-large);
+  max-inline-size: 58rem;
+  padding: var(--op-space-large);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--panel);
+}
+
+.board-scene__title {
+  margin: 0;
+  text-wrap: balance;
+}
+
+.board-scene__form {
+  max-inline-size: none;
+}
+
+.board-scene__media {
+  display: grid;
+  gap: var(--op-space-medium);
+  padding-block-start: var(--op-space-large);
+  border-block-start: var(--op-border-width) solid var(--line);
+}
+
+.board-scene__media h3 {
+  margin: 0;
+  font-size: var(--op-font-medium);
+}
+
 .board__take-span {
   color: var(--muted);
   font-family: var(--m);
@@ -3878,6 +4687,12 @@ textarea.fills.form-control {
 
 .board__empty .btn {
   margin-inline: auto;
+}
+
+.form-control:not([type='radio'], [type='checkbox']) {
+  &:focus-visible:not([readonly]) {
+    background-color: transparent;
+  }
 }
 
 textarea.form-control.board__brief {

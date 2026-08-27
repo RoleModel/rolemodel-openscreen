@@ -26,8 +26,8 @@
  * step fails and you want to know why.
  */
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { attachRecorder, CURSOR_MODES, recordArgs, sentinelTitle } from "../lib/demo-capture.mjs";
 import { attach as watchClicks, serialize as serializeDemo } from "../lib/demo-record.mjs";
@@ -132,6 +132,41 @@ const TITLE_SETTLE_MS = 400;
 const RECORDER_SETTLE_MS = Number(process.env.RM_RECORDER_SETTLE_MS) || 20_000;
 /** Held frames after the last step, so the cut is not on the click. */
 const TAIL_HOLD_MS = 900;
+/** Claude makes one observed decision at a time, so a changed screen never follows a stale plan. */
+const AGENT_STEP_LIMIT = Number(process.env.RM_DEMO_AGENT_STEP_LIMIT) || 16;
+
+/** The windows OpenScreen itself can currently resolve by title. */
+function sourceWindows(bin) {
+	return new Promise((done) => {
+		const child = spawn(bin, ["sources", "--json"], { stdio: ["ignore", "pipe", "ignore"] });
+		let out = "";
+		child.stdout?.on("data", (chunk) => (out += String(chunk)));
+		child.on("error", () => done([]));
+		child.on("close", () => {
+			for (const line of out.split(/\r?\n/).reverse()) {
+				try {
+					const event = JSON.parse(line);
+					if (Array.isArray(event?.sources?.windows)) return done(event.sources.windows.map((window) => String(window.name ?? "")));
+				} catch {
+					// `sources --json` is NDJSON; the initial event has no source list.
+				}
+			}
+			done([]);
+		});
+	});
+}
+
+/** Do not ask record to match a window until its own source listing can see it. */
+async function waitForWindowSource(bin, title) {
+	const deadline = Date.now() + RECORDER_SETTLE_MS;
+	let windows = [];
+	do {
+		windows = await sourceWindows(bin);
+		if (windows.some((name) => name.includes(title))) return { found: true, windows };
+		if (Date.now() < deadline) await new Promise((done) => setTimeout(done, 250));
+	} while (Date.now() < deadline);
+	return { found: false, windows };
+}
 
 /**
  * Resolve a target to a Playwright locator.
@@ -144,6 +179,172 @@ const TAIL_HOLD_MS = 900;
 function locate(page, target) {
 	const looksLikeSelector = /^[.#[]|^[a-z]+[.#[:]|^(div|span|button|input|a|section|main|nav|ul|li|table)\b/i.test(target);
 	return looksLikeSelector ? page.locator(target) : page.getByText(target, { exact: false }).first();
+}
+
+/** Collect the controls Claude can actually use, and give each one a temporary id. */
+async function agentScreen(page, screenshot) {
+	await page.screenshot({ path: screenshot }).catch(() => {});
+	return page.evaluate(() => {
+		const visible = (node) => {
+			const style = getComputedStyle(node);
+			const box = node.getBoundingClientRect();
+			return style.visibility !== "hidden" && style.display !== "none" && box.width > 0 && box.height > 0;
+		};
+		// Cards in Studio are deliberate click targets too. They are divs because a
+		// card can contain its own action menu, so include JavaScript click targets
+		// rather than pretending Claude can only see native controls.
+		const nodes = [...document.querySelectorAll("*")].filter(
+			(node) => visible(node) && (node.matches("a, button, [role=button], input, textarea, select") || typeof node.onclick === "function"),
+		);
+		return nodes.slice(0, 120).map((node, index) => {
+			const id = `rm-agent-${index + 1}`;
+			node.setAttribute("data-rm-agent-target", id);
+			const label = [
+				node.getAttribute("aria-label"),
+				node.labels?.[0]?.innerText,
+				node.innerText,
+				node.value,
+				node.getAttribute("placeholder"),
+			]
+				.find((value) => String(value ?? "").trim())
+				?.trim();
+			return { id, kind: node.tagName.toLowerCase(), type: node.getAttribute("type") ?? null, label: label?.slice(0, 160) ?? "unnamed control" };
+		});
+	});
+}
+
+function runClaude(args, cwd) {
+	return new Promise((resolveRun) => {
+		const child = spawn("claude", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+		let out = "";
+		let err = "";
+		child.stdout.on("data", (chunk) => (out += String(chunk)));
+		child.stderr.on("data", (chunk) => (err += String(chunk)));
+		child.on("error", (error) => resolveRun({ ok: false, out, err: error.message }));
+		child.on("close", (code) => resolveRun({ ok: code === 0, out, err }));
+	});
+}
+
+const AGENT_SCHEMA = JSON.stringify({
+	type: "object",
+	properties: {
+		action: { enum: ["click", "fill", "wait", "done"] },
+		target: { type: "string" },
+		text: { type: "string" },
+		ms: { type: "number" },
+	},
+	required: ["action"],
+	additionalProperties: false,
+});
+
+/**
+ * Let Claude make the next move from the screen it can see now.
+ *
+ * Recast edits the trace after the run; it does not choose browser actions. This
+ * bridge does: Claude gets a current screenshot plus an exact, bounded list of
+ * live controls, chooses one action, and then sees the resulting screen before
+ * it chooses again. It never gets a free-form browser or a stale list of labels.
+ */
+function liveAgent(page, { workDir, log }) {
+	let turn = 0;
+	let scratch = null;
+	const history = [];
+	// A visible button can remain on screen after a failed request. Without this
+	// guard, an otherwise careful one-step agent can keep choosing the same
+	// button, turning one useful error into sixteen identical clicks.
+	const attemptedClicks = new Set();
+
+	const choose = async (goal) => {
+		if (!scratch) scratch = await mkdtemp(join(tmpdir(), "rm-demo-agent-"));
+		for (; turn < AGENT_STEP_LIMIT; turn++) {
+			const screenshot = join(scratch, `screen-${turn + 1}.png`);
+			const controls = await agentScreen(page, screenshot);
+			const prompt = [
+				"Drive one safe next step of a local product demo.",
+				`Goal: ${goal}`,
+				`The current screen is saved at: ${screenshot}`,
+				"Read the screenshot if it helps. Pick exactly one action from the live controls below.",
+				"Use only a listed target id. Do not navigate outside the current app. Do not open Console, change settings, sign in, upload, delete, or start an external render unless the goal explicitly asks for it.",
+				"Return done when the goal is visibly complete. A fill action needs text. A wait action is only for a screen that is visibly loading. Never repeat a click: if a button remains after you used it, inspect the visible result or finish instead.",
+				history.length ? `Actions already taken in this run: ${history.join(" → ")}. Choose the next unfinished part of the goal; do not redo any of these.` : "No actions have been taken yet.",
+				"",
+				JSON.stringify(controls),
+			].join("\n");
+			const answer = await runClaude([
+				"-p",
+				prompt,
+				"--add-dir",
+				scratch,
+				"--allowedTools",
+				"Read",
+				"--output-format",
+				"json",
+				"--json-schema",
+				AGENT_SCHEMA,
+				"--no-session-persistence",
+			], workDir);
+			if (!answer.ok) throw new Error(`Claude could not inspect this screen: ${(answer.err || answer.out).trim().slice(-400)}`);
+			let response;
+			try {
+				const envelope = JSON.parse(answer.out);
+				response = envelope.structured_output ?? JSON.parse(envelope.result);
+			} catch {
+				throw new Error("Claude did not return a usable next action.");
+			}
+			if (response.action === "done") return;
+			if (response.action === "wait") {
+				const ms = Math.max(100, Math.min(5000, Number(response.ms) || 700));
+				log(`Claude waits ${ms}ms`);
+				history.push(`wait ${ms}ms`);
+				await page.waitForTimeout(ms);
+				continue;
+			}
+			if (!controls.some((control) => control.id === response.target)) throw new Error("Claude chose a control that is no longer on screen.");
+			const target = page.locator(`[data-rm-agent-target="${response.target}"]`);
+			const control = controls.find((item) => item.id === response.target);
+			// Claude's answer takes longer than a Studio paint. If that paint replaced
+			// the node it inspected, its temporary id is gone. That is a normal race,
+			// not a failed click: take a fresh screenshot and let Claude decide again.
+			if ((await target.count()) !== 1) {
+				log("Studio changed while Claude was looking; checking the current screen again.");
+				continue;
+			}
+			if (response.action === "fill") {
+				if (!["input", "textarea"].includes(control.kind) || typeof response.text !== "string") throw new Error("Claude proposed an invalid fill action.");
+				log(`Claude fills ${JSON.stringify(control.label)}`);
+				try {
+					await target.fill(response.text, { timeout: 2_000 });
+				} catch {
+					log("Studio changed while Claude was looking; checking the current screen again.");
+					continue;
+				}
+				history.push(`filled ${JSON.stringify(control.label)}`);
+			} else if (response.action === "click") {
+				const clickKey = `${control.kind}:${control.label}`;
+				if (attemptedClicks.has(clickKey)) {
+					throw new Error(`Claude already clicked ${JSON.stringify(control.label)} and the screen did not advance. Stopping instead of repeating the action.`);
+				}
+				log(`Claude clicks ${JSON.stringify(control.label)}`);
+				try {
+					await target.click({ timeout: 2_000 });
+				} catch {
+					log("Studio changed while Claude was looking; checking the current screen again.");
+					continue;
+				}
+				attemptedClicks.add(clickKey);
+				history.push(`clicked ${JSON.stringify(control.label)}`);
+			} else {
+				throw new Error("Claude proposed an unknown action.");
+			}
+			await page.waitForTimeout(SETTLE_MS);
+		}
+		throw new Error(`Claude reached the ${AGENT_STEP_LIMIT}-step safety limit before the goal was complete.`);
+	};
+
+	choose.cleanup = async () => {
+		if (scratch) await rm(scratch, { recursive: true, force: true });
+	};
+	return choose;
 }
 
 /** Verbs whose first argument has to exist on the page before we can act on it. */
@@ -183,7 +384,7 @@ async function explainMissing(page, target) {
 	return `nothing matched ${JSON.stringify(target)} on ${page.url()}${near}`;
 }
 
-async function runStep(page, step, log) {
+async function runStep(page, step, log, agent) {
 	const [a, b] = step.args;
 	log(`${step.verb} ${step.args.map((x) => JSON.stringify(x)).join(" ")}`);
 
@@ -235,6 +436,10 @@ async function runStep(page, step, log) {
 			// The guard above already waited for it and threw if it never appeared —
 			// which is the whole job. A demo that silently records the wrong screen
 			// is worse than one that stops, so `expect` never saw it means stop.
+			break;
+		case "agent":
+			if (!agent) throw new Error("this run has no Claude screen agent");
+			await agent(String(a));
 			break;
 		default:
 			throw new Error(`unhandled step ${step.verb}`);
@@ -425,11 +630,10 @@ async function captureCommand() {
 	// When attaching, --window names the browser already on screen and is the point.
 	const ownWindow = attach && typeof flag("window") === "string";
 	const title = ownWindow ? String(flag("window")) : sentinelTitle(process.pid);
-	let recArgs;
-	try {
-		recArgs = recordArgs({
+	const recorderArgsFor = (window) =>
+		recordArgs({
 			project: resolve(project),
-			window: title,
+			window,
 			...(flag("display") !== undefined ? { display: flag("display") } : {}),
 			...(flag("mic") === true ? { mic: true } : {}),
 			...(typeof flag("mic-device") === "string" ? { micDevice: flag("mic-device") } : {}),
@@ -437,6 +641,9 @@ async function captureCommand() {
 			...(typeof flag("cursor") === "string" ? { cursor: flag("cursor") } : {}),
 			...(flag("duration") !== undefined ? { duration: flag("duration") } : {}),
 		});
+	let recArgs;
+	try {
+		recArgs = recorderArgsFor(title);
 	} catch (err) {
 		die(err.message);
 	}
@@ -551,11 +758,9 @@ async function captureCommand() {
 			page = await context.newPage();
 		}
 
-		// The sentinel has to be on a page the OS can see before the recorder looks.
-		await page.goto("about:blank");
-		await page.evaluate((t) => {
-			document.title = t;
-		}, title);
+		// Commit a real document with the sentinel title. Mutating about:blank's
+		// title can satisfy Playwright while never reaching the window server.
+		await page.goto(`data:text/html,${encodeURIComponent(`<!doctype html><title>${title}</title>`)}`);
 		await page.waitForTimeout(TITLE_SETTLE_MS);
 	}
 
@@ -616,6 +821,34 @@ async function captureCommand() {
 	 * not exist. The spawn was always right; only what it printed was not.
 	 */
 	const shq = (a) => (/^[A-Za-z0-9_@%+=:,.\/-]+$/.test(a) ? a : `'${String(a).replaceAll("'", `'\\''`)}'`);
+	let captureTitle = title;
+	let source = await waitForWindowSource(bin, captureTitle);
+	/*
+	 * Chromium sometimes reports a freshly launched window as "New page" to
+	 * ScreenCaptureKit even after its document title has changed. That is not a
+	 * user window we should guess at: use it only when it is the one and only
+	 * default-title window currently visible. It lets the recorder acquire the
+	 * launched browser without ever widening a match to an unrelated window.
+	 */
+	if (!source.found && !ownWindow) {
+		const newPages = source.windows.filter((name) => name === "New page");
+		if (newPages.length === 1) {
+			captureTitle = newPages[0];
+			recArgs = recorderArgsFor(captureTitle);
+			source = { ...source, found: true };
+			console.log('  capture   Chromium reported the launched window as "New page"; using it.');
+		}
+	}
+	if (!source.found) {
+		await (browser ?? context)?.close();
+		die(
+			[
+				`OpenScreen could not see the capture window "${captureTitle}" before recording began.`,
+				"The driven browser did not become a recordable window, so no capture was started.",
+				source.windows.length ? `Windows OpenScreen can see: ${source.windows.join(" · ")}` : "OpenScreen returned no recordable windows.",
+			].join("\n\n  "),
+		);
+	}
 	console.log(`  recorder  ${bin} ${recArgs.map(shq).join(" ")}`);
 	/*
 	 * "Recording started", not a guess.
@@ -673,7 +906,7 @@ async function captureCommand() {
 		await (browser ?? context)?.close();
 		die(
 			/No window title contains/.test(early)
-				? `${early}\n\n  The window this drives is titled "${title}" until the recorder has it.\n  Every window above is a page title, so the recorder looked before this one\n  existed — give it longer with RM_RECORDER_SETTLE_MS, or record a display.`
+				? `${early}\n\n  OpenScreen saw "${title}" before the recorder started, but it disappeared before\n  the recorder latched onto it. The browser window closed or changed outside the capture.`
 				: early,
 		);
 	}
@@ -683,14 +916,16 @@ async function captureCommand() {
 
 	let failed = null;
 	const started = Date.now();
+	const agent = liveAgent(page, { workDir: dirname(resolve(project)), log: (msg) => console.log(`  ${msg}`) });
 	for (const step of steps) {
 		try {
-			await runStep(page, step, (msg) => console.log(`  ${msg}`));
+			await runStep(page, step, (msg) => console.log(`  ${msg}`), agent);
 		} catch (err) {
 			failed = { step, message: err instanceof Error ? err.message : String(err) };
 			break;
 		}
 	}
+	await agent.cleanup();
 	// A held tail, so the capture does not cut on the same frame as the last click.
 	await page.waitForTimeout(TAIL_HOLD_MS);
 
@@ -809,15 +1044,17 @@ async function runCommand() {
 	let failed = null;
 	const started = Date.now();
 	const log = (msg) => console.log(`  ${msg}`);
+	const agent = liveAgent(page, { workDir: dir, log });
 
 	for (const step of steps) {
 		try {
-			await runStep(page, step, log);
+			await runStep(page, step, log, agent);
 		} catch (err) {
 			failed = { step, message: err instanceof Error ? err.message : String(err) };
 			break;
 		}
 	}
+	await agent.cleanup();
 
 	// Named after the script, not "trace.zip", so the screencast can share the
 	// basename. recast pairs them by basename — and so does our own /api/recast,
@@ -921,6 +1158,7 @@ switch (cmd) {
 				"brand preset, auto-zoom and the camera bubble only apply to the latter.",
 				"",
 				"A script is markdown: prose is narration, ```do blocks are actions.",
+				"`agent \"goal\"` lets Claude inspect the current screenshot and live controls, then decide one action at a time. It uses your Claude account and stops after 16 actions unless RM_DEMO_AGENT_STEP_LIMIT says otherwise.",
 				"The same file feeds rm-voice unchanged — it ignores fenced blocks.",
 				"",
 			].join("\n"),
