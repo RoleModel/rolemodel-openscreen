@@ -1187,6 +1187,12 @@ button.btn:disabled {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--op-space-small);
+  /* Optics clips the sticky page shell at times; a project menu is allowed to
+     extend below its trigger rather than disappear behind the first row. */
+  isolation: isolate;
+  overflow: visible;
+  position: relative;
+  z-index: 70;
 }
 
 .breadcrumbs {
@@ -1225,6 +1231,11 @@ button.btn:disabled {
 /* Ours, not Optics'. See crumbs() in studio.js — Optics ships no separator. */
 .crumb-sep {
   color: var(--muted);
+}
+
+dialog.media-name-dialog {
+  border: solid 1px var(--line);
+  border-radius: var(--op-radius-medium);
 }
 
 /* The project trail says where you are; this strip is the direct route between
@@ -2205,12 +2216,17 @@ pre {
 }
 
 .voice__lines {
+  box-sizing: border-box;
+  inline-size: 100%;
   max-block-size: min(48vh, 32rem);
   min-block-size: 14rem;
   overflow: auto;
+  resize: vertical;
+  white-space: pre-wrap;
 }
 
 .voice__estimate,
+.voice__saved,
 .voice__status,
 .voice__output {
   margin: 0;
@@ -2226,6 +2242,21 @@ pre {
 .voice__result {
   display: grid;
   gap: var(--op-space-2x-small);
+}
+
+.storage__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--op-space-medium);
+}
+
+.storage__head .lede {
+  margin: 0;
+}
+
+.storage__settings {
+  margin-block: var(--op-space-medium);
 }
 
 .voice__status {
@@ -2507,6 +2538,8 @@ textarea.form-control.script-body {
   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
   border-radius: var(--op-radius-large);
   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+  max-block-size: min(32rem, calc(100vh - 8rem));
+  overflow-y: auto;
 }
 
 .projmenu__item {
@@ -3542,6 +3575,21 @@ textarea.fills.form-control {
   white-space: pre-line;
 }
 
+.canvas-script__controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+}
+
+.canvas-script__controls .form-control {
+  flex: 1 1 16rem;
+}
+
+.canvas-script__status {
+  margin: 0;
+}
+
 @media (max-width: 780px) {
   .workflow {
     grid-template-columns: minmax(0, 1fr);
@@ -3616,8 +3664,8 @@ textarea.fills.form-control {
   cursor: pointer;
   display: grid;
   gap: var(--op-space-x-small);
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  min-block-size: 2.75rem;
+  grid-template-columns: auto 4.5rem minmax(0, 1fr);
+  min-block-size: 4.25rem;
   padding: var(--op-space-2x-small) var(--op-space-x-small);
 }
 
@@ -3627,17 +3675,44 @@ textarea.fills.form-control {
 }
 
 .multi-assembly__source-name {
+  display: block;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.multi-assembly__source-thumb {
+  aspect-ratio: 16 / 9;
+  background-color: var(--op-color-neutral-plus-max);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border-radius: var(--op-radius-small);
+}
+
+.multi-assembly__source-details {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  min-inline-size: 0;
+}
+
 .multi-assembly__source-meta {
   color: var(--muted);
+  display: block;
   font-family: var(--m);
   font-size: var(--op-font-2x-small);
   font-variant-numeric: tabular-nums;
+}
+
+.multi-assembly__source-ready {
+  color: var(--muted);
+  display: block;
+  font-size: var(--op-font-2x-small);
+}
+
+.multi-assembly__source-ready--done {
+  color: var(--accent);
 }
 
 .multi-assembly__setup {
@@ -3817,6 +3892,12 @@ textarea.fills.form-control {
 .multi-assembly__pick-reason {
   color: var(--muted);
   font-size: var(--op-font-x-small);
+  margin: 0;
+}
+
+.multi-assembly__pick-transcript {
+  font-size: var(--op-font-x-small);
+  line-height: 1.45;
   margin: 0;
 }
 
@@ -4434,8 +4515,11 @@ textarea.fills.form-control {
 .board__scene-frame {
   block-size: 400%;
   border: 0;
+  display: block;
+  inset: 0;
   inline-size: 400%;
   pointer-events: none;
+  position: absolute;
   transform: scale(0.25);
   transform-origin: top left;
 }

@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{TITLE}}</title>
+    <style>
+      :root {
+        --rm-blue: #3a70b3;
+        --dark-blue-green: #04242b;
+        --page: rgb(250, 250, 250);
+        --card: #ffffff;
+        --ink: #181a18;
+        --ink-soft: #545454;
+        --rule: #e3e3e3;
+        --cut: #b4472f;
+        --gap: #a3271a;
+        --keep: #2f6b4f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 24px 80px;
+      }
+      header {
+        background: var(--dark-blue-green);
+        color: #fafafa;
+        padding: 40px 0 32px;
+        margin-bottom: 32px;
+      }
+      header .wrap {
+        padding-bottom: 0;
+      }
+      .eyebrow {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+        color: #87d4e9;
+        margin: 0 0 10px;
+      }
+      h1 {
+        font-size: 34px;
+        letter-spacing: -0.03em;
+        margin: 0 0 8px;
+      }
+      header p {
+        margin: 0;
+        color: #c9d6da;
+        max-width: 60ch;
+      }
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        margin-top: 28px;
+      }
+      .stat .value {
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+      .stat .label {
+        font-size: 12px;
+        color: #9fb4ba;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .stages {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .stages video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: none;
+        object-fit: contain;
+      }
+      .stages video.active {
+        display: block;
+      }
+      .stages.audio-only {
+        aspect-ratio: auto;
+        background: transparent;
+      }
+      .stages audio {
+        width: 100%;
+        display: none;
+      }
+      .stages audio.active {
+        display: block;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      button {
+        font: inherit;
+        font-size: 15px;
+        border: 1px solid var(--rm-blue);
+        background: var(--rm-blue);
+        color: #fff;
+        padding: 9px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: transparent;
+        color: var(--rm-blue);
+      }
+      button.chip {
+        background: transparent;
+        color: var(--ink-soft);
+        border-color: var(--rule);
+        padding: 5px 12px;
+        font-size: 13px;
+        border-radius: 999px;
+      }
+      button.chip.active {
+        border-color: var(--rm-blue);
+        color: var(--rm-blue);
+      }
+      .now-playing {
+        color: var(--ink-soft);
+        font-size: 15px;
+        min-height: 1.55em;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--ink-soft);
+        margin: 36px 0 14px;
+        font-weight: 600;
+      }
+      .beat-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 4px;
+      }
+      .beat-title {
+        font-size: 18px;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .speaker {
+        color: var(--ink-soft);
+        font-size: 14px;
+        margin: 0 0 16px;
+      }
+      .badge {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 3px 9px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .badge.ok {
+        background: #eaf3ee;
+        color: var(--keep);
+      }
+      .badge.look {
+        background: #fdf1e7;
+        color: var(--cut);
+      }
+      .badge.missing {
+        background: #fdecea;
+        color: var(--gap);
+      }
+      .reading {
+        font-size: 17px;
+      }
+      .reading del {
+        color: var(--cut);
+        text-decoration-thickness: 1px;
+        opacity: 0.75;
+      }
+      .reading .why {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--cut);
+        vertical-align: super;
+        margin-left: 3px;
+        white-space: nowrap;
+      }
+      .removed {
+        margin: 18px 0 0;
+        padding: 14px 16px;
+        background: #fbf7f5;
+        border-left: 3px solid var(--cut);
+        border-radius: 0 6px 6px 0;
+        font-size: 14px;
+        color: var(--ink-soft);
+      }
+      .removed ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+      }
+      .missing-card {
+        border-left: 3px solid var(--gap);
+      }
+      .expected {
+        margin: 12px 0 0;
+        padding: 14px 16px;
+        background: #fdfaf9;
+        border-radius: 6px;
+        font-size: 16px;
+        color: var(--ink-soft);
+      }
+      .alternates {
+        margin-top: 18px;
+        border-top: 1px solid var(--rule);
+        padding-top: 16px;
+      }
+      .alternate {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        font-size: 14px;
+        color: var(--ink-soft);
+      }
+      .alternate p {
+        margin: 0;
+      }
+      .copied {
+        color: var(--keep);
+        font-size: 13px;
+      }
+      .how {
+        background: #f2f6fa;
+        border: 1px solid #dbe6f1;
+      }
+      .how li {
+        margin-bottom: 6px;
+      }
+      code {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.92em;
+        background: #eef2f6;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <p class="eyebrow">Review the cut</p>
+        <h1>{{TITLE}}</h1>
+        <p>
+          Watch it through, then read what everyone actually said. Anything crossed out was removed.
+          Tell me in plain words what to change.
+        </p>
+        <div class="stats" id="stats"></div>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div class="card player" id="player-card"></div>
+      <div id="beats"></div>
+
+      <div class="card how">
+        <h2 style="margin-top: 0">Giving feedback</h2>
+        <p style="margin-top: 0">Say it the way you would to an editor. Some examples:</p>
+        <ul>
+          <li><code>use the second attempt at beat 3</code></li>
+          <li><code>the pause after "four steps" is too long</code></li>
+          <li><code>put back the "um" in beat 1, it sounded natural</code></li>
+          <li><code>beat 4 is missing, I did record it, check the other file</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      const DATA = {{DATA}};
+
+      const REASON_LABELS = {
+        repeated: "repeated attempt",
+        filler: "filler word",
+        long_pause: "long pause",
+      };
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (character) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character]);
+
+      const spokenLength = (seconds) => {
+        const whole = Math.round(seconds);
+        const minutes = Math.floor(whole / 60);
+        const remainder = whole % 60;
+        if (!minutes) return `${remainder} sec`;
+        return `${minutes} min ${remainder} sec`;
+      };
+
+      function renderStats() {
+        const matched = DATA.beats.filter((beat) => beat.status === "matched").length;
+        const flagged = DATA.beats.filter((beat) => beat.needs_a_look).length;
+        const entries = [
+          { value: spokenLength(DATA.runtime_s), label: "Assembled" },
+          { value: DATA.target_runtime_s ? spokenLength(DATA.target_runtime_s) : "not set", label: "Plan target" },
+          { value: `${matched} of ${DATA.beats.length}`, label: "Beats found" },
+          { value: flagged ? String(flagged) : "none", label: "Need a look" },
+        ];
+        document.getElementById("stats").innerHTML = entries
+          .map(
+            (entry) =>
+              `<div class="stat"><div class="value">${escapeHtml(entry.value)}</div><div class="label">${escapeHtml(
+                entry.label
+              )}</div></div>`
+          )
+          .join("");
+      }
+
+      function renderPlayer() {
+        const card = document.getElementById("player-card");
+        if (!DATA.clips.length) {
+          card.innerHTML = "<p style='margin:0'>Nothing was assembled, so there is nothing to play yet.</p>";
+          return;
+        }
+
+        const sources = [...new Set(DATA.clips.map((clip) => clip.source))];
+        const tag = DATA.audio_only ? "audio" : "video";
+        const extras = DATA.audio_only ? "controls" : "playsinline";
+
+        card.innerHTML = `
+          <div class="stages ${DATA.audio_only ? "audio-only" : ""}" id="stages">
+            ${sources
+              .map(
+                (source, position) =>
+                  `<${tag} id="stage-${position}" src="${escapeHtml(source)}" preload="auto" ${extras}></${tag}>`
+              )
+              .join("")}
+          </div>
+          <div class="controls">
+            <button id="play-all">Play the whole cut</button>
+            <button class="ghost" id="stop">Stop</button>
+            <button class="ghost" id="restart">Start over</button>
+            <span class="now-playing" id="now-playing"></span>
+          </div>
+          <div class="chips" id="chips"></div>
+        `;
+
+        const nowPlaying = document.getElementById("now-playing");
+        const playButton = document.getElementById("play-all");
+        const stages = sources.map((_source, position) => document.getElementById(`stage-${position}`));
+        const stageFor = (clip) => stages[sources.indexOf(clip.source)];
+
+        function syncPlayLabel() {
+          const stage = stageFor(DATA.clips[index]);
+          playButton.textContent = stage && !stage.paused ? "Pause" : "Play the whole cut";
+        }
+
+        let index = 0;
+        let running = false;
+        let unlocked = false;
+
+        // Autoplay is only granted inside a user gesture, and a gesture only unlocks the
+        // elements touched during it. Nudging every other source here keeps the later
+        // handoffs from being blocked when the sequence reaches them.
+        function unlock(active) {
+          if (unlocked) return;
+          unlocked = true;
+          for (const stage of stages) {
+            if (stage === active) continue;
+            const attempt = stage.play();
+            if (attempt && attempt.then) attempt.then(() => stage.pause()).catch(() => {});
+          }
+        }
+
+        function describe(clip) {
+          const beat = DATA.beats.find((entry) => entry.number === clip.beat);
+          nowPlaying.textContent = beat ? `Beat ${beat.number}: ${beat.speaker}` : "";
+          document.querySelectorAll("#chips button").forEach((chip) => {
+            chip.classList.toggle("active", Number(chip.dataset.beat) === clip.beat);
+          });
+        }
+
+        function load(target, autoplay) {
+          index = target;
+          const clip = DATA.clips[index];
+          const stage = stageFor(clip);
+
+          for (const other of stages) {
+            other.classList.toggle("active", other === stage);
+            if (other !== stage) other.pause();
+          }
+          describe(clip);
+
+          const seek = () => {
+            stage.currentTime = clip.start_s;
+            if (!autoplay) return;
+            const attempt = stage.play();
+            if (attempt && attempt.catch) {
+              attempt.catch(() => {
+                running = false;
+                nowPlaying.textContent = "Your browser blocked playback, press play again.";
+              });
+            }
+          };
+
+          if (stage.readyState >= 1) seek();
+          else stage.addEventListener("loadedmetadata", seek, { once: true });
+        }
+
+        function advance(stage) {
+          const clip = DATA.clips[index];
+          if (!running || !clip || stageFor(clip) !== stage) return;
+          if (index + 1 < DATA.clips.length) {
+            load(index + 1, true);
+          } else {
+            stage.pause();
+            running = false;
+            nowPlaying.textContent = "That's the whole cut.";
+          }
+        }
+
+        for (const stage of stages) {
+          stage.addEventListener("timeupdate", () => {
+            const clip = DATA.clips[index];
+            if (!running || !clip || stageFor(clip) !== stage) return;
+            if (stage.currentTime >= clip.end_s) advance(stage);
+          });
+          // A clip that runs to the very end of its file stops firing timeupdate
+          // before reaching end_s, so completion has to come off `ended` too.
+          stage.addEventListener("ended", () => advance(stage));
+          stage.addEventListener("play", syncPlayLabel);
+          stage.addEventListener("pause", syncPlayLabel);
+        }
+
+        document.getElementById("chips").innerHTML = DATA.beats
+          .filter((beat) => beat.status === "matched")
+          .map(
+            (beat) =>
+              `<button class="chip" data-beat="${beat.number}">Beat ${beat.number} &middot; ${escapeHtml(
+                beat.speaker
+              )}</button>`
+          )
+          .join("");
+
+        document.querySelectorAll("#chips button").forEach((chip) => {
+          chip.addEventListener("click", () => {
+            const target = DATA.clips.findIndex((clip) => clip.beat === Number(chip.dataset.beat));
+            if (target < 0) return;
+            unlock(stageFor(DATA.clips[target]));
+            running = true;
+            load(target, true);
+          });
+        });
+
+        playButton.addEventListener("click", () => {
+          const clip = DATA.clips[index];
+          const stage = stageFor(clip);
+          if (!stage.paused) {
+            stage.pause();
+            return;
+          }
+          unlock(stage);
+          running = true;
+          const partway = stage.currentTime >= clip.start_s && stage.currentTime < clip.end_s;
+          if (partway) {
+            const attempt = stage.play();
+            if (attempt && attempt.catch) attempt.catch(() => {});
+          } else {
+            load(index, true);
+          }
+        });
+
+        document.getElementById("stop").addEventListener("click", () => {
+          running = false;
+          for (const stage of stages) stage.pause();
+          nowPlaying.textContent = "Stopped.";
+          syncPlayLabel();
+        });
+
+        document.getElementById("restart").addEventListener("click", () => {
+          unlock(stageFor(DATA.clips[0]));
+          running = true;
+          load(0, true);
+        });
+
+        load(0, false);
+        syncPlayLabel();
+      }
+
+      function renderReading(beat) {
+        return beat.reading
+          .map((segment) => {
+            const text = escapeHtml(segment.text);
+            if (segment.kept) return text;
+            const why = REASON_LABELS[segment.reason] || segment.reason;
+            return `<del>${text}</del><span class="why">${escapeHtml(why)}</span>`;
+          })
+          .join(" ");
+      }
+
+      function renderRemoved(beat) {
+        if (!beat.removed.length) return "";
+        const items = beat.removed
+          .map((entry) => {
+            const why = REASON_LABELS[entry.reason] || entry.reason;
+            const detail = entry.text ? `&ldquo;${escapeHtml(entry.text)}&rdquo;` : `${entry.seconds} seconds of silence`;
+            return `<li>${escapeHtml(why)}: ${detail}</li>`;
+          })
+          .join("");
+        return `<div class="removed">Taken out of this beat:<ul>${items}</ul></div>`;
+      }
+
+      function renderAlternates(beat) {
+        if (beat.alternates.length < 1) return "";
+        const rows = beat.alternates
+          .map(
+            (alternate) => `
+              <div class="alternate">
+                <button class="chip" data-copy="use attempt ${alternate.number} for beat ${beat.number}">Use this one</button>
+                <p>Attempt ${alternate.number}, ${alternate.words} words &mdash; &ldquo;${escapeHtml(
+              alternate.preview
+            )}&rdquo;</p>
+              </div>`
+          )
+          .join("");
+        return `<div class="alternates"><strong style="font-size:14px">Other attempts at this beat</strong>${rows}</div>`;
+      }
+
+      function renderBeats() {
+        document.getElementById("beats").innerHTML =
+          '<h2>What everyone said</h2>' +
+          DATA.beats
+            .map((beat) => {
+              if (beat.status !== "matched") {
+                return `
+                  <div class="card missing-card">
+                    <div class="beat-head">
+                      <p class="beat-title">Beat ${beat.number}: ${escapeHtml(beat.label)}</p>
+                      <span class="badge missing">not found</span>
+                    </div>
+                    <p class="speaker">${escapeHtml(beat.speaker)}</p>
+                    <p style="margin:0">${escapeHtml(beat.gap_explanation)}</p>
+                    <div class="expected">Expected: &ldquo;${escapeHtml(beat.script)}&rdquo;</div>
+                  </div>`;
+              }
+              const badge = beat.needs_a_look
+                ? '<span class="badge look">worth a look</span>'
+                : '<span class="badge ok">looks good</span>';
+              return `
+                <div class="card">
+                  <div class="beat-head">
+                    <p class="beat-title">Beat ${beat.number}: ${escapeHtml(beat.label)}</p>
+                    ${badge}
+                  </div>
+                  <p class="speaker">${escapeHtml(beat.speaker)} &middot; ${spokenLength(beat.duration_s)}</p>
+                  <p class="reading">${renderReading(beat)}</p>
+                  ${renderRemoved(beat)}
+                  ${renderAlternates(beat)}
+                </div>`;
+            })
+            .join("");
+
+        document.querySelectorAll("[data-copy]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(button.dataset.copy);
+              const note = document.createElement("span");
+              note.className = "copied";
+              note.textContent = "copied, paste it to me";
+              button.after(note);
+              setTimeout(() => note.remove(), 2600);
+            } catch (error) {
+              window.prompt("Copy this and paste it to me:", button.dataset.copy);
+            }
+          });
+        });
+      }
+
+      renderStats();
+      renderPlayer();
+      renderBeats();
+    </script>
+  </body>
+</html>

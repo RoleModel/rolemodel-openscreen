@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width={{WIDTH}}, height={{HEIGHT}}" />
+    <title>{{TITLE}}</title>
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: {{WIDTH}}px;
+        height: {{HEIGHT}}px;
+        overflow: hidden;
+      }
+      video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="{{WIDTH}}"
+      data-height="{{HEIGHT}}"
+      data-fps="{{FPS}}"
+      data-duration="{{DURATION}}"
+      data-no-timeline
+    >
+{{MEDIA}}
+    </div>
+  </body>
+</html>

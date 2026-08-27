@@ -1,0 +1,60 @@
+{
+  "skill_name": "video-from-script",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I've got the video plan from /video-plan and five recordings, one per speaker, in a folder. Build me the video.",
+      "expected_output": "Should run the read-only preflight (node, ffmpeg, npx hyperframes --version) without asking. Should set up a project under marketing/drafts/video/<slug>/. Should read the plan into beats.json itself rather than writing a parser, then show the parsed beat table back and confirm it BEFORE transcribing. Should map speakers to files by filename and ask when ambiguous. Should ask permission before the first transcribe because of the Whisper model download, naming the size. Should record duration_s per source with ffprobe. Should run align.py then build.py, run hyperframes check, and hand over review.html via the repo-root server on port 8000. Should not add titles, lower thirds, or b-roll.",
+      "assertions": [
+        "Runs preflight without asking",
+        "Works inside marketing/drafts/video/ rather than a committed path",
+        "Parses the plan by reading it, not with a regex parser",
+        "Confirms the parsed beat table before transcribing",
+        "Asks before the Whisper model download and names the size",
+        "Records duration_s per source with ffprobe",
+        "Runs hyperframes check before showing the user anything",
+        "Serves the review page from the repo root on port 8000",
+        "Does not add titles, lower thirds, captions, or b-roll"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Beat 3 picked the wrong take, I want the second attempt. And put the um back in beat 1, it sounded natural.",
+      "expected_output": "Should write both decisions into overrides.json as {\"beats\": {\"3\": {\"attempt\": 2}, \"1\": {\"config\": {\"fillers\": []}}}}, re-run align.py with --overrides and then build.py, and report what changed. Should not hand-edit cut.json or index.html, since both are generated. Should confirm the forced selection came through as forced_by_you.",
+      "assertions": [
+        "Writes overrides.json rather than editing generated files",
+        "Uses the 1-based attempt number from the review page",
+        "Uses a per-beat fillers override to restore the filler word",
+        "Re-runs both align.py and build.py",
+        "Reports what actually changed in the cut"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Two of the five beats came back empty. What happened?",
+      "expected_output": "Should distinguish no_footage from below_threshold. Should check the speaker-to-file mapping first, because a wrong file is indistinguishable from missing footage. Should show the script that was expected for each gap and ask whether a recording is missing or whether delivery diverged too far. Should not lower coverage_threshold to force a match, and should not quietly drop the beats. Should confirm the gaps consume no timeline time and appear in the manifest for a decision.",
+      "assertions": [
+        "Distinguishes no_footage from below_threshold",
+        "Checks the speaker-to-file mapping before adjusting thresholds",
+        "Shows the expected script for each gap",
+        "Does not silently drop the missing beats",
+        "Does not lower the coverage threshold to manufacture a match"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Can you leave space in the video for the title card and the lower thirds so the branding step has room?",
+      "expected_output": "Should decline to put reserved empty time or visual markers in the exported skeleton, and explain that reserving room locks the later steps into the plan's shape. Should point out that the structure is already carried in skeleton-manifest.json, including each beat's timeline window and the plan's on-screen intent, which is what /video-branding reads. Should note the runtime delta is expected to be negative for exactly this reason.",
+      "assertions": [
+        "Does not add reserved empty time or visual markers",
+        "Explains why structure travels in the manifest instead",
+        "Points at skeleton-manifest.json and the per-beat plan intent",
+        "Explains the negative runtime delta as expected"
+      ],
+      "files": []
+    }
+  ]
+}

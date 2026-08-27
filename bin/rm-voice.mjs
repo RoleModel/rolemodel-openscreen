@@ -22,7 +22,7 @@
  * same code path either way, and the Studio streams this output into Console.
  */
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { defaultRoot, readManifest } from "../lib/library.mjs";
 import { DEFAULT_PROVIDER, PROVIDERS, VOICES, concat, hasApiKey, parseScript, srt, synth, vtt } from "../lib/narration.mjs";
 import { isReady, setup, venvDir } from "../lib/voice-setup.mjs";
@@ -96,9 +96,14 @@ if (typeof name !== "string") {
 	else die(`--script is required. Found: ${found.map((f) => f.replace(/\.md$/, "")).join(", ")}`);
 }
 
-const scriptPath = join(scriptsDir, `${name}.md`);
+const sourceArg = flag("source");
+const scriptPath = typeof sourceArg === "string" ? resolve(projectDir, sourceArg) : join(scriptsDir, `${name}.md`);
+const sourceRelative = relative(projectDir, scriptPath);
+if (typeof sourceArg === "string" && (sourceRelative === "" || sourceRelative === ".." || sourceRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`))) {
+	die("--source must be a file inside the project");
+}
 const source = await readFile(scriptPath, "utf8").catch(() => null);
-if (source == null) die(`no script at ${scriptPath}`);
+if (source == null) die(`no narration source at ${scriptPath}`);
 
 const lines = parseScript(source);
 if (!lines.length) die("that script has no speakable lines — headings and code blocks are skipped");

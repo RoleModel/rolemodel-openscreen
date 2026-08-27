@@ -1,6 +1,6 @@
 {
   "name": "rolemodel-openscreen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
@@ -62,7 +62,8 @@
     "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
   },
   "devDependencies": {
-    "gsap": "^3.14.2"
+    "gsap": "^3.14.2",
+    "supabase": "^2.116.0"
   },
   "repository": {
     "type": "git",

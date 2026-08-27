@@ -35,6 +35,7 @@ import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
+import { createStudioSkill, fetchStudioSkill, fetchStudioSkills, updateStudioSkill } from "../lib/supabase.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
@@ -64,6 +65,7 @@ import {
   describe as describeDemo,
   parseDemo,
   settings as demoSettings,
+  speakerSections,
 } from "../lib/demo-script.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import {
@@ -197,6 +199,111 @@ const PREVIEWS_KEPT = 8;
 const projectTransfers = new Map();
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
+
+/*
+ * HyperFrames Studio is a second editor, not an export target.
+ *
+ * Each Make run gets its own folder under media/Renders/.  That folder is the
+ * editable source project Claude writes and HyperFrames owns; the MP4 beside it
+ * is only one render of that source.  Keep one preview server per project's
+ * Renders folder so moving between two generated videos reuses the same Studio
+ * instance and preserves its normal filesystem autosave/version history.
+ */
+const hyperframesStudios = new Map();
+const HYPERFRAMES_VIDEO_EXT = new Set([".mp4", ".mov", ".m4v", ".webm"]);
+
+async function freeLocalPort() {
+  const probe = createServer();
+  return new Promise((done, fail) => {
+    probe.once("error", fail);
+    probe.listen(0, "127.0.0.1", () => {
+      const port = probe.address().port;
+      probe.close((error) => (error ? fail(error) : done(port)));
+    });
+  });
+}
+
+async function hyperframesProjects(id) {
+  const renders = join(mediaDir(id), "Renders");
+  const entries = await readdir(renders, { withFileTypes: true }).catch(() => []);
+  const projects = await Promise.all(
+    entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+      const dir = join(renders, entry.name);
+      const index = join(dir, "index.html");
+      const info = await stat(index).catch(() => null);
+      if (!info?.isFile()) return null;
+      const brief = await readFile(join(dir, "brief.md"), "utf8").catch(() => "");
+      const title = brief.match(/^#\s+(.+)$/m)?.[1]?.trim() || entry.name;
+      const files = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      const videoRenders = await Promise.all(
+        files
+          .filter((file) => file.isFile() && HYPERFRAMES_VIDEO_EXT.has(extname(file.name).toLowerCase()))
+          .map(async (file) => {
+            const fileInfo = await stat(join(dir, file.name)).catch(() => null);
+            return fileInfo?.isFile()
+              ? { name: file.name, rel: `Renders/${entry.name}/${file.name}`, bytes: fileInfo.size, mtime: fileInfo.mtime.toISOString() }
+              : null;
+          }),
+      );
+      return {
+        folder: entry.name,
+        title,
+        updatedAt: info.mtime.toISOString(),
+        renders: videoRenders.filter(Boolean).sort((a, b) => b.mtime.localeCompare(a.mtime)),
+      };
+    }),
+  );
+  return projects.filter(Boolean).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+async function openHyperframesStudio(id, folder) {
+  const renders = resolve(mediaDir(id), "Renders");
+  const candidate = resolve(renders, basename(String(folder ?? "")));
+  if (!candidate.startsWith(renders + sep) || !(await stat(join(candidate, "index.html")).catch(() => null))?.isFile()) {
+    throw new Error("that editable HyperFrames project is not in this project")
+  }
+
+  const root = dirname(candidate);
+  let studio = hyperframesStudios.get(root);
+  if (!studio?.child) {
+    const port = await freeLocalPort();
+    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--port", String(port)], {
+      cwd: root,
+      env: jobs.childEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    studio = { child, port, state: "starting", error: null, output: [] };
+    hyperframesStudios.set(root, studio);
+    const note = (data) => {
+      const line = String(data).trim();
+      if (!line) return;
+      studio.output.push(line);
+      if (studio.output.length > 12) studio.output.shift();
+      if (/listening|localhost|studio/i.test(line)) studio.state = "ready";
+    };
+    child.stdout?.on("data", note);
+    child.stderr?.on("data", note);
+    child.on("error", (error) => {
+      studio.state = "failed";
+      studio.error = error.code === "ENOENT" ? "npx is not available to start HyperFrames Studio" : error.message;
+      studio.child = null;
+    });
+    child.on("close", (code) => {
+      if (studio.state !== "failed") {
+        studio.state = "stopped";
+        studio.error = code === 0 ? "HyperFrames Studio stopped." : `HyperFrames Studio stopped (${code ?? "unknown"}).`;
+      }
+      studio.child = null;
+    });
+  }
+
+  return {
+    folder: basename(candidate),
+    state: studio.state,
+    error: studio.error,
+    url: `http://localhost:${studio.port}/#project/${encodeURIComponent(basename(candidate))}`,
+  };
+}
 /*
  * Captures made by OpenScreen before Studio knew which project was active.
  *
@@ -320,6 +427,11 @@ async function restartWorkflow(id) {
  * an allowed location and explicitly ask it to read the relevant instructions.
  */
 const GLOBAL_SKILL_DIR = join(TOOLKIT, "skill");
+// Skills installed through Studio belong in the signed-in team's database. This
+// cache is only how Claude gets a real directory of scripts/references to read;
+// it intentionally lives outside the Git checkout.
+const SHARED_SKILL_DIR = join(STATE_DIR, "shared-skills");
+const SHARED_SKILL_LIMIT = 8 * 1024 * 1024;
 /*
  * Standard is an optional neighboring checkout. Studio must keep working in a
  * standalone install, so this is deliberately an allowed source, never a
@@ -337,8 +449,8 @@ function safeZipEntry(entry) {
   return path.split("/").some((part) => !part || part === "." || part === "..") ? null : path;
 }
 
-/** Install a zipped skill bundle into the shared toolkit source of truth. */
-async function installGlobalSkillZip(archive, { replace = false } = {}) {
+/** Check an uploaded zip before it becomes a shared skill bundle. */
+async function inspectGlobalSkillZip(archive) {
   const scratch = join(TOOLKIT, `.skill-upload-${randomUUID()}`);
   const zip = join(scratch, "upload.zip");
   const extracted = join(scratch, "unpacked");
@@ -375,27 +487,71 @@ async function installGlobalSkillZip(archive, { replace = false } = {}) {
       const sourceDir = dirname(sourceFile);
       const sourceStat = await lstat(sourceDir);
       if (sourceStat.isSymbolicLink()) throw new Error("skill folders cannot be symbolic links");
-      found.push({ name, sourceDir });
+      found.push({
+        slug: name,
+        name: declaredName ?? name,
+        description: globalSkillMeta(source, "description"),
+        entryPath: safe,
+        skillMd: source,
+      });
     }
-    const clashes = found.filter(({ name }) => existsSync(join(GLOBAL_SKILL_DIR, name))).map(({ name }) => name);
-    if (clashes.length && !replace) {
-      const error = new Error(`A shared skill already exists: ${clashes.join(", ")}. Replace it?`);
-      error.code = "SKILL_EXISTS";
-      error.skills = clashes;
-      throw error;
-    }
-    for (const { name, sourceDir } of found) {
-      const destination = join(GLOBAL_SKILL_DIR, name);
-      if (replace) await rm(destination, { recursive: true, force: true });
-      await cp(sourceDir, destination, { recursive: true, force: replace, errorOnExist: !replace });
-    }
-    return found.map(({ name }) => name);
+    const duplicates = found.filter((skill, index) => found.findIndex((other) => other.slug === skill.slug) !== index).map(({ slug }) => slug);
+    if (duplicates.length) throw new Error(`the zip declares ${[...new Set(duplicates)].join(", ")} more than once`);
+    return found;
   } finally {
     await rm(scratch, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-async function globalStudioSkills() {
+async function materializeSharedSkill(skill) {
+  const slug = globalSkillId(skill?.slug);
+  const entry = safeZipEntry(skill?.entry_path);
+  if (!slug || !entry || basename(entry) !== "SKILL.md") throw new Error("that shared skill has an invalid bundle entry");
+  const bundle = Buffer.from(String(skill.bundle_base64 ?? ""), "base64");
+  if (!bundle.length || bundle.length > SHARED_SKILL_LIMIT) throw new Error(`${slug} has no readable shared skill bundle`);
+  const scratch = join(STATE_DIR, `.shared-skill-${randomUUID()}`);
+  const zip = join(scratch, "skill.zip");
+  const extracted = join(scratch, "unpacked");
+  const target = join(SHARED_SKILL_DIR, slug);
+  try {
+    await mkdir(scratch, { recursive: true });
+    await writeFile(zip, bundle);
+    const listing = await capture("unzip", ["-Z1", zip]);
+    const entries = listing.out.split(/\r?\n/).filter(Boolean);
+    if (!listing.ok || !entries.length || entries.some((path) => !safeZipEntry(path))) throw new Error(`${slug} has an unsafe shared skill bundle`);
+    const unpack = await capture("unzip", ["-qq", zip, "-d", extracted]);
+    if (!unpack.ok) throw new Error(`${slug} could not be unpacked`);
+    const root = resolve(extracted);
+    const source = resolve(extracted, dirname(entry));
+    if (!source.startsWith(`${root}${sep}`) && source !== root) throw new Error(`${slug} points outside its skill bundle`);
+    await rm(target, { recursive: true, force: true });
+    await mkdir(SHARED_SKILL_DIR, { recursive: true });
+    await cp(source, target, { recursive: true });
+    await writeFile(join(target, "SKILL.md"), String(skill.skill_md ?? ""), "utf8");
+    await writeFile(join(target, ".studio-skill.json"), `${JSON.stringify({ slug, version: skill.version ?? 1 })}\n`, "utf8");
+  } finally {
+    await rm(scratch, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function sharedSkillClient() {
+  const { cfg, token } = await SUPABASE_SYNC.token();
+  const userId = cfg.session?.user?.id;
+  if (!userId) throw new Error("sign in to share and edit skills");
+  return { url: cfg.url, key: cfg.key, token, userId };
+}
+
+async function syncSharedSkills() {
+  const client = await sharedSkillClient();
+  const listed = await fetchStudioSkills(client);
+  for (const item of listed) {
+    const full = await fetchStudioSkill({ ...client, slug: item.slug });
+    if (full) await materializeSharedSkill(full);
+  }
+  return listed;
+}
+
+async function studioSkillsIn(dir, source) {
   const files = [];
   const visit = async (dir) => {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -406,19 +562,111 @@ async function globalStudioSkills() {
       else if (entry.isFile() && entry.name === "SKILL.md") files.push(file);
     }
   };
-  await visit(GLOBAL_SKILL_DIR);
+  await visit(dir);
   return (await Promise.all(files.map(async (file) => {
-    const source = await readFile(file, "utf8");
+    const body = await readFile(file, "utf8");
+    const slug = globalSkillId(basename(dirname(file))) ?? wpSlug(globalSkillMeta(body, "name") ?? "");
     return {
-      name: globalSkillMeta(source, "name") || basename(dirname(file)),
-      description: globalSkillMeta(source, "description"),
+      name: globalSkillMeta(body, "name") || basename(dirname(file)),
+      description: globalSkillMeta(body, "description"),
+      slug,
       file,
       path: relative(TOOLKIT, file),
+      source,
     };
   }))).sort((a, b) => a.path.localeCompare(b.path));
 }
 
+async function globalStudioSkills() {
+  const local = await studioSkillsIn(GLOBAL_SKILL_DIR, "local");
+  const shared = await studioSkillsIn(SHARED_SKILL_DIR, "shared");
+  const bySlug = new Map(local.map((skill) => [skill.slug, skill]));
+  for (const skill of shared) bySlug.set(skill.slug, skill);
+  return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function installSharedSkillZip(archive, { replace = false } = {}) {
+  if (archive.length > SHARED_SKILL_LIMIT) throw new Error("shared skill zips must be 8 MB or smaller");
+  const client = await sharedSkillClient();
+  const found = await inspectGlobalSkillZip(archive);
+  const bundle = archive.toString("base64");
+  const installed = [];
+  for (const item of found) {
+    const existing = await fetchStudioSkill({ ...client, slug: item.slug });
+    if (existing && !replace) {
+      const error = new Error(`A shared skill already exists: ${item.slug}. Replace it?`);
+      error.code = "SKILL_EXISTS";
+      error.skills = [item.slug];
+      throw error;
+    }
+    const next = {
+      slug: item.slug,
+      name: item.name,
+      description: item.description,
+      skill_md: item.skillMd,
+      bundle_base64: bundle,
+      entry_path: item.entryPath,
+      version: Number(existing?.version ?? 0) + 1,
+    };
+    const saved = existing
+      ? await updateStudioSkill({ ...client, slug: item.slug, skill: next })
+      : await createStudioSkill({ ...client, skill: next });
+    if (!saved) throw new Error(`Studio could not save ${item.slug}`);
+    await materializeSharedSkill(saved);
+    installed.push(item.slug);
+  }
+  return installed;
+}
+
+async function updateSharedSkillText(slug, skillMd) {
+  const client = await sharedSkillClient();
+  const current = await fetchStudioSkill({ ...client, slug });
+  if (!current) throw new Error("that skill is not in the shared library yet");
+  const saved = await updateStudioSkill({
+    ...client,
+    slug,
+    skill: { skill_md: String(skillMd), version: Number(current.version ?? 0) + 1 },
+  });
+  if (!saved) throw new Error("Studio could not save that shared skill");
+  await materializeSharedSkill(saved);
+  return saved;
+}
+
+async function archiveLocalSkill(file) {
+  const scratch = join(STATE_DIR, `.publish-skill-${randomUUID()}`);
+  const archive = join(scratch, "skill.zip");
+  const dir = dirname(file);
+  const rootInstruction = dir === GLOBAL_SKILL_DIR;
+  try {
+    await mkdir(scratch, { recursive: true });
+    const result = await new Promise((done) => {
+      const args = rootInstruction ? ["-q", "-j", archive, file] : ["-q", "-r", archive, basename(dir)];
+      const child = spawn("zip", args, { cwd: rootInstruction ? undefined : dirname(dir), stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (chunk) => {
+        err += String(chunk);
+      });
+      child.on("error", (error) => done({ ok: false, error: error.message }));
+      child.on("close", (code) => done({ ok: code === 0, error: err.trim() }));
+    });
+    if (!result.ok) throw new Error(result.error || "Studio could not package that bundled skill");
+    return readFile(archive);
+  } finally {
+    await rm(scratch, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function publishLocalStudioSkill(slug, { replace = false } = {}) {
+  const local = (await studioSkillsIn(GLOBAL_SKILL_DIR, "local")).find((skill) => skill.slug === slug);
+  if (!local) throw new Error("that bundled skill was not found");
+  const archive = await archiveLocalSkill(local.file);
+  return installSharedSkillZip(archive, { replace });
+}
+
 async function globalSkillDirection() {
+  // A successful sign-in is enough to refresh the cache on the next Claude job.
+  // Offline work keeps using the last materialized copy and bundled skills.
+  await syncSharedSkills().catch(() => {});
   const skills = await globalStudioSkills();
   return [
     "",
@@ -438,7 +686,7 @@ const studioAgentStep = async ({ prompt, cwd, label }) => agentStep(await agentC
   prompt,
   cwd,
   label,
-  additionalDirectories: [GLOBAL_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
+  additionalDirectories: [GLOBAL_SKILL_DIR, SHARED_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
 });
 
 /*
@@ -449,6 +697,39 @@ const studioAgentStep = async ({ prompt, cwd, label }) => agentStep(await agentC
 const paperEditPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.json`);
 const paperEditSelectionPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.selection.json`);
 const paperEditTranscriptPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.vtt`);
+
+async function renameMediaReferences(id, oldRel, nextRel, oldPath, nextPath) {
+  const oldKey = Buffer.from(oldRel).toString("base64url");
+  const nextKey = Buffer.from(nextRel).toString("base64url");
+  const edits = paperEditDir(id);
+  for (const suffix of [".json", ".selection.json", ".vtt", ".prompt.txt"]) {
+    const from = join(edits, `${oldKey}${suffix}`);
+    const to = join(edits, `${nextKey}${suffix}`);
+    if (await stat(from).catch(() => null)) await rename(from, to).catch(() => {});
+  }
+  const oldFrames = join(multiAssemblyDir(id), "visual-beats", oldKey);
+  const nextFrames = join(multiAssemblyDir(id), "visual-beats", nextKey);
+  if (await stat(oldFrames).catch(() => null)) await rename(oldFrames, nextFrames).catch(() => {});
+
+  const textExtensions = new Set([".json", ".md", ".txt", ".edl", ".vtt"]);
+  const project = projectDir(id);
+  const replace = async (dir) => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (entry.name === "media" || entry.name === "archive") continue;
+      const file = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await replace(file);
+        continue;
+      }
+      if (!entry.isFile() || !textExtensions.has(extname(entry.name).toLowerCase())) continue;
+      const raw = await readFile(file, "utf8").catch(() => null);
+      if (raw == null || (!raw.includes(oldRel) && !raw.includes(oldPath))) continue;
+      await writeFile(file, raw.replaceAll(oldRel, nextRel).replaceAll(oldPath, nextPath), "utf8");
+    }
+  };
+  await replace(project);
+}
 
 const paperEditMedia = async (id, rel) => {
   const safeRel = String(rel ?? "");
@@ -596,6 +877,7 @@ const multiPickKey = (pick) => Buffer.from(`${pick.source}:${pick.inSec}:${pick.
 async function multiAssemblySources(id, rawRels) {
   const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
   if (!rels.length) throw new Error("choose at least one project recording");
+  if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
   const sources = [];
   const missing = [];
   for (const rel of rels) {
@@ -611,7 +893,24 @@ async function multiAssemblySources(id, rawRels) {
   return sources;
 }
 
-function multiAssemblyPrompt({ sources, notes = "" }) {
+/*
+ * Assembly starts from a small, deliberate batch. This is separate from
+ * `multiAssemblySources`: that helper needs all inputs ready so it can build
+ * Claude's prompt, while this one tells the UI which work is still needed.
+ */
+async function multiAssemblyPreparation(id, rawRels) {
+  const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
+  if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
+  return Promise.all(rels.map(async (rel) => {
+    const file = await paperEditMedia(id, rel).catch(() => null);
+    if (!file || !/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) return { rel, transcript: false, visual: false, missing: true };
+    const paper = await paperEditForRecording(id, rel);
+    const visual = await readVisualBeats(id, rel);
+    return { rel, transcript: Boolean(paper?.transcript?.cues?.length), visual: Boolean(visual?.frames?.length), missing: false };
+  }));
+}
+
+function multiAssemblyPrompt({ sources, notes = "", script = null }) {
   const catalog = sources.map((source) => {
     const lines = source.transcript.cues.map((cue) => `${Number(cue.startSec).toFixed(2)}-${Number(cue.endSec).toFixed(2)} | ${cue.text}`).join("\n");
     const frames = source.visual.frames.map((frame) => `${Number(frame.atSec).toFixed(2)}s | ${join(visualBeatDir(source.projectId, source.rel), frame.file)}`).join("\n");
@@ -624,6 +923,17 @@ function multiAssemblyPrompt({ sources, notes = "" }) {
     "Return JSON only, with this exact shape:",
     '{"version":1,"picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
     "Keep the order that tells the clearest story. Do not invent footage, narration, titles, or timecodes.",
+    script?.body
+      ? [
+          "WORKFLOW: apply the project skill video-from-script to this selection pass.",
+          "The script below is the beat spine: preserve its order, choose the strongest complete take for each beat, and make every missing beat visible instead of silently skipping it. Park strong unused material rather than inventing a place for it.",
+          "For every pick, include an optional `beat` field naming the script line it supports. Return an optional `gaps` array for script lines with no usable recording and an optional `parked` array for unused passages worth keeping.",
+          `PROJECT SCRIPT (${script.name}):\n${script.body}`,
+          speakerSections(script.body).length
+            ? `SCRIPT SECTIONS BY PERSON:\n${speakerSections(script.body).map(({ speaker, text }) => `${speaker}:\n${text}`).join("\n\n")}`
+            : "",
+        ].join("\n\n")
+      : "WORKFLOW: this is a best-parts assembly, not a script match. Choose only the passages that genuinely support the story notes.",
     notes ? `EDITOR NOTES:\n${notes}` : "",
     "SOURCE CATALOG:",
     catalog,
@@ -647,7 +957,14 @@ function validateMultiAssemblySelection(selection, sources) {
     const last = source?.transcript?.words?.at(-1)?.endSec ?? 0;
     if (!source) problems.push(`unknown source: ${String(item?.source ?? "")}`);
     else if (!Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec || inSec < 0 || outSec > last + 0.15) problems.push(`invalid range for ${basename(source.rel)}`);
-    else picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), id: multiPickKey({ source: source.rel, inSec, outSec }) });
+    else {
+      const text = source.transcript.cues
+        .filter((cue) => Number(cue.endSec) > inSec && Number(cue.startSec) < outSec)
+        .map((cue) => String(cue.text ?? "").trim())
+        .filter(Boolean)
+        .join(" ");
+      picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), text, id: multiPickKey({ source: source.rel, inSec, outSec }) });
+    }
   }
   if (!picks.length) throw new Error(problems[0] ?? "Claude did not choose any usable passages");
   return { version: 1, picks, problems };
@@ -696,6 +1013,9 @@ function audioAlignmentPrompt({ sources, script = "", notes = "" }) {
     .join("\n");
   return [
     "You are aligning a narration recording to a screen demo. This is an EDIT, not an audio overlay.",
+    "WORKFLOW: apply the project skill video-b-roll in Mode A (locked voiceover plus a longer screen recording).",
+    `Before mapping, use ${join(TOOLKIT, "skill", "video-b-roll", "scripts", "vo-phrase-boundaries.py")} on the locked narration at ${sources.audio}. Use the measured phrase boundaries as the timing source; the transcript is for words and intent only, never the final cut boundary.`,
+    "Treat the screen frames as evidence. Cut or retime the screen to land the on-screen action on the phrase it proves. Keep each screen segment between roughly 0.8x and 2.2x in effective speed; if the recording order conflicts with narration order, preserve the best visual compromise and call out the conflict rather than pretending it is solved.",
     "Inspect the visual-beat images before deciding which screen range proves each narration range.",
     "Return JSON only with this exact shape:",
     '{"version":1,"segments":[{"audioInSec":0,"audioOutSec":3.2,"screenInSec":12.4,"screenOutSec":15.6,"reason":"the screen visibly performs the narrated action"}]}',
@@ -782,6 +1102,13 @@ const safeName = (name, fallback) =>
 		.replace(/[/\\:*?"<>|\x00-\x1f]/g, "")
 		.replace(/^\.+/, "")
 		.trim() || fallback;
+// Narration copy is editable independently of the source script. Keeping the
+// draft beside the project means returning to Voice never loses a line, while
+// the script can still be used unchanged for a later render or rewrite.
+const voiceDraftPath = (id, script) => join(projectDir(id), "voice", `${safeName(script, "narration")}.md`);
+// A narration build reads a sealed copy of the editor, not the editable draft.
+// Autosave can keep changing the latter while a queued job is about to start.
+const voiceBuildPath = (id, script, buildId) => join(projectDir(id), "voice", "builds", `${safeName(script, "narration")}-${buildId}.md`);
 const thumbDir = (id) => join(projectDir(id), ".thumbs");
 
 const MIME = {
@@ -1338,6 +1665,37 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { catalog: await reindex(id) });
     }
 
+    /*
+     * One download for the project's actual assets. Streaming zip keeps even a
+     * large set of footage out of server memory and leaves working/interview
+     * files behind; this is the portable media handoff people expect from the
+     * project header.
+     */
+    if (p === "/api/project/assets" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      const assets = mediaDir(id);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      if (!(await stat(assets).catch(() => null))?.isDirectory()) return json(res, 404, { error: "this project has no media to download" });
+      const filename = `${safeName(manifest.name || id, "project")}-assets.zip`.replace(/\s+/g, "-");
+      const archive = spawn("zip", ["-q", "-r", "-y", "-", join(id, "media")], { cwd: LIB, stdio: ["ignore", "pipe", "pipe"] });
+      const errors = [];
+      archive.stderr.on("data", (chunk) => errors.push(String(chunk)));
+      archive.on("error", (error) => {
+        if (!res.headersSent) json(res, 500, { error: `could not package the project: ${error.message}` });
+        else res.destroy(error);
+      });
+      archive.on("close", (code) => {
+        if (code !== 0 && !res.writableEnded) res.destroy(new Error(errors.join("").trim() || "could not package the project"));
+      });
+      res.writeHead(200, {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+      });
+      archive.stdout.pipe(res);
+      return;
+    }
+
     /**
      * Delete something from the library.
      *
@@ -1480,7 +1838,11 @@ const server = createServer(async (req, res) => {
       let brand = body.brand || m.brand || "rolemodel";
       const src = (body.source || "").trim();
       if (!src) return json(res, 400, { error: "give it a script or a URL" });
-      const output = body.output === "template" ? "template" : "video";
+      // Claude's handoff is an editable composition, never a one-off MP4.
+      // Older tabs can still post output:"video"; treating that as a template
+      // keeps their result in the reviewable HyperFrames workflow rather than
+      // silently recreating the dead-end path we removed from the form.
+      const output = "template";
 
       const isUrl = /^https?:\/\//i.test(src);
 
@@ -1497,6 +1859,7 @@ const server = createServer(async (req, res) => {
        * parser over one would report every line of a web address as a problem.
        */
       const fromDoc = isUrl ? {} : demoSettings(parseDemo(src));
+      const scriptSpeakers = isUrl ? [] : speakerSections(src);
       // Re-resolved from the document, which was parsed after `brand` was chosen.
       if (fromDoc.brand) brand = fromDoc.brand;
       const pick = (key, fallback) => {
@@ -1782,6 +2145,15 @@ const server = createServer(async (req, res) => {
             "- Before rendering, check source coverage: the title and every numbered line must have one clear, reviewable moment in the composition.",
           ].join("\n");
 
+      const speakerDirection = scriptSpeakers.length
+        ? [
+            "SCRIPT SECTIONS BY PERSON — NON-NEGOTIABLE:",
+            "- Each person owns the exact section listed below. Keep their sections intact and in script order.",
+            "- Prefer a selected project clip whose filename identifies that person. If there is no matching footage, preserve the gap for review rather than assigning their section to someone else.",
+            ...scriptSpeakers.map(({ speaker, text }) => `${speaker}:\n${text}`),
+          ].join("\n")
+        : "";
+
       const subject = isUrl ? `a ${body.seconds || 20}-second ${brand}-branded promo for ${src}` : `a ${brand}-branded video that faithfully renders the script below`;
       const templateDirection = output === "template"
         ? [
@@ -1801,7 +2173,7 @@ const server = createServer(async (req, res) => {
             "The next human step is HyperFrames lint and review, then a manual render from this folder.",
           ].filter(Boolean).join("\n")
         : `Using /hyperframes, make ${subject}.\nRender the MP4 into ${outDir}.`;
-      const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${scriptFidelity}${isUrl ? "" : `\n\n${spokenSrc}`}`;
+      const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${scriptFidelity}${speakerDirection ? `\n\n${speakerDirection}` : ""}${isUrl ? "" : `\n\n${spokenSrc}`}`;
 
       const brief = [
         `# ${body.title || slug}`,
@@ -1853,6 +2225,10 @@ const server = createServer(async (req, res) => {
         isUrl,
         output,
         template: output === "template" ? join(outDir, "index.html") : null,
+        // This is the thing that gets edited.  The eventual MP4 is intentionally
+        // not the handoff: it is a render of this source project, and can always
+        // be made again after someone adjusts the timeline in HyperFrames.
+        hyperframesProject: output === "template" ? basename(outDir) : null,
         lintStep: output === "template"
           ? { label: `lint template ${slug}`, project: id, bin: "npx", args: ["--yes", "hyperframes", "lint"], cwd: outDir }
           : null,
@@ -1862,6 +2238,33 @@ const server = createServer(async (req, res) => {
         // that goes with it, is lib/agents.mjs — one decision, not two copies.
         step: { ...await studioAgentStep({ prompt, cwd: outDir, label: `make ${slug}` }), project: id },
       });
+    }
+
+    /*
+     * The real HyperFrames editing surface.
+     *
+     * Studio's React components are not a drop-in panel, and imitating the
+     * timeline here would create a second editor that cannot write the actual
+     * composition.  Start HyperFrames' own Studio against the project's Renders
+     * folder instead; the browser URL selects the one composition folder to edit.
+     */
+    if (p === "/api/hyperframes" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { projects: await hyperframesProjects(id) });
+    }
+
+    if (p === "/api/hyperframes/open" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        return json(res, 200, await openHyperframesStudio(id, body.folder));
+      } catch (error) {
+        return json(res, 400, { error: String(error.message ?? error) });
+      }
     }
 
     /**
@@ -2016,6 +2419,45 @@ const server = createServer(async (req, res) => {
       }
       await Promise.all([reindex(from, { force: true }), reindex(to, { force: true })]).catch(() => {});
       return json(res, 200, { ok: true, from, to, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: info.size });
+    }
+
+    /*
+     * Rename an asset without losing the work already attached to it.
+     *
+     * A media name is part of the prompt Claude sees, but it is also a key in
+     * transcripts and paper edits. Keep the original extension, move the three
+     * derived paper-edit files to their new key, and rewrite only ordinary text
+     * project files — never a binary recording.
+     */
+    if (p === "/api/media/rename" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      const requested = String(body.name ?? "").trim();
+      if (!id || !rel || !requested) return json(res, 400, { error: "pick media and give it a name" });
+      if (basename(requested) !== requested) return json(res, 400, { error: "a media name cannot contain a folder" });
+
+      const root = mediaDir(id);
+      const source = requestedPath({ projectId: id, rel });
+      if (!source.startsWith(root + sep)) return json(res, 403, { error: "that file is outside this project's media" });
+      const info = await stat(source).catch(() => null);
+      if (!info?.isFile()) return json(res, 404, { error: "that media file is no longer in this project" });
+
+      const sourceExt = extname(source);
+      const requestedExt = extname(requested);
+      if (requestedExt && requestedExt.toLowerCase() !== sourceExt.toLowerCase()) {
+        return json(res, 400, { error: `keep the ${sourceExt} extension when renaming this media` });
+      }
+      const stem = safeName(basename(requested, requestedExt), "untitled");
+      const target = join(dirname(source), `${stem}${sourceExt}`);
+      if (target === source) return json(res, 200, { ok: true, rel, name: basename(source) });
+      if (await stat(target).catch(() => null)) return json(res, 409, { error: "a file with that name already exists in this folder" });
+
+      await rename(source, target);
+      const nextRel = relative(root, target);
+      await renameMediaReferences(id, rel, nextRel, source, target);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { ok: true, rel: nextRel, name: basename(target) });
     }
 
     /*
@@ -2887,15 +3329,62 @@ const server = createServer(async (req, res) => {
     if (p === "/api/skills/upload" && req.method === "POST") {
       try {
         const replace = new URL(req.url, "http://studio.local").searchParams.get("replace") === "1";
-        const archive = await bytes(req, 64 * 1024 * 1024);
-        const installed = await installGlobalSkillZip(archive, { replace });
+        const archive = await bytes(req, SHARED_SKILL_LIMIT);
+        const installed = await installSharedSkillZip(archive, { replace });
         return json(res, 200, { installed, studio: await globalStudioSkills() });
       } catch (err) {
         return json(res, err.code === "SKILL_EXISTS" ? 409 : 400, { error: String(err.message), skills: err.skills ?? [] });
       }
     }
 
-    if (p === "/api/skills") {
+    const publishSkillMatch = /^\/api\/skills\/([a-z0-9][a-z0-9-]{0,63})\/publish$/.exec(p);
+    if (publishSkillMatch && req.method === "POST") {
+      try {
+        const replace = new URL(req.url, "http://studio.local").searchParams.get("replace") === "1";
+        const installed = await publishLocalStudioSkill(publishSkillMatch[1], { replace });
+        return json(res, 200, { installed, studio: await globalStudioSkills() });
+      } catch (err) {
+        return json(res, err.code === "SKILL_EXISTS" ? 409 : 400, { error: String(err.message), skills: err.skills ?? [] });
+      }
+    }
+
+    const skillMatch = /^\/api\/skills\/([a-z0-9][a-z0-9-]{0,63})$/.exec(p);
+    if (skillMatch) {
+      const slug = skillMatch[1];
+      if (req.method === "GET") {
+        try {
+          const client = await sharedSkillClient();
+          const skill = await fetchStudioSkill({ ...client, slug });
+          if (!skill) throw new Error("that shared skill was not found");
+          return json(res, 200, { skill: { slug: skill.slug, name: skill.name, description: skill.description, content: skill.skill_md, version: skill.version, source: "shared" } });
+        } catch (err) {
+          const local = (await globalStudioSkills()).find((skill) => skill.slug === slug && skill.source === "local");
+          if (!local) return json(res, 404, { error: String(err.message) });
+          return json(res, 200, { skill: { slug: local.slug, name: local.name, description: local.description, content: await readFile(local.file, "utf8"), source: "local" } });
+        }
+      }
+      if (req.method === "POST") {
+        try {
+          const body = JSON.parse(await text(req));
+          const content = String(body.content ?? "");
+          if (!content.trim()) return json(res, 400, { error: "a skill needs a SKILL.md instruction" });
+          const saved = await updateSharedSkillText(slug, content);
+          return json(res, 200, { skill: { slug: saved.slug, name: saved.name, description: saved.description, content: saved.skill_md, version: saved.version, source: "shared" }, studio: await globalStudioSkills() });
+        } catch (err) {
+          return json(res, 400, { error: String(err.message) });
+        }
+      }
+      return json(res, 405, { error: "method not allowed" });
+    }
+
+    if (p === "/api/skills" && req.method === "GET") {
+      let shared = { available: false, error: null, count: 0 };
+      try {
+        const remote = await syncSharedSkills();
+        shared = { available: true, error: null, count: remote.length };
+      } catch (err) {
+        shared.error = String(err.message);
+      }
       const studio = await globalStudioSkills();
       const standard = {
         available: standardAvailable(),
@@ -2906,7 +3395,7 @@ const server = createServer(async (req, res) => {
       // Strip the ANSI the CLI paints its counts with.
       const text = `${r.out}${r.err}`.replace(/\x1b\[[0-9;]*m/g, "");
       if (!r.ok && !text.includes("skills")) {
-        return json(res, 200, { studio, standard, ok: false, why: "hyperframes is not reachable — it is fetched with npx on first use" });
+        return json(res, 200, { studio, standard, shared, ok: false, why: "hyperframes is not reachable — it is fetched with npx on first use" });
       }
       const num = (label) => {
         const m = text.match(new RegExp(`(\\d+)\\s+${label}`));
@@ -2918,6 +3407,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         studio,
         standard,
+        shared,
         ok: true,
         location: loc?.[1] ?? null,
         tool: loc?.[2] ?? null,
@@ -3562,12 +4052,55 @@ async function fetchVoiceList() {
      * from measured durations rather than transcribed back out of our own
      * audio. See lib/narration.mjs for why that round trip is a bad idea.
      */
+    if (p === "/api/voice/draft" && req.method === "GET") {
+      const id = url.searchParams.get("project");
+      const scriptName = url.searchParams.get("script");
+      const m = id ? await readManifest(projectDir(id)).catch(() => null) : null;
+      if (!m) return json(res, 404, { error: "pick a project" });
+      if (!scriptName) return json(res, 400, { error: "pick a script" });
+      const source = await readFile(voiceDraftPath(id, scriptName), "utf8").catch(() => null);
+      return json(res, 200, { lines: source === null ? null : source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) });
+    }
+
+    if (p === "/api/voice/draft" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = body.projectId;
+      const m = await readManifest(projectDir(id)).catch(() => null);
+      if (!m) return json(res, 404, { error: "pick a project" });
+      if (!body.script) return json(res, 400, { error: "pick a script" });
+      if (!Array.isArray(body.lines)) return json(res, 400, { error: "send narration lines" });
+      const lines = body.lines.map((line) => String(line).trim()).filter(Boolean);
+      if (!lines.length) return json(res, 400, { error: "add at least one narration line" });
+      if (lines.length > 500 || lines.join("\n").length > 100_000) return json(res, 400, { error: "that narration draft is too large" });
+      const target = voiceDraftPath(id, body.script);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, `${lines.join("\n")}\n`, "utf8");
+      return json(res, 200, { ok: true, lines: lines.length });
+    }
+
     if (p === "/api/voice" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = body.projectId;
       const m = await readManifest(projectDir(id)).catch(() => null);
       if (!m) return json(res, 404, { error: "pick a project" });
       if (!body.script) return json(res, 400, { error: "pick a script" });
+
+      const editedLines = Array.isArray(body.lines) ? body.lines.map((line) => String(line).trim()).filter(Boolean) : null;
+      if (editedLines && !editedLines.length) return json(res, 400, { error: "add at least one narration line" });
+      if (editedLines && (editedLines.length > 500 || editedLines.join("\n").length > 100_000)) return json(res, 400, { error: "that narration draft is too large" });
+      let buildSource = null;
+      if (editedLines) {
+        const target = voiceDraftPath(id, body.script);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, `${editedLines.join("\n")}\n`, "utf8");
+        // Give this job its own immutable input. Reusing the draft here meant a
+        // delayed autosave could cause the renderer to speak an older script.
+        const buildId = randomUUID();
+        const targetSnapshot = voiceBuildPath(id, body.script, buildId);
+        await mkdir(dirname(targetSnapshot), { recursive: true });
+        await writeFile(targetSnapshot, `${editedLines.join("\n")}\n`, "utf8");
+        buildSource = join("voice", "builds", `${safeName(body.script, "narration")}-${buildId}.md`);
+      }
 
       // `rm-voice` exists on PATH only after a Homebrew install. In a checkout it
       // does not, so resolve the script ourselves rather than handing the user a
@@ -3578,6 +4111,7 @@ async function fetchVoiceList() {
       const rest = [
         id,
         "--script", body.script,
+        ...(buildSource ? ["--source", buildSource] : []),
         "--provider", provider,
         "--voice", body.voice || (provider === "kokoro" ? "af_heart" : ""),
         "--gap", String(body.gap || 320),
@@ -4465,7 +4999,10 @@ async function fetchVoiceList() {
         return res.end("no such scene\n");
       }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
-      return res.end(sceneHtml({ body, title: name, base: "" }));
+      // Title and other entering components are invisible at frame zero. This
+      // is a Canvas thumbnail, not a playback start position, so seek a moment
+      // into the saved scene where its authored treatment can actually be seen.
+      return res.end(sceneHtml({ body, title: name, base: "", previewAt: 750 }));
     }
 
     if (p.startsWith("/api/scene/preview/")) {
@@ -4634,6 +5171,11 @@ async function fetchVoiceList() {
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
       try {
+        // Interview is the first Studio screen for a new project. Refresh the
+        // shared cache here instead of requiring someone to visit Skills first:
+        // otherwise a perfectly healthy Supabase library looks empty until a
+        // completely unrelated screen happens to hydrate it.
+        await syncSharedSkills().catch(() => {});
         const state = await readInterview(id);
         return json(res, 200, { state, phase: interviewState(state), skills: await globalStudioSkills() });
       } catch (err) {
@@ -4749,7 +5291,8 @@ async function fetchVoiceList() {
       const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
-      return json(res, 200, { state: await readMultiAssembly(id).catch(() => null) });
+      const state = await readMultiAssembly(id).catch(() => null);
+      return json(res, 200, { state, preparation: await multiAssemblyPreparation(id, state?.sources ?? []) });
     }
 
     if (p === "/api/multi-assembly/audio-align" && req.method === "GET") {
@@ -4808,6 +5351,47 @@ async function fetchVoiceList() {
       }
     }
 
+    /*
+     * The actual batch entry point. A person chooses the clips once; Studio
+     * persists that choice, starts only missing transcript/frame jobs, and the
+     * client asks Claude for the assembly once those jobs finish.
+     */
+    if (p === "/api/multi-assembly/prepare" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const rels = [...new Set((Array.isArray(body.rels) ? body.rels : []).map(String).filter(Boolean))];
+        if (!rels.length) throw new Error("choose at least one project recording");
+        if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
+        const prior = await readMultiAssembly(id);
+        const sameSources = JSON.stringify(prior?.sources ?? []) === JSON.stringify(rels);
+        await writeMultiAssembly(id, {
+          version: 1,
+          sources: rels,
+          notes: String(body.notes ?? prior?.notes ?? ""),
+          scriptName: safeName(body.scriptName ?? prior?.scriptName, "") || null,
+          picks: sameSources ? prior?.picks ?? [] : [],
+          comments: sameSources ? prior?.comments ?? {} : {},
+        });
+        const prepared = await multiAssemblyPreparation(id, rels);
+        const steps = [];
+        for (const item of prepared) {
+          if (item.missing) throw new Error(`${basename(item.rel)} is no longer a project video`);
+          const file = await paperEditMedia(id, item.rel);
+          if (!item.transcript) {
+            await mkdir(paperEditDir(id), { recursive: true });
+            steps.push({ rel: item.rel, kind: "transcript", step: ownStep("rm-transcribe", ["--input", file, "--output", paperEditTranscriptPath(id, item.rel), "--language", String(body.language ?? "en")], { label: `transcribe ${basename(item.rel)}`, cwd: paperEditDir(id), project: id, note: "Creates a timed transcript for this Assembly source in the background." }) });
+          }
+          if (!item.visual) {
+            steps.push({ rel: item.rel, kind: "screen", step: ownStep("rm-visual-beats", ["--input", file, "--output", visualBeatDir(id, item.rel), "--source", item.rel], { label: `analyze screen ${basename(item.rel)}`, cwd: multiAssemblyDir(id), project: id, note: "Samples timestamped screen frames so Claude can verify what the clip shows." }) });
+          }
+        }
+        return json(res, 200, { steps, preparation: prepared });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/multi-assembly/draft" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
@@ -4819,10 +5403,13 @@ async function fetchVoiceList() {
           return pick ? `${pick.source} ${pick.inSec}-${pick.outSec}: ${comment}` : null;
         }).filter(Boolean).join("\n");
         const notes = [String(body.notes ?? "").trim(), feedback ? `REVIEW COMMENTS TO APPLY:\n${feedback}` : ""].filter(Boolean).join("\n\n");
-        const prompt = `${multiAssemblyPrompt({ sources, notes })}${await globalSkillDirection()}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Do not alter source recordings or transcripts.`;
+        const scriptName = safeName(body.scriptName ?? prior?.scriptName, "");
+        const scriptBody = scriptName ? await readFile(join(projectDir(id), "scripts", `${scriptName}.md`), "utf8").catch(() => "") : "";
+        const script = scriptBody ? { name: scriptName, body: scriptBody } : null;
+        const prompt = `${multiAssemblyPrompt({ sources, notes, script })}${await globalSkillDirection()}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the script beats, gaps, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
         await mkdir(multiAssemblyDir(id), { recursive: true });
         await writeFile(join(multiAssemblyDir(id), "multi-clip.prompt.txt"), `${prompt}\n`, "utf8");
-        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), picks: prior?.picks ?? [], comments: prior?.comments ?? {} });
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), scriptName: script?.name ?? null, picks: prior?.picks ?? [], comments: prior?.comments ?? {} });
         return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "multi-clip assembly" }), project: id } });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
