@@ -3664,6 +3664,98 @@ textarea.fills.form-control {
   margin-block-start: var(--op-space-large);
 }
 
+.multi-assembly__alignment-review {
+  border-block: 1px solid var(--line);
+  margin-block: var(--op-space-medium);
+  padding-block: var(--op-space-medium);
+}
+
+.multi-assembly__alignment-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+}
+
+.multi-assembly__alignment-body {
+  align-items: start;
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: minmax(20rem, 1.25fr) minmax(18rem, 1fr);
+}
+
+.multi-assembly__alignment-video {
+  aspect-ratio: 16 / 9;
+  background: var(--op-color-neutral-plus-max);
+  border-radius: var(--op-radius-medium);
+  inline-size: 100%;
+  object-fit: contain;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+}
+
+.multi-assembly__alignment-cuts {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  max-block-size: 24rem;
+  overflow: auto;
+}
+
+.multi-assembly__alignment-cut {
+  align-items: start;
+  background: transparent;
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: var(--op-space-3x-small) var(--op-space-x-small);
+  grid-template-columns: 1.5rem 5rem minmax(0, 1fr);
+  inline-size: 100%;
+  padding: var(--op-space-x-small);
+  text-align: start;
+}
+
+.multi-assembly__alignment-cut:last-child {
+  border-block-end: 0;
+}
+
+.multi-assembly__alignment-cut:hover,
+.multi-assembly__alignment-cut:focus-visible,
+.multi-assembly__alignment-cut--active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.multi-assembly__alignment-number,
+.multi-assembly__alignment-range {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.multi-assembly__alignment-detail {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  min-inline-size: 0;
+}
+
+.multi-assembly__alignment-detail strong {
+  font-size: var(--op-font-x-small);
+}
+
+.multi-assembly__alignment-detail span {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  line-height: 1.4;
+}
+
+@media (max-width: 56rem) {
+  .multi-assembly__alignment-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .multi-assembly__review-head {
   align-items: baseline;
   display: flex;

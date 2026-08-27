@@ -98,6 +98,11 @@ jobs.setNodeExecutable(process.execPath);
 // launched through the cask's symlink, Electron cannot find its helper apps and
 // every command that forks dies with "Unable to find helper app".
 jobs.addPath(join(TOOLKIT, "bin", "shims"));
+// Finder-launched apps do not inherit the interactive shell's Homebrew PATH.
+// Keep these conventional install locations available to helper scripts such as
+// rm-transcribe, which in turn starts ffmpeg and whisper-cli.
+jobs.addPath("/usr/local/bin");
+jobs.addPath("/opt/homebrew/bin");
 // The Studio process is already running under Node, but Finder/Electron can
 // launch it with a PATH that omits that same executable. Own toolkit jobs are
 // deliberately `node <toolkit>/bin/*.mjs`; make the Node that started Studio
@@ -658,6 +663,36 @@ async function audioAlignmentSources(id, videoRel, audioRel) {
   const paper = await paperEditForRecording(id, audioRel);
   if (!paper?.transcript?.cues?.length) throw new Error("transcribe the narration before mapping it to the screen");
   return { id, videoRel, audioRel, video, audio, visual, transcript: paper.transcript };
+}
+
+/**
+ * A completed alignment is durable project work, so reopening Assembly must
+ * restore the two actions that turn it into a video.  The first version only
+ * returned these steps from POST /build; after a refresh the timeline was
+ * visible but the way to render it had silently disappeared.
+ */
+async function audioAlignmentRenderSteps(id, state) {
+  if (!state?.document || !state?.alignedAudio || !state?.renderedVideo) return {};
+  const sources = await audioAlignmentSources(id, state.videoRel, state.audioRel);
+  const outDir = dirname(state.document);
+  const alignmentFile = join(outDir, "alignment.json");
+  return {
+    prepareRenderStep: ownStep("rm-align-audio", ["--input", sources.audio, "--alignment", alignmentFile, "--output", state.alignedAudio], {
+      label: "build aligned narration",
+      cwd: outDir,
+      project: id,
+      note: "Cuts and joins only the narration ranges that were mapped to the visual edit.",
+    }),
+    renderStep: {
+      bin: "openscreen",
+      args: ["export", state.document, "-o", state.renderedVideo, "--audio", state.alignedAudio, "--audio-mode", "replace"],
+      label: "render visual narration alignment",
+      cwd: outDir,
+      project: id,
+      note: "Renders the reviewed visual cut, then adds its matching segmented narration track.",
+    },
+    rendered: existsSync(state.renderedVideo),
+  };
 }
 
 function audioAlignmentPrompt({ sources, script = "", notes = "" }) {
@@ -4569,7 +4604,12 @@ async function fetchVoiceList() {
       const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
-      return json(res, 200, { state: await readAudioAlignment(id).catch(() => null) });
+      try {
+        const state = await readAudioAlignment(id).catch(() => null);
+        return json(res, 200, { state, ...(await audioAlignmentRenderSteps(id, state)) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
     }
 
     if (p === "/api/multi-assembly/analyze" && req.method === "POST") {
@@ -4764,12 +4804,12 @@ async function fetchVoiceList() {
         await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
         const alignmentFile = join(outDir, "alignment.json");
         await writeFile(alignmentFile, `${JSON.stringify({ ...state, document, renderedVideo, alignedAudio, clips }, null, 2)}\n`, "utf8");
-        await writeAudioAlignment(id, { ...state, document, renderedVideo, alignedAudio, builtAt: new Date().toISOString() });
+        const builtState = { ...state, document, renderedVideo, alignedAudio, builtAt: new Date().toISOString() };
+        await writeAudioAlignment(id, builtState);
         return json(res, 200, {
           document,
           clips: clips.length,
-          prepareRenderStep: ownStep("rm-align-audio", ["--input", sources.audio, "--alignment", alignmentFile, "--output", alignedAudio], { label: "build aligned narration", cwd: outDir, project: id, note: "Cuts and joins only the narration ranges that were mapped to the visual edit." }),
-          renderStep: { bin: "openscreen", args: ["export", document, "-o", renderedVideo, "--audio", alignedAudio, "--audio-mode", "replace"], label: "render visual narration alignment", cwd: outDir, project: id, note: "Renders the reviewed visual cut, then adds its matching segmented narration track." },
+          ...(await audioAlignmentRenderSteps(id, builtState)),
         });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
