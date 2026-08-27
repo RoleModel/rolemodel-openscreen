@@ -373,6 +373,16 @@
             <textarea data-el="brief" id="scene-brief" class="form-control" rows="3"
                placeholder="What is this scene? One or two sentences."></textarea>
          </div>
+         <div data-el="footageGroup" class="form-group" hidden>
+            <label class="form-label" for="scene-footage">Footage for this Canvas shot</label>
+            <select data-el="footage" id="scene-footage" class="form-control"></select>
+            <div class="row">
+               <button data-el="attachFootage" type="button" class="btn btn--small">Attach</button>
+               <button data-el="addFootage" type="button" class="btn ghost btn--small">Add video</button>
+               <input data-el="footagePicker" type="file" accept="video/*" hidden />
+            </div>
+            <div data-el="footageHint" class="form-hint"></div>
+         </div>
       </div>
 
       <div data-region="footer">

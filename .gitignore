@@ -5,6 +5,7 @@ dist/
 .DS_Store
 .env
 .env.*
+supabase/.temp/
 
 # Working files from real recordings — never commit client footage or captures
 *.openscreen

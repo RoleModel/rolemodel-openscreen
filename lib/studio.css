@@ -1209,12 +1209,17 @@ button.btn:disabled {
 }
 
 .breadcrumbs__link:hover {
-  color: var(--fg);
+  color: var(--accent);
 }
 
 .breadcrumbs__text {
-  color: var(--fg);
+  color: var(--accent);
+  font-weight: 650;
   white-space: nowrap;
+}
+
+.breadcrumbs__text[aria-current='page'] {
+  color: var(--accent);
 }
 
 /* Ours, not Optics'. See crumbs() in studio.js — Optics ships no separator. */
@@ -4364,7 +4369,8 @@ textarea.fills.form-control {
 }
 
 .board__node-select,
-.board__node-edit {
+.board__node-edit,
+.board__node-remove {
   flex: 1 1 0;
   background: transparent;
   border: var(--op-border-width) solid var(--line);
@@ -4391,6 +4397,16 @@ textarea.fills.form-control {
   color: var(--accent);
 }
 
+.board__node-remove {
+  color: var(--op-color-danger-base, #dc3545);
+}
+
+.board__node-remove:hover,
+.board__node-remove:focus-visible {
+  border-color: var(--op-color-danger-base, #dc3545);
+  color: var(--op-color-danger-base, #dc3545);
+}
+
 .board__node-shot {
   aspect-ratio: var(--video-ar);
   overflow: hidden;
@@ -4401,6 +4417,38 @@ textarea.fills.form-control {
   flex: 1;
   min-block-size: 0;
   position: relative;
+}
+
+/* A saved scene is a visual asset. Scale its real stage into the canvas card so
+   the title, shader, image, or other treatment is visible before opening it. */
+.board__scene-preview {
+  aspect-ratio: var(--video-ar);
+  background: var(--sunk);
+  border-radius: var(--op-radius-small);
+  flex: 1;
+  min-block-size: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.board__scene-frame {
+  block-size: 400%;
+  border: 0;
+  inline-size: 400%;
+  pointer-events: none;
+  transform: scale(0.25);
+  transform-origin: top left;
+}
+
+.board__scene-label {
+  background: color-mix(in oklch, var(--panel) 82%, transparent);
+  border-radius: var(--op-radius-small);
+  bottom: var(--op-space-3x-small);
+  color: var(--fg);
+  font-size: var(--op-font-2x-small);
+  inset-inline-end: var(--op-space-3x-small);
+  padding: 0.15rem 0.35rem;
+  position: absolute;
 }
 
 .board__node-empty {
@@ -4874,4 +4922,36 @@ textarea.form-control.board__brief {
    at 100% however far you zoom out. */
 .board__spacer {
   pointer-events: none;
+}
+
+/* One small decision beside the asset it changes. */
+.move-asset {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  box-shadow: var(--op-shadow-large);
+  color: var(--ink);
+  inline-size: min(28rem, calc(100vw - var(--op-space-large)));
+  margin: auto;
+  padding: var(--op-space-medium);
+}
+
+.move-asset::backdrop {
+  background: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.move-asset__form {
+  display: grid;
+  gap: var(--op-space-small);
+}
+
+.move-asset__form h2,
+.move-asset__form p {
+  margin: 0;
+}
+
+.move-asset__actions {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  justify-content: flex-end;
 }

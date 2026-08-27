@@ -1329,6 +1329,15 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { catalog: await reindex(p.slice("/api/index/".length), { force: true }) });
     }
 
+    /* A direct Claude render can finish outside Studio's job runner. Re-index
+     * this open project on demand so that new output appears without a reload. */
+    if (p === "/api/project/media" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { catalog: await reindex(id) });
+    }
+
     /**
      * Delete something from the library.
      *
@@ -1580,7 +1589,32 @@ const server = createServer(async (req, res) => {
           "and those fonts — do not link Google Fonts and do not pick your own colours.",
       );
 
-      const titleCard = String(pick("title", body.titleCard) || "").trim();
+      /*
+       * A script heading is content, not disposable prompt decoration.
+       *
+       * The earlier prompt handed Claude one loose paragraph and separately
+       * said there was no title card. That let it turn a named script into a
+       * generic product explainer. Keep the first H1 as the default title and
+       * give every remaining non-directive line an ordered, literal render slot.
+       */
+      const scriptLines = isUrl
+        ? []
+        : src
+            .split(/\r?\n/)
+            .map((raw) => raw.trim())
+            .filter((line) => line && !/^\/[a-z][a-z-]*(\s|$)/i.test(line));
+      let scriptTitle = "";
+      const scriptBeats = [];
+      for (const line of scriptLines) {
+        const heading = line.match(/^#{1,6}\s+(.+)$/);
+        if (heading && !scriptTitle) {
+          scriptTitle = heading[1].trim();
+          continue;
+        }
+        scriptBeats.push(heading ? heading[1].trim() : line);
+      }
+
+      const titleCard = String(pick("title", body.titleCard) || scriptTitle || "").trim();
       if (titleCard) {
         const eyebrow = String(pick("eyebrow", body.eyebrow) || "").trim();
         wants.push(
@@ -1729,13 +1763,26 @@ const server = createServer(async (req, res) => {
        */
       const spokenSrc = isUrl
         ? src
-        : src
-            .split("\n")
-            .filter((line) => !/^\s*\/[a-z][a-z-]*(\s|$)/i.test(line))
-            .join("\n")
-            .trim();
+        : [
+            "SCRIPT SOURCE OF TRUTH",
+            titleCard ? `Opening title (render these exact words): ${titleCard}` : "Opening title: none",
+            "Required script lines, in this exact order:",
+            ...scriptBeats.map((line, index) => `${index + 1}. ${line}`),
+          ].join("\n");
 
-      const subject = isUrl ? `a ${body.seconds || 20}-second ${brand}-branded promo for ${src}` : `a ${brand}-branded video from the script below`;
+      const scriptFidelity = isUrl
+        ? ""
+        : [
+            "\n\nSCRIPT FIDELITY — NON-NEGOTIABLE:",
+            "- Treat the supplied script as the source of truth, not a creative brief to summarize.",
+            "- Render the opening title and every numbered script line exactly as written and in the listed order. Do not paraphrase, combine, reorder, omit, replace, or add lines.",
+            "- Claude may choose visual treatment, timing, scene layout, and transitions; it may not invent the message, a new story, product claims, example users, fake UI copy, or a generic Plan / Brand / Render explainer.",
+            "- If a line needs a visual and no real asset was provided, make that exact line the visual using the staged brand treatment. Do not fabricate a screenshot or substitute different copy.",
+            "- Do not shorten the script to fit the requested duration. Give every silent line enough reading time; with narration, cut scenes to the recorded or generated words.",
+            "- Before rendering, check source coverage: the title and every numbered line must have one clear, reviewable moment in the composition.",
+          ].join("\n");
+
+      const subject = isUrl ? `a ${body.seconds || 20}-second ${brand}-branded promo for ${src}` : `a ${brand}-branded video that faithfully renders the script below`;
       const templateDirection = output === "template"
         ? [
             `Create a reviewable HyperFrames template for ${subject}.`,
@@ -1754,7 +1801,7 @@ const server = createServer(async (req, res) => {
             "The next human step is HyperFrames lint and review, then a manual render from this folder.",
           ].filter(Boolean).join("\n")
         : `Using /hyperframes, make ${subject}.\nRender the MP4 into ${outDir}.`;
-      const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${isUrl ? "" : `\n\n${spokenSrc}`}`;
+      const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${scriptFidelity}${isUrl ? "" : `\n\n${spokenSrc}`}`;
 
       const brief = [
         `# ${body.title || slug}`,
@@ -1928,6 +1975,48 @@ const server = createServer(async (req, res) => {
       }
       return { folder, dest, renamed: basename(dest) !== `${stem}${ext}` ? basename(dest) : null };
     };
+
+    /*
+     * Move one catalogued media file between projects.
+     *
+     * The caller can name only a catalog-relative path from its source project;
+     * it can never provide arbitrary source or destination filesystem paths.
+     * The destination folder still follows the file type, exactly as imports do.
+     */
+    if (p === "/api/media/move" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const from = String(body.fromProjectId ?? "");
+      const to = String(body.toProjectId ?? "");
+      const rel = String(body.rel ?? "");
+      if (!from || !to || !rel) return json(res, 400, { error: "pick the media and destination project" });
+      if (from === to) return json(res, 400, { error: "that media is already in this project" });
+
+      const [sourceManifest, destinationManifest] = await Promise.all([
+        readManifest(projectDir(from)).catch(() => null),
+        readManifest(projectDir(to)).catch(() => null),
+      ]);
+      if (!sourceManifest || !destinationManifest) return json(res, 404, { error: "one of those projects no longer exists" });
+
+      const sourceRoot = mediaDir(from);
+      const source = requestedPath({ projectId: from, rel });
+      if (!source.startsWith(sourceRoot + sep)) return json(res, 403, { error: "that file is outside the source project" });
+      const info = await stat(source).catch(() => null);
+      if (!info?.isFile()) return json(res, 404, { error: "that media file is no longer in this project" });
+
+      const spot = await mediaSpot(to, basename(source));
+      if (spot.error) return json(res, 400, { error: spot.error });
+      try {
+        await rename(source, spot.dest);
+      } catch (err) {
+        // Rare for two projects in one library, but preserve the user's intent
+        // if a library spans volumes instead of leaving a half-finished move.
+        if (err?.code !== "EXDEV") return json(res, 500, { error: `could not move the media: ${err.message}` });
+        await copyFile(source, spot.dest);
+        await rm(source, { force: true });
+      }
+      await Promise.all([reindex(from, { force: true }), reindex(to, { force: true })]).catch(() => {});
+      return json(res, 200, { ok: true, from, to, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: info.size });
+    }
 
     /*
      * Existing HUD captures are easy to lose because they land in OpenScreen's
@@ -4358,6 +4447,27 @@ async function fetchVoiceList() {
       return json(res, 200, { url: `/api/scene/preview/${id}` });
     }
 
+    /* Canvas cards need a durable preview of their saved scene rather than the
+       temporary editor frame. Resolve only a slug beneath this project's scenes
+       folder, so the thumbnail survives reloads without becoming a file reader. */
+    if (p === "/api/scene/frame" && req.method === "GET") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const id = String(q.get("project") ?? "");
+      const name = wpSlug(String(q.get("scene") ?? ""));
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man || !name) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("no such scene\n");
+      }
+      const body = await readFile(join(projectDir(id), "scenes", `${name}.html`), "utf8").catch(() => null);
+      if (body == null) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        return res.end("no such scene\n");
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
+      return res.end(sceneHtml({ body, title: name, base: "" }));
+    }
+
     if (p.startsWith("/api/scene/preview/")) {
       const held = previews.get(p.slice("/api/scene/preview/".length));
       if (!held) {
@@ -5331,6 +5441,10 @@ async function fetchVoiceList() {
                 name: typeof body.name === "string" ? body.name.trim() || sl.name : sl.name,
                 intent: typeof body.intent === "string" ? body.intent.trim() : sl.intent,
                 seconds: body.seconds === null || body.seconds === "" ? null : Number(body.seconds) > 0 ? Number(body.seconds) : sl.seconds,
+                // A canvas shot can point at the component scene that fulfils it.
+                // Keep the filename on the slot, rather than inferring it from a
+                // mutable shot name every time someone opens the canvas.
+                scene: typeof body.scene === "string" && body.scene.trim() ? body.scene.trim() : sl.scene,
               },
         );
         b.graph = graphFor(b);
