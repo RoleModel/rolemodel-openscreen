@@ -24,6 +24,8 @@
   },
   "scripts": {
     "build": "pnpm run sync-brand && pnpm run optics && pnpm run optics-tokens && pnpm run figma-tokens && pnpm run icons && pnpm run imagery && pnpm run wallpapers",
+    "prepare": "node scripts/install-git-hooks.mjs",
+    "precommit": "node scripts/pre-commit.mjs",
     "check": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run figma-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify && pnpm run sync-tap:check && pnpm run sync-docs:check",
     "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
     "studio": "node bin/rm-studio.mjs",
