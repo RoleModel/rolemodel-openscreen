@@ -1,6 +1,6 @@
 {
   "name": "rolemodel-openscreen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
@@ -22,7 +22,7 @@
     "rm-voice": "./bin/rm-voice.mjs"
   },
   "scripts": {
-    "build": "pnpm run sync-brand && pnpm run optics && pnpm run wallpapers",
+    "build": "pnpm run sync-brand && pnpm run optics && pnpm run optics-tokens && pnpm run icons && pnpm run imagery && pnpm run wallpapers",
     "check": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify && pnpm run sync-tap:check && pnpm run sync-docs:check",
     "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
     "studio": "node bin/rm-studio.mjs",
@@ -62,6 +62,7 @@
     "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
   },
   "devDependencies": {
+    "@rolemodel/optics": "2.4.0",
     "gsap": "^3.14.2",
     "supabase": "^2.116.0"
   },

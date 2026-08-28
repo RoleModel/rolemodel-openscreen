@@ -20,7 +20,7 @@
  * 348 steps left to the package, which owns them.
  *
  * The lightness ladder comes from the vendored package, so an Optics
- * release that retunes its steps retunes these on the next `npm run optics`.
+ * release that retunes its steps retunes these on the next `pnpm run optics`.
  */
 :root {
   --op-color-academy-accent-h: 149;

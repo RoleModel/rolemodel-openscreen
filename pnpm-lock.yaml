@@ -15,6 +15,9 @@ importers:
         specifier: ^0.19.2
         version: 0.19.2
     devDependencies:
+      '@rolemodel/optics':
+        specifier: 2.4.0
+        version: 2.4.0(tom-select@2.6.2)
       gsap:
         specifier: ^3.14.2
         version: 3.14.2
@@ -57,6 +60,17 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@orchidjs/sifter@1.1.0':
+    resolution: {integrity: sha512-mYwHCfr736cIWWdhhSZvDbf90AKt2xyrJspKFC3qyIJG1LtrJeJunYEqCGG4Aq2ijENbc4WkOjszcvNaIAS/pQ==}
+
+  '@orchidjs/unicode-variants@1.1.2':
+    resolution: {integrity: sha512-5DobW1CHgnBROOEpFlEXytED5OosEWESFvg/VYmH0143oXcijYTprRYJTs+55HzGM4IqxiLFSuqEzu9mPNwVsA==}
+
+  '@rolemodel/optics@2.4.0':
+    resolution: {integrity: sha512-h6YsNF+/Lry49dEF3PXF1ReUtDw80mDlISR/tQMt61babfjEfT25fKt+403Nkdw7k941i78OAMVp8s0gC1x/bA==, tarball: https://npm.pkg.github.com/download/@rolemodel/optics/2.4.0/18ecea260d8ae88ac34c71abccb318684558fcc3}
+    peerDependencies:
+      tom-select: ^2.0.0
 
   '@supabase/cli-darwin-arm64@2.116.0':
     resolution: {integrity: sha512-Mvfxf5q7oQ1KR59ndFFyGkh12IfwKH5ZOv7OWtHsFkBuwHtHiJgY6Zwd3w09tnat4spkpDTFavclBlLsOQnh2A==}
@@ -336,6 +350,9 @@ packages:
     resolution: {integrity: sha512-Lbgzdk0h4juoQ9fCKXW4by0UJqj+nOOrI9MJ1sSj4nI8aI2eo1qmvQEie4VD1glsS250n15LsWsYtCugiStS5A==}
     engines: {node: '>=18'}
 
+  modern-css-reset@1.4.0:
+    resolution: {integrity: sha512-0crZmSFmrxkI7159rvQWjpDhy0u4+Awg/iOycJdlVn0RSeft/a+6BrQHR3IqvmdK25sqt0o6Z5Ap7cWgUee2rw==}
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -475,6 +492,9 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
+  tom-select@2.6.2:
+    resolution: {integrity: sha512-eiXIkk82XzzUTOVQDFpy+ZGejuqdTvMukyUyeZBQaKnqW42UoTiTZnrod/eX0rkqJEc4rZY9DZ3zdjV07i29wQ==}
+
   type-is@2.1.0:
     resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
     engines: {node: '>= 18'}
@@ -542,6 +562,17 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@orchidjs/sifter@1.1.0':
+    dependencies:
+      '@orchidjs/unicode-variants': 1.1.2
+
+  '@orchidjs/unicode-variants@1.1.2': {}
+
+  '@rolemodel/optics@2.4.0(tom-select@2.6.2)':
+    dependencies:
+      modern-css-reset: 1.4.0
+      tom-select: 2.6.2
 
   '@supabase/cli-darwin-arm64@2.116.0':
     optional: true
@@ -808,6 +839,8 @@ snapshots:
     dependencies:
       mime-db: 1.54.0
 
+  modern-css-reset@1.4.0: {}
+
   ms@2.1.3: {}
 
   negotiator@1.1.0:
@@ -962,6 +995,11 @@ snapshots:
       '@supabase/cli-windows-x64': 2.116.0
 
   toidentifier@1.0.1: {}
+
+  tom-select@2.6.2:
+    dependencies:
+      '@orchidjs/sifter': 1.1.0
+      '@orchidjs/unicode-variants': 1.1.2
 
   type-is@2.1.0:
     dependencies:

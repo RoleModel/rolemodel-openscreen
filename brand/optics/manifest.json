@@ -4,7 +4,7 @@
 	"version": "2.4.0",
 	"upstreamFile": "dist/css/optics+no_icons.css",
 	"vendoredSha256": "c08a160ed7135d8b82e5c32d02dc9ba6136a5ca2b37027917b539d3af10369c3",
-	"supplementSha256": "33a6d7c94a773af585e3b191d9a738654adc71637b253991cb16f704305ffce6",
+	"supplementSha256": "a91185db47165676201b155b86ffec179a4ad42fcd8e61d2badf72327ef2b886",
 	"tokens": {
 		"published": 486,
 		"rolemodelOnly": 869
