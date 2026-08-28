@@ -4620,6 +4620,13 @@ async function fetchVoiceList() {
 
     if (p === "/api/jobs") return json(res, 200, { jobs: jobs.list(), shell: SHELL });
 
+    // The Console answers "what happened?" one run at a time. Usage answers
+    // the other question people need after a stretch of experimentation: how
+    // much work did the Studio run, and what did the agent actually report as
+    // tokens and spend? `usageReport` reads the same durable journal as the
+    // Console, so a restart does not reset the accounting.
+    if (p === "/api/usage") return json(res, 200, jobs.usageReport());
+
     /*
      * Empty the Console.
      *
