@@ -4244,7 +4244,7 @@ textarea.fills.form-control {
 
 .paper-edit__video {
   align-self: flex-start;
-  background: #000;
+  background: var(--ink);
   border-radius: var(--op-radius-medium);
   box-shadow: var(--op-shadow-large);
   inline-size: 100%;
@@ -4479,13 +4479,13 @@ textarea.fills.form-control {
 }
 
 .board__node-remove {
-  color: var(--op-color-danger-base, #dc3545);
+  color: var(--danger);
 }
 
 .board__node-remove:hover,
 .board__node-remove:focus-visible {
-  border-color: var(--op-color-danger-base, #dc3545);
-  color: var(--op-color-danger-base, #dc3545);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .board__node-shot {

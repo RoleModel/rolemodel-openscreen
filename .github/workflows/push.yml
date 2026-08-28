@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 # A second push while one is mid-release would race on the tag. Queue rather than
 # cancel: the first run may already have tagged, and cancelling it half way is how
@@ -49,10 +50,16 @@ jobs:
       - uses: pnpm/action-setup@v6
         with: { version: 11.20.0 }
       - uses: actions/setup-node@v7
-        with: { node-version: "24", cache: "pnpm" }
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          scope: "@rolemodel"
+          registry-url: "https://npm.pkg.github.com"
       # The frozen pnpm lock keeps CI on the exact dependency graph contributors use.
       # needs the dev ones the checks use.
       - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm exec playwright install --with-deps chromium
       # `check:ci`, not `check`.
       #
