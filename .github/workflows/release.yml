@@ -47,10 +47,16 @@ jobs:
       - name: Check out OpenScreen for schema verification
         run: git clone --depth 1 --branch "$OPENSCREEN_REF" https://github.com/RoleModel/openscreen.git /tmp/openscreen
 
+      # The token stylesheet is generated into OpenScreen rather than this
+      # toolkit. Build it in the pinned checkout so a tag tests the exact app
+      # token layer it was made for.
+      - run: node lib/optics-tokens.mjs --openscreen /tmp/openscreen
+      - run: node lib/optics-tokens.mjs --check --openscreen /tmp/openscreen
+
       - run: node lib/verify.mjs --openscreen /tmp/openscreen
 
-      # Both generated files are committed, so drift between the Figma export
-      # and what ships is a diff, not a mystery.
+      # The Figma exports ship with this toolkit; the OpenScreen token layer was
+      # generated in its pinned checkout above.
       - run: node lib/sync-brand.mjs --check
       - run: node lib/optics-css.mjs --check
 

@@ -5461,7 +5461,18 @@ async function fetchVoiceList() {
     if (p === "/api/scene/preview" && req.method === "POST") {
       const b = JSON.parse(await text(req));
       const id = String(++previewSeq);
-      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand: b.brand || undefined, name: b.name || "Scene preview" });
+      // Scene footage always comes from this Studio project. Keeping the preview
+      // source on the media route means it shares the editor's origin and cannot
+      // turn a scene-preview request into an arbitrary remote fetch.
+      const footageSource = typeof b.footage?.src === "string" && b.footage.src.startsWith("/media/") ? b.footage.src : null;
+      const footage = footageSource
+        ? {
+            src: footageSource,
+            inSec: Math.max(0, Number(b.footage.inSec) || 0),
+            outSec: Math.max(0, Number(b.footage.outSec) || 0),
+          }
+        : undefined;
+      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand: b.brand || undefined, footage, name: b.name || "Scene preview" });
       // Only the last few matter; anything older is a frame nobody is looking at.
       for (const key of previews.keys()) {
         if (previews.size <= PREVIEWS_KEPT) break;

@@ -4573,6 +4573,37 @@ textarea.fills.form-control {
   min-inline-size: 0;
 }
 
+/* A caption line is just the readable wrap; words carry the actual editing
+   boundary. The controls stay inline so a sentence reads as speech, not a row
+   of tiny fields, while every word remains an exact timed selection. */
+.paper-edit__words {
+  display: block;
+}
+
+.paper-edit__word {
+  background: transparent;
+  border: 0;
+  border-radius: var(--op-radius-small);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  padding: 0;
+}
+
+.paper-edit__word:hover,
+.paper-edit__word:focus-visible {
+  background: color-mix(in oklch, var(--accent) 10%, var(--panel));
+  outline: none;
+}
+
+.paper-edit__word--selected,
+.paper-edit__word--selected:hover,
+.paper-edit__word--selected:focus-visible {
+  background: color-mix(in oklch, var(--accent) 24%, var(--panel));
+  color: var(--fg);
+}
+
 .paper-edit__preview {
   align-items: stretch;
   background: var(--op-color-neutral-plus-six);

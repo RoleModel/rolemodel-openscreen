@@ -269,7 +269,14 @@ class RMScene extends RMElement {
         .stage { position:relative; width:100%; height:100%; padding:${Number(pad)}cqw;
                  background-size:cover; background-position:center; }
         ${wp ? `.stage { background-image:url("${this.esc(wp)}.jpg"); }` : ''}
-        ::slotted(*) { position:absolute; }
+        /* Footage is the one stage layer that sits underneath every branded
+           component. It is supplied by sceneHtml when a Canvas shot is being
+           edited, so lower thirds and titles are truly over the selected clip. */
+        ::slotted(*) { position:absolute; z-index:1; }
+        ::slotted([data-rm-footage]) {
+          inset:0; width:100%; height:100%; z-index:0; object-fit:contain;
+          background:var(--op-color-neutral-plus-max, #1f1f1f);
+        }
       </style>
       <div class="stage"><slot></slot></div>`
   }

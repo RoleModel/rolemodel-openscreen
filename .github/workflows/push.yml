@@ -50,6 +50,11 @@ jobs:
       # available for every pnpm step, not only install, so the runner does not
       # report a missing registry credential while it runs the gate.
       NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
+      # Keep the gate against the same OpenScreen version the tag workflow
+      # verifies. This repository owns the source tokens; the app owns the
+      # generated CSS that consumes them.
+      OPENSCREEN_REF: v0.0.2
+      OPENSCREEN_ROOT: /tmp/openscreen
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -64,6 +69,12 @@ jobs:
       # needs the dev ones the checks use.
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - name: Check out OpenScreen for app-side token checks
+        run: git clone --depth 1 --branch "$OPENSCREEN_REF" https://github.com/RoleModel/openscreen.git "$OPENSCREEN_ROOT"
+      # This output belongs to the app checkout, not this toolkit. Generate it
+      # in the pinned temporary checkout before checking the complete gate.
+      - name: Generate the OpenScreen Optics token layer
+        run: node lib/optics-tokens.mjs --openscreen "$OPENSCREEN_ROOT"
       # `check:ci`, not `check`.
       #
       # The full gate ends with sync-tap:check and sync-docs:check, and both
