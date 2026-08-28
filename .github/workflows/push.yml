@@ -45,11 +45,11 @@ jobs:
     name: The gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with: { version: 11.20.0 }
-      - uses: actions/setup-node@v4
-        with: { node-version: "22", cache: "pnpm" }
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: "pnpm" }
       # The frozen pnpm lock keeps CI on the exact dependency graph contributors use.
       # needs the dev ones the checks use.
       - run: pnpm install --frozen-lockfile
@@ -82,7 +82,7 @@ jobs:
       github.actor != 'github-actions[bot]'
       && !contains(github.event.head_commit.message, '[skip release]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
