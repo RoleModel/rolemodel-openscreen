@@ -108,6 +108,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      # This job runs no checks, so it installs nothing — but the bump below is
+      # `pnpm version`, and a bare runner has no pnpm on PATH. Without this the
+      # job died at `pnpm: command not found` after the gate had already passed,
+      # which reads as a failed release of a perfectly good commit.
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.20.0 }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: Did anything that ships change?
         id: shipped
         run: |
