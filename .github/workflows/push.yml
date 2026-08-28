@@ -59,7 +59,7 @@ jobs:
       # needs the dev ones the checks use.
       - run: pnpm install --frozen-lockfile
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
       - run: pnpm exec playwright install --with-deps chromium
       # `check:ci`, not `check`.
       #

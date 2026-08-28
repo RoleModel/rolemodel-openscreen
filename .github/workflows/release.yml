@@ -38,7 +38,7 @@ jobs:
       # that generated them must be available to the release runner too.
       - run: pnpm install --frozen-lockfile
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
 
       # The presets are a patch onto OpenScreen's typed document. Check them
       # against the real thing before shipping a tag — a drifted field name
