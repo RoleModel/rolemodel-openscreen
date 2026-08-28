@@ -1178,9 +1178,13 @@ button.btn:disabled {
          gives it the header z-index; the rule below only supplies the surface,
          since a sticky bar with no background lets content slide under it. */
 .op-page__main-header {
+  --projmenu-editor-clearance: 0px;
   background: var(--bg);
   border-bottom: var(--op-border-width) solid var(--line);
   padding: var(--op-space-small) var(--op-space-large);
+  /* The project menu opens into this reserved block when a native editor is
+     mounted. Its absolute position is translated back into the reservation. */
+  padding-block-end: calc(var(--op-space-small) + var(--projmenu-editor-clearance));
   /* The trail and the project switcher share this row: the trail says where you
      are, the switcher says which space you are in. */
   display: flex;
@@ -2540,6 +2544,7 @@ textarea.form-control.script-body {
   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
   max-block-size: min(32rem, calc(100vh - 8rem));
   overflow-y: auto;
+  transform: translateY(calc(-1 * var(--projmenu-editor-clearance)));
 }
 
 .projmenu__item {
