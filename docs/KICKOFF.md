@@ -94,13 +94,11 @@ brew trust --tap rolemodel/tap
 brew install --cask rolemodel/tap/rolemodel-openscreen
 ```
 
-It arrives called **RoleModel Studio** — that is the name in the Dock, the menu
-bar, the About panel and every macOS permission prompt. The bundle on disk is
-still `/Applications/Openscreen.app`, and deliberately so: the cask's `app`
-stanza, the `openscreen` shim that puts the CLI on your PATH, and the DMG name
-the release job writes all resolve that filename. So `ls /Applications` and the
-Dock disagree, on purpose. It is a RoleModel build of OpenScreen, and the About
-panel says so with a link to the original.
+It installs as **Openscreen** (`/Applications/Openscreen.app`). Open that app
+from Applications or Spotlight; RoleModel Studio is the workspace inside it. The
+cask's `app` stanza, the `openscreen` shim that puts the CLI on your PATH, and
+the DMG name the release job writes all use that filename. It is a RoleModel build
+of OpenScreen, and the About panel says so with a link to the original.
 
 > **Manual step, once.** The cask needs a release to point at, and GitHub
 > disables all workflows on a forked repo until someone acknowledges it:
@@ -122,8 +120,8 @@ Use the fork, not upstream. The Studio hands documents to the editor with
 
 ## 2. Make a video
 
-Open **RoleModel Studio** from Spotlight or Applications. The Studio is a window
-in it — `main.ts` opens it right after the first window, so there is nothing to
+Open **Openscreen** from Applications or Spotlight. RoleModel Studio opens inside
+it — `main.ts` opens it right after the first window, so there is nothing to
 start and no address to type. The port it uses is whatever was free, not 4600.
 
 Not from a terminal: macOS gives Screen Recording to whatever hosts Electron, so

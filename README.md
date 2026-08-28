@@ -10,9 +10,9 @@ Screen capture in, branded video out, and a link a client can leave notes on.
 curl -fsSL https://raw.githubusercontent.com/RoleModel/rolemodel-openscreen/main/install.sh | sh
 ```
 
-Then open **RoleModel Studio** the way you open any Mac app — Spotlight, or
-Applications. The Studio comes up as a window in it; there is nothing to type and
-no localhost address to visit.
+Then open **Openscreen** the way you open any Mac app — Spotlight, or
+Applications. RoleModel Studio comes up as a window inside it; there is nothing to
+type and no localhost address to visit.
 
 Do not launch it from a terminal. macOS grants Screen Recording to whatever binary
 hosts Electron, so a shell launch grants it to your terminal and the recorder then
@@ -26,7 +26,7 @@ browser on :4600 — that is the developer path, and it is in
 ```sh
 brew trust --tap rolemodel/tap
 brew install rolemodel/tap/rm-video                    # the fourteen commands
-brew install --cask rolemodel/tap/rolemodel-openscreen # the app, "RoleModel Studio"
+brew install --cask rolemodel/tap/rolemodel-openscreen # the app, Openscreen.app
 rm-setup                                               # the rest, idempotent
 ```
 

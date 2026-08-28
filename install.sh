@@ -179,7 +179,7 @@ fi
 say ""
 say "${G}Done.${R} Start it the way you start any Mac app:"
 say ""
-say "    open ${B}RoleModel Studio${R}   ${D}# Spotlight, or Applications${R}"
+say "    open -a ${B}Openscreen${R}   ${D}# Applications → Openscreen${R}"
 say ""
 # Not `rm-studio` here, which is what this said and which sent people down the one
 # path that breaks recording: macOS grants Screen Recording to the binary hosting
