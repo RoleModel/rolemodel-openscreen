@@ -272,7 +272,19 @@ async function repairLegacyHyperframesAssembly(id, dir) {
     readFile(assemblyPath, "utf8").then(JSON.parse).catch(() => null),
     readFile(indexPath, "utf8").catch(() => ""),
   ]);
-  if (!Array.isArray(assembly?.clips) || html.includes("--assembly-wallpaper")) return false;
+  const needsWallpaper = !html.includes("--assembly-wallpaper");
+  // Timeline track order is audio/timing metadata, not CSS paint order. Older
+  // generated cuts had lower-third elements but no z-index, leaving every one
+  // underneath the video plane.
+  const needsLowerThirdLayer = html.includes("assembly-lower-third")
+    && !/\.assembly-lower-third\s*\{[^}]*\bz-index\s*:/s.test(html);
+  // Normal source clips used to have duplicate, independent <audio> tracks.
+  // HyperFrames can instead treat the video's own sound as part of that clip,
+  // which is what makes a picture trim or move keep its sound in sync.
+  const needsNativeAudioLink = Array.isArray(assembly?.clips)
+    && assembly.clips.some((clip) => !clip.audioSource)
+    && !html.includes('data-has-audio="true"');
+  if (!Array.isArray(assembly?.clips) || (!needsWallpaper && !needsLowerThirdLayer && !needsNativeAudioLink)) return false;
 
   const manifest = await readManifest(projectDir(id));
   const staged = await stageRenderAssets(dir, {
@@ -292,6 +304,29 @@ async function repairLegacyHyperframesAssembly(id, dir) {
   );
   return true;
 }
+
+/*
+ * A preview process can exist before its HTTP listener does. Returning its URL
+ * at that moment lets the iframe cache Chromium's connection-refused page,
+ * which looks like Studio lost the composition. Confirm the local server is
+ * answering before handing its URL to the browser instead.
+ */
+const waitForHyperframesStudio = async (studio) => {
+  const url = `http://localhost:${studio.port}/`;
+  const deadline = Date.now() + 12_000;
+  while (Date.now() < deadline) {
+    if (studio.state === "failed" || studio.state === "stopped") {
+      throw new Error(studio.error || "HyperFrames Studio stopped before it could open.");
+    }
+    const response = await fetch(url, { signal: AbortSignal.timeout(750) }).catch(() => null);
+    if (response?.ok) {
+      studio.state = "ready";
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 160));
+  }
+  throw new Error("HyperFrames Studio took too long to start. Try opening the assembly again.");
+};
 
 async function openHyperframesStudio(id, folder) {
   const renders = resolve(mediaDir(id), "Renders");
@@ -344,6 +379,8 @@ async function openHyperframesStudio(id, folder) {
       studio.child = null;
     });
   }
+
+  await waitForHyperframesStudio(studio);
 
   return {
     folder: basename(candidate),
@@ -1086,13 +1123,23 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920,
     const mediaStart = hfSeconds(clip.mediaStartMs);
     const source = `source/${String(clip.source).replace(/^\/+/, "")}`;
     const id = `clip-${String(index + 1).padStart(2, "0")}`;
+    /*
+     * A video's native audio is the one case HyperFrames can keep intrinsically
+     * linked while someone drags or trims it in Studio. Do not fork it into a
+     * second audio timeline element. A deliberately substituted narration file
+     * is different media, so it remains a separate editable audio clip.
+     */
+    const hasReplacementAudio = Boolean(clip.audioSource && clip.audioSource !== source);
+    const audio = hasReplacementAudio
+      ? `    <audio id="${id}-audio" src="${hf(clip.audioSource)}" data-start="${start}" data-duration="${span}" data-media-start="${hfSeconds(clip.audioStartMs ?? clip.mediaStartMs)}" data-track-index="${index + 1}"></audio>`
+      : "";
     const lowerThird = clip.speaker
       ? `    <aside class="assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span>${hf(clip.speaker)}</span></aside>`
       : "";
     cursor += duration;
     return [
-      `    <video id="${id}" src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0" muted playsinline preload="auto"></video>`,
-      `    <audio id="${id}-audio" src="${hf(clip.audioSource ?? source)}" data-start="${start}" data-duration="${span}" data-media-start="${hfSeconds(clip.audioStartMs ?? clip.mediaStartMs)}" data-track-index="${index + 1}"></audio>`,
+      `    <video id="${id}" src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`,
+      audio,
       lowerThird,
     ].join("\n");
   }).join("\n");
@@ -1107,12 +1154,12 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920,
     <style>
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--color-dark); }
       [data-composition-id] { --assembly-wallpaper: ${wallpaperUrl}; position: relative; width: ${width}px; height: ${height}px; overflow: hidden; background: var(--assembly-wallpaper) center / cover, var(--color-dark); font-family: var(--font-display); }
-      video { position: absolute; inset: 2.5%; width: 95%; height: 95%; object-fit: contain; background: transparent; }
+      video { position: absolute; inset: 2.5%; z-index: 1; width: 95%; height: 95%; object-fit: contain; background: transparent; }
       audio { display: none; }
-      .assembly-title { position: absolute; inset: 0; display: grid; align-content: center; padding: 0 8%; background: linear-gradient(90deg, color-mix(in srgb, var(--color-dark) 94%, transparent), color-mix(in srgb, var(--color-dark) 62%, transparent)), var(--assembly-wallpaper) center / cover; color: var(--color-light); }
+      .assembly-title { position: absolute; inset: 0; z-index: 3; display: grid; align-content: center; padding: 0 8%; background: linear-gradient(90deg, color-mix(in srgb, var(--color-dark) 94%, transparent), color-mix(in srgb, var(--color-dark) 62%, transparent)), var(--assembly-wallpaper) center / cover; color: var(--color-light); }
       .assembly-title__eyebrow { color: var(--color-accent); font-family: var(--font-mono); font-size: var(--size-eyebrow); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
       .assembly-title__text { margin-top: 0.35em; max-width: 16ch; font-size: var(--size-title); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
-      .assembly-lower-third { position: absolute; bottom: 8%; left: 6%; max-width: 52%; padding: 0.55% 1.2%; background: color-mix(in srgb, var(--color-dark) 86%, transparent); color: var(--color-light); font-size: var(--size-lower-third); font-weight: 700; letter-spacing: -0.02em; }
+      .assembly-lower-third { position: absolute; z-index: 2; bottom: 8%; left: 6%; max-width: 52%; padding: 0.55% 1.2%; background: color-mix(in srgb, var(--color-dark) 86%, transparent); color: var(--color-light); font-size: var(--size-lower-third); font-weight: 700; letter-spacing: -0.02em; }
     </style>
   </head>
   <body>

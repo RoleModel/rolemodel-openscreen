@@ -696,6 +696,189 @@ class RMShader extends RMElement {
 }
 define('rm-shader', RMShader)
 
+/* ── rm-pixel-reveal ─────────────────────────────────────────────────────── */
+
+/*
+ * A pixel-and-print treatment for brand scenes.
+ *
+ * The original treatment is a Framer component made from a ChromaFlow texture,
+ * a pixel grid, a halftone overlay, and an optional duotone. Those are useful
+ * visual ingredients, but a React component loaded from a CDN cannot be a scene
+ * asset: previews and HyperFrames renders need to work with no network and at a
+ * deterministic point in time. This is the same treatment expressed as one
+ * seekable WebGL pass. `RM.seek()` is the only clock it reads.
+ *
+ * It deliberately has no mark or copy. Pair it with rm-title or rm-lower-third
+ * when a scene needs words; a background treatment should not make a lockup a
+ * requirement.
+ */
+const PIXEL_REVEAL_FRAGMENT = [
+  'precision highp float;uniform vec2 r;uniform float t;uniform float imageAspect;uniform sampler2D imageTex;uniform float pixelDensity;uniform float pixelGap;uniform float pixelRoundness;uniform float halftoneFrequency;uniform float colorFringing;uniform float flowIntensity;uniform float showDuotone;uniform vec3 paper;uniform vec3 cyanInk;uniform vec3 magentaInk;uniform vec3 yellowInk;uniform vec3 blackInk;uniform vec3 colorA;uniform vec3 colorB;varying vec2 v;',
+  'vec2 coverUV(vec2 uv){float canvasAspect=r.x/r.y;vec2 s=canvasAspect>imageAspect?vec2(1.,imageAspect/canvasAspect):vec2(canvasAspect/imageAspect,1.);return(uv-.5)*s+.5;}',
+  'float roundedCell(vec2 p,float gap,float roundness){vec2 halfSize=vec2(.5-gap*.5);vec2 q=abs(p-.5)-halfSize;float radius=min(min(halfSize.x,halfSize.y),roundness*.5);float distance=length(max(q,0.))-radius;return 1.-smoothstep(0.,.035,distance);}',
+  'vec3 printColour(vec3 photo,float luma){vec3 printed=paper;printed=mix(printed,cyanInk,(1.-photo.r)*.72);printed=mix(printed,magentaInk,(1.-photo.g)*.62);printed=mix(printed,yellowInk,(1.-photo.b)*.46);printed=mix(printed,blackInk,(1.-luma)*.54);return printed;}',
+  'void main(){float size=max(3.,pixelDensity);vec2 pixel=gl_FragCoord.xy;vec2 cell=floor(pixel/size);vec2 local=fract(pixel/size);vec2 centre=(cell+.5)*size/r;float motion=t*.001;vec2 flow=vec2(sin(motion+centre.y*8.),cos(motion*.8+centre.x*7.))*flowIntensity*.009;float fringe=colorFringing/max(r.x,r.y);vec2 offset=vec2(fringe,fringe*.45);float red=texture2D(imageTex,coverUV(centre+flow+offset)).r;float green=texture2D(imageTex,coverUV(centre+flow)).g;float blue=texture2D(imageTex,coverUV(centre+flow-offset)).b;vec3 photo=vec3(red,green,blue);float luma=dot(photo,vec3(.299,.587,.114));vec3 colour=printColour(photo,luma);vec3 duo=mix(colorB,colorA,luma);colour=mix(colour,duo,showDuotone);float screen=(sin((cell.x+cell.y)*halftoneFrequency*.35)*.5+.5)*(1.-luma)*.2;colour=mix(colour,blackInk,screen);float shape=roundedCell(local,pixelGap,pixelRoundness);gl_FragColor=vec4(mix(paper,colour,shape),1.);}',
+].join('')
+
+class RMPixelReveal extends RMElement {
+  static fields = [
+    'image',
+    'pixel-density',
+    'pixel-gap',
+    'pixel-roundness',
+    'halftone-frequency',
+    'border-color',
+    'border-radius',
+    'show-duotone',
+    'color-a',
+    'color-b',
+    'paper',
+    'cyan-ink',
+    'magenta-ink',
+    'yellow-ink',
+    'black-ink',
+    'color-fringing',
+    'flow-intensity',
+    'flow',
+    'at',
+    'for',
+  ]
+
+  disconnectedCallback() {
+    this._dispose?.()
+    this._dispose = null
+  }
+
+  render() {
+    this._dispose?.()
+    const dark = this.closest('rm-scene')?.getAttribute('theme') !== 'light'
+    const pixelDensity = shaderClamp(Number(this.attr('pixel-density', 20)) || 20, 3, 64)
+    const pixelGap = shaderClamp(Number(this.attr('pixel-gap', 0.12)) || 0, 0, 0.9)
+    const pixelRoundness = shaderClamp(Number(this.attr('pixel-roundness', 0.7)) || 0, 0, 1)
+    const halftoneFrequency = shaderClamp(Number(this.attr('halftone-frequency', 0.75)) || 0, 0, 3)
+    const borderRadius = shaderClamp(Number(this.attr('border-radius', 0)) || 0, 0, 12)
+    const colorFringing = shaderClamp(Number(this.attr('color-fringing', 0.6)) || 0, 0, 3)
+    const flowIntensity = shaderClamp(Number(this.attr('flow-intensity', 1.5)) || 0, 0, 3.5)
+    const flowing = this.attr('flow', 'still') === 'flow'
+    const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
+    const border = shaderColour(this.attr('border-color'), 'var(--op-color-neutral-plus-four, #424242)')
+    const paper = shaderColour(this.attr('paper'), background)
+    const cyanInk = shaderColour(this.attr('cyan-ink'), 'var(--op-color-primary-base, #3a70b3)')
+    const magentaInk = shaderColour(this.attr('magenta-ink'), 'var(--op-color-tertiary-base, #7b5ea7)')
+    const yellowInk = shaderColour(this.attr('yellow-ink'), 'var(--op-color-secondary-base, #d4b30a)')
+    const blackInk = shaderColour(this.attr('black-ink'), 'var(--op-color-neutral-plus-max, #242424)')
+    const colorA = shaderColour(this.attr('color-a'), 'var(--brand, var(--op-color-primary-base, #3a70b3))')
+    const colorB = shaderColour(this.attr('color-b'), background)
+    const showDuotone = this.attr('show-duotone', 'off') === 'on'
+    const rawImage = this.attr('image')
+    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
+    const hasImage = Boolean(imageSource)
+    this.shadowRoot.innerHTML =
+      '<style>' +
+      TYPE +
+      TIMING +
+      ':host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:' +
+      paper +
+      ';border:' +
+      (borderRadius ? '.12cqw solid ' : '0 solid ') +
+      border +
+      ';border-radius:' +
+      borderRadius +
+      'cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">' +
+      (hasImage ? '<canvas aria-hidden="true"></canvas>' : '<div class="empty"><span>Choose or upload an image to make a pixel reveal</span></div>') +
+      '</div>'
+
+    const canvas = this.shadowRoot.querySelector('canvas')
+    if (!canvas) return
+    const gl = canvas.getContext('webgl', { alpha: false, antialias: false })
+    const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
+    const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, PIXEL_REVEAL_FRAGMENT)
+    const program = gl?.createProgram()
+    if (!(gl && vertex && fragment && program)) return
+    gl.attachShader(program, vertex)
+    gl.attachShader(program, fragment)
+    gl.linkProgram(program)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return
+    gl.useProgram(program)
+
+    const buffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW)
+    const position = gl.getAttribLocation(program, 'p')
+    gl.enableVertexAttribArray(position)
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+    const uniform = (name) => gl.getUniformLocation(program, name)
+    const resolution = uniform('r')
+    const time = uniform('t')
+    const aspect = uniform('imageAspect')
+    gl.uniform1f(uniform('pixelDensity'), pixelDensity)
+    gl.uniform1f(uniform('pixelGap'), pixelGap)
+    gl.uniform1f(uniform('pixelRoundness'), pixelRoundness)
+    gl.uniform1f(uniform('halftoneFrequency'), halftoneFrequency)
+    gl.uniform1f(uniform('colorFringing'), colorFringing)
+    gl.uniform1f(uniform('flowIntensity'), flowIntensity)
+    gl.uniform1f(uniform('showDuotone'), showDuotone ? 1 : 0)
+    gl.uniform3fv(uniform('paper'), shaderVector(this.shadowRoot, paper, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
+    gl.uniform3fv(uniform('cyanInk'), shaderVector(this.shadowRoot, cyanInk, [0.23, 0.44, 0.7]))
+    gl.uniform3fv(uniform('magentaInk'), shaderVector(this.shadowRoot, magentaInk, [0.48, 0.37, 0.65]))
+    gl.uniform3fv(uniform('yellowInk'), shaderVector(this.shadowRoot, yellowInk, [0.83, 0.7, 0.04]))
+    gl.uniform3fv(uniform('blackInk'), shaderVector(this.shadowRoot, blackInk, [0.14, 0.14, 0.14]))
+    gl.uniform3fv(uniform('colorA'), shaderVector(this.shadowRoot, colorA, [0.23, 0.44, 0.7]))
+    gl.uniform3fv(uniform('colorB'), shaderVector(this.shadowRoot, colorB, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
+
+    const texture = gl.createTexture()
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+    gl.uniform1i(uniform('imageTex'), 0)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+
+    const draw = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+      const width = Math.max(1, Math.round(canvas.clientWidth * ratio))
+      const height = Math.max(1, Math.round(canvas.clientHeight * ratio))
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width
+        canvas.height = height
+        gl.viewport(0, 0, width, height)
+      }
+      gl.uniform2f(resolution, canvas.width, canvas.height)
+      gl.uniform1f(time, flowing ? RM.t : 0)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+    }
+    const observer = new ResizeObserver(draw)
+    const onSeek = () => draw()
+    observer.observe(canvas)
+    root.addEventListener('rmseek', onSeek)
+    let settleTexture
+    RM.waitFor(new Promise((resolve) => (settleTexture = resolve)))
+    const image = new Image()
+    image.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+      gl.uniform1f(aspect, image.naturalWidth / Math.max(1, image.naturalHeight))
+      draw()
+      settleTexture()
+    }
+    image.onerror = () => settleTexture()
+    image.src = imageSource
+    draw()
+    this._dispose = () => {
+      observer.disconnect()
+      root.removeEventListener('rmseek', onSeek)
+      settleTexture()
+      gl.deleteTexture(texture)
+      gl.deleteBuffer(buffer)
+      gl.deleteProgram(program)
+      gl.deleteShader(vertex)
+      gl.deleteShader(fragment)
+    }
+  }
+}
+define('rm-pixel-reveal', RMPixelReveal)
+
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
 /**

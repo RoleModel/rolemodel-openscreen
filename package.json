@@ -23,8 +23,8 @@
     "rm-voice": "./bin/rm-voice.mjs"
   },
   "scripts": {
-    "build": "pnpm run sync-brand && pnpm run optics && pnpm run optics-tokens && pnpm run icons && pnpm run imagery && pnpm run wallpapers",
-    "check": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify && pnpm run sync-tap:check && pnpm run sync-docs:check",
+    "build": "pnpm run sync-brand && pnpm run optics && pnpm run optics-tokens && pnpm run figma-tokens && pnpm run icons && pnpm run imagery && pnpm run wallpapers",
+    "check": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run figma-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify && pnpm run sync-tap:check && pnpm run sync-docs:check",
     "dev": "node --watch-path=./bin --watch-path=./lib --watch bin/rm-studio.mjs --watch",
     "studio": "node bin/rm-studio.mjs",
     "presets": "node bin/rm-video.mjs presets",
@@ -48,6 +48,8 @@
     "sync-docs:check": "node lib/sync-docs.mjs --check",
     "optics-tokens": "node lib/optics-tokens.mjs",
     "optics-tokens:check": "node lib/optics-tokens.mjs --check",
+    "figma-tokens": "node lib/figma-tokens.mjs",
+    "figma-tokens:check": "node lib/figma-tokens.mjs --check",
     "icons": "node lib/make-icons.mjs",
     "icons:check": "node lib/make-icons.mjs --check",
     "logos": "node lib/make-logos.mjs",
@@ -60,7 +62,7 @@
     "app": "node lib/launch-app.mjs",
     "bem": "node lib/bem-check.mjs",
     "bem:check": "node lib/bem-check.mjs --check",
-    "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
+    "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run figma-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
   },
   "devDependencies": {
     "@rolemodel/optics": "2.4.0",

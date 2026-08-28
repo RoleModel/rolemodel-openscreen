@@ -11844,6 +11844,104 @@
                 "$value": "#e0c9f7"
               }
             }
+          },
+          "standard": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-standard-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#3870b3"
+            }
+          },
+          "almanac": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-almanac-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#337bcc"
+            }
+          },
+          "compass": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-compass-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#193c67"
+            }
+          },
+          "ai": {
+            "green": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-green-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#3a8f5c"
+              }
+            },
+            "yellow": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-yellow-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#d4b30a"
+              }
+            },
+            "purple": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-purple-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#7b5ea7"
+              }
+            },
+            "orange": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-orange-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#e89b30"
+              }
+            },
+            "blue": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-blue-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#3a70b3"
+              }
+            }
           }
         },
         "Dark": {
@@ -23688,6 +23786,104 @@
                 "$value": "#d5b8f5"
               }
             }
+          },
+          "standard": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-standard-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#3870b3"
+            }
+          },
+          "almanac": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-almanac-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#337bcc"
+            }
+          },
+          "compass": {
+            "original": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-compass-original)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$value": "#193c67"
+            }
+          },
+          "ai": {
+            "green": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-green-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#3a8f5c"
+              }
+            },
+            "yellow": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-yellow-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#d4b30a"
+              }
+            },
+            "purple": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-purple-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#7b5ea7"
+              }
+            },
+            "orange": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-orange-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#e89b30"
+              }
+            },
+            "blue": {
+              "original": {
+                "$codeSyntax": {
+                  "WEB": "var(--op-color-ai-blue-original)"
+                },
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#3a70b3"
+              }
+            }
           }
         }
       }
@@ -24227,6 +24423,262 @@
               ],
               "$type": "string",
               "$value": "56%"
+            }
+          },
+          "op-color-standard": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-standard-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 212.6829
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-standard-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "52.3404%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-standard-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "46.0784%"
+            }
+          },
+          "op-color-almanac": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-almanac-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 211.7647
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-almanac-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "60%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-almanac-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "50%"
+            }
+          },
+          "op-color-compass": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-compass-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 213.0769
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-compass-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "60.9375%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-compass-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "25.098%"
+            }
+          },
+          "op-color-ai-green": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-green-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 144
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-green-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "42.2886%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-green-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "39.4118%"
+            }
+          },
+          "op-color-ai-yellow": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-yellow-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 50
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-yellow-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "90.991%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-yellow-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "43.5294%"
+            }
+          },
+          "op-color-ai-purple": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-purple-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 263.8356
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-purple-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "29.3173%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-purple-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "51.1765%"
+            }
+          },
+          "op-color-ai-orange": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-orange-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 34.8913
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-orange-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "80%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-orange-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "54.902%"
+            }
+          },
+          "op-color-ai-blue": {
+            "h": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-blue-h)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "float",
+              "$value": 213.2231
+            },
+            "s": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-blue-s)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "51.0549%"
+            },
+            "l": {
+              "$codeSyntax": {
+                "WEB": "var(--op-color-ai-blue-l)"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "string",
+              "$value": "46.4706%"
             }
           },
           "op-color-alerts-warning": {

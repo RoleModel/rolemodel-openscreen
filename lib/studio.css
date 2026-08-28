@@ -2503,29 +2503,19 @@ button.usage-run:focus-visible {
   background: var(--bg);
 }
 
-/* HyperFrames is hosted by Studio, so the rail, page chrome, spacing and
-   surrounding workbench all keep the same Optics tokens as every other view. */
+/* HyperFrames is hosted inside Studio. The Studio header owns the surrounding
+   navigation and actions; this surface is only the editor itself. */
 .hyperframes-workspace {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--op-space-small);
-  block-size: var(--frame-h);
+  block-size: calc(100dvh - 7rem);
   min-block-size: var(--frame-h);
-}
-
-.hyperframes-workspace__header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--op-space-small);
 }
 
 .hyperframes-workspace__frame {
   inline-size: 100%;
   block-size: 100%;
   min-block-size: 0;
-  border: var(--op-border-width) solid var(--line);
-  border-radius: var(--op-radius-large);
+  border: 0;
+  border-radius: 0;
   background: var(--op-color-neutral-plus-two);
 }
 
@@ -5172,6 +5162,7 @@ textarea.fills.form-control {
   display: grid;
   gap: var(--op-space-small);
   margin-block-start: var(--op-space-small);
+  grid-template-columns: 1fr;
 }
 
 .scene-footage-review__player {
@@ -5200,7 +5191,7 @@ textarea.fills.form-control {
 }
 
 .scene-footage-review__lines {
-  max-block-size: 20rem;
+  max-block-size: 80rem;
 }
 
 .board__take-span {

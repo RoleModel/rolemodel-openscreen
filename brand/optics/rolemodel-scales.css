@@ -16,15 +16,15 @@
  *      exported value — mostly on-* ink, where the export drops to a
  *      near-black no lightness ladder would predict.
  *
- * 57 seeds · 1379 computed steps · 218 literal steps
+ * 81 seeds · 1379 computed steps · 226 literal steps
  * 348 steps left to the package, which owns them.
  *
  * The lightness ladder comes from the vendored package, so an Optics
  * release that retunes its steps retunes these on the next `pnpm run optics`.
  */
 :root {
-  --op-color-academy-accent-h: 149;
-  --op-color-academy-accent-s: 47%;
+  --op-color-academy-accent-h: 148.75;
+  --op-color-academy-accent-s: 47.0588%;
   --op-color-academy-accent-l: 40%;
   --op-color-academy-accent-base: light-dark(hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 40%), hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 37.8%));
   --op-color-academy-accent-minus-eight: light-dark(#050f0a, hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 88%));
@@ -83,8 +83,8 @@
   --op-color-academy-accent-plus-six: light-dark(#e9f7ef, hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 20%));
   --op-color-academy-accent-plus-three: light-dark(hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 70%), hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 29%));
   --op-color-academy-accent-plus-two: light-dark(hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 63.9%), hsl(var(--op-color-academy-accent-h) var(--op-color-academy-accent-s) 32%));
-  --op-color-academy-dark-h: 212;
-  --op-color-academy-dark-s: 27%;
+  --op-color-academy-dark-h: 212.1429;
+  --op-color-academy-dark-s: 27.451%;
   --op-color-academy-dark-l: 40%;
   --op-color-academy-dark-base: light-dark(hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 40%), hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 38%));
   --op-color-academy-dark-minus-eight: light-dark(#070a0d, hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 88%));
@@ -143,7 +143,7 @@
   --op-color-academy-dark-plus-six: light-dark(#eceff4, hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 20%));
   --op-color-academy-dark-plus-three: light-dark(hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 70%), hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 29%));
   --op-color-academy-dark-plus-two: light-dark(hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 63.9%), hsl(var(--op-color-academy-dark-h) var(--op-color-academy-dark-s) 32.2%));
-  --op-color-academy-primary-h: 157;
+  --op-color-academy-primary-h: 157.0588;
   --op-color-academy-primary-s: 100%;
   --op-color-academy-primary-l: 40%;
   --op-color-academy-primary-base: light-dark(hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 40%), hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 38%));
@@ -204,7 +204,7 @@
   --op-color-academy-primary-plus-three: light-dark(hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 70%), hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 29%));
   --op-color-academy-primary-plus-two: light-dark(hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 63.9%), hsl(var(--op-color-academy-primary-h) var(--op-color-academy-primary-s) 32%));
   --op-color-academy-secondary-h: 222;
-  --op-color-academy-secondary-s: 49%;
+  --op-color-academy-secondary-s: 49.0196%;
   --op-color-academy-secondary-l: 40%;
   --op-color-academy-secondary-base: light-dark(hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 40%), hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 37.8%));
   --op-color-academy-secondary-minus-eight: light-dark(hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 3.9%), hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 87.8%));
@@ -264,7 +264,7 @@
   --op-color-academy-secondary-plus-three: light-dark(hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 70%), hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 29%));
   --op-color-academy-secondary-plus-two: light-dark(hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 63.9%), hsl(var(--op-color-academy-secondary-h) var(--op-color-academy-secondary-s) 32.2%));
   --op-color-accent-h: 55;
-  --op-color-accent-s: 94%;
+  --op-color-accent-s: 94.1176%;
   --op-color-accent-l: 40%;
   --op-color-accent-base: light-dark(hsl(var(--op-color-accent-h) var(--op-color-accent-s) 40%), hsl(var(--op-color-accent-h) var(--op-color-accent-s) 38%));
   --op-color-accent-minus-eight: light-dark(#141201, hsl(var(--op-color-accent-h) var(--op-color-accent-s) 88%));
@@ -323,8 +323,23 @@
   --op-color-accent-plus-six: light-dark(hsl(var(--op-color-accent-h) var(--op-color-accent-s) 93.9%), hsl(var(--op-color-accent-h) var(--op-color-accent-s) 20%));
   --op-color-accent-plus-three: light-dark(hsl(var(--op-color-accent-h) var(--op-color-accent-s) 70%), hsl(var(--op-color-accent-h) var(--op-color-accent-s) 28.8%));
   --op-color-accent-plus-two: light-dark(hsl(var(--op-color-accent-h) var(--op-color-accent-s) 63.9%), hsl(var(--op-color-accent-h) var(--op-color-accent-s) 32%));
-  --op-color-airfield-h: 182;
-  --op-color-airfield-s: 96%;
+  --op-color-ai-blue-h: 213.2231;
+  --op-color-ai-blue-s: 51.0549%;
+  --op-color-ai-blue-l: 46.4706%;
+  --op-color-ai-green-h: 144;
+  --op-color-ai-green-s: 42.2886%;
+  --op-color-ai-green-l: 39.4118%;
+  --op-color-ai-orange-h: 34.8913;
+  --op-color-ai-orange-s: 80%;
+  --op-color-ai-orange-l: 54.902%;
+  --op-color-ai-purple-h: 263.8356;
+  --op-color-ai-purple-s: 29.3173%;
+  --op-color-ai-purple-l: 51.1765%;
+  --op-color-ai-yellow-h: 50;
+  --op-color-ai-yellow-s: 90.991%;
+  --op-color-ai-yellow-l: 43.5294%;
+  --op-color-airfield-h: 182.1429;
+  --op-color-airfield-s: 96.0784%;
   --op-color-airfield-l: 40%;
   --op-color-airfield-base: light-dark(hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 40%), hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 38%));
   --op-color-airfield-minus-eight: light-dark(#001314, hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 88%));
@@ -384,19 +399,22 @@
   --op-color-airfield-plus-three: light-dark(hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 70%), hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 29%));
   --op-color-airfield-plus-two: light-dark(hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 63.9%), hsl(var(--op-color-airfield-h) var(--op-color-airfield-s) 32%));
   --op-color-alerts-danger-h: 0;
-  --op-color-alerts-danger-s: 99%;
+  --op-color-alerts-danger-s: 99.0196%;
   --op-color-alerts-danger-l: 40%;
   --op-color-alerts-info-h: 189;
-  --op-color-alerts-info-s: 88%;
+  --op-color-alerts-info-s: 88.2353%;
   --op-color-alerts-info-l: 40%;
-  --op-color-alerts-notice-h: 107;
-  --op-color-alerts-notice-s: 43%;
+  --op-color-alerts-notice-h: 107.0455;
+  --op-color-alerts-notice-s: 43.1373%;
   --op-color-alerts-notice-l: 40%;
-  --op-color-alerts-warning-h: 38;
+  --op-color-alerts-warning-h: 37.9412;
   --op-color-alerts-warning-s: 100%;
   --op-color-alerts-warning-l: 40%;
-  --op-color-building-h: 66;
-  --op-color-building-s: 92%;
+  --op-color-almanac-h: 211.7647;
+  --op-color-almanac-s: 60%;
+  --op-color-almanac-l: 50%;
+  --op-color-building-h: 66.0638;
+  --op-color-building-s: 92.1569%;
   --op-color-building-l: 40%;
   --op-color-building-base: light-dark(hsl(var(--op-color-building-h) var(--op-color-building-s) 40%), hsl(var(--op-color-building-h) var(--op-color-building-s) 38%));
   --op-color-building-minus-eight: light-dark(hsl(var(--op-color-building-h) var(--op-color-building-s) 4.1%), hsl(var(--op-color-building-h) var(--op-color-building-s) 88%));
@@ -455,6 +473,9 @@
   --op-color-building-plus-six: light-dark(hsl(var(--op-color-building-h) var(--op-color-building-s) 94.1%), hsl(var(--op-color-building-h) var(--op-color-building-s) 20%));
   --op-color-building-plus-three: light-dark(hsl(var(--op-color-building-h) var(--op-color-building-s) 70%), hsl(var(--op-color-building-h) var(--op-color-building-s) 29%));
   --op-color-building-plus-two: light-dark(hsl(var(--op-color-building-h) var(--op-color-building-s) 64.1%), hsl(var(--op-color-building-h) var(--op-color-building-s) 32.2%));
+  --op-color-compass-h: 213.0769;
+  --op-color-compass-s: 60.9375%;
+  --op-color-compass-l: 25.098%;
   --op-color-decks-h: 40;
   --op-color-decks-s: 100%;
   --op-color-decks-l: 40%;
@@ -516,7 +537,7 @@
   --op-color-decks-plus-three: light-dark(hsl(var(--op-color-decks-h) var(--op-color-decks-s) 70%), hsl(var(--op-color-decks-h) var(--op-color-decks-s) 29%));
   --op-color-decks-plus-two: light-dark(hsl(var(--op-color-decks-h) var(--op-color-decks-s) 63.9%), hsl(var(--op-color-decks-h) var(--op-color-decks-s) 32%));
   --op-color-docks-h: 165;
-  --op-color-docks-s: 63%;
+  --op-color-docks-s: 62.7451%;
   --op-color-docks-l: 40%;
   --op-color-docks-base: light-dark(hsl(var(--op-color-docks-h) var(--op-color-docks-s) 40%), hsl(var(--op-color-docks-h) var(--op-color-docks-s) 38%));
   --op-color-docks-minus-eight: light-dark(#04110d, hsl(var(--op-color-docks-h) var(--op-color-docks-s) 88%));
@@ -576,7 +597,7 @@
   --op-color-docks-plus-three: light-dark(hsl(var(--op-color-docks-h) var(--op-color-docks-s) 70%), hsl(var(--op-color-docks-h) var(--op-color-docks-s) 29%));
   --op-color-docks-plus-two: light-dark(hsl(var(--op-color-docks-h) var(--op-color-docks-s) 63.9%), hsl(var(--op-color-docks-h) var(--op-color-docks-s) 32%));
   --op-color-flow-h: 190;
-  --op-color-flow-s: 91%;
+  --op-color-flow-s: 91.1765%;
   --op-color-flow-l: 40%;
   --op-color-flow-base: light-dark(hsl(var(--op-color-flow-h) var(--op-color-flow-s) 40%), hsl(var(--op-color-flow-h) var(--op-color-flow-s) 38%));
   --op-color-flow-minus-eight: light-dark(hsl(var(--op-color-flow-h) var(--op-color-flow-s) 3.9%), hsl(var(--op-color-flow-h) var(--op-color-flow-s) 88%));
@@ -635,8 +656,8 @@
   --op-color-flow-plus-six: light-dark(#e2f9fe, hsl(var(--op-color-flow-h) var(--op-color-flow-s) 20%));
   --op-color-flow-plus-three: light-dark(hsl(var(--op-color-flow-h) var(--op-color-flow-s) 70%), hsl(var(--op-color-flow-h) var(--op-color-flow-s) 29%));
   --op-color-flow-plus-two: light-dark(hsl(var(--op-color-flow-h) var(--op-color-flow-s) 64.1%), hsl(var(--op-color-flow-h) var(--op-color-flow-s) 32%));
-  --op-color-lcad-h: 214;
-  --op-color-lcad-s: 93%;
+  --op-color-lcad-h: 214.1053;
+  --op-color-lcad-s: 93.1373%;
   --op-color-lcad-l: 40%;
   --op-color-lcad-base: light-dark(hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 40%), hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 38%));
   --op-color-lcad-minus-eight: light-dark(#010914, hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 88%));
@@ -695,11 +716,11 @@
   --op-color-lcad-plus-six: light-dark(hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 93.9%), hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 20%));
   --op-color-lcad-plus-three: light-dark(hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 70%), hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 29%));
   --op-color-lcad-plus-two: light-dark(hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 64.1%), hsl(var(--op-color-lcad-h) var(--op-color-lcad-s) 32%));
-  --op-color-primary-h: 214;
-  --op-color-primary-s: 91%;
+  --op-color-primary-h: 213.871;
+  --op-color-primary-s: 91.1765%;
   --op-color-primary-l: 40%;
-  --op-color-railing-h: 269;
-  --op-color-railing-s: 75%;
+  --op-color-railing-h: 268.8312;
+  --op-color-railing-s: 75.4902%;
   --op-color-railing-l: 40%;
   --op-color-railing-base: light-dark(hsl(var(--op-color-railing-h) var(--op-color-railing-s) 40%), hsl(var(--op-color-railing-h) var(--op-color-railing-s) 38%));
   --op-color-railing-minus-eight: light-dark(#0a0312, hsl(var(--op-color-railing-h) var(--op-color-railing-s) 87.8%));
@@ -758,8 +779,8 @@
   --op-color-railing-plus-six: light-dark(hsl(var(--op-color-railing-h) var(--op-color-railing-s) 93.9%), hsl(var(--op-color-railing-h) var(--op-color-railing-s) 20%));
   --op-color-railing-plus-three: light-dark(hsl(var(--op-color-railing-h) var(--op-color-railing-s) 70%), hsl(var(--op-color-railing-h) var(--op-color-railing-s) 28.8%));
   --op-color-railing-plus-two: light-dark(hsl(var(--op-color-railing-h) var(--op-color-railing-s) 63.9%), hsl(var(--op-color-railing-h) var(--op-color-railing-s) 32%));
-  --op-color-secondary-h: 283;
-  --op-color-secondary-s: 49%;
+  --op-color-secondary-h: 283.2;
+  --op-color-secondary-s: 49.0196%;
   --op-color-secondary-l: 40%;
   --op-color-secondary-base: light-dark(hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 40%), hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 37.8%));
   --op-color-secondary-minus-eight: light-dark(hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 3.9%), hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 87.8%));
@@ -818,8 +839,11 @@
   --op-color-secondary-plus-six: light-dark(hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 93.9%), hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 20%));
   --op-color-secondary-plus-three: light-dark(hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 70%), hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 29%));
   --op-color-secondary-plus-two: light-dark(hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 63.9%), hsl(var(--op-color-secondary-h) var(--op-color-secondary-s) 32.2%));
-  --op-color-tertiary-h: 193;
-  --op-color-tertiary-s: 69%;
+  --op-color-standard-h: 212.6829;
+  --op-color-standard-s: 52.3404%;
+  --op-color-standard-l: 46.0784%;
+  --op-color-tertiary-h: 192.8571;
+  --op-color-tertiary-s: 68.6275%;
   --op-color-tertiary-l: 40%;
   --op-color-tertiary-base: light-dark(hsl(var(--op-color-tertiary-h) var(--op-color-tertiary-s) 40%), hsl(var(--op-color-tertiary-h) var(--op-color-tertiary-s) 38%));
   --op-color-tertiary-minus-eight: light-dark(hsl(var(--op-color-tertiary-h) var(--op-color-tertiary-s) 3.9%), hsl(var(--op-color-tertiary-h) var(--op-color-tertiary-s) 88%));
@@ -883,13 +907,21 @@
   --op-color-academy-primary-original: #00b871;
   --op-color-academy-secondary-original: #3e62b6;
   --op-color-accent-original: #fcf397;
+  --op-color-ai-blue-original: #3a70b3;
+  --op-color-ai-green-original: #3a8f5c;
+  --op-color-ai-orange-original: #e89b30;
+  --op-color-ai-purple-original: #7b5ea7;
+  --op-color-ai-yellow-original: #d4b30a;
   --op-color-airfield-original: #46f5fb;
+  --op-color-almanac-original: #337bcc;
   --op-color-building-original: #adbf08;
+  --op-color-compass-original: #193c67;
   --op-color-decks-original: #ffad0a;
   --op-color-docks-original: #33d1a9;
   --op-color-flow-original: #0bc9ef;
   --op-color-lcad-original: #2b84f7;
   --op-color-railing-original: #8c3be3;
   --op-color-secondary-original: #3b1948;
+  --op-color-standard-original: #3870b3;
   --op-color-tertiary-original: #86d4e9;
 }
