@@ -868,6 +868,36 @@ const writeMultiAssembly = async (id, state) => {
   await mkdir(multiAssemblyDir(id), { recursive: true });
   await writeFile(multiAssemblyPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
 };
+
+/**
+ * Recover an assembly that finished after its page went away.
+ *
+ * Claude writes its constrained choice to the project before its background job
+ * exits. Previously, only the page that launched that job read the choice and
+ * copied it into the durable assembly state. Navigating away at the wrong moment
+ * therefore made a successful assembly look as though it had produced nothing.
+ *
+ * A fresh draft removes the old reply first, so the presence of this file means
+ * it belongs to the currently saved source set rather than a previous run.
+ */
+async function recoverMultiAssemblySelection(id, state = null) {
+  state ??= await readMultiAssembly(id);
+  if (!state?.sources?.length || state.picks?.length) return state;
+  const raw = await readFile(multiAssemblySelectionPath(id), "utf8").catch(() => null);
+  if (!raw) return state;
+  const sources = await multiAssemblySources(id, state.sources);
+  const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources);
+  const recovered = {
+    ...state,
+    version: 1,
+    sources: sources.map((source) => source.rel),
+    picks: checked.picks,
+    comments: state.comments ?? {},
+    recoveredAt: new Date().toISOString(),
+  };
+  await writeMultiAssembly(id, recovered);
+  return recovered;
+}
 const writeAudioAlignment = async (id, state) => {
   await mkdir(multiAssemblyDir(id), { recursive: true });
   await writeFile(audioAlignmentPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
@@ -5291,7 +5321,7 @@ async function fetchVoiceList() {
       const id = String(new URL(req.url, "http://studio.local").searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
-      const state = await readMultiAssembly(id).catch(() => null);
+      const state = await recoverMultiAssemblySelection(id).catch(() => readMultiAssembly(id));
       return json(res, 200, { state, preparation: await multiAssemblyPreparation(id, state?.sources ?? []) });
     }
 
@@ -5408,6 +5438,7 @@ async function fetchVoiceList() {
         const script = scriptBody ? { name: scriptName, body: scriptBody } : null;
         const prompt = `${multiAssemblyPrompt({ sources, notes, script })}${await globalSkillDirection()}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the script beats, gaps, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
         await mkdir(multiAssemblyDir(id), { recursive: true });
+        await rm(multiAssemblySelectionPath(id), { force: true });
         await writeFile(join(multiAssemblyDir(id), "multi-clip.prompt.txt"), `${prompt}\n`, "utf8");
         await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), scriptName: script?.name ?? null, picks: prior?.picks ?? [], comments: prior?.comments ?? {} });
         return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "multi-clip assembly" }), project: id } });
