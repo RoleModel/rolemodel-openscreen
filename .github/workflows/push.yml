@@ -45,6 +45,11 @@ jobs:
   check:
     name: The gate
     runs-on: ubuntu-latest
+    env:
+      # setup-node writes this placeholder into the npm config. Keep the token
+      # available for every pnpm step, not only install, so the runner does not
+      # report a missing registry credential while it runs the gate.
+      NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -58,8 +63,6 @@ jobs:
       # The frozen pnpm lock keeps CI on the exact dependency graph contributors use.
       # needs the dev ones the checks use.
       - run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
       - run: pnpm exec playwright install --with-deps chromium
       # `check:ci`, not `check`.
       #

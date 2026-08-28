@@ -23,7 +23,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { copyFile, cp, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { pipeline } from "node:stream/promises";
@@ -55,6 +55,7 @@ import {
 	capture,
 	defaultRoot,
 	newManifest,
+	probe,
 	readManifest,
 	run,
 	writeManifest,
@@ -67,6 +68,7 @@ import {
   settings as demoSettings,
   speakerSections,
 } from "../lib/demo-script.mjs";
+import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import {
 	STATE_DIR,
@@ -256,6 +258,41 @@ async function hyperframesProjects(id) {
   return projects.filter(Boolean).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/*
+ * The first generated assembly format staged tokens and fonts but had no
+ * wallpaper contract. Its assembly.json identifies it as one of ours, and the
+ * absent custom property identifies the pre-wallpaper HTML exactly. Upgrade
+ * only that format as it is opened; never rewrite a composition a person has
+ * already edited in HyperFrames.
+ */
+async function repairLegacyHyperframesAssembly(id, dir) {
+  const assemblyPath = join(dir, "assembly.json");
+  const indexPath = join(dir, "index.html");
+  const [assembly, html] = await Promise.all([
+    readFile(assemblyPath, "utf8").then(JSON.parse).catch(() => null),
+    readFile(indexPath, "utf8").catch(() => ""),
+  ]);
+  if (!Array.isArray(assembly?.clips) || html.includes("--assembly-wallpaper")) return false;
+
+  const manifest = await readManifest(projectDir(id));
+  const staged = await stageRenderAssets(dir, {
+    brand: manifest.brand ?? "rolemodel",
+    wallpaper: manifest.wallpaper ?? null,
+    quiet: true,
+  });
+  await writeFile(
+    indexPath,
+    hyperframesAssemblyHtml({ title: assembly.title || "Review cut", clips: assembly.clips, wallpaper: staged.wallpaper }),
+    "utf8",
+  );
+  await writeFile(
+    assemblyPath,
+    `${JSON.stringify({ ...assembly, wallpaper: staged.wallpaper, upgradedAt: new Date().toISOString() }, null, 2)}\n`,
+    "utf8",
+  );
+  return true;
+}
+
 async function openHyperframesStudio(id, folder) {
   const renders = resolve(mediaDir(id), "Renders");
   const candidate = resolve(renders, basename(String(folder ?? "")));
@@ -263,11 +300,22 @@ async function openHyperframesStudio(id, folder) {
     throw new Error("that editable HyperFrames project is not in this project")
   }
 
-  const root = dirname(candidate);
+  await repairLegacyHyperframesAssembly(id, candidate).catch((error) => {
+    // A project made before this format is still editable without the visual
+    // upgrade. Do not turn a recoverable brand copy error into an editor outage.
+    console.warn(`could not upgrade legacy HyperFrames assembly: ${error.message}`);
+  });
+
+  /* `hyperframes preview` discovers the composition from its working directory.
+     Starting it from media/Renders meant every nested project had no index.html,
+     so Studio opened an empty/error page even though the project existed. */
+  const root = candidate;
   let studio = hyperframesStudios.get(root);
   if (!studio?.child) {
     const port = await freeLocalPort();
-    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--port", String(port)], {
+    // Studio is already the visible app. HyperFrames otherwise opens this same
+    // editor in the system browser as a second window.
+    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--no-open", "--port", String(port)], {
       cwd: root,
       env: jobs.childEnv(),
       stdio: ["ignore", "pipe", "pipe"],
@@ -697,6 +745,10 @@ const studioAgentStep = async ({ prompt, cwd, label }) => agentStep(await agentC
 const paperEditPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.json`);
 const paperEditSelectionPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.selection.json`);
 const paperEditTranscriptPath = (id, rel) => join(paperEditDir(id), `${Buffer.from(String(rel)).toString("base64url")}.vtt`);
+/* Claude's proposed passage belongs to one Canvas shot and one source file.
+ * It cannot share the recording-level paper-edit selection: the same clip may
+ * legitimately fulfil two scenes with two different passages. */
+const boardSuggestionPath = (id, slotId, rel) => join(paperEditDir(id), `${Buffer.from(`${String(slotId)}\0${String(rel)}`).toString("base64url")}.scene-selection.json`);
 
 async function renameMediaReferences(id, oldRel, nextRel, oldPath, nextPath) {
   const oldKey = Buffer.from(oldRel).toString("base64url");
@@ -815,10 +867,26 @@ async function writeInterview(id, state) {
 /** A completed VTT is already an attachment of this recording, not a loose file. */
 async function paperEditForRecording(id, rel) {
   const saved = await readPaperEdit(id, rel);
-  if (saved) return saved;
   const captions = await readFile(paperEditTranscriptPath(id, rel), "utf8").catch(() => null);
-  if (!captions) return null;
-  const state = { version: 1, rel, transcript: transcriptFromCaptions(captions), plan: { shots: [] }, selection: null, updatedAt: new Date().toISOString() };
+  if (!captions) return saved;
+
+  /*
+   * rm-transcribe replaces the VTT.  The paper-edit JSON is a convenient place
+   * for the review state, but it must never win over a newer transcript file or
+   * the words beside the video describe a previous transcription run.
+   */
+  const [captionInfo, savedInfo] = await Promise.all([
+    stat(paperEditTranscriptPath(id, rel)).catch(() => null),
+    stat(paperEditPath(id, rel)).catch(() => null),
+  ]);
+  if (saved && (!captionInfo || savedInfo?.mtimeMs >= captionInfo.mtimeMs)) return saved;
+
+  const state = {
+    ...(saved ?? { version: 1, rel, plan: { shots: [] }, selection: null }),
+    rel,
+    transcript: transcriptFromCaptions(captions),
+    updatedAt: new Date().toISOString(),
+  };
   await writePaperEdit(id, rel, state);
   return state;
 }
@@ -882,27 +950,273 @@ const writeMultiAssembly = async (id, state) => {
  */
 async function recoverMultiAssemblySelection(id, state = null) {
   state ??= await readMultiAssembly(id);
-  if (!state?.sources?.length || state.picks?.length) return state;
+  if (!state?.sources?.length || state.picks?.length || state.selectionFinalized) return state;
   const raw = await readFile(multiAssemblySelectionPath(id), "utf8").catch(() => null);
   if (!raw) return state;
   const sources = await multiAssemblySources(id, state.sources);
-  const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources);
+  const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources, {
+    scriptBeats: state?.scriptBeats ?? [],
+  });
   const recovered = {
     ...state,
     version: 1,
     sources: sources.map((source) => source.rel),
     picks: checked.picks,
+    gaps: checked.gaps,
+    parked: checked.parked,
     comments: state.comments ?? {},
+    selectionFinalized: true,
     recoveredAt: new Date().toISOString(),
   };
   await writeMultiAssembly(id, recovered);
   return recovered;
 }
+
+/*
+ * Assembly and Canvas are two views of the same proposed edit.  A Claude pick
+ * becomes a Canvas take so people can see it against the planned scene, but it
+ * is deliberately NOT written to board.picks: "Claude proposed this" is not
+ * the same thing as somebody approving it for the cut.
+ */
+const canvasText = (value) => String(value ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+const canvasLabel = (value, fallback) => {
+  const text = String(value ?? fallback ?? "Selected passage").replace(/\s+/g, " ").trim();
+  return text.length > 68 ? `${text.slice(0, 65).trimEnd()}…` : text;
+};
+
+async function putAssemblyProposalsOnCanvas(id, state) {
+  const manifest = await readManifest(projectDir(id));
+  const dir = projectDir(id);
+  const board = await readBoard(dir, { projectId: id, title: manifest.name });
+  const beats = new Map((state.scriptBeats ?? []).map((beat) => [beat.id, beat]));
+  const at = new Date().toISOString();
+  const by = await reviewerName();
+  let created = 0;
+  let attached = 0;
+  const next = await applyToBoard(
+    dir,
+    board,
+    { type: "assembly-proposals", at, by, count: state.picks.length },
+    (b) => {
+      const graph = graphFor(b);
+      let rightmost = graph.nodes.reduce((max, node) => Math.max(max, Number(node.x) || 0), 400 - NODE_WIDTH - NODE_GAP_X);
+      const row = graph.nodes.length ? Math.max(...graph.nodes.map((node) => Number(node.y) || 400)) + 380 : 400;
+      for (const [index, pick] of state.picks.entries()) {
+        const beat = beats.get(pick.beatId);
+        const intent = String(beat?.text ?? pick.spokenText ?? pick.text ?? pick.reason ?? "").trim();
+        let slot = (b.slots ?? []).find((item) => item.assemblyPickId === pick.id)
+          ?? (beat ? (b.slots ?? []).find((item) => canvasText(item.intent) === canvasText(beat.text)) : null);
+        if (!slot) {
+          const slotId = graphIdFor("slot", `${id}:assembly:${pick.id}`);
+          slot = {
+            id: slotId,
+            order: (b.slots ?? []).length,
+            name: canvasLabel(intent, `Assembly selection ${index + 1}`),
+            intent,
+            seconds: Math.max(1, Math.round(Number(pick.outSec) - Number(pick.inSec))),
+            notes: "Claude proposal — review this passage before approving the cut.",
+            assemblyPickId: pick.id,
+            assemblyProposal: true,
+          };
+          b.slots.push(slot);
+          rightmost += NODE_WIDTH + NODE_GAP_X;
+          graph.nodes.push({ id: slotId, kind: "shot", name: slot.name, intent: slot.intent, seconds: slot.seconds, x: rightmost, y: row });
+          created += 1;
+        }
+        const takeId = takeIdFor(slot.id, pick.source, Number(pick.inSec), Number(pick.outSec));
+        if (!(b.takes ?? []).some((take) => take.id === takeId)) {
+          b.takes.push({
+            id: takeId,
+            slotId: slot.id,
+            rel: pick.source,
+            inSec: Number(pick.inSec),
+            outSec: Number(pick.outSec),
+            durationSec: Math.max(0, Number(pick.outSec) - Number(pick.inSec)),
+            addedBy: by,
+            addedAt: at,
+            origin: "claude-assembly",
+            assemblyPickId: pick.id,
+          });
+          attached += 1;
+        }
+      }
+      b.graph = graph;
+      return b;
+    },
+  );
+  return { board: next, created, attached };
+}
 const writeAudioAlignment = async (id, state) => {
   await mkdir(multiAssemblyDir(id), { recursive: true });
   await writeFile(audioAlignmentPath(id), `${JSON.stringify({ ...state, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
 };
+
+/*
+ * A multi-clip assembly is an editable HyperFrames composition, not an
+ * OpenScreen document. OpenScreen owns recorded demos and screenshot edits;
+ * HyperFrames owns the cut order, media timing, and later motion work.
+ *
+ * Keep project media canonical. HyperFrames refuses ../ asset paths, so the
+ * composition gets one `source` symlink to the project's media directory.
+ * The media is never duplicated or re-encoded just to make a first cut.
+ */
+const hf = (value) => String(value ?? "")
+  .replaceAll("&", "&amp;")
+  .replaceAll("\"", "&quot;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;");
+
+const hfSeconds = (milliseconds) => (Math.max(0, Math.round(Number(milliseconds) || 0)) / 1000).toFixed(3);
+
+async function linkHyperframesProjectMedia(id, outDir) {
+  const link = join(outDir, "source");
+  const existing = await lstat(link).catch(() => null);
+  if (existing?.isSymbolicLink()) return;
+  if (existing) throw new Error("the HyperFrames assembly has a non-media source folder");
+  await symlink(mediaDir(id), link, "dir");
+}
+
+function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920, height = 1080, fps = 30 }) {
+  const titleDuration = title ? 1800 : 0;
+  let cursor = titleDuration;
+  const media = clips.map((clip, index) => {
+    const duration = Math.max(100, Math.round(Number(clip.durationMs) || 0));
+    const start = hfSeconds(cursor);
+    const span = hfSeconds(duration);
+    const mediaStart = hfSeconds(clip.mediaStartMs);
+    const source = `source/${String(clip.source).replace(/^\/+/, "")}`;
+    const id = `clip-${String(index + 1).padStart(2, "0")}`;
+    const lowerThird = clip.speaker
+      ? `    <aside class="assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span>${hf(clip.speaker)}</span></aside>`
+      : "";
+    cursor += duration;
+    return [
+      `    <video id="${id}" src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0" muted playsinline preload="auto"></video>`,
+      `    <audio id="${id}-audio" src="${hf(clip.audioSource ?? source)}" data-start="${start}" data-duration="${span}" data-media-start="${hfSeconds(clip.audioStartMs ?? clip.mediaStartMs)}" data-track-index="${index + 1}"></audio>`,
+      lowerThird,
+    ].join("\n");
+  }).join("\n");
+  const total = hfSeconds(cursor);
+  const wallpaperUrl = wallpaper ? `url("assets/wallpapers/${hf(wallpaper)}")` : "none";
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>${hf(title)}</title>
+    <link rel="stylesheet" href="theme.css" />
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--color-dark); }
+      [data-composition-id] { --assembly-wallpaper: ${wallpaperUrl}; position: relative; width: ${width}px; height: ${height}px; overflow: hidden; background: var(--assembly-wallpaper) center / cover, var(--color-dark); font-family: var(--font-display); }
+      video { position: absolute; inset: 2.5%; width: 95%; height: 95%; object-fit: contain; background: transparent; }
+      audio { display: none; }
+      .assembly-title { position: absolute; inset: 0; display: grid; align-content: center; padding: 0 8%; background: linear-gradient(90deg, color-mix(in srgb, var(--color-dark) 94%, transparent), color-mix(in srgb, var(--color-dark) 62%, transparent)), var(--assembly-wallpaper) center / cover; color: var(--color-light); }
+      .assembly-title__eyebrow { color: var(--color-accent); font-family: var(--font-mono); font-size: var(--size-eyebrow); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+      .assembly-title__text { margin-top: 0.35em; max-width: 16ch; font-size: var(--size-title); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
+      .assembly-lower-third { position: absolute; bottom: 8%; left: 6%; max-width: 52%; padding: 0.55% 1.2%; background: color-mix(in srgb, var(--color-dark) 86%, transparent); color: var(--color-light); font-size: var(--size-lower-third); font-weight: 700; letter-spacing: -0.02em; }
+    </style>
+  </head>
+  <body>
+    <main id="assembly" data-composition-id="assembly" data-start="0" data-duration="${total}" data-width="${width}" data-height="${height}" data-fps="${fps}" data-no-timeline>
+${title ? `    <section class="assembly-title" data-start="0" data-duration="${hfSeconds(titleDuration)}" data-track-index="0"><div class="assembly-title__eyebrow">Review cut</div><div class="assembly-title__text">${hf(title)}</div></section>` : ""}
+${media}
+    </main>
+  </body>
+</html>
+`;
+}
+
+async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {} }) {
+  if (!clips.length) throw new Error("choose at least one clip for the HyperFrames assembly");
+  const outDir = join(mediaDir(id), "Renders", folder);
+  await mkdir(outDir, { recursive: true });
+  await linkHyperframesProjectMedia(id, outDir);
+  const manifest = await readManifest(projectDir(id));
+  const staged = await stageRenderAssets(outDir, {
+    brand: manifest.brand ?? "rolemodel",
+    wallpaper: manifest.wallpaper ?? null,
+    quiet: true,
+  });
+  const normalized = clips.map((clip) => ({
+    source: String(clip.source ?? ""),
+    mediaStartMs: Math.max(0, Math.round(Number(clip.mediaStartMs) || 0)),
+    durationMs: Math.max(100, Math.round(Number(clip.durationMs) || 0)),
+    ...(clip.audioSource ? { audioSource: String(clip.audioSource) } : {}),
+    ...(Number.isFinite(Number(clip.audioStartMs)) ? { audioStartMs: Math.max(0, Math.round(Number(clip.audioStartMs))) } : {}),
+    ...(String(clip.speaker ?? "").trim() ? { speaker: String(clip.speaker).trim() } : {}),
+  }));
+  if (normalized.some((clip) => !clip.source || clip.source.includes(".."))) throw new Error("one of the assembly clips is outside this project");
+  const durationSec = normalized.reduce((total, clip) => total + clip.durationMs, 0) / 1000;
+  await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper }), "utf8");
+  await writeFile(join(outDir, "brief.md"), `# ${title}\n\nEditable source assembly created by Studio. Media remains linked from this project's media folder.\n`, "utf8");
+  await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, ...metadata }, null, 2)}\n`, "utf8");
+  return { folder, outDir, clips: normalized.length, durationSec };
+}
 const multiPickKey = (pick) => Buffer.from(`${pick.source}:${pick.inSec}:${pick.outSec}`).toString("base64url").slice(-18);
+
+/* The selected script is a cut contract, not a paragraph of optional prompt
+   context. Split it into stable, human-readable beat ids before Claude sees
+   the recordings so the response can be checked for order and coverage. */
+function scriptAssemblyBeats(body) {
+  const sections = speakerSections(body);
+  const namedParagraphs = () => {
+    const groups = [];
+    let speaker = null;
+    let lines = [];
+    const flush = () => {
+      const text = lines.join("\n").trim();
+      if (text) groups.push({ speaker, lines: parseScript(text) });
+      lines = [];
+    };
+    const rawLines = String(body ?? "").split(/\r?\n/);
+    for (let index = 0; index < rawLines.length; index += 1) {
+      const line = rawLines[index].trim();
+      const next = rawLines.slice(index + 1).find((item) => item.trim())?.trim() ?? "";
+      // Existing CCC Days scripts use a bare "First Last" paragraph label,
+      // rather than /speaker. Treat that label as ownership, never narration.
+      const looksLikeName = /^[A-Z][a-z]+(?:[ '-][A-Z][a-z]+){1,3}$/.test(line) && Boolean(next);
+      if (looksLikeName) {
+        flush();
+        speaker = line;
+      } else lines.push(rawLines[index]);
+    }
+    flush();
+    return groups;
+  };
+  const groups = sections.length
+    ? sections.map((section) => ({ speaker: section.speaker, lines: parseScript(section.text) }))
+    : namedParagraphs();
+  let number = 0;
+  return groups.flatMap(({ speaker, lines }) => lines.map((text) => {
+    number += 1;
+    return { id: `B${String(number).padStart(2, "0")}`, number, speaker, text };
+  }));
+}
+
+/*
+ * A selected script is part of the assembly state, not just prompt decoration.
+ * When a project has one script, use it automatically: making a "best parts"
+ * edit by accident is worse than asking for a choice when the project has more
+ * than one candidate.
+ */
+async function assemblyScript(id, requestedName, priorName = null) {
+  const dir = join(projectDir(id), "scripts");
+  const requested = safeName(requestedName ?? priorName, "");
+  const names = (await readdir(dir, { withFileTypes: true }).catch(() => []))
+    .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
+    .map((entry) => basename(entry.name, ".md"));
+  const name = requested || (names.length === 1 ? names[0] : "");
+  if (!name) return null;
+  if (!names.includes(name)) throw new Error("the selected script is no longer in this project");
+  const body = await readFile(join(dir, `${name}.md`), "utf8").catch(() => "");
+  if (!body.trim()) throw new Error("the selected script is empty or cannot be read");
+  return { name, body };
+}
+
+/* Identical cue text *and* timing across different media files is not a second
+   take. It means the same caption artifact was attached more than once. */
+const transcriptSignature = (transcript) => (transcript?.cues ?? [])
+  .map((cue) => `${Number(cue.startSec).toFixed(3)}:${Number(cue.endSec).toFixed(3)}:${String(cue.text ?? "").trim()}`)
+  .join("\n");
 
 async function multiAssemblySources(id, rawRels) {
   const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
@@ -915,9 +1229,23 @@ async function multiAssemblySources(id, rawRels) {
     if (!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) throw new Error(`${basename(rel)} is not a video recording`);
     const paper = await paperEditForRecording(id, rel);
     const visual = await readVisualBeats(id, rel);
+    const transcriptEnd = Math.max(0, ...(paper?.transcript?.cues ?? []).map((cue) => Number(cue.endSec) || 0));
+    const duration = (await probe(file))?.durationSec ?? null;
     if (!paper?.transcript) missing.push(basename(rel));
+    else if (duration != null && transcriptEnd > duration + 0.5) missing.push(`${basename(rel)} (its saved transcript belongs to a longer recording; re-transcribe it)`);
     else if (!visual?.frames?.length) missing.push(`${basename(rel)} (analyze screen)`);
-    else sources.push({ projectId: id, rel, file, transcript: paper.transcript, visual });
+    else sources.push({ projectId: id, rel, file, durationSec: duration, transcript: paper.transcript, transcriptSignature: transcriptSignature(paper.transcript), visual });
+  }
+  const sameTranscript = new Map();
+  for (const source of sources) {
+    if (!source.transcriptSignature) continue;
+    const group = sameTranscript.get(source.transcriptSignature) ?? [];
+    group.push(source);
+    sameTranscript.set(source.transcriptSignature, group);
+  }
+  for (const group of sameTranscript.values()) {
+    if (group.length < 2) continue;
+    missing.push(`${group.map((source) => basename(source.rel)).join(", ")} (the same timed captions are attached to different recordings; re-transcribe each one)`);
   }
   if (missing.length) throw new Error(`prepare these recordings first (transcript and screen analysis): ${missing.join(", ")}`);
   return sources;
@@ -931,37 +1259,78 @@ async function multiAssemblySources(id, rawRels) {
 async function multiAssemblyPreparation(id, rawRels) {
   const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
   if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
-  return Promise.all(rels.map(async (rel) => {
+  const prepared = await Promise.all(rels.map(async (rel) => {
     const file = await paperEditMedia(id, rel).catch(() => null);
     if (!file || !/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(file)) return { rel, transcript: false, visual: false, missing: true };
     const paper = await paperEditForRecording(id, rel);
     const visual = await readVisualBeats(id, rel);
-    return { rel, transcript: Boolean(paper?.transcript?.cues?.length), visual: Boolean(visual?.frames?.length), missing: false };
+    const transcriptEnd = Math.max(0, ...(paper?.transcript?.cues ?? []).map((cue) => Number(cue.endSec) || 0));
+    const duration = (await probe(file))?.durationSec ?? null;
+    const transcript = Boolean(paper?.transcript?.cues?.length) && (duration == null || transcriptEnd <= duration + 0.5);
+    return { rel, transcript, visual: Boolean(visual?.frames?.length), missing: false, transcriptProblem: !transcript && transcriptEnd > 0 ? "Saved transcript is longer than this recording" : null, transcriptSignature: transcript ? transcriptSignature(paper.transcript) : "" };
   }));
+  const duplicateSignatures = new Set();
+  const bySignature = new Map();
+  for (const item of prepared) {
+    if (!item.transcriptSignature) continue;
+    const group = bySignature.get(item.transcriptSignature) ?? [];
+    group.push(item.rel);
+    bySignature.set(item.transcriptSignature, group);
+  }
+  for (const [signature, group] of bySignature) if (group.length > 1) duplicateSignatures.add(signature);
+  return prepared.map(({ transcriptSignature: signature, ...item }) => signature && duplicateSignatures.has(signature)
+    ? { ...item, transcript: false, transcriptProblem: "Saved transcript is duplicated across recordings" }
+    : item);
 }
 
-function multiAssemblyPrompt({ sources, notes = "", script = null }) {
+/*
+ * The multi-clip review needs the words beside the picture, not just the one
+ * excerpt Claude happened to select.  Keep this deliberately small — caption
+ * cues are enough to seek and highlight the selected passage; word timing stays
+ * in the project file for editing and prompt construction.
+ */
+async function multiAssemblyTranscripts(id, rawRels) {
+  const rels = [...new Set((Array.isArray(rawRels) ? rawRels : []).map(String).filter(Boolean))];
+  return Object.fromEntries(await Promise.all(rels.map(async (rel) => {
+    const paper = await paperEditForRecording(id, rel).catch(() => null);
+    const cues = (paper?.transcript?.cues ?? []).map((cue) => ({
+      startSec: Number(cue.startSec),
+      endSec: Number(cue.endSec),
+      text: String(cue.text ?? ""),
+    })).filter((cue) => Number.isFinite(cue.startSec) && Number.isFinite(cue.endSec) && cue.text);
+    return [rel, cues];
+  })));
+}
+
+function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats = [] }) {
   const catalog = sources.map((source) => {
     const lines = source.transcript.cues.map((cue) => `${Number(cue.startSec).toFixed(2)}-${Number(cue.endSec).toFixed(2)} | ${cue.text}`).join("\n");
     const frames = source.visual.frames.map((frame) => `${Number(frame.atSec).toFixed(2)}s | ${join(visualBeatDir(source.projectId, source.rel), frame.file)}`).join("\n");
-    return `SOURCE: ${source.rel}\nTIMED SPOKEN PASSAGES:\n${lines}\n\nVISUAL BEATS — inspect these actual timestamped screen frames before choosing:\n${frames}`;
+    return `SOURCE: ${source.rel}\nSOURCE DURATION: ${source.durationSec == null ? "unknown" : `${Number(source.durationSec).toFixed(2)}s`}\nTIMED SPOKEN PASSAGES — verified only for this source:\n${lines}\n\nVISUAL BEATS — inspect these actual timestamped screen frames before choosing:\n${frames}`;
   }).join("\n\n---\n\n");
   return [
     "You are building the first rough assembly from several real recordings.",
-    "Choose the strongest passages across the sources. You may use a source more than once, but only name a source and times that appear below.",
-    "You MUST inspect the visual-beat image files. Select a passage only when its screen state supports what the chosen words say; a transcript match alone is not enough.",
+    scriptBeats.length
+      ? "This is a script-location pass. Find where each script beat is actually spoken in the supplied recordings. You may use a source more than once, but only name a source and times that appear below."
+      : "Choose the strongest passages across the sources. You may use a source more than once, but only name a source and times that appear below.",
+    scriptBeats.length
+      ? "Start with the spoken words: match exact wording first, then an unmistakable close paraphrase only when the full thought is clearly delivered. Inspect the visual-beat image files to choose between duplicate takes and flag visual conflicts, but do not replace a spoken script match with unrelated material because it looks better."
+      : "You MUST inspect the visual-beat image files. Select a passage only when its screen state supports what the chosen words say; a transcript match alone is not enough.",
+    scriptBeats.length
+      ? "EVIDENCE RULES: Every pick must quote the words from that exact source's timed passage in spokenText, name the evidence in evidence, and fit inside that source's duration. Never transfer words or timecodes from one recording to another, even if two transcripts look similar. Frames can support who or what is on camera; they cannot by themselves prove that a person spoke a particular line. When the source-specific evidence cannot prove a line, return a gap with the reason 'not verified from the available transcript and frames'. A gap means only that this pass could not verify it — never claim it was not recorded, needs a reshoot, or belongs to a named person based only on a filename or frame."
+      : "",
     "Return JSON only, with this exact shape:",
-    '{"version":1,"picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
-    "Keep the order that tells the clearest story. Do not invent footage, narration, titles, or timecodes.",
+    scriptBeats.length
+      ? '{"version":1,"title":"A concise factual title drawn from the recorded script","picks":[{"beatId":"B01","source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"spokenText":"the words actually spoken in this range","evidence":"source-specific timed transcript plus supporting frame timestamps","reason":"why this is the best delivery of that script beat"}],"gaps":[{"beatId":"B02","reason":"not verified from the available transcript and frames"}],"parked":[{"source":"Footage/alternate.mp4","inSec":3,"outSec":8,"reason":"useful later, but not part of the script"}]}'
+      : '{"version":1,"title":"A concise factual title drawn from the selected speech","picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
+    scriptBeats.length
+      ? "Preserve script order. The title is metadata for the opening title card: make it concise and factual from the recorded script, never a new claim. Do not invent footage, narration, timecodes, or a new story. Each script beat has exactly one result: its best matching spoken passage or a visible gap."
+      : "Keep the order that tells the clearest story. Propose one concise, factual title from the selected speech; it must not make a claim the recordings do not support. Do not invent footage, narration, or timecodes.",
     script?.body
       ? [
           "WORKFLOW: apply the project skill video-from-script to this selection pass.",
-          "The script below is the beat spine: preserve its order, choose the strongest complete take for each beat, and make every missing beat visible instead of silently skipping it. Park strong unused material rather than inventing a place for it.",
-          "For every pick, include an optional `beat` field naming the script line it supports. Return an optional `gaps` array for script lines with no usable recording and an optional `parked` array for unused passages worth keeping.",
-          `PROJECT SCRIPT (${script.name}):\n${script.body}`,
-          speakerSections(script.body).length
-            ? `SCRIPT SECTIONS BY PERSON:\n${speakerSections(script.body).map(({ speaker, text }) => `${speaker}:\n${text}`).join("\n\n")}`
-            : "",
+          "The script beats below are the source of truth. Return the exact location where each line is spoken, preserving beat order. Never replace a missing beat with a different idea. Every beat must appear exactly once either in a pick's beatId or in gaps. Park strong unused material rather than inventing a place for it.",
+          `SCRIPT BEATS (use these exact ids):\n${scriptBeats.map((beat) => `${beat.id}${beat.speaker ? ` · ${beat.speaker}` : ""} | ${beat.text}`).join("\n")}`,
         ].join("\n\n")
       : "WORKFLOW: this is a best-parts assembly, not a script match. Choose only the passages that genuinely support the story notes.",
     notes ? `EDITOR NOTES:\n${notes}` : "",
@@ -973,19 +1342,33 @@ function multiAssemblyPrompt({ sources, notes = "", script = null }) {
 function parseMultiAssemblySelection(raw) {
   const text = String(raw ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const parsed = JSON.parse(text);
-  return { version: 1, picks: Array.isArray(parsed?.picks) ? parsed.picks : [] };
+  return {
+    version: 1,
+    title: String(parsed?.title ?? "").trim(),
+    picks: Array.isArray(parsed?.picks) ? parsed.picks : [],
+    gaps: Array.isArray(parsed?.gaps) ? parsed.gaps : [],
+    parked: Array.isArray(parsed?.parked) ? parsed.parked : [],
+  };
 }
 
-function validateMultiAssemblySelection(selection, sources) {
+function validateMultiAssemblySelection(selection, sources, { scriptBeats = [] } = {}) {
   const byRel = new Map(sources.map((source) => [source.rel, source]));
+  const beatsById = new Map(scriptBeats.map((beat) => [beat.id, beat]));
   const picks = [];
   const problems = [];
+  let lastBeat = 0;
   for (const item of selection.picks ?? []) {
     const source = byRel.get(String(item?.source ?? ""));
     const inSec = Number(item?.inSec);
     const outSec = Number(item?.outSec);
     const last = source?.transcript?.words?.at(-1)?.endSec ?? 0;
-    if (!source) problems.push(`unknown source: ${String(item?.source ?? "")}`);
+    const beatId = String(item?.beatId ?? "");
+    const beat = beatsById.get(beatId);
+    if (scriptBeats.length && !beat) problems.push(`unknown or missing script beat: ${beatId || "(none)"}`);
+    else if (scriptBeats.length && !String(item?.spokenText ?? "").trim()) problems.push(`script beat ${beatId} is missing its recorded spoken text`);
+    else if (scriptBeats.length && !String(item?.evidence ?? "").trim()) problems.push(`script beat ${beatId} is missing its source evidence`);
+    else if (beat && beat.number < lastBeat) problems.push(`script beats are out of order at ${beatId}`);
+    else if (!source) problems.push(`unknown source: ${String(item?.source ?? "")}`);
     else if (!Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec || inSec < 0 || outSec > last + 0.15) problems.push(`invalid range for ${basename(source.rel)}`);
     else {
       const text = source.transcript.cues
@@ -993,11 +1376,34 @@ function validateMultiAssemblySelection(selection, sources) {
         .map((cue) => String(cue.text ?? "").trim())
         .filter(Boolean)
         .join(" ");
-      picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), text, id: multiPickKey({ source: source.rel, inSec, outSec }) });
+      if (beat && picks.some((pick) => pick.beatId === beat.id)) problems.push(`script beat ${beat.id} was selected more than once`);
+      if (beat) lastBeat = beat.number;
+      picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), evidence: String(item?.evidence ?? "").trim(), text, spokenText: String(item?.spokenText ?? text).trim(), id: multiPickKey({ source: source.rel, inSec, outSec }), ...(beat ? { beatId: beat.id, beat: beat.text, speaker: beat.speaker } : {}) });
     }
   }
-  if (!picks.length) throw new Error(problems[0] ?? "Claude did not choose any usable passages");
-  return { version: 1, picks, problems };
+  const pickedBeatIds = new Set(picks.map((pick) => pick.beatId).filter(Boolean));
+  const gaps = [];
+  for (const rawGap of selection.gaps ?? []) {
+    const beatId = String(rawGap?.beatId ?? "");
+    const beat = beatsById.get(beatId);
+    if (!beat) {
+      if (scriptBeats.length) problems.push(`unknown script gap: ${beatId || "(none)"}`);
+      continue;
+    }
+    if (pickedBeatIds.has(beatId)) {
+      problems.push(`script beat ${beatId} cannot be both selected and missing`);
+      continue;
+    }
+    gaps.push({ beatId, beat: beat.text, speaker: beat.speaker, reason: String(rawGap?.reason ?? "No usable recorded delivery").trim() || "No usable recorded delivery" });
+  }
+  if (scriptBeats.length) {
+    const gapIds = new Set(gaps.map((gap) => gap.beatId));
+    for (const beat of scriptBeats) if (!pickedBeatIds.has(beat.id) && !gapIds.has(beat.id)) problems.push(`script beat ${beat.id} has no pick or visible gap`);
+  }
+  if (problems.length) throw new Error(problems[0]);
+  if (!picks.length && !gaps.length) throw new Error("Claude did not choose any usable passages");
+  const title = String(selection.title ?? "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+  return { version: 1, title, picks, gaps, parked: selection.parked.map((item) => ({ source: String(item?.source ?? ""), inSec: Number(item?.inSec), outSec: Number(item?.outSec), reason: String(item?.reason ?? "").trim() })).filter((item) => item.source && Number.isFinite(item.inSec) && Number.isFinite(item.outSec) && item.outSec > item.inSec), problems };
 }
 
 async function audioAlignmentSources(id, videoRel, audioRel) {
@@ -1019,12 +1425,11 @@ async function audioAlignmentSources(id, videoRel, audioRel) {
  * visible but the way to render it had silently disappeared.
  */
 async function audioAlignmentRenderSteps(id, state) {
-  if (!state?.document || !state?.alignedAudio || !state?.renderedVideo) return {};
+  if (!state?.alignmentFile || !state?.alignedAudio || !state?.renderedVideo) return {};
   const sources = await audioAlignmentSources(id, state.videoRel, state.audioRel);
-  const outDir = dirname(state.document);
-  const alignmentFile = join(outDir, "alignment.json");
+  const outDir = dirname(state.alignmentFile);
   return {
-    renderStep: ownStep("rm-render-alignment", ["--alignment", alignmentFile, "--narration", sources.audio, "--audio-output", state.alignedAudio, "--output", state.renderedVideo], {
+    renderStep: ownStep("rm-render-alignment", ["--alignment", state.alignmentFile, "--narration", sources.audio, "--audio-output", state.alignedAudio, "--output", state.renderedVideo], {
       label: "render aligned review video",
       cwd: outDir,
       project: id,
@@ -5329,7 +5734,11 @@ async function fetchVoiceList() {
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
       const state = await recoverMultiAssemblySelection(id).catch(() => readMultiAssembly(id));
-      return json(res, 200, { state, preparation: await multiAssemblyPreparation(id, state?.sources ?? []) });
+      return json(res, 200, {
+        state,
+        preparation: await multiAssemblyPreparation(id, state?.sources ?? []),
+        transcripts: await multiAssemblyTranscripts(id, state?.sources ?? []),
+      });
     }
 
     if (p === "/api/multi-assembly/audio-align" && req.method === "GET") {
@@ -5373,7 +5782,7 @@ async function fetchVoiceList() {
         // Source choice is work too. Persist it before the jobs start so a
         // refresh while Whisper is running does not make a person reselect a
         // handful of camera angles just to see their progress.
-        const sameSources = JSON.stringify(prior?.sources ?? []) === JSON.stringify(rels);
+        const sameSources = rels.length === (prior?.sources ?? []).length && rels.every((rel) => prior.sources.includes(rel));
         await writeMultiAssembly(id, { version: 1, sources: rels, notes: prior?.notes ?? "", picks: sameSources ? prior?.picks ?? [] : [], comments: sameSources ? prior?.comments ?? {} : {} });
         const steps = [];
         for (const rel of rels) {
@@ -5401,14 +5810,18 @@ async function fetchVoiceList() {
         if (!rels.length) throw new Error("choose at least one project recording");
         if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
         const prior = await readMultiAssembly(id);
-        const sameSources = JSON.stringify(prior?.sources ?? []) === JSON.stringify(rels);
+        const script = await assemblyScript(id, body.scriptName, prior?.scriptName);
+        const sameSources = rels.length === (prior?.sources ?? []).length && rels.every((rel) => prior.sources.includes(rel));
         await writeMultiAssembly(id, {
           version: 1,
           sources: rels,
           notes: String(body.notes ?? prior?.notes ?? ""),
-          scriptName: safeName(body.scriptName ?? prior?.scriptName, "") || null,
+          title: prior?.title ?? "",
+          scriptName: script?.name ?? null,
+          scriptBeats: script ? scriptAssemblyBeats(script.body) : [],
           picks: sameSources ? prior?.picks ?? [] : [],
           comments: sameSources ? prior?.comments ?? {} : {},
+          selectionFinalized: false,
         });
         const prepared = await multiAssemblyPreparation(id, rels);
         const steps = [];
@@ -5440,14 +5853,17 @@ async function fetchVoiceList() {
           return pick ? `${pick.source} ${pick.inSec}-${pick.outSec}: ${comment}` : null;
         }).filter(Boolean).join("\n");
         const notes = [String(body.notes ?? "").trim(), feedback ? `REVIEW COMMENTS TO APPLY:\n${feedback}` : ""].filter(Boolean).join("\n\n");
-        const scriptName = safeName(body.scriptName ?? prior?.scriptName, "");
-        const scriptBody = scriptName ? await readFile(join(projectDir(id), "scripts", `${scriptName}.md`), "utf8").catch(() => "") : "";
-        const script = scriptBody ? { name: scriptName, body: scriptBody } : null;
-        const prompt = `${multiAssemblyPrompt({ sources, notes, script })}${await globalSkillDirection()}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the script beats, gaps, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
+        const script = await assemblyScript(id, body.scriptName, prior?.scriptName);
+        const scriptBeats = script ? scriptAssemblyBeats(script.body) : [];
+        if (script && !scriptBeats.length) throw new Error("the selected script has no spoken lines to match");
+        const scriptContract = script
+          ? "\n\nFINAL, NON-NEGOTIABLE ASSEMBLY CONTRACT: This is not a best-parts edit and not a rewrite. Do not choose material for story quality, runtime, screen appearance, or a new beat. For each supplied beatId, locate the place its words are spoken in a source transcript. Use that beatId in the pick; if the words are not recorded, emit exactly one object in gaps with that beatId. Never use a person name or prose in place of beatId. The JSON schema above is the only allowed response — no markdown, analysis, or text after the closing brace."
+          : "";
+        const prompt = `${multiAssemblyPrompt({ sources, notes, script, scriptBeats })}${await globalSkillDirection()}${scriptContract}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the exact script beats, every visible gap, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
         await mkdir(multiAssemblyDir(id), { recursive: true });
         await rm(multiAssemblySelectionPath(id), { force: true });
         await writeFile(join(multiAssemblyDir(id), "multi-clip.prompt.txt"), `${prompt}\n`, "utf8");
-        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), scriptName: script?.name ?? null, picks: prior?.picks ?? [], comments: prior?.comments ?? {} });
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), title: prior?.title ?? "", scriptName: script?.name ?? null, scriptBeats, picks: prior?.picks ?? [], gaps: prior?.gaps ?? [], parked: prior?.parked ?? [], comments: prior?.comments ?? {}, selectionFinalized: false });
         return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "multi-clip assembly" }), project: id } });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -5461,9 +5877,11 @@ async function fetchVoiceList() {
         const prior = await readMultiAssembly(id);
         const sources = await multiAssemblySources(id, body.rels ?? prior?.sources);
         const raw = body.fromFile ? await readFile(multiAssemblySelectionPath(id), "utf8") : JSON.stringify(body.selection ?? {});
-        const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources);
+        const script = await assemblyScript(id, prior?.scriptName);
+        const scriptBeats = script ? scriptAssemblyBeats(script.body) : (prior?.scriptBeats ?? []);
+        const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources, { scriptBeats });
         const comments = prior?.comments ?? {};
-        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: prior?.notes ?? "", picks: checked.picks, comments });
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: prior?.notes ?? "", title: checked.title || prior?.title || "Review cut", scriptName: script?.name ?? null, scriptBeats, picks: checked.picks, gaps: checked.gaps, parked: checked.parked, comments, selectionFinalized: true, reviewApprovedAt: null, hyperframesProject: null });
         return json(res, 200, { state: await readMultiAssembly(id), problems: checked.problems });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -5487,24 +5905,99 @@ async function fetchVoiceList() {
       }
     }
 
+    /* A first cut is editable before it reaches HyperFrames. Removing a pick
+       never touches the source video; script work records an explicit gap so a
+       later pass cannot quietly fill it with an unrelated line. */
+    if (p === "/api/multi-assembly/remove" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        const pickId = String(body.pickId ?? "");
+        const pick = state?.picks?.find((item) => item.id === pickId);
+        if (!pick) throw new Error("that assembly clip is no longer available");
+        const picks = state.picks.filter((item) => item.id !== pickId);
+        const comments = { ...(state.comments ?? {}) };
+        delete comments[pickId];
+        const gaps = [...(state.gaps ?? [])];
+        if (pick.beatId && !gaps.some((gap) => gap.beatId === pick.beatId)) {
+          gaps.push({ beatId: pick.beatId, beat: pick.beat ?? "", speaker: pick.speaker ?? null, reason: "Removed during review" });
+        }
+        const parked = [...(state.parked ?? []), { source: pick.source, inSec: pick.inSec, outSec: pick.outSec, reason: "Removed during review" }];
+        await writeMultiAssembly(id, { ...state, picks, gaps, parked, comments, hyperframesProject: null, reviewApprovedAt: null, selectionFinalized: true });
+        return json(res, 200, { state: await readMultiAssembly(id) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/multi-assembly/build" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
       try {
         const state = await readMultiAssembly(id);
         if (!state?.picks?.length) throw new Error("ask Claude to choose clips first");
-        const files = new Map();
-        for (const rel of state.sources ?? []) files.set(rel, await paperEditMedia(id, rel));
-        const clips = state.picks.map((pick) => ({ path: files.get(pick.source), inSec: pick.inSec, outSec: pick.outSec, reason: pick.reason, label: basename(pick.source) }));
-        if (clips.some((clip) => !clip.path)) throw new Error("one of the selected recordings is no longer in this project");
-        const outDir = join(mediaDir(id), "Renders", "multi-clip-assembly");
-        await mkdir(outDir, { recursive: true });
-        const document = join(outDir, "multi-clip-assembly.openscreen");
-        const doc = cutlistToDocument({ id: `${id}-multi-clip-assembly`, title: "Multi-clip assembly", clips, createdAt: new Date().toISOString() });
-        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-        await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ ...state, document, clips }, null, 2)}\n`, "utf8");
-        await writeMultiAssembly(id, { ...state, document, builtAt: new Date().toISOString() });
-        return json(res, 200, { document, clips: doc.timeline.clips.length, durationSec: doc.timeline.clips.at(-1)?.timelineEndSec ?? 0 });
+        await Promise.all((state.sources ?? []).map((rel) => paperEditMedia(id, rel)));
+        const built = await writeHyperframesAssembly(id, {
+          folder: "multi-clip-assembly",
+          title: state.title || "Review cut",
+          clips: state.picks.map((pick) => ({
+            source: pick.source,
+            mediaStartMs: Number(pick.inSec) * 1000,
+            durationMs: (Number(pick.outSec) - Number(pick.inSec)) * 1000,
+            speaker: pick.speaker,
+          })),
+          metadata: { title: state.title || "Review cut", picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "hard-cut-on-beat" },
+        });
+        await writeMultiAssembly(id, { ...state, hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), reviewApprovedAt: new Date().toISOString() });
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, durationSec: built.durationSec });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /* Reaching HyperFrames is a distinct step from agreeing to create the
+       editable cut. Keep it on disk so returning to Assembly does not put the
+       render action ahead of the first visual review. */
+    if (p === "/api/multi-assembly/opened" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        if (!state?.hyperframesProject) throw new Error("build the review cut before opening it");
+        await writeMultiAssembly(id, { ...state, reviewOpenedAt: new Date().toISOString() });
+        return json(res, 200, { state: await readMultiAssembly(id) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /* A review cut is only useful when it becomes a real project MP4 and a
+       review link. Keep that work in the same background-job surface as the
+       selection pass rather than bouncing somebody through the Console. */
+    if (p === "/api/multi-assembly/render" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        if (!state?.hyperframesProject) throw new Error("build the review cut before rendering it");
+        const outDir = join(mediaDir(id), "Renders", safeName(state.hyperframesProject, "multi-clip-assembly"));
+        const index = join(outDir, "index.html");
+        if (!existsSync(index)) throw new Error("the editable review composition is missing");
+        const renderedVideo = join(outDir, "review-cut.mp4");
+        const renderedRel = relative(mediaDir(id), renderedVideo).split(sep).join("/");
+        await writeMultiAssembly(id, { ...state, renderedVideo, renderedRel, renderRequestedAt: new Date().toISOString() });
+        return json(res, 200, {
+          renderedRel,
+          title: state.title || "Review cut",
+          step: {
+            label: "render review cut",
+            project: id,
+            ...ownStep("rm-render-hyperframes", ["--output", renderedVideo]),
+            cwd: outDir,
+            note: "Checks then renders the branded title, named lower thirds, and selected footage into one MP4 for review.",
+          },
+        });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -5522,22 +6015,16 @@ async function fetchVoiceList() {
       try {
         const prior = await readMultiAssembly(id);
         const sources = await multiAssemblySources(id, body.rels ?? prior?.sources);
-        const clips = sources.map((source) => ({
-          path: source.file,
-          inSec: 0,
-          outSec: Number(source.visual.durationSec),
-          reason: "Full source recording",
-          label: basename(source.rel),
-        }));
-        if (clips.some((clip) => !Number.isFinite(clip.outSec) || clip.outSec <= 0)) throw new Error("screen analysis needs a duration before Studio can stack these recordings");
-        const outDir = join(mediaDir(id), "Renders", "multi-clip-assembly");
-        await mkdir(outDir, { recursive: true });
-        const document = join(outDir, "source-recordings-stack.openscreen");
-        const doc = cutlistToDocument({ id: `${id}-source-recordings-stack`, title: "Source recordings stack", clips, createdAt: new Date().toISOString() });
-        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-        await writeFile(join(outDir, "source-recordings-stack.json"), `${JSON.stringify({ sources: sources.map((source) => source.rel), document, clips }, null, 2)}\n`, "utf8");
-        await writeMultiAssembly(id, { ...prior, version: 1, sources: sources.map((source) => source.rel), document, stackedAt: new Date().toISOString() });
-        return json(res, 200, { document, clips: doc.timeline.clips.length, durationSec: doc.timeline.clips.at(-1)?.timelineEndSec ?? 0 });
+        const clips = sources.map((source) => ({ source: source.rel, mediaStartMs: 0, durationMs: Number(source.visual.durationSec) * 1000 }));
+        if (clips.some((clip) => !Number.isFinite(clip.durationMs) || clip.durationMs <= 0)) throw new Error("screen analysis needs a duration before Studio can stack these recordings");
+        const built = await writeHyperframesAssembly(id, {
+          folder: "source-recordings-stack",
+          title: "Source recordings stack",
+          clips,
+          metadata: { sources: sources.map((source) => source.rel), sourceType: "full-recordings" },
+        });
+        await writeMultiAssembly(id, { ...prior, version: 1, sources: sources.map((source) => source.rel), hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), stackedAt: new Date().toISOString() });
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, durationSec: built.durationSec });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -5603,22 +6090,37 @@ async function fetchVoiceList() {
         const state = await readAudioAlignment(id);
         if (!state?.segments?.length) throw new Error("map the narration to screen moments first");
         const sources = await audioAlignmentSources(id, state.videoRel, state.audioRel);
-        const clips = state.segments.map((segment) => ({ path: sources.video, inSec: segment.screenInSec, outSec: segment.screenOutSec, reason: segment.reason, label: basename(sources.videoRel) }));
+        const clips = state.segments.map((segment) => ({
+          path: sources.video,
+          inSec: segment.screenInSec,
+          outSec: segment.screenOutSec,
+          reason: segment.reason,
+          label: basename(sources.videoRel),
+        }));
         const outDir = join(mediaDir(id), "Renders", "audio-alignment");
         await mkdir(outDir, { recursive: true });
         const stem = `${wpSlug(basename(sources.videoRel, extname(sources.videoRel)))}-aligned-to-${wpSlug(basename(sources.audioRel, extname(sources.audioRel)))}`;
-        const document = join(outDir, `${stem}.openscreen`);
         const renderedVideo = join(outDir, `${stem}.mp4`);
         const alignedAudio = join(outDir, `${stem}.wav`);
-        const doc = cutlistToDocument({ id: `${id}-audio-alignment`, title: "Visual narration alignment", clips, createdAt: new Date().toISOString() });
-        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
         const alignmentFile = join(outDir, "alignment.json");
-        await writeFile(alignmentFile, `${JSON.stringify({ ...state, document, renderedVideo, alignedAudio, clips }, null, 2)}\n`, "utf8");
-        const builtState = { ...state, document, renderedVideo, alignedAudio, builtAt: new Date().toISOString() };
+        await writeFile(alignmentFile, `${JSON.stringify({ ...state, renderedVideo, alignedAudio, clips }, null, 2)}\n`, "utf8");
+        const built = await writeHyperframesAssembly(id, {
+          folder: "audio-alignment",
+          title: "Visual narration alignment",
+          clips: state.segments.map((segment) => ({
+            source: sources.videoRel,
+            mediaStartMs: Number(segment.screenInSec) * 1000,
+            durationMs: (Number(segment.screenOutSec) - Number(segment.screenInSec)) * 1000,
+            audioSource: `source/${sources.audioRel}`,
+            audioStartMs: Number(segment.audioInSec) * 1000,
+          })),
+          metadata: { segments: state.segments, sourceType: "narration-alignment" },
+        });
+        const builtState = { ...state, alignmentFile, hyperframesProject: built.folder, renderedVideo, alignedAudio, builtAt: new Date().toISOString() };
         await writeAudioAlignment(id, builtState);
         return json(res, 200, {
-          document,
-          clips: clips.length,
+          hyperframesProject: built.folder,
+          clips: built.clips,
           ...(await audioAlignmentRenderSteps(id, builtState)),
         });
       } catch (err) {
@@ -5838,6 +6340,59 @@ async function fetchVoiceList() {
         },
       );
       return json(res, 200, { board: next, progress: boardProgress(next) });
+    }
+
+    /*
+     * Let Claude propose the words from one source that fulfil one Canvas shot.
+     *
+     * The recording owns its transcript; the scene owns this proposal. Keeping
+     * those files separate means a person can use one interview take for an
+     * opening and a close without either review overwriting the other.
+     */
+    if (p === "/api/board/suggest" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const slotId = String(body.slotId ?? "");
+      const rel = String(body.rel ?? "");
+      if (!id || !slotId || !rel) return json(res, 400, { error: "choose a canvas scene and a recording first" });
+      try {
+        await paperEditMedia(id, rel);
+        const board = await readBoard(projectDir(id), { projectId: id });
+        const slot = board.slots.find((item) => item.id === slotId);
+        if (!slot) throw new Error("that scene is no longer on the canvas");
+        const source = await paperEditForRecording(id, rel);
+        if (!source?.transcript) throw new Error("transcribe this video before asking Claude to find the scene");
+        const plan = { shots: [{ name: slot.name || "Canvas scene", intent: String(body.intent ?? slot.intent ?? "").trim(), seconds: slot.seconds ?? null }] };
+        const dest = boardSuggestionPath(id, slotId, rel);
+        const prompt = `${buildPaperEditPrompt({ plan, transcript: source.transcript, notes: `This is one Canvas scene. Find only the passage in this source that fulfils: ${slot.intent || slot.name || "the scene brief"}. Do not rewrite, invent footage, or select unrelated words.` })}${await globalSkillDirection()}\n\nThis is the video-from-script selection step. Return the JSON only, and write it to ${dest}. Do not alter the recording, its transcript, or another scene's review.`;
+        await mkdir(paperEditDir(id), { recursive: true });
+        return json(res, 200, { prompt, step: { ...await studioAgentStep({ prompt, cwd: paperEditDir(id), label: `find scene passage ${basename(rel)}` }), project: id } });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/board/suggest/load" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const slotId = String(body.slotId ?? "");
+      const rel = String(body.rel ?? "");
+      if (!id || !slotId || !rel) return json(res, 400, { error: "choose a canvas scene and a recording first" });
+      try {
+        const board = await readBoard(projectDir(id), { projectId: id });
+        const slot = board.slots.find((item) => item.id === slotId);
+        if (!slot) throw new Error("that scene is no longer on the canvas");
+        const source = await paperEditForRecording(id, rel);
+        if (!source?.transcript) throw new Error("this video has no transcript yet");
+        const raw = await readFile(boardSuggestionPath(id, slotId, rel), "utf8");
+        const selection = parseSelection(raw);
+        const plan = { shots: [{ name: slot.name || "Canvas scene", intent: slot.intent ?? "", seconds: slot.seconds ?? null }] };
+        const checked = validateSelection(selection, { transcript: source.transcript, plan });
+        if (!checked.ranges.length) throw new Error(checked.problems[0] ?? "Claude did not find a usable passage for this scene");
+        return json(res, 200, { selection, checked });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
     }
 
     /** Offer a span of a file as a candidate for one slot. */

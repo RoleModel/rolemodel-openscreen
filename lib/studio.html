@@ -380,11 +380,18 @@
             <label class="form-label" for="scene-footage">Footage for this Canvas shot</label>
             <select data-el="footage" id="scene-footage" class="form-control"></select>
             <div class="row">
-               <button data-el="attachFootage" type="button" class="btn btn--small">Attach</button>
+               <button data-el="transcribeFootage" type="button" class="btn btn--small">Transcribe</button>
+               <button data-el="suggestFootage" type="button" class="btn ghost btn--small">Ask Claude to find it</button>
+               <button data-el="attachFootage" type="button" class="btn ghost btn--small">Use whole file</button>
                <button data-el="addFootage" type="button" class="btn ghost btn--small">Add video</button>
                <input data-el="footagePicker" type="file" accept="video/*" hidden />
             </div>
             <div data-el="footageHint" class="form-hint"></div>
+            <section data-el="footageReview" class="scene-footage-review" hidden>
+               <video data-el="footagePlayer" class="scene-footage-review__player" controls playsinline preload="metadata"></video>
+               <div data-el="footageReviewStatus" class="form-hint"></div>
+               <div data-el="footageTranscript" class="scene-footage-review__transcript"></div>
+            </section>
          </div>
       </div>
 

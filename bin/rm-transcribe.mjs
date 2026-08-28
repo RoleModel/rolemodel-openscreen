@@ -8,6 +8,7 @@
  * so the first click may download it, but the second never does.
  */
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -35,7 +36,16 @@ const run = (bin, argv) => new Promise((resolvePromise) => {
 });
 
 const dir = dirname(output);
-const wav = join(dir, ".paper-edit-audio.wav");
+/*
+ * Assembly prepares several recordings at once. A fixed .paper-edit-audio.wav
+ * made those background jobs overwrite one another, so Whisper repeatedly read
+ * the last clip to finish extracting and wrote its words under every source.
+ * Keep every intermediate and output staging file private to this process.
+ */
+const temporaryId = `${process.pid}-${randomUUID()}`;
+const wav = join(dir, `.paper-edit-audio-${temporaryId}.wav`);
+const temporaryBase = join(dir, `.paper-edit-transcript-${temporaryId}`);
+const temporaryVtt = `${temporaryBase}.vtt`;
 const model = join(dirname(dirname(dir)), ".rm-studio", "models", "ggml-base.en.bin");
 const modelUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
 
@@ -57,11 +67,13 @@ try {
   const audio = await run("ffmpeg", ["-y", "-i", input, "-vn", "-ac", "1", "-ar", "16000", wav]);
   if (!audio.ok) die("ffmpeg could not read audio from this recording");
   console.log("Transcribing…");
-  const whisper = await run("whisper-cli", ["-m", model, "-f", wav, "-ovtt", "-of", output.replace(/\.vtt$/i, ""), "-l", language]);
+  const whisper = await run("whisper-cli", ["-m", model, "-f", wav, "-ovtt", "-of", temporaryBase, "-l", language]);
   if (!whisper.ok) die("whisper could not transcribe this recording");
+  await rename(temporaryVtt, output);
   console.log(`Transcript ready: ${output}`);
 } catch (error) {
   die(error.message || String(error));
 } finally {
   await rm(wav, { force: true }).catch(() => {});
+  await rm(temporaryVtt, { force: true }).catch(() => {});
 }

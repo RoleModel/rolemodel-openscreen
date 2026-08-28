@@ -1459,7 +1459,7 @@ how to remove the virtical space around the range input in IE*/
 .projgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
-  gap: var(--op-space-medium);
+  gap: var(--op-space-large);
 }
 
 .projgrid--list {
@@ -1496,15 +1496,15 @@ how to remove the virtical space around the range input in IE*/
   inset: calc(var(--op-border-width-large) * -1);
   z-index: -1;
   pointer-events: none;
-  background: conic-gradient(from calc(var(--gradient-angle) + 335deg), transparent 0deg, var(--op-color-primary-base) 30deg, var(--op-color-academy-primary-base) 60deg, transparent 100deg, transparent 360deg);
+  background: conic-gradient(from calc(var(--gradient-angle) + 335deg), transparent 0deg, var(--op-color-alerts-info-base) 30deg, var(--op-color-academy-primary-base) 60deg, transparent 100deg, transparent 360deg);
   border-radius: inherit;
   opacity: 0;
-  filter: blur(10px);
+  filter: blur(8px);
   transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1);
   animation: gradient-spin 3s linear infinite;
 }
 
-.projcard:not(.projcard--new)::before {
+.projgrid .projcard:not(.projcard--new)::before {
   content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
   position: absolute;
   z-index: 0;
@@ -2503,6 +2503,32 @@ button.usage-run:focus-visible {
   background: var(--bg);
 }
 
+/* HyperFrames is hosted by Studio, so the rail, page chrome, spacing and
+   surrounding workbench all keep the same Optics tokens as every other view. */
+.hyperframes-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--op-space-small);
+  block-size: var(--frame-h);
+  min-block-size: var(--frame-h);
+}
+
+.hyperframes-workspace__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--op-space-small);
+}
+
+.hyperframes-workspace__frame {
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--op-color-neutral-plus-two);
+}
+
 /* A command to copy, not output to read. */
 .cmd-note {
   margin-block-start: var(--op-space-medium);
@@ -2907,6 +2933,9 @@ textarea.form-control.script-body {
   position: relative;
   min-block-size: 3.2rem;
   padding-inline-end: calc(3.2rem + var(--op-space-small));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  place-content: space-between;
 }
 
 .project-head > .lede {
@@ -2939,8 +2968,8 @@ textarea.form-control.script-body {
 .kebab__trigger {
   display: grid;
   place-items: center;
-  inline-size: 3.2rem;
-  block-size: 3.2rem;
+  inline-size: var(--op-input-height-medium);
+  block-size: var(--op-input-height-medium);
   padding: 0;
   background: var(--op-color-neutral-plus-max);
   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
@@ -3779,7 +3808,7 @@ textarea.fills.form-control {
 .multi-assembly__sources {
   display: grid;
   gap: var(--op-space-2x-small);
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
   margin-block: var(--op-space-small);
 }
 
@@ -3842,6 +3871,14 @@ textarea.fills.form-control {
   color: var(--accent);
 }
 
+.multi-assembly__source-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+  justify-content: space-between;
+}
+
 .multi-assembly__setup {
   display: grid;
   gap: var(--op-space-small);
@@ -3854,9 +3891,11 @@ textarea.fills.form-control {
 }
 
 .multi-assembly__align {
-  border-block: 1px solid var(--line);
+  background-color: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
   margin-block: var(--op-space-medium);
-  padding-block: var(--op-space-small);
+  padding: var(--op-space-small);
 }
 
 .multi-assembly__align summary {
@@ -3880,6 +3919,8 @@ textarea.fills.form-control {
 
 .multi-assembly__review {
   margin-block-start: var(--op-space-large);
+  display: grid;
+  gap: var(--op-space-small);
 }
 
 .multi-assembly__alignment-review {
@@ -3986,13 +4027,104 @@ textarea.fills.form-control {
   margin: 0;
 }
 
-.multi-assembly__picks {
-  display: grid;
-  gap: var(--op-space-small);
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+.multi-assembly__script-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-3x-small);
+  margin-block-start: var(--op-space-x-small);
 }
 
-.multi-assembly__pick {
+.multi-assembly__script-beat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  max-inline-size: 20rem;
+  overflow: hidden;
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-assembly__script-beat--matched {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.multi-assembly__script-beat--missing {
+  color: var(--danger-fg);
+}
+
+.multi-assembly__script-gaps {
+  color: var(--danger-fg);
+  display: grid;
+  gap: var(--op-space-3x-small);
+  margin-block: var(--op-space-small) 0;
+  padding-inline-start: var(--op-space-medium);
+}
+
+.multi-assembly__review-surface {
+  display: grid;
+  gap: var(--op-space-small);
+}
+
+.multi-assembly__timeline {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
+  overflow-x: auto;
+  padding-block-end: var(--op-space-3x-small);
+}
+
+.multi-assembly__timeline-pick {
+  align-items: start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  flex: var(--assembly-pick-duration) 1 9rem;
+  gap: var(--op-space-3x-small);
+  min-inline-size: 9rem;
+  padding: var(--op-space-x-small);
+  text-align: start;
+}
+
+.multi-assembly__timeline-pick:hover,
+.multi-assembly__timeline-pick:focus-visible,
+.multi-assembly__timeline-pick--active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.multi-assembly__timeline-number,
+.multi-assembly__timeline-time {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.multi-assembly__timeline-label {
+  font-size: var(--op-font-x-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-assembly__review-body {
+  align-items: start;
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+}
+
+.multi-assembly__stage {
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--op-radius-medium);
   display: grid;
@@ -4001,35 +4133,142 @@ textarea.fills.form-control {
   padding: var(--op-space-x-small);
 }
 
-.multi-assembly__pick-video {
+.multi-assembly__review-player {
   aspect-ratio: 16 / 9;
   background: var(--op-color-neutral-plus-max);
   border-radius: calc(var(--op-radius-medium) - var(--op-space-3x-small));
   inline-size: 100%;
-  object-fit: cover;
-  outline: 1px solid oklch(1 0 0 / 0.1);
+  object-fit: contain;
 }
 
-.multi-assembly__pick-title {
-  font-size: var(--op-font-x-small);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--op-font-weight-semi-bold);
-}
-
-.multi-assembly__pick-reason {
-  color: var(--muted);
-  font-size: var(--op-font-x-small);
+.multi-assembly__selected-label,
+.multi-assembly__selected-text,
+.multi-assembly__selected-reason {
   margin: 0;
 }
 
-.multi-assembly__pick-transcript {
+.multi-assembly__selected-label {
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.multi-assembly__selected-text {
   font-size: var(--op-font-x-small);
   line-height: 1.45;
-  margin: 0;
+}
+
+.multi-assembly__selected-reason {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  line-height: 1.45;
+}
+
+.multi-assembly__transcript {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-block-size: 32rem;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.multi-assembly__transcript-head {
+  align-items: baseline;
+  border-block-end: 1px solid var(--line);
+  display: flex;
+  gap: var(--op-space-x-small);
+  justify-content: space-between;
+  padding: var(--op-space-x-small);
+}
+
+.multi-assembly__transcript-head strong {
+  font-size: var(--op-font-x-small);
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-assembly__transcript-hint {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  white-space: nowrap;
+}
+
+.multi-assembly__transcript-lines {
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+.multi-assembly__transcript-line {
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  border-block-end: 1px solid var(--line);
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: var(--op-space-x-small);
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  inline-size: 100%;
+  padding: var(--op-space-x-small);
+  text-align: start;
+}
+
+.multi-assembly__transcript-line:last-child {
+  border-block-end: 0;
+}
+
+.multi-assembly__transcript-line time {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.multi-assembly__transcript-copy {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-3x-small);
+  font-size: var(--op-font-x-small);
+  line-height: 1.45;
+}
+
+.multi-assembly__transcript-line--selected {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.multi-assembly__transcript-line--playing {
+  box-shadow: inset 7px 0 0 var(--accent);
+}
+
+.multi-assembly__selection-badge {
+  background: var(--accent);
+  border-radius: var(--op-radius-small);
+  color: var(--op-color-neutral-plus-max);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem var(--op-space-3x-small);
+  text-transform: uppercase;
 }
 
 .multi-assembly__comment {
   min-block-size: 4.5rem;
+}
+
+@media (max-width: 56rem) {
+  .multi-assembly__review-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .multi-assembly__transcript {
+    max-block-size: 20rem;
+  }
 }
 
 .paper-edit {
@@ -4039,7 +4278,7 @@ textarea.fills.form-control {
   display: grid;
   gap: 0;
   grid-template-columns: minmax(18rem, var(--paper-edit-transcript-width, 26rem)) 0.5rem minmax(0, 1fr);
-  min-block-size: calc(100dvh - 12rem);
+  block-size: calc(80dvh - 12rem);
   overflow: hidden;
 }
 
@@ -4890,6 +5129,78 @@ textarea.fills.form-control {
 .board-scene__media h3 {
   margin: 0;
   font-size: var(--op-font-medium);
+}
+
+/* Footage belongs to the canvas scene it fulfils. Keep the picture and its
+   transcript together here, rather than asking people to leave Canvas, make an
+   unscoped paper edit, then remember which shot it was for. */
+.board-scene__review {
+  display: grid;
+  gap: var(--op-space-small);
+  padding-block-start: var(--op-space-medium);
+  border-block-start: var(--op-border-width) solid var(--line);
+}
+
+.board-scene__review h3 {
+  margin: 0;
+  font-size: var(--op-font-medium);
+}
+
+.board-scene__player {
+  background: var(--op-color-background);
+  border-radius: var(--op-radius-medium);
+  inline-size: 100%;
+  max-block-size: 26rem;
+}
+
+.board-scene__review-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+  justify-content: space-between;
+}
+
+.board-scene__lines {
+  max-block-size: 24rem;
+}
+
+/* The real scene editor is also the footage-review surface for a Canvas node.
+   The stage stays put while the rail answers the next question: which spoken
+   passage actually fulfils this scene? */
+.scene-footage-review {
+  display: grid;
+  gap: var(--op-space-small);
+  margin-block-start: var(--op-space-small);
+}
+
+.scene-footage-review__player {
+  background: var(--op-color-background);
+  border-radius: var(--op-radius-medium);
+  inline-size: 100%;
+  max-block-size: 18rem;
+}
+
+.scene-footage-review__suggestions,
+.scene-footage-review__manual {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.scene-footage-review__suggestion {
+  align-items: start;
+  display: grid;
+  gap: var(--op-space-2x-small);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.scene-footage-review__suggestion span {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+}
+
+.scene-footage-review__lines {
+  max-block-size: 20rem;
 }
 
 .board__take-span {

@@ -8,6 +8,7 @@
   "bin": {
     "rm-align-audio": "./bin/rm-align-audio.mjs",
     "rm-render-alignment": "./bin/rm-render-alignment.mjs",
+    "rm-render-hyperframes": "./bin/rm-render-hyperframes.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-insert": "./bin/rm-insert.mjs",

@@ -23,6 +23,9 @@ jobs:
       # and Studio host files that the toolkit actually targets. Keep the ref
       # stable so a tag cannot turn red because the fork's main moved later.
       OPENSCREEN_REF: v0.0.2
+      # setup-node records this placeholder in the npm config. It must outlive
+      # install because every later pnpm command parses the same config.
+      NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v6
@@ -37,8 +40,6 @@ jobs:
       # The generated Optics files are checked below, so the private package
       # that generated them must be available to the release runner too.
       - run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
 
       # The presets are a patch onto OpenScreen's typed document. Check them
       # against the real thing before shipping a tag — a drifted field name
