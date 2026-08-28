@@ -5503,6 +5503,39 @@ async function fetchVoiceList() {
       }
     }
 
+    /*
+     * A useful fallback when an AI pass is not good enough: put the chosen
+     * recordings in order as whole clips. This is deliberately separate from
+     * the AI build above — it preserves all source material and gives the
+     * editor a concrete starting point without pretending Claude made picks.
+     */
+    if (p === "/api/multi-assembly/stack" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const prior = await readMultiAssembly(id);
+        const sources = await multiAssemblySources(id, body.rels ?? prior?.sources);
+        const clips = sources.map((source) => ({
+          path: source.file,
+          inSec: 0,
+          outSec: Number(source.visual.durationSec),
+          reason: "Full source recording",
+          label: basename(source.rel),
+        }));
+        if (clips.some((clip) => !Number.isFinite(clip.outSec) || clip.outSec <= 0)) throw new Error("screen analysis needs a duration before Studio can stack these recordings");
+        const outDir = join(mediaDir(id), "Renders", "multi-clip-assembly");
+        await mkdir(outDir, { recursive: true });
+        const document = join(outDir, "source-recordings-stack.openscreen");
+        const doc = cutlistToDocument({ id: `${id}-source-recordings-stack`, title: "Source recordings stack", clips, createdAt: new Date().toISOString() });
+        await writeFile(document, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+        await writeFile(join(outDir, "source-recordings-stack.json"), `${JSON.stringify({ sources: sources.map((source) => source.rel), document, clips }, null, 2)}\n`, "utf8");
+        await writeMultiAssembly(id, { ...prior, version: 1, sources: sources.map((source) => source.rel), document, stackedAt: new Date().toISOString() });
+        return json(res, 200, { document, clips: doc.timeline.clips.length, durationSec: doc.timeline.clips.at(-1)?.timelineEndSec ?? 0 });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/multi-assembly/audio-align/prepare" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
