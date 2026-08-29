@@ -1987,6 +1987,11 @@ pre {
  * columns now — main, the rail, the footer — so the preview is simply as wide as
  * the column it is in.
  */
+ 
+ .wpprev {
+  margin-block-end: var(--op-space-medium)
+ }
+ 
 .wpprev canvas {
   width: 100%;
   height: auto;

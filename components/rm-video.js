@@ -1116,6 +1116,7 @@ const STUDY_H = 860
 
 const sClamp = (v, min, max) => Math.max(min, Math.min(max, v))
 const sMix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+
 const sSmooth = (e0, e1, v) => { const t = sClamp((v - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t) }
 const sEaseIn = (t) => t * t * t
 const sEaseOut = (t) => 1 - (1 - t) ** 4
@@ -1169,6 +1170,10 @@ const sRgba = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a.toFixed
 
 /* The soft colour wash under the dots. */
 function sPaintWash(ctx, w, h, st, pal) {
+  // How much of the soft glow is laid over the frame. The sheet ran this at
+  // full strength on a page of small cards; across a whole 16:9 frame the same
+  // wash covers everything and the halftone underneath stops reading.
+  const haze = st.haze
   const soft = (cx, cy, rx, ry, color, alpha) => {
     ctx.save(); ctx.translate(cx, cy); ctx.scale(rx, ry)
     const g = ctx.createRadialGradient(0, 0, 0.08, 0, 0, 1)
@@ -1180,15 +1185,15 @@ function sPaintWash(ctx, w, h, st, pal) {
   ctx.save()
   ctx.globalCompositeOperation = 'screen'
   ctx.filter = `blur(${28 + st.blend * 18}px)`
-  soft(st.massAX * w, st.massAY * h, w * (0.32 + st.blend * 0.08), h * 0.42, pal.green, 0.17 + st.blend * 0.08)
-  soft(st.massBX * w, st.massBY * h, w * 0.3, h * (0.4 + st.blend * 0.06), pal.cyan, 0.14 + st.blend * 0.07)
-  soft(st.massCX * w, st.massCY * h, w * 0.46, h * 0.2, pal.amber, 0.08 + st.blend * 0.04)
+  soft(st.massAX * w, st.massAY * h, w * (0.32 + st.blend * 0.08), h * 0.42, pal.green, (0.17 + st.blend * 0.08) * haze)
+  soft(st.massBX * w, st.massBY * h, w * 0.3, h * (0.4 + st.blend * 0.06), pal.cyan, (0.14 + st.blend * 0.07) * haze)
+  soft(st.massCX * w, st.massCY * h, w * 0.46, h * 0.2, pal.amber, (0.08 + st.blend * 0.04) * haze)
   const ribbonY = h * (0.5 + Math.sin(st.phase * 0.72) * 0.16)
   const ribbon = ctx.createLinearGradient(0, 0, w, 0)
   ribbon.addColorStop(0, sRgba(pal.green, 0))
-  ribbon.addColorStop(0.28, sRgba(pal.green, 0.11 + st.blend * 0.04))
-  ribbon.addColorStop(0.58, sRgba(pal.cyan, 0.12 + st.blend * 0.05))
-  ribbon.addColorStop(0.86, sRgba(pal.amber, 0.06 + st.blend * 0.03))
+  ribbon.addColorStop(0.28, sRgba(pal.green, (0.11 + st.blend * 0.04) * haze))
+  ribbon.addColorStop(0.58, sRgba(pal.cyan, (0.12 + st.blend * 0.05) * haze))
+  ribbon.addColorStop(0.86, sRgba(pal.amber, (0.06 + st.blend * 0.03) * haze))
   ribbon.addColorStop(1, sRgba(pal.cyan, 0))
   ctx.strokeStyle = ribbon
   ctx.lineWidth = h * (0.18 + st.blend * 0.08)
@@ -1244,15 +1249,17 @@ function sDrawField(ctx, w, h, st, pal) {
   }
 
   if (st.blend > 0.01) {
-    ctx.fillStyle = sRgba(pal.green, 0.08 * st.blend)
+    ctx.fillStyle = sRgba(pal.green, 0.08 * st.blend * st.haze)
     ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = sRgba(pal.cyan, 0.07 * st.blend)
+    ctx.fillStyle = sRgba(pal.cyan, 0.07 * st.blend * st.haze)
     ctx.fillRect(w * 0.18, 0, w * 0.82, h)
   }
+  // The vignette rides the same control: at full haze it is the sheet's, and at
+  // zero the centre is left alone entirely rather than veiled by a flat 8%.
   const vig = ctx.createRadialGradient(cx, cy, h * 0.04, cx, cy, maxD * 0.92)
-  vig.addColorStop(0, 'rgba(0,0,0,0.08)')
-  vig.addColorStop(0.5, 'rgba(0,0,0,0.03)')
-  vig.addColorStop(1, 'rgba(0,0,0,0.44)')
+  vig.addColorStop(0, `rgba(0,0,0,${(0.08 * st.haze).toFixed(3)})`)
+  vig.addColorStop(0.5, `rgba(0,0,0,${(0.03 * st.haze).toFixed(3)})`)
+  vig.addColorStop(1, `rgba(0,0,0,${(0.16 + 0.28 * st.haze).toFixed(3)})`)
   ctx.fillStyle = vig
   ctx.fillRect(0, 0, w, h)
 }
@@ -1278,7 +1285,7 @@ function sMotion(mode, time, phase) {
   const cycle = (time % 5.2) / 5.2
   const breakCycle = (time % 4.8) / 4.8
   const m = {
-    swell: 0, blend: 0, hue: 0, sat: 1.12, fgBlur: 0, cutDrag: 0, cutBoost: 0,
+    swell: 0, blend: 0, hue: 0, sat: 1.12, fgBlur: 0, cutDrag: 0, cutBoost: 0, haze: 1,
     plateX: Math.sin(slow * Math.PI * 2) * 54,
     plateY: Math.cos(slow * Math.PI * 2 + 0.8) * 14,
     plateScale: 1.04, slow, cycle,
@@ -1373,6 +1380,7 @@ function sState(m, mode) {
     shapeScale: 0.24 + m.swell * 0.82,
     ribbonScale: 0.06 + m.swell * 0.18,
     blend: m.blend,
+    haze: m.haze,
     ribbon: m.slow * 0.82 + m.plateX / 900,
     massAX: -0.28 + ((m.slow * 0.46) % 1.56),
     massAY: 0.42 + Math.sin(m.slow * Math.PI * 0.9) * 0.16,
@@ -1487,7 +1495,7 @@ const fieldStyle = (el) => {
  * other component, the way you would over footage.
  */
 class RMStudyField extends RMElement {
-  static fields = ['mode', 'phase', 'bloom', 'eyebrow', 'title', 'body', 'size', 'x', 'y', 'align', 'ground', 'paper', 'green', 'cyan', 'amber', 'at', 'for']
+  static fields = ['mode', 'phase', 'bloom', 'haze', 'eyebrow', 'title', 'body', 'size', 'x', 'y', 'align', 'ground', 'paper', 'green', 'cyan', 'amber', 'at', 'for']
 
   disconnectedCallback() { this._dispose?.(); this._dispose = null }
 
@@ -1530,6 +1538,8 @@ class RMStudyField extends RMElement {
       const time = Math.max(0, RM.t - (Number(this.attr('at', 0)) || 0)) / 1000
       const m = sMotion(mode, time, Number.isFinite(phase) ? phase : 1.4)
       if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
+      const haze = Number(this.attr('haze', ''))
+      if (Number.isFinite(haze)) m.haze = sClamp(haze, 0, 1)
       canvas.style.transform = `translate(calc(-50% + ${m.plateX}px), calc(-50% + ${m.plateY}px)) scale(${m.plateScale})`
       canvas.style.filter = `hue-rotate(${m.hue}deg) saturate(${m.sat}) blur(${m.fgBlur}px)`
       sDrawField(ctx, STUDY_W, STUDY_H, sState(m, mode), pal)
