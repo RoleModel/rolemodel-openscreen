@@ -1853,6 +1853,19 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
     const lowerThird = clip.speaker && !hasCanvasScene
       ? `    <aside class="clip assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span class="assembly-lower-third__name">${hf(clip.speaker)}</span>${clip.role ? `<span class="assembly-lower-third__role">${hf(clip.role)}</span>` : ""}</aside>`
       : "";
+    /*
+     * preload="metadata", not "auto".
+     *
+     * "auto" asks the browser to fetch each file in full before anything is
+     * played. A cut is a handful of camera-original takes — half a gigabyte at
+     * 30 Mbps is ordinary — and every clip plus every dissolve tail is its own
+     * element, so opening a composition meant downloading all of it up front and
+     * the editor sat there. Metadata gets duration and dimensions, and the
+     * browser range-requests the rest as it seeks.
+     *
+     * Safe for rendering: frames come from ffmpeg extraction, not from the
+     * browser's buffered video, so what the renderer produces does not change.
+     */
     /* Keep the real video as a direct timed child. HyperFrames uses that timing
        to seek the source frame and to keep its native audio attached while a
        person trims the clip. Canvas components are staged together in one
@@ -1882,7 +1895,7 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
       tweens.push(`      tl.to('#${id}', { opacity: 0, duration: ${hfSeconds(fadeOutMs)}, ease: 'none' }, ${hfSeconds(cursor + duration - fadeOutMs)});`);
     }
     const canvasScene = source
-      ? `    <video id="${id}" data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`
+      ? `    <video id="${id}" data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="metadata"></video>`
       : "";
     /*
      * The dissolve is carried by a muted clone of the outgoing clip.
@@ -1910,7 +1923,7 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
     const handleMs = sourceMs ? sourceMs - ((Number(clip.mediaStartMs) || 0) + duration) : 0;
     const dissolveMs = handleMs >= defaultDissolveDuration(clip, next) ? defaultDissolveDuration(clip, next) : 0;
     const dissolveTail = dissolveMs && source && next?.source
-      ? `    <video id="${id}-tail" data-assembly-dissolve-tail src="${hf(source)}" data-start="${hfSeconds(cursor + duration)}" data-duration="${hfSeconds(dissolveMs)}" data-media-start="${hfSeconds((Number(clip.mediaStartMs) || 0) + duration)}" data-track-index="0" muted playsinline preload="auto"></video>`
+      ? `    <video id="${id}-tail" data-assembly-dissolve-tail src="${hf(source)}" data-start="${hfSeconds(cursor + duration)}" data-duration="${hfSeconds(dissolveMs)}" data-media-start="${hfSeconds((Number(clip.mediaStartMs) || 0) + duration)}" data-track-index="0" muted playsinline preload="metadata"></video>`
       : "";
     if (dissolveTail) {
       tweens.push(`      tl.fromTo('#clip-${String(index + 2).padStart(2, "0")}', { opacity: 0 }, { opacity: 1, duration: ${hfSeconds(dissolveMs)}, ease: 'none' }, ${hfSeconds(cursor + duration)});`);
