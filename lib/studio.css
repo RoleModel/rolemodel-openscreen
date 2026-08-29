@@ -1667,6 +1667,42 @@ how to remove the virtical space around the range input in IE*/
   position: relative;
 }
 
+/*
+ * Watch a clip on its own tile.
+ *
+ * Centred on the thumbnail rather than tucked in a corner: it is the primary
+ * thing you can do to a piece of footage you are only looking at, and a 24px
+ * target in a corner is a miss on a trackpad. The scrim is the same one the kind
+ * pill uses, so the glyph stays readable over a bright frame.
+ */
+.thumbwrap__play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: calc(var(--op-size-unit) * 18);
+  block-size: calc(var(--op-size-unit) * 13);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: var(--op-border-width) solid var(--line);
+  /* A rounded rectangle, the shape of a player's own play button — and not a
+     circle, which the design system reserves for status dots and the
+     new-project tile. */
+  border-radius: var(--op-radius-x-large);
+  background: var(--scrim);
+  color: var(--fg);
+  font-size: var(--op-font-2x-large);
+  cursor: pointer;
+}
+
+.thumbwrap__play:hover,
+.thumbwrap__play:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+
+
 .client {
   font-size: var(--op-font-small);
   text-transform: uppercase;
@@ -2683,6 +2719,26 @@ textarea.form-control.script-body {
 .projmenu__trigger:hover,
 .projmenu__trigger[aria-expanded='true'] {
   border-color: var(--op-color-neutral-plus-three);
+}
+
+/*
+ * The stage control is a breadcrumb, not a button.
+ *
+ * It behaves exactly like the project switcher — same menu, same keyboard, same
+ * editor clearance — but it sits at the end of the trail where a plain word used
+ * to be, so the chrome comes off. Only the caret and the hover colour say it
+ * opens onto anything.
+ */
+.projmenu--stage .projmenu__trigger {
+  padding-inline: 0;
+  background: none;
+  border-color: transparent;
+}
+
+.projmenu--stage .projmenu__trigger:hover,
+.projmenu--stage .projmenu__trigger[aria-expanded='true'] {
+  border-color: transparent;
+  color: var(--accent);
 }
 
 .projmenu__mark {
@@ -5526,6 +5582,63 @@ textarea.form-control.board__brief {
 }
 
 /* One small decision beside the asset it changes. */
+/*
+ * A clip at the size you judge it at.
+ *
+ * Nearly the whole window, because the point is to watch it — a player boxed
+ * into a card tells you a video exists and nothing about whether it is good.
+ * The frame is capped at the video's own aspect so a 16:9 render does not get
+ * letterboxed inside a letterbox.
+ */
+.player {
+  max-inline-size: none;
+  max-block-size: none;
+  inline-size: 100vw;
+  block-size: 100dvh;
+  padding: var(--op-space-large);
+  border: 0;
+  background: none;
+}
+
+.player::backdrop {
+  background: color-mix(in srgb, var(--op-color-black) 88%, transparent);
+}
+
+.player__frame {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--op-space-x-small);
+  block-size: 100%;
+  margin: auto;
+  max-inline-size: calc(100dvh * 16 / 9);
+}
+
+.player__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--op-space-small);
+  color: var(--fg);
+}
+
+.player__name {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player__video {
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  border-radius: var(--op-radius-medium);
+  background: var(--op-color-black);
+  object-fit: contain;
+}
+
 .move-asset {
   background: var(--panel);
   border: var(--op-border-width) solid var(--line);

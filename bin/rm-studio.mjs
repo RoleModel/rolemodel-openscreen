@@ -1523,12 +1523,40 @@ const hf = (value) => String(value ?? "")
 
 const hfSeconds = (milliseconds) => (Math.max(0, Math.round(Number(milliseconds) || 0)) / 1000).toFixed(3);
 
+/*
+ * `source/` reaches the project's footage without reaching itself.
+ *
+ * This used to be one symlink at media/ — and the assembly folder lives inside
+ * media/Renders/, so the link contained its own parent:
+ *
+ *   media/Renders/<cut>/source/Renders/<cut>/source/Renders/<cut>/...
+ *
+ * Nothing errored, because a symlink loop is only a problem for whatever walks
+ * it. Everything that does — find, du, Spotlight, Time Machine, a recursive
+ * copy — recursed until the path outgrew PATH_MAX, nineteen levels down in the
+ * project this was found in.
+ *
+ * So the media folders are linked one by one and Renders is skipped, which is
+ * the only one that can contain this directory. `source/Footage/clip.mp4` still
+ * resolves exactly as before, so no composition needs rewriting.
+ */
 async function linkHyperframesProjectMedia(id, outDir) {
   const link = join(outDir, "source");
   const existing = await lstat(link).catch(() => null);
-  if (existing?.isSymbolicLink()) return;
-  if (existing) throw new Error("the HyperFrames assembly has a non-media source folder");
-  await symlink(mediaDir(id), link, "dir");
+  // An old whole-media symlink is the loop. Replace it rather than leave it.
+  if (existing?.isSymbolicLink()) await rm(link, { force: true });
+  else if (existing && !existing.isDirectory()) {
+    throw new Error("the HyperFrames assembly has a non-media source folder");
+  }
+  await mkdir(link, { recursive: true });
+  const media = mediaDir(id);
+  for (const entry of await readdir(media, { withFileTypes: true }).catch(() => [])) {
+    // Renders holds this very folder; linking it is what made the loop.
+    if (!entry.isDirectory() || entry.name === "Renders") continue;
+    const dest = join(link, entry.name);
+    if (await lstat(dest).catch(() => null)) continue;
+    await symlink(join(media, entry.name), dest, "dir");
+  }
 }
 
 /*
@@ -1694,20 +1722,37 @@ function firstCutTitleScene({ name, eyebrow, title, sub = "", durationMs = 2600 
 
 /*
  * A rough cut needs punctuation, not a flash on every sentence.  Keep a calm
- * fade-through for true scene changes (speaker/source/card changes) and leave
- * consecutive selects from the same take as straight edits.  That means audio
- * stays attached to its source clip and does not smear across a transition.
+ * cross-dissolve for true scene changes (speaker/source/card changes) and leave
+ * consecutive selects from the same take as straight edits.
+ *
+ * This was a wash through black, and it was wrong twice over. It dipped to the
+ * ground between two shots, which reads as "the video stopped" rather than as a
+ * transition — and it was driven by a CSS animation keyed off --t, which the
+ * renderer never seeks, so in a render it only ever flashed. Both faults are
+ * gone: the picture now dissolves, driven by GSAP, which is the animation the
+ * renderer actually drives.
+ *
+ * Audio still does not smear across the boundary, and that is deliberate rather
+ * than a limitation we settled for. A clip's native audio is intrinsically bound
+ * to its video element (see hasReplacementAudio below), so lengthening a clip to
+ * overlap the next one would also overlap its sound — and HyperFrames' audio
+ * graph has no fade primitive (atrim/adelay/amix/apad and a static volume=), so
+ * the two takes would mix at full gain and talk over each other. The dissolve is
+ * therefore carried by a muted tail clone, leaving each clip's own audio to end
+ * exactly where it always did. Between two speakers, a clean audio cut under a
+ * dissolving picture is the ordinary convention anyway.
  */
-const DEFAULT_FADE_THROUGH_MS = 600;
+/* 800ms, not 600. Long enough to read as a dissolve rather than a soft cut. */
+const DEFAULT_DISSOLVE_MS = 800;
 const isAssemblySceneBoundary = (current, next) => {
   if (!current || !next) return false;
   if (!current.source || !next.source) return true;
   return current.source !== next.source
     || String(current.speaker ?? "").trim() !== String(next.speaker ?? "").trim();
 };
-const defaultFadeThroughDuration = (current, next) => isAssemblySceneBoundary(current, next)
-  && Math.min(Number(current.durationMs) || 0, Number(next.durationMs) || 0) >= DEFAULT_FADE_THROUGH_MS
-  ? DEFAULT_FADE_THROUGH_MS
+const defaultDissolveDuration = (current, next) => isAssemblySceneBoundary(current, next)
+  && Math.min(Number(current.durationMs) || 0, Number(next.durationMs) || 0) >= DEFAULT_DISSOLVE_MS
+  ? DEFAULT_DISSOLVE_MS
   : 0;
 
 /* `stageRenderAssets` deliberately provides a standalone title-card starter for
@@ -1748,14 +1793,14 @@ async function isolateStandaloneTitleCard(outDir) {
   return true;
 }
 
-function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock = null, showAssemblyTitle = true, width = 1920, height = 1080, fps = 30 }) {
+function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock = null, showAssemblyTitle = true, width = 1920, height = 1080, fps = 30, sourceDurations = {} }) {
   const titleDuration = showAssemblyTitle && title ? 1800 : 0;
   let cursor = titleDuration;
   const hasCanvasScenes = clips.some((clip) => typeof clip.scene?.body === "string" && clip.scene.body.trim());
   const canvasRuntime = hasCanvasScenes ? '<script type="module" src="assets/canvas-components/rm-video.js"></script>' : "";
   const canvasSceneBodies = [];
   const canvasTimelineComponents = [];
-  const transitions = [];
+  const tweens = [];
   const media = clips.map((clip, index) => {
     const duration = Math.max(100, Math.round(Number(clip.durationMs) || 0));
     const start = hfSeconds(cursor);
@@ -1802,24 +1847,50 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
      */
     const nextIsTitleCard = Boolean(next && !next.source && /<rm-title\b/i.test(String(next.scene?.body ?? "")));
     const fadeOutMs = nextIsTitleCard ? Math.min(600, Math.max(200, Math.round(duration / 4))) : 0;
-    const fadeOut = fadeOutMs
-      ? ` class="assembly-fade-out" style="--assembly-fade-out-start:${Math.round(cursor + duration - fadeOutMs)}ms; --assembly-fade-out-duration:${fadeOutMs}ms"`
-      : "";
+    if (fadeOutMs && source) {
+      tweens.push(`      tl.to('#${id}', { opacity: 0, duration: ${hfSeconds(fadeOutMs)}, ease: 'none' }, ${hfSeconds(cursor + duration - fadeOutMs)});`);
+    }
     const canvasScene = source
-      ? `    <video id="${id}"${fadeOut} data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`
+      ? `    <video id="${id}" data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`
       : "";
-    const transitionDuration = defaultFadeThroughDuration(clip, next);
-    if (transitionDuration) {
-      const boundaryMs = cursor + duration;
-      const transitionStartMs = Math.max(0, boundaryMs - transitionDuration / 2);
-      transitions.push(`    <div id="fade-through-${String(index + 1).padStart(2, "0")}" class="clip assembly-transition assembly-transition--fade-through" data-assembly-transition="fade-through" data-start="${hfSeconds(transitionStartMs)}" data-duration="${hfSeconds(transitionDuration)}" data-track-index="${clips.length + 5}" data-wash="dark" data-strength="0.72" style="--assembly-transition-start:${Math.round(transitionStartMs)}ms; --assembly-transition-duration:${transitionDuration}ms" aria-label="Fade through transition"></div>`);
+    /*
+     * The dissolve is carried by a muted clone of the outgoing clip.
+     *
+     * The real clip still ends on its own out point, so its audio cuts there and
+     * nothing mixes. This clone picks the picture up at that instant and holds it
+     * for the length of the dissolve while the incoming clip fades in over the
+     * top — the incoming video is later in the document and shares its z-index,
+     * so it already paints above without any stacking games.
+     *
+     * It plays the frames that follow the cut, so it needs that much handle left
+     * in the source. Where the take runs out the clone simply holds its last
+     * frame for the remainder, which is invisible underneath an incoming picture
+     * that is already most of the way in.
+     */
+    /*
+     * A dissolve needs handle: frames in the take beyond the clip's out point.
+     * Where a clip was cut to the last frame of its source there are none, and a
+     * tail asking for them fails the renderer's frame-coverage gate outright — a
+     * render that aborts, or worse one that ships the clip blank. Measure first
+     * and leave those boundaries as straight cuts; an honest cut beats a
+     * transition that cannot be filled.
+     */
+    const sourceMs = Number(sourceDurations[clip.source]) || 0;
+    const handleMs = sourceMs ? sourceMs - ((Number(clip.mediaStartMs) || 0) + duration) : 0;
+    const dissolveMs = handleMs >= defaultDissolveDuration(clip, next) ? defaultDissolveDuration(clip, next) : 0;
+    const dissolveTail = dissolveMs && source && next?.source
+      ? `    <video id="${id}-tail" data-assembly-dissolve-tail src="${hf(source)}" data-start="${hfSeconds(cursor + duration)}" data-duration="${hfSeconds(dissolveMs)}" data-media-start="${hfSeconds((Number(clip.mediaStartMs) || 0) + duration)}" data-track-index="0" muted playsinline preload="auto"></video>`
+      : "";
+    if (dissolveTail) {
+      tweens.push(`      tl.fromTo('#clip-${String(index + 2).padStart(2, "0")}', { opacity: 0 }, { opacity: 1, duration: ${hfSeconds(dissolveMs)}, ease: 'none' }, ${hfSeconds(cursor + duration)});`);
     }
     cursor += duration;
     return [
       canvasScene,
+      dissolveTail,
       audio,
       lowerThird,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
   }).join("\n");
   const canvasOverlay = canvasSceneBodies.length
     ? `    <rm-scene id="canvas-scene-overlays" class="assembly-canvas-overlays" assets="assets/imagery">
@@ -1845,7 +1916,9 @@ ${canvasSceneBodies.join("\n")}
   const canvasClockTrack = canvasClock
     ? `    <audio id="canvas-scene-clock" class="assembly-canvas-clock" src="${hf(canvasClock)}" data-assembly-clock data-assembly-clock-derived="${total}" data-start="0" data-duration="${total}" data-media-start="0" data-track-index="${clips.length + 3}" preload="auto"></audio>`
     : "";
-  const hasAssemblyEffects = hasCanvasScenes || transitions.length > 0;
+  const hasAssemblyEffects = hasCanvasScenes || tweens.length > 0;
+  /* Vendored, not from a CDN: a render must not depend on the network. */
+  const gsapRuntime = tweens.length ? '<script src="assets/vendor/gsap.min.js"></script>' : "";
   const wallpaperUrl = wallpaper ? `url("assets/wallpapers/${hf(wallpaper)}")` : "none";
   return `<!doctype html>
 <html lang="en">
@@ -1854,6 +1927,7 @@ ${canvasSceneBodies.join("\n")}
     <title>${hf(title)}</title>
     <link rel="stylesheet" href="theme.css" />
     ${canvasRuntime}
+    ${gsapRuntime}
     <style>
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--color-dark); }
       [data-composition-id] { --assembly-wallpaper: ${wallpaperUrl}; --op-color-neutral-plus-max: var(--color-dark); --op-color-neutral-minus-max: var(--color-light); --op-color-neutral-minus-seven: color-mix(in srgb, var(--color-light) 76%, var(--color-dark)); --op-color-academy-primary-base: var(--color-primary); --op-color-academy-primary-on-base: var(--color-dark); --duration-base: 400ms; --duration-fast: 200ms; --duration-slow: 520ms; --ease-enter: cubic-bezier(0.16, 1, 0.3, 1); --ease-exit: cubic-bezier(0.55, 0, 1, 0.45); --ease-emphasis: cubic-bezier(0.34, 1.4, 0.64, 1); --distance-sm: 8px; position: relative; width: ${width}px; height: ${height}px; overflow: hidden; background: var(--assembly-wallpaper) center / cover, var(--color-dark); font-family: var(--font-display); }
@@ -1863,21 +1937,17 @@ ${canvasSceneBodies.join("\n")}
          anyone widened a frame by hand. object-fit contain stays: at matching
          aspect ratio it fills exactly, and refuses to stretch one that does not. */
       video { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: contain; background: transparent; }
-      /* Applied only to a clip a title card follows — see nextIsTitleCard. */
-      .assembly-fade-out { animation: assembly-fade-out var(--assembly-fade-out-duration, 600ms) var(--ease-exit) both paused; animation-delay: calc(var(--assembly-fade-out-start) - var(--t, 0ms)); }
-      @keyframes assembly-fade-out { from { opacity: 1; } to { opacity: 0; } }
       audio { display: none; }
       .assembly-canvas-clock { display:block; position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
       .assembly-canvas-overlays { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; background: transparent; pointer-events: none; }
       rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }
       rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }
-      .assembly-transition { position:absolute; inset:0; z-index:5; display:block; pointer-events:none; opacity:0; }
-      /* Dips through the dark ground, not through the brand colour. This mixed
-         72% --color-primary, so every scene change flashed green — a wash strong
-         enough to read as a colour is a title card, not a transition, and it fired
-         on each clip boundary in a video whose subject is the footage. */
-      .assembly-transition--fade-through { background:var(--color-dark); animation:assembly-fade-through var(--assembly-transition-duration) var(--ease-enter) both paused; animation-delay:calc(var(--assembly-transition-start) - var(--t, 0ms)); }
-      @keyframes assembly-fade-through { 0%, 100% { opacity:0; } 50% { opacity:var(--assembly-transition-strength, 0.72); } }
+      /*
+       * The wash-through-black transition that used to live here is gone, along
+       * with its keyframes. It dipped to the ground between shots and, being a
+       * CSS animation keyed off --t, the renderer never seeked it — so it read as
+       * a flash. Transitions are GSAP tweens now; see the timeline below.
+       */
       .assembly-title { position: absolute; inset: 0; z-index: 3; display: grid; align-content: center; padding: 0 8%; background: linear-gradient(90deg, color-mix(in srgb, var(--color-dark) 94%, transparent), color-mix(in srgb, var(--color-dark) 62%, transparent)), var(--assembly-wallpaper) center / cover; color: var(--color-light); }
       .assembly-title__eyebrow { color: var(--color-accent); font-family: var(--font-mono); font-size: var(--size-eyebrow); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
       .assembly-title__text { margin-top: 0.35em; max-width: 16ch; font-size: var(--size-title); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
@@ -1895,7 +1965,6 @@ ${media}
 ${canvasClockTrack}
 ${canvasOverlay}
 ${canvasTimelineComponents.join("\n")}
-${transitions.join("\n")}
     </main>
 ${hasAssemblyEffects ? `  <script>
     /* HyperFrames seeks and plays each timed media element. Source-video events
@@ -1912,6 +1981,25 @@ ${hasAssemblyEffects ? `  <script>
     document.addEventListener('timeupdate', syncAssemblyEffects, true);
     document.addEventListener('seeked', syncAssemblyEffects, true);
     document.addEventListener('loadeddata', syncAssemblyEffects, true);
+  </script>` : ""}
+${tweens.length ? `  <script>
+    /*
+     * Transitions, as GSAP tweens on the composition clock.
+     *
+     * GSAP because it is the animation the renderer actually seeks. The obvious
+     * alternative — a CSS animation whose delay is calc(start - var(--t)) —
+     * looks equivalent and is not: nothing drives it frame by frame, so it
+     * flashes in a render and dips in the middle of a clip on a scrub. Every
+     * transition here is a tween positioned in absolute composition time, so
+     * moving a clip in Studio moves its dissolve with it.
+     */
+    (function () {
+      if (!window.gsap) return;
+      var tl = gsap.timeline({ paused: true });
+${tweens.join("\n")}
+      window.__timelines = window.__timelines || {};
+      window.__timelines['assembly'] = tl;
+    })();
   </script>` : ""}
 </body>
 </html>
@@ -1952,7 +2040,22 @@ async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {
     ? await stageCanvasSceneClock(outDir, durationSec * 1000)
     : null;
   if (hasCanvasScenes) await stageCanvasSceneRuntime(outDir);
-  await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper, canvasClock, showAssemblyTitle }), "utf8");
+  /*
+   * Measure each take once. Transitions need to know how much footage sits past
+   * a clip's out point, and only the file can answer that — the board records
+   * where a clip was cut, never how much take was left over.
+   */
+  const sourceDurations = {};
+  for (const clip of normalized) {
+    if (!clip.source || clip.source in sourceDurations) continue;
+    const probe = await capture("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1",
+      join(mediaDir(id), clip.source),
+    ]);
+    const seconds = probe.ok ? Number.parseFloat(String(probe.out).trim()) : Number.NaN;
+    if (Number.isFinite(seconds) && seconds > 0) sourceDurations[clip.source] = Math.round(seconds * 1000);
+  }
+  await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper, canvasClock, showAssemblyTitle, sourceDurations }), "utf8");
   await writeFile(join(outDir, "brief.md"), `# ${title}\n\nEditable source assembly created by Studio. Media remains linked from this project's media folder.\n`, "utf8");
   await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, showAssemblyTitle, ...metadata }, null, 2)}\n`, "utf8");
   return { folder, outDir, clips: normalized.length, durationSec };
@@ -7075,7 +7178,7 @@ async function fetchVoiceList() {
           // The two explicit Canvas scenes above are the complete branded
           // opening and closing; do not also add the legacy generic title.
           showAssemblyTitle: false,
-          metadata: { title, picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "fade-through-on-scene-change", firstCut: { opening: opening.scene, closing: closing.scene } },
+          metadata: { title, picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "cross-dissolve-on-scene-change", firstCut: { opening: opening.scene, closing: closing.scene } },
         });
         await writeMultiAssembly(id, { ...state, hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), reviewApprovedAt: new Date().toISOString() });
         return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, selections: state.picks.length, durationSec: built.durationSec });
@@ -8004,7 +8107,7 @@ async function fetchVoiceList() {
               closing: isTitleScene(authoredClips.at(-1)) ? "canvas" : "generated",
             },
             missingScenes,
-            transition: "fade-through-on-scene-change",
+            transition: "cross-dissolve-on-scene-change",
           },
         });
         /*

@@ -424,8 +424,8 @@ class RMLowerThird extends RMElement {
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
                 box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
         .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
-        .n { font-size:1.55cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2;  }
-        .s { font-family:var(--mono); font-size:.95cqw; color:var(--muted); margin-top:.18cqw; }
+        .n { font-size:1.95cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2;  }
+        .s { font-family:var(--mono); font-size:1.45cqw; color:var(--muted); margin-top:.18cqw; }
         /* Slides in rather than rising — reads as a reveal, and stays legible
            over busy footage. Uses the same registered properties so it still
            composes with the exit animation. */
