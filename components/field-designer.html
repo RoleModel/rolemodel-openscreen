@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Animated field designer</title>
+  <!--
+  Design an animated background with its lockup, then save it as a scene.
+
+  Built the way the wallpaper designer is: controls on the left, one preview on
+  the right, every control repainting that one preview. Deliberately not the
+  component gallery — the gallery shows every component at once, and this field
+  is a full-frame canvas of tens of thousands of dots a frame, so several of them
+  playing together costs more than an authoring page should.
+
+  Saving goes through Studio's own /api/scene, so a design lands where Canvas
+  already looks and can be mounted into a composition. That endpoint keeps a
+  revision of what was there before, so saving over a scene is not a cliff.
+  Open this from Studio (it serves /components/) with ?project=<id> to save.
+
+  Time is seeked, never played. Play here steps the same seek on a timer, so the
+  frame you stop on is the frame that gets rendered.
+-->
+  <link rel="stylesheet" href="../brand/fonts/fonts.css" />
+  <link rel="stylesheet" href="../brand/optics/optics.css" />
+  <link rel="stylesheet" href="../brand/optics/rolemodel-scales.css" />
+  <style>
+    :root { color-scheme: dark; }
+
+    html, body {
+      margin: 0;
+      background: var(--op-color-neutral-plus-max);
+      color: var(--op-color-neutral-minus-max);
+      font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    body { padding: 24px; }
+    h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.02em; }
+    .lede { margin: 0 0 20px; color: var(--op-color-neutral-minus-seven); font-size: 13px; }
+    .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start; }
+
+    .panel {
+      display: grid;
+      grid-template-columns: 92px 1fr 46px;
+      gap: 10px 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 16px;
+      border: 1px solid var(--op-color-neutral-plus-four);
+      border-radius: 12px;
+      background: var(--op-color-neutral-plus-two);
+    }
+
+    .panel h2 {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--op-color-neutral-minus-seven);
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    label { color: var(--op-color-neutral-minus-seven); font-size: 12px; }
+    select, input[type="range"], input[type="text"], textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 5px 7px;
+      border: 1px solid var(--op-color-neutral-plus-four);
+      border-radius: 7px;
+      background: var(--op-color-neutral-plus-one);
+      color: inherit;
+      font: inherit;
+      font-size: 12px;
+    }
+    input[type="range"] { padding: 0; border: 0; background: none; }
+    input[type="color"] { width: 100%; height: 26px; padding: 0; border: 0; background: none; }
+    textarea { min-height: 48px; resize: vertical; }
+    .v { color: var(--op-color-neutral-minus-seven); font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; text-align: right; }
+    .wide { grid-column: 2 / -1; }
+
+    .frame { overflow: hidden; border: 1px solid var(--op-color-neutral-plus-four); border-radius: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+
+    button {
+      padding: 7px 12px;
+      border: 1px solid var(--op-color-neutral-plus-four);
+      border-radius: 8px;
+      background: var(--op-color-neutral-plus-three);
+      color: inherit;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 12px;
+      border: 1px solid var(--op-color-neutral-plus-four);
+      border-radius: 10px;
+      background: var(--op-color-neutral-plus-one);
+      color: var(--op-color-neutral-minus-seven);
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 12px;
+    }
+
+    .note { color: var(--op-color-neutral-minus-seven); font-size: 12px; }
+    .note.bad { color: var(--op-color-warning-base, #d4b30a); }
+    .note.ok { color: var(--op-color-academy-primary-base, #00b871); }
+  </style>
+  <script type="module" src="./rm-video.js"></script>
+</head>
+
+<body>
+  <h1>Animated field</h1>
+  <p class="lede">Eight motions over one halftone field, with an optional lockup. Save it as a scene to use it in HyperFrames.</p>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2>Motion</h2>
+        <label for="mode">Motion</label>
+        <select id="mode" class="wide"></select>
+
+        <label for="phase">Phase</label>
+        <input id="phase" type="range" min="0" max="6" step="0.05" value="1.4" />
+        <span class="v" id="phase-v">1.40</span>
+
+        <label for="bloom">Bloom floor</label>
+        <input id="bloom" type="range" min="0" max="1" step="0.02" value="0" />
+        <span class="v" id="bloom-v">0.00</span>
+      </div>
+
+      <div class="panel">
+        <h2>Type</h2>
+        <label for="eyebrow">Eyebrow</label>
+        <input id="eyebrow" type="text" class="wide" value="CCC Days" />
+
+        <label for="title">Title</label>
+        <input id="title" type="text" class="wide" value="Creating video should be easy." />
+
+        <label for="body">Body</label>
+        <textarea id="body" class="wide"></textarea>
+
+        <label for="size">Size</label>
+        <input id="size" type="range" min="2" max="14" step="0.2" value="6.6" />
+        <span class="v" id="size-v">6.6</span>
+
+        <label for="x">X</label>
+        <input id="x" type="range" min="0" max="100" step="1" value="50" />
+        <span class="v" id="x-v">50</span>
+
+        <label for="y">Y</label>
+        <input id="y" type="range" min="0" max="100" step="1" value="50" />
+        <span class="v" id="y-v">50</span>
+
+        <label for="align">Align</label>
+        <select id="align" class="wide">
+          <option value="center">center</option>
+          <option value="left">left</option>
+          <option value="right">right</option>
+        </select>
+      </div>
+
+      <div class="panel">
+        <h2>Palette</h2>
+        <label for="ground">Ground</label><input id="ground" type="color" value="#07100c" /><span class="v"></span>
+        <label for="green">Green</label><input id="green" type="color" value="#45d86e" /><span class="v"></span>
+        <label for="cyan">Cyan</label><input id="cyan" type="color" value="#19b7d5" /><span class="v"></span>
+        <label for="amber">Amber</label><input id="amber" type="color" value="#f1b64a" /><span class="v"></span>
+        <label for="paper">Paper</label><input id="paper" type="color" value="#fff8e9" /><span class="v"></span>
+      </div>
+    </div>
+
+    <div>
+      <div class="frame">
+        <rm-scene>
+          <rm-study-field id="field" at="0" for="60000"></rm-study-field>
+        </rm-scene>
+      </div>
+
+      <div class="row">
+        <button id="play" type="button">Play</button>
+        <input id="scrub" type="range" min="0" max="10400" step="20" value="0" style="flex:1" />
+        <span class="v" id="tv">0 ms</span>
+      </div>
+
+      <pre id="markup"></pre>
+
+      <div class="row">
+        <button id="copy" type="button">Copy tag</button>
+        <input id="scene-name" type="text" placeholder="scene name" value="animated-field" style="max-width:220px" />
+        <button id="save" type="button">Save as scene</button>
+        <span class="note" id="save-note"></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { RM } from "./rm-video.js";
+
+    const $ = (id) => document.getElementById(id);
+    const field = $("field");
+    const scrub = $("scrub");
+    const markup = $("markup");
+    const saveNote = $("save-note");
+
+    const MODES = ["current", "bloom", "softCut", "cutCurveA", "cutCurveB", "wipe", "claude", "proof"];
+    for (const m of MODES) $("mode").append(Object.assign(document.createElement("option"), { value: m, textContent: m }));
+    $("mode").value = "bloom";
+
+    const TEXT = ["eyebrow", "title", "body"];
+    const NUMS = ["phase", "bloom", "size", "x", "y"];
+    const COLOURS = ["ground", "green", "cyan", "amber", "paper"];
+
+    const esc = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    /*
+     * One path only: every control writes an attribute onto the component and it
+     * re-renders itself. There is no second drawing routine on this page that
+     * could disagree with what a composition will do with the same tag.
+     */
+    const apply = () => {
+      field.setAttribute("mode", $("mode").value);
+      field.setAttribute("phase", $("phase").value);
+      field.setAttribute("align", $("align").value);
+      for (const n of ["size", "x", "y"]) field.setAttribute(n, $(n).value);
+      // An empty field is an absent attribute, not an empty string: that is what
+      // makes this a background rather than a card with blank lines in it.
+      for (const t of [...TEXT, "bloom"]) {
+        const raw = $(t).value.trim();
+        const off = t === "bloom" ? Number(raw) <= 0 : raw === "";
+        if (off) field.removeAttribute(t);
+        else field.setAttribute(t, raw);
+      }
+      for (const c of COLOURS) field.setAttribute(c, $(c).value);
+      for (const n of NUMS) $(`${n}-v`) && ($(`${n}-v`).textContent = $(n).value);
+
+      const attrs = [`mode="${$("mode").value}"`, `phase="${$("phase").value}"`];
+      if (Number($("bloom").value) > 0) attrs.push(`bloom="${$("bloom").value}"`);
+      for (const t of TEXT) if ($(t).value.trim()) attrs.push(`${t}="${esc($(t).value.trim())}"`);
+      for (const n of ["size", "x", "y"]) attrs.push(`${n}="${$(n).value}"`);
+      attrs.push(`align="${$("align").value}"`);
+      for (const c of COLOURS) attrs.push(`${c}="${$(c).value}"`);
+      markup.textContent = `<rm-study-field at="0" for="4000"\n  ${attrs.join("\n  ")}></rm-study-field>`;
+      RM.seek(Number(scrub.value));
+    };
+
+    for (const id of [...TEXT, ...NUMS, ...COLOURS, "mode", "align"]) {
+      $(id).addEventListener("input", apply);
+      $(id).addEventListener("change", apply);
+    }
+
+    await RM.ready();
+    const set = (ms) => {
+      RM.seek(ms);
+      scrub.value = ms;
+      $("tv").textContent = Math.round(ms) + " ms";
+    };
+    scrub.oninput = () => set(Number(scrub.value));
+    apply();
+    set(0);
+
+    /*
+     * Playback is a throttled seek, not a render loop.
+     *
+     * The field is a full-frame canvas of tens of thousands of dots; drawing it
+     * on every animation frame pins a core for no visible gain at this size. 24
+     * steps a second reads as motion and leaves the machine usable — which was
+     * the whole problem with playing a page of these at once.
+     */
+    let timer = null;
+    let last = 0;
+    $("play").onclick = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        $("play").textContent = "Play";
+        return;
+      }
+      $("play").textContent = "Pause";
+      last = performance.now();
+      timer = setInterval(() => {
+        const now = performance.now();
+        set((Number(scrub.value) + (now - last)) % Number(scrub.max));
+        last = now;
+      }, 1000 / 24);
+    };
+
+    $("copy").onclick = async () => {
+      await navigator.clipboard.writeText(markup.textContent).catch(() => {});
+      saveNote.className = "note ok";
+      saveNote.textContent = "copied";
+    };
+
+    // Saving needs Studio: this page is static, and the scene belongs to a
+    // project. Opened from Studio with ?project=<id> the same origin serves both.
+    const projectId = new URLSearchParams(location.search).get("project") ?? "";
+    if (!projectId) {
+      $("save").disabled = true;
+      saveNote.className = "note bad";
+      saveNote.textContent = "open from Studio with ?project=<id> to save";
+    }
+    $("save").onclick = async () => {
+      saveNote.className = "note";
+      saveNote.textContent = "saving…";
+      const result = await fetch("/api/scene", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, name: $("scene-name").value, body: markup.textContent }),
+      })
+        .then((r) => r.text())
+        .then((t) => { try { return JSON.parse(t) } catch { return { error: t || "Studio did not answer" } } })
+        .catch((e) => ({ error: e.message }));
+      const failed = !result || result.error;
+      saveNote.className = failed ? "note bad" : "note ok";
+      saveNote.textContent = failed ? result.error : `saved as ${result.name}`;
+    };
+  </script>
+</body>
+
+</html>

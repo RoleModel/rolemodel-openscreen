@@ -1421,231 +1421,126 @@ function sColor(value, fallback) {
 const FIELD = `
   :host {
     /* The sheet's palette as fallbacks only, so retuning the brand retunes the
-       studies — the same contract every other component here follows. */
+       field — the same contract every other component here follows. */
     --ground: var(--op-color-neutral-plus-max, #07100c);
     --paper-ink: var(--op-color-neutral-minus-max, #fff8e9);
     --green: var(--op-color-academy-primary-base, #45d86e);
     --cyan: var(--op-color-primary-base, #19b7d5);
     --amber: var(--op-color-secondary-base, #f1b64a);
-    --coral: var(--op-color-tertiary-base, #d97757);
     display: block; inset: 0; width: 100%; height: 100%;
   }
   .field { position:absolute; inset:0; overflow:hidden; background:var(--ground); --rise:0px; }
+  /*
+   * Type over the field, positioned as a percentage of the frame and sized in
+   * cqw, so a lockup keeps its place and its proportion at any render width.
+   * All three lines are optional: with none of them this is a background.
+   */
+  /* x is the anchor, and which edge it anchors follows the alignment. Always
+     centring the block meant a left-aligned lockup moved toward the left edge
+     ran half its width off the frame. */
+  .lockup { position:absolute; left:var(--x, 50%); top:var(--y, 50%); width:78%;
+            transform:translate(var(--tx, -50%), -50%); display:grid; gap:.5em;
+            justify-items:var(--just, center); text-align:var(--align, center); }
+  .eyebrow { color:color-mix(in srgb, var(--paper-ink) 74%, transparent);
+             font-family:var(--mono); font-size:calc(var(--size, 6.6cqw) * 0.2);
+             letter-spacing:.16em; text-transform:uppercase; }
+  .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:950;
+           line-height:.92; letter-spacing:-.04em;
+           text-shadow:.12cqw 0 color-mix(in srgb, var(--cyan) 42%, transparent),
+                       -.12cqw 0 color-mix(in srgb, var(--paper-ink) 0%, transparent),
+                       0 2.44cqw 6.35cqw rgba(0,0,0,.46); }
+  .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
+          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:34ch; }
   /* Oversized and centred: the plate travels during a cut, and a plate the size
      of the frame would show the ground along the edge it moves away from. */
   canvas { position:absolute; left:50%; top:50%; width:126%; height:126%;
            transform:translate(-50%,-50%); will-change:transform, filter; }
-  .plate { position:absolute; inset:5.86cqw; border:.12cqw solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
-           border-radius:2.44cqw; pointer-events:none; }
-  .axis { position:absolute; left:3.91cqw; right:3.91cqw; top:3.67cqw; z-index:3; display:flex;
-          justify-content:space-between; color:color-mix(in srgb, var(--paper-ink) 62%, transparent);
-          font-family:var(--mono); font-size:1.47cqw; letter-spacing:.08em; text-transform:uppercase; }
-  .ticker { position:absolute; right:3.42cqw; bottom:2.93cqw; z-index:3;
-            color:color-mix(in srgb, var(--paper-ink) 62%, transparent);
-            font-family:var(--mono); font-size:1.47cqw; letter-spacing:.08em; text-transform:uppercase; }
-  .headline { position:absolute; left:50%; top:50%; width:78%; transform:translate(-50%,-50%);
-              color:var(--paper-ink); font-size:6.6cqw; font-weight:950; line-height:.92;
-              letter-spacing:-.04em; text-align:center; will-change:transform, filter, opacity;
-              text-shadow:.12cqw 0 color-mix(in srgb, var(--cyan) 42%, transparent),
-                          -.12cqw 0 color-mix(in srgb, var(--coral) 28%, transparent),
-                          0 2.44cqw 6.35cqw rgba(0,0,0,.46); }
-  .scene { position:absolute; left:50%; top:50%; width:78%; transform:translate(-50%,-50%);
-           will-change:transform, filter, opacity; }
-`
-
-const studyChrome = (el) => `
-  <canvas aria-hidden="true"></canvas>
-  <div class="plate"></div>
-  <div class="axis"><span>${el.esc(el.attr('axis-left', ''))}</span><span>${el.esc(el.attr('axis-right', ''))}</span></div>
-  ${el.attr('ticker') ? `<div class="ticker">${el.esc(el.attr('ticker'))}</div>` : ''}
 `
 
 /*
  * The field's colours arrive as attributes so they can be driven from the
  * timeline. Written onto the host as custom properties rather than interpolated
- * into the stylesheet: the shadow CSS is one constant shared by four components,
- * and re-templating it per instance would defeat that.
+ * into the stylesheet, so the shadow CSS stays one shared constant.
  */
 const fieldStyle = (el) => {
   const set = (name, value) => (value ? `${name}:${value};` : '')
-  return set('--ground', el.attr('ground'))
+  const align = el.attr('align', 'center')
+  return set('--x', el.attr('x') ? `${el.attr('x')}%` : '')
+    + set('--y', el.attr('y') ? `${el.attr('y')}%` : '')
+    + set('--size', el.attr('size') ? `${el.attr('size')}cqw` : '')
+    + set('--align', align)
+    + set('--just', align === 'center' ? 'center' : align === 'right' ? 'end' : 'start')
+    + set('--tx', align === 'center' ? '-50%' : align === 'right' ? '-100%' : '0%')
+    + set('--ground', el.attr('ground'))
     + set('--paper-ink', el.attr('paper'))
     + set('--green', el.attr('green'))
     + set('--cyan', el.attr('cyan'))
     + set('--amber', el.attr('amber'))
 }
 
-const FIELD_FIELDS = ['mode', 'phase', 'axis-left', 'axis-right', 'ticker', 'ground', 'paper', 'green', 'cyan', 'amber', 'bloom', 'at', 'for']
-
-/*
- * Wire a study up to the clock.
+/**
+ * The animated halftone field on its own.
  *
- * One place, because all four do the same thing: read the composition time,
- * work out the motion, paint the field and move the body. Redrawn on rmseek and
- * never on a frame loop — see the note at the top of this section.
+ * A background, not a card. The sheet this came from drew titles and mocks over
+ * the field to show what each motion was for; those were the demonstration, and
+ * the field is the thing worth keeping. Lay type over it with rm-title, or any
+ * other component, the way you would over footage.
  */
-function mountStudy(host, mode, apply) {
-  const canvas = host.shadowRoot.querySelector('canvas')
-  const ctx = canvas?.getContext('2d')
-  if (!ctx) return
-  canvas.width = STUDY_W
-  canvas.height = STUDY_H
-  const bloom = Number(host.attr('bloom', ''))
-  const draw = () => {
-    const css = getComputedStyle(host)
-    const pal = {
-      ground: sColor(css.getPropertyValue('--ground'), 'rgb(7, 16, 12)'),
-      paper: sColor(css.getPropertyValue('--paper-ink'), 'rgb(255, 248, 233)'),
-      green: sColor(css.getPropertyValue('--green'), 'rgb(69, 216, 110)'),
-      cyan: sColor(css.getPropertyValue('--cyan'), 'rgb(25, 183, 213)'),
-      amber: sColor(css.getPropertyValue('--amber'), 'rgb(241, 182, 74)'),
-    }
-    // The clip's own time, so a study reads the same wherever it is mounted.
-    const time = Math.max(0, RM.t - (Number(host.attr('at', 0)) || 0)) / 1000
-    const phase = Number(host.attr('phase', ''))
-    const m = sMotion(mode, time, Number.isFinite(phase) ? phase : 1.4)
-    if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
-    const st = sState(m, mode)
-    canvas.style.transform = `translate(calc(-50% + ${m.plateX}px), calc(-50% + ${m.plateY}px)) scale(${m.plateScale})`
-    canvas.style.filter = `hue-rotate(${m.hue}deg) saturate(${m.sat}) blur(${m.fgBlur}px)`
-    apply(m)
-    sDrawField(ctx, STUDY_W, STUDY_H, st, pal)
-  }
-  const onSeek = () => draw()
-  root.addEventListener('rmseek', onSeek)
-  draw()
-  host._dispose = () => root.removeEventListener('rmseek', onSeek)
-}
+class RMStudyField extends RMElement {
+  static fields = ['mode', 'phase', 'bloom', 'eyebrow', 'title', 'body', 'size', 'x', 'y', 'align', 'ground', 'paper', 'green', 'cyan', 'amber', 'at', 'for']
 
-const place = (node, part) => {
-  if (!node || !part) return
-  node.style.transform = `translate(-50%, -50%) translateX(${part.x ?? 0}px) scale(${part.scale ?? 1})`
-  if (part.o !== undefined) node.style.opacity = String(part.o)
-  node.style.filter = `blur(${part.blur ?? 0}px)`
-}
-
-class RMStudyBase extends RMElement {
   disconnectedCallback() { this._dispose?.(); this._dispose = null }
-  mode() { return STUDY_MODES.includes(this.attr('mode')) ? this.attr('mode') : this.constructor.defaultMode }
-}
 
-/** One line of display type over the field. `accent` gradient-fills a phrase. */
-class RMStudyTitle extends RMStudyBase {
-  static defaultMode = 'current'
-  static fields = ['title', 'accent', ...FIELD_FIELDS]
   render() {
     this._dispose?.()
-    const title = this.attr('title', 'Creating video should be easy.')
-    const accent = this.attr('accent', '')
-    const marked = accent && title.includes(accent)
-      ? this.esc(title).replace(this.esc(accent), `<span class="accent">${this.esc(accent)}</span>`)
-      : this.esc(title)
-    this.shadowRoot.innerHTML = `
-      <style>
-        ${TYPE}${TIMING}${FIELD}
-        .accent { color:transparent; background:linear-gradient(90deg,var(--green),var(--cyan),var(--amber));
-                  -webkit-background-clip:text; background-clip:text; text-shadow:none; }
-      </style>
-      <div class="field anim" style="${fieldStyle(this)}">
-        ${studyChrome(this)}
-        <div class="headline">${marked}</div>
-      </div>`
-    const body = this.shadowRoot.querySelector('.headline')
-    mountStudy(this, this.mode(), (m) => place(body, m.body))
-  }
-}
-define('rm-study-title', RMStudyTitle)
-
-/** Two lines that cut between each other — the transition studies. */
-class RMStudyScenes extends RMStudyBase {
-  static defaultMode = 'softCut'
-  static fields = ['scene-a', 'scene-b', ...FIELD_FIELDS]
-  render() {
-    this._dispose?.()
+    const mode = STUDY_MODES.includes(this.attr('mode')) ? this.attr('mode') : 'current'
     this.shadowRoot.innerHTML = `
       <style>${TYPE}${TIMING}${FIELD}</style>
       <div class="field anim" style="${fieldStyle(this)}">
-        ${studyChrome(this)}
-        <div class="headline scene sa">${this.esc(this.attr('scene-a', "Close isn't final."))}</div>
-        <div class="headline scene sb">${this.esc(this.attr('scene-b', 'AI gets you moving.'))}</div>
+        <canvas aria-hidden="true"></canvas>
+        ${this.attr('eyebrow') || this.attr('title') || this.attr('body') ? `<div class="lockup">
+          ${this.attr('eyebrow') ? `<div class="eyebrow">${this.esc(this.attr('eyebrow'))}</div>` : ''}
+          ${this.attr('title') ? `<div class="title">${this.esc(this.attr('title'))}</div>` : ''}
+          ${this.attr('body') ? `<div class="body">${this.esc(this.attr('body'))}</div>` : ''}
+        </div>` : ''}
       </div>`
-    const a = this.shadowRoot.querySelector('.sa')
-    const b = this.shadowRoot.querySelector('.sb')
-    mountStudy(this, this.mode(), (m) => { place(a, m.a); place(b, m.b) })
-  }
-}
-define('rm-study-scenes', RMStudyScenes)
 
-/** The assistant-window mock: a titled bar over placeholder lines. */
-class RMStudyCard extends RMStudyBase {
-  static defaultMode = 'claude'
-  static fields = ['card-title', 'lines', ...FIELD_FIELDS]
-  render() {
-    this._dispose?.()
-    const lines = Math.max(1, Math.min(6, Number(this.attr('lines', 3)) || 3))
-    this.shadowRoot.innerHTML = `
-      <style>
-        ${TYPE}${TIMING}${FIELD}
-        .card { position:absolute; left:50%; top:50%; width:57.4cqw; transform:translate(-50%,-50%);
-                overflow:hidden; border-radius:2.2cqw; will-change:transform, filter;
-                border:.12cqw solid color-mix(in srgb, var(--paper-ink) 88%, var(--ground));
-                background:color-mix(in srgb, var(--paper-ink) 96%, var(--ground));
-                box-shadow:0 3.9cqw 10.5cqw rgba(0,0,0,.32); }
-        .bar { display:flex; align-items:center; height:5.13cqw; padding:0 2.4cqw;
-               border-bottom:.12cqw solid color-mix(in srgb, var(--paper-ink) 88%, var(--ground));
-               background:color-mix(in srgb, var(--paper-ink) 98%, var(--ground));
-               color:color-mix(in srgb, var(--ground) 62%, var(--paper-ink));
-               font-family:var(--mono); font-size:1.35cqw;
-               letter-spacing:.06em; text-transform:uppercase; }
-        .line { height:2.93cqw; margin:2.93cqw 4.15cqw; border-radius:99cqw;
-                background:color-mix(in srgb, var(--paper-ink) 92%, var(--ground)); }
-        /* The last line stops short and sits right, the way a reply tapers. */
-        .line:last-child { width:62%; margin-left:auto; }
-      </style>
-      <div class="field anim" style="${fieldStyle(this)}">
-        ${studyChrome(this)}
-        <div class="card">
-          <div class="bar">${this.esc(this.attr('card-title', 'Claude'))}</div>
-          ${Array.from({ length: lines }, () => '<div class="line"></div>').join('')}
-        </div>
-      </div>`
-    const card = this.shadowRoot.querySelector('.card')
-    mountStudy(this, this.mode(), (m) => place(card, m.body))
-  }
-}
-define('rm-study-card', RMStudyCard)
+    const canvas = this.shadowRoot.querySelector('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    canvas.width = STUDY_W
+    canvas.height = STUDY_H
+    const bloom = Number(this.attr('bloom', ''))
+    const phase = Number(this.attr('phase', ''))
 
-/** A single measured claim, held on frosted glass. */
-class RMStudyProof extends RMStudyBase {
-  static defaultMode = 'proof'
-  static fields = ['value', 'label', ...FIELD_FIELDS]
-  render() {
-    this._dispose?.()
-    this.shadowRoot.innerHTML = `
-      <style>
-        ${TYPE}${TIMING}${FIELD}
-        .proof { position:absolute; left:50%; top:50%; width:57.4cqw; min-height:23.2cqw;
-                 display:flex; flex-direction:column; align-items:center; justify-content:center;
-                 gap:.8cqw; padding:3cqw; transform:translate(-50%,-50%); will-change:transform, filter;
-                 border:.12cqw solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
-                 border-radius:2.93cqw; background:color-mix(in srgb, var(--paper-ink) 12%, transparent);
-                 box-shadow:0 3.9cqw 10.5cqw rgba(0,0,0,.32); backdrop-filter:blur(.98cqw); }
-        .value { color:var(--paper-ink); font-size:7.2cqw; font-weight:950; letter-spacing:-.04em; line-height:1; }
-        .label { color:color-mix(in srgb, var(--paper-ink) 68%, transparent); font-family:var(--mono);
-                 font-size:1.47cqw; letter-spacing:.1em; text-transform:uppercase; text-align:center; }
-      </style>
-      <div class="field anim" style="${fieldStyle(this)}">
-        ${studyChrome(this)}
-        <div class="proof">
-          <div class="value">${this.esc(this.attr('value', '3×'))}</div>
-          <div class="label">${this.esc(this.attr('label', 'faster to a first cut'))}</div>
-        </div>
-      </div>`
-    const card = this.shadowRoot.querySelector('.proof')
-    mountStudy(this, this.mode(), (m) => place(card, m.body))
+    const plate = canvas.parentElement
+    const draw = () => {
+      // The palette is written onto .field, not the host, so it has to be read
+      // from .field. Reading the host gave the :host defaults and silently
+      // ignored every colour attribute.
+      const css = getComputedStyle(plate)
+      const pal = {
+        ground: sColor(css.getPropertyValue('--ground'), 'rgb(7, 16, 12)'),
+        paper: sColor(css.getPropertyValue('--paper-ink'), 'rgb(255, 248, 233)'),
+        green: sColor(css.getPropertyValue('--green'), 'rgb(69, 216, 110)'),
+        cyan: sColor(css.getPropertyValue('--cyan'), 'rgb(25, 183, 213)'),
+        amber: sColor(css.getPropertyValue('--amber'), 'rgb(241, 182, 74)'),
+      }
+      // The clip's own time, so a field reads the same wherever it is mounted.
+      const time = Math.max(0, RM.t - (Number(this.attr('at', 0)) || 0)) / 1000
+      const m = sMotion(mode, time, Number.isFinite(phase) ? phase : 1.4)
+      if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
+      canvas.style.transform = `translate(calc(-50% + ${m.plateX}px), calc(-50% + ${m.plateY}px)) scale(${m.plateScale})`
+      canvas.style.filter = `hue-rotate(${m.hue}deg) saturate(${m.sat}) blur(${m.fgBlur}px)`
+      sDrawField(ctx, STUDY_W, STUDY_H, sState(m, mode), pal)
+    }
+    const onSeek = () => draw()
+    root.addEventListener('rmseek', onSeek)
+    draw()
+    this._dispose = () => root.removeEventListener('rmseek', onSeek)
   }
 }
-define('rm-study-proof', RMStudyProof)
+define('rm-study-field', RMStudyField)
 
 
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
