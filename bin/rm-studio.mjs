@@ -360,6 +360,86 @@ async function sceneFootageForProject(id, name) {
  * history.
  */
 const hyperframesStudios = new Map();
+
+/*
+ * Preview servers outlive Studio unless something goes and gets them.
+ *
+ * Two reasons they were surviving. The shutdown handler stops jobs, and a
+ * preview is not a job — it is spawned directly — so nothing ever signalled it.
+ * And `npx hyperframes preview` is two processes, an npx parent and the node
+ * server it execs, so signalling the child Studio holds leaves the server that
+ * actually owns the port still listening. They are spawned into their own
+ * process group and signalled as a group for that reason.
+ *
+ * Neither helps when Studio is force-quit, because no handler runs at all. So
+ * the pids are also written down, and the next Studio to start reaps whatever
+ * the last one left behind.
+ */
+const PREVIEW_PIDS_FILE = join(STATE_DIR, "preview-pids.json");
+
+async function readPreviewPids() {
+  const raw = await readFile(PREVIEW_PIDS_FILE, "utf8").catch(() => "[]");
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list.filter((pid) => Number.isInteger(pid) && pid > 1) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writePreviewPids(pids) {
+  await mkdir(STATE_DIR, { recursive: true }).catch(() => {});
+  await writeFile(PREVIEW_PIDS_FILE, `${JSON.stringify([...new Set(pids)])}\n`, "utf8").catch(() => {});
+}
+
+const rememberPreviewPid = async (pid) => writePreviewPids([...(await readPreviewPids()), pid]);
+const forgetPreviewPid = async (pid) => writePreviewPids((await readPreviewPids()).filter((p) => p !== pid));
+
+/*
+ * Never signal a pid on the strength of a number alone. Pids are reused, and a
+ * stale file plus an unlucky wrap would have Studio killing something a person
+ * is using. Ask the system what the process actually is first.
+ */
+async function isHyperframesPreview(pid) {
+  const probe = await capture("ps", ["-p", String(pid), "-o", "command="]);
+  return probe.ok && /hyperframes[^\n]*preview/.test(probe.out);
+}
+
+function signalPreviewGroup(pid, signal = "SIGTERM") {
+  // The group, so the npx parent and the node server both go.
+  try {
+    process.kill(-pid, signal);
+    return true;
+  } catch {
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/* Stop every preview this Studio started. Synchronous on purpose: it runs from
+   the exit path, where a promise would not be waited for. */
+function stopAllPreviews() {
+  for (const studio of hyperframesStudios.values()) {
+    if (studio?.child?.pid) signalPreviewGroup(studio.child.pid);
+  }
+}
+
+/* Whatever the last Studio left running, on the way up. */
+async function reapOrphanedPreviews() {
+  const pids = await readPreviewPids();
+  if (!pids.length) return { reaped: 0, checked: 0 };
+  let reaped = 0;
+  for (const pid of pids) {
+    if (!(await isHyperframesPreview(pid))) continue;
+    if (signalPreviewGroup(pid)) reaped += 1;
+  }
+  await writePreviewPids([]);
+  return { reaped, checked: pids.length };
+}
 const HYPERFRAMES_VIDEO_EXT = new Set([".mp4", ".mov", ".m4v", ".webm"]);
 
 async function freeLocalPort() {
@@ -745,9 +825,17 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
       cwd: root,
       env: jobs.childEnv(),
       stdio: ["ignore", "pipe", "pipe"],
+      // Its own process group, so the npx parent and the node server it execs
+      // can be signalled together. Studio kills it on the way out; this is not
+      // a request to let it run on.
+      detached: true,
     });
     studio = { child, port, state: "starting", error: null, output: [] };
     hyperframesStudios.set(root, studio);
+    if (child.pid) {
+      void rememberPreviewPid(child.pid);
+      child.on("exit", () => void forgetPreviewPid(child.pid));
+    }
     const note = (data) => {
       const line = String(data).trim();
       if (!line) return;
@@ -9030,10 +9118,14 @@ await mkdir(LIB, { recursive: true });
 // like nothing ever happened.
 const restored = await jobs.restore();
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   const at = `http://localhost:${PORT}`;
   console.log(`\n  RoleModel Studio  ${at}`);
   console.log(`  library           ${LIB}`);
+  // Whatever a force-quit left listening. Says so rather than doing it quietly,
+  // because a preview holding a gigabyte is worth knowing about.
+  const reaped = await reapOrphanedPreviews().catch(() => ({ reaped: 0 }));
+  if (reaped.reaped) console.log(`  reclaimed         ${reaped.reaped} orphaned preview server${reaped.reaped === 1 ? "" : "s"}`);
   if (SHELL) console.log("  shell             free-text commands ENABLED (--shell)");
   if (WATCH) console.log("  watch             reloading on changes to lib, presets, and brand\n");
   else console.log("");
@@ -9081,10 +9173,18 @@ if (WATCH) {
   }
 }
 
-// Don't orphan an ffmpeg or a half-finished export when the server goes away.
-for (const sig of ["SIGINT", "SIGTERM"]) {
+// Don't orphan an ffmpeg, a half-finished export, or a preview server when the
+// server goes away. SIGHUP included: closing the terminal Studio was started
+// from used to leave every preview it had spawned still listening.
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(sig, () => {
     jobs.stopAll();
+    stopAllPreviews();
     process.exit(0);
   });
 }
+// Covers the ordinary returns and throws that never raise a signal at all.
+process.on("exit", () => {
+  jobs.stopAll();
+  stopAllPreviews();
+});
