@@ -467,10 +467,19 @@ async function promoteHyperframesExport(id, root, entry) {
 }
 
 /*
- * A render is written over time. Only promote it after two identical polls, so
- * the project never receives a playable-looking but still-growing MP4.
+ * A render is written over time, so a file is only promoted once it has stopped
+ * changing. Two ways to know that, because there are two ways to arrive here.
+ *
+ * While the editor is open this is polled every couple of seconds, and an
+ * unchanged size+mtime between polls settles it. A sweep runs once and has no
+ * previous poll to compare against, so a file nothing has touched for
+ * EXPORT_SETTLED_MS counts as finished on its own. Without the second rule a
+ * render made while you were looking at another view needed two more visits
+ * before it appeared.
  */
-async function syncHyperframesExports(id, root, studio, { baseline = false } = {}) {
+const EXPORT_SETTLED_MS = 10_000;
+
+async function syncHyperframesExports(id, root, studio) {
   const files = await readHyperframesExportFiles(root);
   studio.exportFiles ??= new Map();
   studio.exports ??= [];
@@ -479,19 +488,18 @@ async function syncHyperframesExports(id, root, studio, { baseline = false } = {
   for (const entry of files) {
     const signature = hyperframesExportSignature(entry);
     const prior = studio.exportFiles.get(entry.file);
-    if (baseline && !prior) {
-      studio.exportFiles.set(entry.file, { signature, stable: 0, promoted: signature });
+    if (prior?.promoted === signature) continue;
+
+    const unchangedSinceLastPoll = prior?.signature === signature;
+    const untouchedLongEnough = Date.now() - Date.parse(entry.mtime) >= EXPORT_SETTLED_MS;
+    if (!unchangedSinceLastPoll && !untouchedLongEnough) {
+      studio.exportFiles.set(entry.file, { signature, promoted: prior?.promoted ?? null });
       continue;
     }
-    if (!prior || prior.signature !== signature) {
-      studio.exportFiles.set(entry.file, { signature, stable: 0, promoted: null });
-      continue;
-    }
-    prior.stable += 1;
-    if (prior.stable < 1 || prior.promoted === signature) continue;
+
     const exported = await promoteHyperframesExport(id, root, entry);
+    studio.exportFiles.set(entry.file, { signature, promoted: exported ? signature : prior?.promoted ?? null });
     if (!exported) continue;
-    prior.promoted = signature;
     studio.exports = [exported, ...studio.exports.filter((item) => item.rel !== exported.rel)]
       .sort((a, b) => b.mtime.localeCompare(a.mtime));
     changed = true;
@@ -499,6 +507,29 @@ async function syncHyperframesExports(id, root, studio, { baseline = false } = {
 
   if (changed) await reindex(id).catch(() => {});
   return { exports: studio.exports, changed };
+}
+
+/*
+ * Promotion used to depend on somebody looking at the motion project, because
+ * only that view polled for exports. A render finished in the background — or
+ * from the command line — stayed inside the composition folder and never became
+ * project media. Sweep every composition instead, so a finished render reaches
+ * the project whatever produced it and wherever you happen to be.
+ */
+async function sweepHyperframesExports(id) {
+  const renders = join(mediaDir(id), "Renders");
+  const entries = await readdir(renders, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const root = join(renders, entry.name);
+    if (!(await stat(join(root, "index.html")).catch(() => null))?.isFile()) continue;
+    let studio = hyperframesStudios.get(root);
+    if (!studio) {
+      studio = { exportFiles: new Map(), exports: [] };
+      hyperframesStudios.set(root, studio);
+    }
+    await syncHyperframesExports(id, root, studio).catch(() => {});
+  }
 }
 
 /*
@@ -2759,6 +2790,10 @@ async function state() {
   // case. A project that fails to index must not take the whole page down.
   await Promise.all(
     projects.map(async (p) => {
+      // Land any finished render before indexing, so a composition rendered from
+      // the editor, a background job, or the command line is already project
+      // media by the time the catalog is written rather than one refresh later.
+      await sweepHyperframesExports(p.id).catch(() => {});
       // The whole catalog, not a summary: listProjects hands the Library the full
       // file list and the panel iterates it. Replacing it with counts here left
       // every project looking empty.
@@ -3574,7 +3609,7 @@ const server = createServer(async (req, res) => {
             label: `render template ${slug}`,
             project: id,
             bin: "npx",
-            args: ["--yes", "hyperframes", "render", "--output", join(outDir, `${slug}.mp4`), "--quality", "draft"],
+            args: ["--yes", "hyperframes", "render", "--output", join(hyperframesExportDir(outDir), `${slug}.mp4`), "--quality", "draft"],
             cwd: outDir,
             note: "run this after Claude has written index.html; the result is a draft MP4 with the selected audio",
           }
@@ -8130,7 +8165,7 @@ async function fetchVoiceList() {
           label: `render ${built.folder}`,
           project: id,
           bin: "npx",
-          args: ["--yes", "hyperframes", "render", "--output", join(renderOut, `${built.folder}.mp4`), "--quality", "draft"],
+          args: ["--yes", "hyperframes", "render", "--output", join(hyperframesExportDir(renderOut), `${built.folder}.mp4`), "--quality", "draft"],
           cwd: renderOut,
         };
         return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, seconds: built.durationSec, scenes: clips.filter((clip) => clip.scene).length, missingScenes, renderStep });
