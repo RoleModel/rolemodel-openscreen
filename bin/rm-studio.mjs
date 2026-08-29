@@ -444,6 +444,33 @@ async function readHyperframesExportFiles(root) {
 
 const hyperframesExportSignature = (entry) => `${entry.bytes}:${entry.mtime}`;
 
+/*
+ * What the composition is made of, as one string that changes when any of it
+ * does.
+ *
+ * HyperFrames ships no file watcher, so editing a composition in a real editor
+ * changes the file on disk and nothing tells the embedded editor. Studio already
+ * polls this folder for finished renders; carrying a source signature on the
+ * same poll is enough for the view to notice an outside edit and reload, without
+ * HyperFrames needing to grow anything.
+ *
+ * The composition, its theme, and the Canvas components it draws with — the
+ * files somebody actually edits by hand. Media is excluded deliberately: a
+ * render writing into this folder must not read as an edit.
+ */
+async function hyperframesSourceSignature(root) {
+  const componentDir = join(root, "assets", "canvas-components");
+  const components = (await readdir(componentDir).catch(() => []))
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => join(componentDir, name));
+  const files = [join(root, "index.html"), join(root, "theme.css"), ...components].sort();
+  const parts = await Promise.all(files.map(async (file) => {
+    const info = await stat(file).catch(() => null);
+    return info?.isFile() ? `${basename(file)}:${info.size}:${info.mtimeMs}` : "";
+  }));
+  return parts.filter(Boolean).join("|");
+}
+
 async function promoteHyperframesExport(id, root, entry) {
   const folder = basename(root);
   const extension = extname(entry.name).toLowerCase();
@@ -762,6 +789,7 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
     state: studio.state,
     error: studio.error,
     exports: (await syncHyperframesExports(id, root, studio)).exports,
+    source: await hyperframesSourceSignature(root),
     url: `http://localhost:${studio.port}/#project/${encodeURIComponent(basename(candidate))}`,
   };
 }
@@ -3701,7 +3729,7 @@ const server = createServer(async (req, res) => {
         hyperframesStudios.set(root, studio);
       }
       const synced = await syncHyperframesExports(id, root, studio);
-      return json(res, 200, synced);
+      return json(res, 200, { ...synced, source: await hyperframesSourceSignature(root) });
     }
 
     /* A motion project is an editable composition folder, including any render

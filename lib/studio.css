@@ -2589,6 +2589,19 @@ button.usage-run:focus-visible {
   margin: calc(var(--op-space-medium) * -1);
 }
 
+/* Sits above the frame rather than floating over it: the frame is HyperFrames'
+   own surface, and this is Studio's control over when it reloads. */
+.hyperframes-workspace__watch {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  padding-inline: var(--op-space-medium);
+  padding-block-start: var(--op-space-2x-small);
+  color: var(--op-color-neutral-minus-three);
+  font-size: var(--op-font-x-small);
+  cursor: pointer;
+}
+
 .hyperframes-workspace__frame {
   inline-size: 100%;
   flex: 1 1 auto;
