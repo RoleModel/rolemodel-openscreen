@@ -432,7 +432,7 @@ class RMLowerThird extends RMElement {
         .anim { transform: translateX(calc(var(--rm-in-y) + var(--rm-out-y))); }
         :host { --rise: -22px; }
       </style>
-      <div class="card anim">
+      <div class="card">
         <div class="bar"></div>
         <div>
           <div class="n">${this.esc(this.attr('name', 'Name'))}</div>
@@ -1094,5 +1094,558 @@ class RMBullets extends RMElement {
   }
 }
 define('rm-bullets', RMBullets)
+
+/* ── the gradient study family ───────────────────────────────────────────── */
+
+/*
+ * A halftone field, and the eight motion studies drawn over it.
+ *
+ * Ported from a design sheet that ran the field on requestAnimationFrame. That
+ * cannot ship here: the frame at 2400ms has to be the same frame on every run or
+ * the render differs between takes. Everything below is a pure function of the
+ * composition clock, redrawn on rmseek — same picture, deterministic.
+ *
+ * The sheet drew at a fixed 1380×860 and scaled the canvas up with CSS. That is
+ * kept deliberately: the dot grid is ~47k cells a frame, so pinning the internal
+ * resolution keeps a 4K render costing exactly what a preview costs, and the
+ * halftone reads as a texture of a fixed weight rather than getting finer as the
+ * output gets bigger.
+ */
+const STUDY_W = 1380
+const STUDY_H = 860
+
+const sClamp = (v, min, max) => Math.max(min, Math.min(max, v))
+const sMix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+const sSmooth = (e0, e1, v) => { const t = sClamp((v - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t) }
+const sEaseIn = (t) => t * t * t
+const sEaseOut = (t) => 1 - (1 - t) ** 4
+const sPulse = (t, a, b) => Math.sin(sClamp((t - a) / (b - a), 0, 1) * Math.PI)
+
+/* Deterministic value noise: the same cell always returns the same number, so
+   the grain does not crawl between frames the way Math.random() would. */
+function sHash2(ix, iy) {
+  let n = ix * 374761393 + iy * 668265263
+  n = (n ^ (n >>> 13)) * 1274126177
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295
+}
+function sNoise(x, y) {
+  const ix = Math.floor(x); const iy = Math.floor(y)
+  const fx = sSmooth(0, 1, x - ix); const fy = sSmooth(0, 1, y - iy)
+  const nx0 = sHash2(ix, iy) * (1 - fx) + sHash2(ix + 1, iy) * fx
+  const nx1 = sHash2(ix, iy + 1) * (1 - fx) + sHash2(ix + 1, iy + 1) * fx
+  return nx0 * (1 - fy) + nx1 * fy
+}
+function sFbm(x, y) {
+  let value = 0; let amp = 0.56; let total = 0; let px = x; let py = y
+  for (let i = 0; i < 4; i += 1) {
+    value += sNoise(px, py) * amp
+    total += amp
+    const rx = px * 1.62 + py * 0.42
+    const ry = py * 1.48 - px * 0.36
+    px = rx + 13.7; py = ry - 8.9; amp *= 0.52
+  }
+  return value / total
+}
+const sMass = (x, y, cx, cy, rx, ry) => Math.exp(-(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2))
+
+/* The field itself: two warped lobes, a ribbon through them, and nested noise. */
+function sField(x, y, st) {
+  const t = st.phase
+  const warpA = (sFbm(x * 2.3 + t * 0.24, y * 1.8 - t * 0.16) - 0.5) * st.warp
+  const warpB = (sFbm(x * 1.7 - t * 0.12 + 4.6, y * 2.15 + t * 0.2) - 0.5) * st.warp
+  const ux = x + warpA + Math.sin(y * Math.PI * 2.1 + t * 0.9) * 0.035
+  const uy = y + warpB + Math.cos(x * Math.PI * 1.55 - t * 0.75) * 0.03
+  const massA = sMass(ux, uy, st.massAX, st.massAY, 0.36, 0.48)
+  const massB = sMass(ux, uy, st.massBX, st.massBY, 0.3, 0.46)
+  const massC = sMass(ux, uy, st.massCX, st.massCY, 0.54, 0.22)
+  const ribbon = sSmooth(0.18, 0.88, Math.sin((ux * 1.12 - uy * 0.22 + st.ribbon) * Math.PI * 2))
+  const nested = sFbm(ux * 2.2 + massA * 0.7 + t * 0.12, uy * 2.0 + massB * 0.7 - t * 0.1)
+  const shape = sClamp(massA * 0.5 + massB * 0.38 + massC * 0.24 + ribbon * 0.18 + nested * 0.22, 0, 1)
+  const hue = sClamp(shape * 0.65 + ribbon * 0.2 + nested * 0.28 + st.palette * 0.3, 0, 1)
+  return { shape, hue, ribbon, nested }
+}
+
+const sRgba = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a.toFixed(3)})`
+
+/* The soft colour wash under the dots. */
+function sPaintWash(ctx, w, h, st, pal) {
+  const soft = (cx, cy, rx, ry, color, alpha) => {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(rx, ry)
+    const g = ctx.createRadialGradient(0, 0, 0.08, 0, 0, 1)
+    g.addColorStop(0, sRgba(color, alpha))
+    g.addColorStop(0.52, sRgba(color, alpha * 0.42))
+    g.addColorStop(1, sRgba(color, 0))
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+  }
+  ctx.save()
+  ctx.globalCompositeOperation = 'screen'
+  ctx.filter = `blur(${28 + st.blend * 18}px)`
+  soft(st.massAX * w, st.massAY * h, w * (0.32 + st.blend * 0.08), h * 0.42, pal.green, 0.17 + st.blend * 0.08)
+  soft(st.massBX * w, st.massBY * h, w * 0.3, h * (0.4 + st.blend * 0.06), pal.cyan, 0.14 + st.blend * 0.07)
+  soft(st.massCX * w, st.massCY * h, w * 0.46, h * 0.2, pal.amber, 0.08 + st.blend * 0.04)
+  const ribbonY = h * (0.5 + Math.sin(st.phase * 0.72) * 0.16)
+  const ribbon = ctx.createLinearGradient(0, 0, w, 0)
+  ribbon.addColorStop(0, sRgba(pal.green, 0))
+  ribbon.addColorStop(0.28, sRgba(pal.green, 0.11 + st.blend * 0.04))
+  ribbon.addColorStop(0.58, sRgba(pal.cyan, 0.12 + st.blend * 0.05))
+  ribbon.addColorStop(0.86, sRgba(pal.amber, 0.06 + st.blend * 0.03))
+  ribbon.addColorStop(1, sRgba(pal.cyan, 0))
+  ctx.strokeStyle = ribbon
+  ctx.lineWidth = h * (0.18 + st.blend * 0.08)
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-w * 0.14, ribbonY + Math.sin(st.phase * 0.9) * h * 0.08)
+  ctx.bezierCurveTo(w * 0.2, ribbonY - h * 0.24, w * 0.62, ribbonY + h * 0.26, w * 1.14, ribbonY - Math.cos(st.phase * 0.7) * h * 0.1)
+  ctx.stroke(); ctx.restore()
+}
+
+/* The dot field. Grain comes from the cell's own hash, not from a running RNG,
+   so a frame drawn on its own matches the same frame drawn in sequence. */
+function sDrawField(ctx, w, h, st, pal) {
+  const spacing = 5.15 / st.density
+  const radius = 1.02 * st.radius
+  const bg = ctx.createLinearGradient(0, 0, w, h)
+  bg.addColorStop(0, sRgba(sMix(pal.ground, pal.green, 0.07), 1))
+  bg.addColorStop(0.52, sRgba(pal.ground, 1))
+  bg.addColorStop(1, sRgba(sMix(pal.ground, [0, 0, 0], 0.35), 1))
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+  sPaintWash(ctx, w, h, st, pal)
+
+  const colors = [pal.green, pal.cyan, pal.paper, pal.amber, sMix(pal.green, pal.ground, 0.5)]
+  const dark = sMix(pal.ground, [0, 0, 0], 0.3)
+  const light = sMix(pal.paper, pal.ground, 0.06)
+  const cx = w * st.centerX
+  const cy = h * st.centerY
+  const maxD = Math.hypot(w * 0.5, h * 0.5)
+
+  for (let y = -spacing; y < h + spacing; y += spacing) {
+    const row = y / h
+    for (let x = -spacing; x < w + spacing; x += spacing) {
+      const col = x / w
+      const dist = Math.hypot(x - cx, y - cy) / maxD
+      const field = sField(col, row, st)
+      const centerDark = sClamp(1 - dist * 2.25, 0, 1) * 0.68
+      const topLight = sClamp(1 - row * 1.6, 0, 1)
+      const grain = sHash2(Math.round(x / spacing), Math.round(y / spacing))
+      let energy = 0.14 + topLight * 0.18 + field.shape * (0.52 + st.blend * 0.24) + st.lift - centerDark * 0.4
+      energy = sClamp(energy + (grain - 0.5) * 0.025, 0.03, 0.98)
+      const colorSeed = field.hue * 3.2 + st.palette * 1.4 + row * 0.42
+      const ci = ((Math.floor(colorSeed) % colors.length) + colors.length) % colors.length
+      const tonal = sMix(dark, light, energy)
+      const fieldColor = sMix(colors[ci], colors[(ci + 1) % colors.length], sSmooth(0.24, 0.78, field.ribbon))
+      const color = sMix(tonal, fieldColor, 0.34 + field.shape * 0.32 + st.wash * 0.22)
+      const alpha = sClamp(0.16 + energy * 0.72 + st.blend * 0.12, 0.12, 0.98)
+      const sizeBase = 0.36 + energy * 1.04 + field.shape * st.shapeScale + field.ribbon * st.ribbonScale
+      const size = radius * sClamp(sizeBase + (grain - 0.5) * 0.045, 0.3, 4.2)
+      ctx.fillStyle = sRgba(color, alpha)
+      ctx.beginPath(); ctx.arc(x + (grain - 0.5) * 0.12, y, size, 0, Math.PI * 2); ctx.fill()
+    }
+  }
+
+  if (st.blend > 0.01) {
+    ctx.fillStyle = sRgba(pal.green, 0.08 * st.blend)
+    ctx.fillRect(0, 0, w, h)
+    ctx.fillStyle = sRgba(pal.cyan, 0.07 * st.blend)
+    ctx.fillRect(w * 0.18, 0, w * 0.82, h)
+  }
+  const vig = ctx.createRadialGradient(cx, cy, h * 0.04, cx, cy, maxD * 0.92)
+  vig.addColorStop(0, 'rgba(0,0,0,0.08)')
+  vig.addColorStop(0.5, 'rgba(0,0,0,0.03)')
+  vig.addColorStop(1, 'rgba(0,0,0,0.44)')
+  ctx.fillStyle = vig
+  ctx.fillRect(0, 0, w, h)
+}
+
+/*
+ * The eight studies are eight motions over that one field, which is why they are
+ * a `mode` rather than eight components. Each returns where the plate is, how
+ * hard the field is blooming, and what the body should do.
+ */
+const STUDY_MODES = ['current', 'bloom', 'softCut', 'cutCurveA', 'cutCurveB', 'wipe', 'claude', 'proof']
+
+function sMotion(mode, time, phase) {
+  /*
+   * Where in the drift this card sits.
+   *
+   * The sheet offset each study by its index, which is what gave eight cards on
+   * one page eight different fields. Without it every study starts at the same
+   * instant — and that instant happens to park both colour masses off the edges
+   * of the frame, so the field reads as nearly black. It is a variable rather
+   * than an index because a component does not know what number it is.
+   */
+  const slow = time * 0.074 + phase
+  const cycle = (time % 5.2) / 5.2
+  const breakCycle = (time % 4.8) / 4.8
+  const m = {
+    swell: 0, blend: 0, hue: 0, sat: 1.12, fgBlur: 0, cutDrag: 0, cutBoost: 0,
+    plateX: Math.sin(slow * Math.PI * 2) * 54,
+    plateY: Math.cos(slow * Math.PI * 2 + 0.8) * 14,
+    plateScale: 1.04, slow, cycle,
+    a: null, b: null, body: null,
+  }
+  const scenes = (exitEase, entryEase, blur, travel) => {
+    m.a = { x: -travel * exitEase, o: sClamp(1 - exitEase * 0.95, 0, 1), blur: blur * exitEase }
+    m.b = { x: travel * (1 - entryEase), o: entryEase, blur: blur * (1 - entryEase) }
+  }
+
+  if (mode === 'current') {
+    m.body = { x: Math.sin(time * 0.22) * 8, scale: 1, blur: 0 }
+  }
+  if (mode === 'bloom') {
+    m.swell = sPulse(breakCycle, 0.22, 0.66) * 1.35
+    m.blend = sPulse(breakCycle, 0.28, 0.7) * 0.85
+    m.plateX += -118 * sPulse(breakCycle, 0.16, 0.82)
+    m.plateScale += 0.18 * m.swell
+    m.hue = 14 * m.swell
+    m.sat += 0.42 * m.swell
+    m.body = { x: 0, scale: 1 + m.swell * 0.035, blur: m.swell * 3 }
+  }
+  if (mode === 'softCut') {
+    m.swell = sPulse(cycle, 0.26, 0.58) * 0.35
+    m.blend = sPulse(cycle, 0.32, 0.56) * 0.2
+    m.plateX += -96 * sPulse(cycle, 0.22, 0.7)
+    m.plateScale += 0.08 * m.swell
+    scenes(sEaseIn(sClamp((cycle - 0.32) / 0.12, 0, 1)), sEaseOut(sClamp((cycle - 0.44) / 0.26, 0, 1)), 8, 230)
+  }
+  if (mode === 'cutCurveA' || mode === 'cutCurveB') {
+    // Cut the curve: the background keeps travelling through the cut instead of
+    // stopping at it, so the two scenes read as one continuous move.
+    const intensity = mode === 'cutCurveA' ? 0.6 : 0.45
+    const exitT = sClamp((cycle - 0.30) / 0.14, 0, 1)
+    const entryT = sClamp((cycle - 0.44) / 0.30, 0, 1)
+    const exitEase = sEaseIn(exitT)
+    const entryEase = entryT === 1 ? 1 : 1 - 2 ** (-10 * entryT)
+    const bgX = entryT > 0 ? -210 + -260 * entryEase : -210 * exitEase
+    m.plateX = bgX
+    m.plateY = Math.cos(slow * Math.PI * 2 + 0.8) * 10
+    const cut = sPulse(cycle, 0.30, 0.58)
+    m.swell = cut * (1.35 * intensity)
+    m.blend = cut * (0.85 * intensity)
+    m.plateScale = 1.04 + 0.20 * m.swell
+    m.hue = 14 * intensity * m.swell
+    m.sat = 1.04 + 0.42 * intensity * m.swell
+    m.fgBlur = cut * (6 * intensity)
+    m.cutDrag = bgX
+    m.cutBoost = cut * intensity
+    scenes(exitEase, entryEase, 8, 230)
+  }
+  if (mode === 'wipe') {
+    const out = sEaseIn(sClamp((breakCycle - 0.22) / 0.16, 0, 1))
+    const enter = sEaseOut(sClamp((breakCycle - 0.44) / 0.34, 0, 1))
+    m.swell = sPulse(breakCycle, 0.22, 0.72) * 1.65
+    m.blend = sPulse(breakCycle, 0.28, 0.72) * 0.98
+    m.plateX += -170 * sPulse(breakCycle, 0.14, 0.86)
+    m.plateScale += 0.28 * m.swell
+    m.hue = -18 * m.swell
+    m.sat += 0.5 * m.swell
+    // The outgoing scene scales through rather than sliding: a reset, not a cut.
+    m.a = { x: 0, scale: 1 + out * 0.18, o: sClamp(1 - out * 0.95, 0, 1), blur: 14 * out }
+    m.b = { x: 260 * (1 - enter), o: enter, blur: 14 * (1 - enter) }
+  }
+  if (mode === 'claude') {
+    m.plateX = Math.sin(slow * Math.PI * 2) * 28
+    m.plateY = Math.cos(slow * Math.PI * 2) * 10
+    m.sat = 1.04
+    m.body = { x: Math.sin(time * 0.42) * 10, scale: 1, blur: 0 }
+  }
+  if (mode === 'proof') {
+    m.plateX = Math.sin(slow * Math.PI * 2) * 34
+    m.plateY = Math.cos(slow * Math.PI * 2) * 8
+    m.swell = 0.15 + Math.sin(time * 0.9) * 0.06
+    m.body = { x: Math.sin(time * 0.55) * 22, scale: 1, blur: 0 }
+  }
+  return m
+}
+
+/* The field's own parameters for this instant, from the motion above. */
+function sState(m, mode) {
+  const st = {
+    phase: m.slow * 2.4 + m.plateX / 820,
+    density: 1.02 + m.swell * 0.2,
+    radius: 1.0 + m.swell * 0.72,
+    lift: 0.03 + m.blend * 0.1,
+    centerX: 0.5 + Math.sin(m.slow * Math.PI * 2) * 0.045 + m.plateX / 4200,
+    centerY: 0.52 + Math.cos(m.slow * Math.PI * 2) * 0.025 + m.plateY / 2600,
+    palette: 0.44 + Math.sin(m.slow * 1.6) * 0.12 + m.blend * 0.4,
+    wash: 0.14 + m.blend * 0.42,
+    warp: 0.22 + m.swell * 0.08,
+    shapeScale: 0.24 + m.swell * 0.82,
+    ribbonScale: 0.06 + m.swell * 0.18,
+    blend: m.blend,
+    ribbon: m.slow * 0.82 + m.plateX / 900,
+    massAX: -0.28 + ((m.slow * 0.46) % 1.56),
+    massAY: 0.42 + Math.sin(m.slow * Math.PI * 0.9) * 0.16,
+    massBX: 1.24 - ((m.slow * 0.34 + 0.28) % 1.54),
+    massBY: 0.6 + Math.cos(m.slow * Math.PI * 0.82) * 0.16,
+    massCX: 0.44 + Math.sin(m.slow * Math.PI * 0.62 + 1.4) * 0.34,
+    massCY: 0.32 + Math.cos(m.slow * Math.PI * 0.54 + 0.8) * 0.12,
+  }
+  // A landed cut-the-curve scene sat near-black between beats; lift its resting
+  // colour so the field still reads as a field when nothing is moving.
+  if (mode === 'cutCurveA' || mode === 'cutCurveB') {
+    st.lift += 0.09; st.wash += 0.12
+    st.palette = sClamp(st.palette + 0.16, 0, 1)
+    st.shapeScale += 0.14; st.ribbonScale += 0.05
+    st.radius += 0.08; st.density += 0.04
+  }
+  // Drag the masses along the cut vector so the shapes cross the frame with the
+  // plate, rather than the plate sliding over a field that stayed put.
+  if (m.cutDrag !== 0 || m.cutBoost !== 0) {
+    const lateral = m.cutDrag / 320
+    st.massAX += lateral * 1.10
+    st.massBX += lateral * 1.25
+    st.massCX += lateral * 0.85
+    st.centerX += m.cutDrag / 1100
+    st.ribbon += m.cutDrag / 260
+    st.phase += m.cutDrag / 220
+    st.warp += m.cutBoost * 0.20
+    st.shapeScale += m.cutBoost * 0.32
+    st.ribbonScale += m.cutBoost * 0.14
+  }
+  return st
+}
+
+/* Colours arrive as CSS custom properties so the palette stays themable; the
+   canvas needs numbers, and this is the one place that converts them. */
+const sProbe = document.createElement('canvas').getContext('2d')
+function sColor(value, fallback) {
+  sProbe.fillStyle = fallback
+  try { sProbe.fillStyle = value } catch { /* keep the fallback */ }
+  const hex = sProbe.fillStyle
+  if (hex.startsWith('#')) return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
+  const parts = hex.match(/[\d.]+/g) ?? []
+  return [Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0]
+}
+
+const FIELD = `
+  :host {
+    /* The sheet's palette as fallbacks only, so retuning the brand retunes the
+       studies — the same contract every other component here follows. */
+    --ground: var(--op-color-neutral-plus-max, #07100c);
+    --paper-ink: var(--op-color-neutral-minus-max, #fff8e9);
+    --green: var(--op-color-academy-primary-base, #45d86e);
+    --cyan: var(--op-color-primary-base, #19b7d5);
+    --amber: var(--op-color-secondary-base, #f1b64a);
+    --coral: var(--op-color-tertiary-base, #d97757);
+    display: block; inset: 0; width: 100%; height: 100%;
+  }
+  .field { position:absolute; inset:0; overflow:hidden; background:var(--ground); --rise:0px; }
+  /* Oversized and centred: the plate travels during a cut, and a plate the size
+     of the frame would show the ground along the edge it moves away from. */
+  canvas { position:absolute; left:50%; top:50%; width:126%; height:126%;
+           transform:translate(-50%,-50%); will-change:transform, filter; }
+  .plate { position:absolute; inset:5.86cqw; border:.12cqw solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
+           border-radius:2.44cqw; pointer-events:none; }
+  .axis { position:absolute; left:3.91cqw; right:3.91cqw; top:3.67cqw; z-index:3; display:flex;
+          justify-content:space-between; color:color-mix(in srgb, var(--paper-ink) 62%, transparent);
+          font-family:var(--mono); font-size:1.47cqw; letter-spacing:.08em; text-transform:uppercase; }
+  .ticker { position:absolute; right:3.42cqw; bottom:2.93cqw; z-index:3;
+            color:color-mix(in srgb, var(--paper-ink) 62%, transparent);
+            font-family:var(--mono); font-size:1.47cqw; letter-spacing:.08em; text-transform:uppercase; }
+  .headline { position:absolute; left:50%; top:50%; width:78%; transform:translate(-50%,-50%);
+              color:var(--paper-ink); font-size:6.6cqw; font-weight:950; line-height:.92;
+              letter-spacing:-.04em; text-align:center; will-change:transform, filter, opacity;
+              text-shadow:.12cqw 0 color-mix(in srgb, var(--cyan) 42%, transparent),
+                          -.12cqw 0 color-mix(in srgb, var(--coral) 28%, transparent),
+                          0 2.44cqw 6.35cqw rgba(0,0,0,.46); }
+  .scene { position:absolute; left:50%; top:50%; width:78%; transform:translate(-50%,-50%);
+           will-change:transform, filter, opacity; }
+`
+
+const studyChrome = (el) => `
+  <canvas aria-hidden="true"></canvas>
+  <div class="plate"></div>
+  <div class="axis"><span>${el.esc(el.attr('axis-left', ''))}</span><span>${el.esc(el.attr('axis-right', ''))}</span></div>
+  ${el.attr('ticker') ? `<div class="ticker">${el.esc(el.attr('ticker'))}</div>` : ''}
+`
+
+/*
+ * The field's colours arrive as attributes so they can be driven from the
+ * timeline. Written onto the host as custom properties rather than interpolated
+ * into the stylesheet: the shadow CSS is one constant shared by four components,
+ * and re-templating it per instance would defeat that.
+ */
+const fieldStyle = (el) => {
+  const set = (name, value) => (value ? `${name}:${value};` : '')
+  return set('--ground', el.attr('ground'))
+    + set('--paper-ink', el.attr('paper'))
+    + set('--green', el.attr('green'))
+    + set('--cyan', el.attr('cyan'))
+    + set('--amber', el.attr('amber'))
+}
+
+const FIELD_FIELDS = ['mode', 'phase', 'axis-left', 'axis-right', 'ticker', 'ground', 'paper', 'green', 'cyan', 'amber', 'bloom', 'at', 'for']
+
+/*
+ * Wire a study up to the clock.
+ *
+ * One place, because all four do the same thing: read the composition time,
+ * work out the motion, paint the field and move the body. Redrawn on rmseek and
+ * never on a frame loop — see the note at the top of this section.
+ */
+function mountStudy(host, mode, apply) {
+  const canvas = host.shadowRoot.querySelector('canvas')
+  const ctx = canvas?.getContext('2d')
+  if (!ctx) return
+  canvas.width = STUDY_W
+  canvas.height = STUDY_H
+  const bloom = Number(host.attr('bloom', ''))
+  const draw = () => {
+    const css = getComputedStyle(host)
+    const pal = {
+      ground: sColor(css.getPropertyValue('--ground'), 'rgb(7, 16, 12)'),
+      paper: sColor(css.getPropertyValue('--paper-ink'), 'rgb(255, 248, 233)'),
+      green: sColor(css.getPropertyValue('--green'), 'rgb(69, 216, 110)'),
+      cyan: sColor(css.getPropertyValue('--cyan'), 'rgb(25, 183, 213)'),
+      amber: sColor(css.getPropertyValue('--amber'), 'rgb(241, 182, 74)'),
+    }
+    // The clip's own time, so a study reads the same wherever it is mounted.
+    const time = Math.max(0, RM.t - (Number(host.attr('at', 0)) || 0)) / 1000
+    const phase = Number(host.attr('phase', ''))
+    const m = sMotion(mode, time, Number.isFinite(phase) ? phase : 1.4)
+    if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
+    const st = sState(m, mode)
+    canvas.style.transform = `translate(calc(-50% + ${m.plateX}px), calc(-50% + ${m.plateY}px)) scale(${m.plateScale})`
+    canvas.style.filter = `hue-rotate(${m.hue}deg) saturate(${m.sat}) blur(${m.fgBlur}px)`
+    apply(m)
+    sDrawField(ctx, STUDY_W, STUDY_H, st, pal)
+  }
+  const onSeek = () => draw()
+  root.addEventListener('rmseek', onSeek)
+  draw()
+  host._dispose = () => root.removeEventListener('rmseek', onSeek)
+}
+
+const place = (node, part) => {
+  if (!node || !part) return
+  node.style.transform = `translate(-50%, -50%) translateX(${part.x ?? 0}px) scale(${part.scale ?? 1})`
+  if (part.o !== undefined) node.style.opacity = String(part.o)
+  node.style.filter = `blur(${part.blur ?? 0}px)`
+}
+
+class RMStudyBase extends RMElement {
+  disconnectedCallback() { this._dispose?.(); this._dispose = null }
+  mode() { return STUDY_MODES.includes(this.attr('mode')) ? this.attr('mode') : this.constructor.defaultMode }
+}
+
+/** One line of display type over the field. `accent` gradient-fills a phrase. */
+class RMStudyTitle extends RMStudyBase {
+  static defaultMode = 'current'
+  static fields = ['title', 'accent', ...FIELD_FIELDS]
+  render() {
+    this._dispose?.()
+    const title = this.attr('title', 'Creating video should be easy.')
+    const accent = this.attr('accent', '')
+    const marked = accent && title.includes(accent)
+      ? this.esc(title).replace(this.esc(accent), `<span class="accent">${this.esc(accent)}</span>`)
+      : this.esc(title)
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}${FIELD}
+        .accent { color:transparent; background:linear-gradient(90deg,var(--green),var(--cyan),var(--amber));
+                  -webkit-background-clip:text; background-clip:text; text-shadow:none; }
+      </style>
+      <div class="field anim" style="${fieldStyle(this)}">
+        ${studyChrome(this)}
+        <div class="headline">${marked}</div>
+      </div>`
+    const body = this.shadowRoot.querySelector('.headline')
+    mountStudy(this, this.mode(), (m) => place(body, m.body))
+  }
+}
+define('rm-study-title', RMStudyTitle)
+
+/** Two lines that cut between each other — the transition studies. */
+class RMStudyScenes extends RMStudyBase {
+  static defaultMode = 'softCut'
+  static fields = ['scene-a', 'scene-b', ...FIELD_FIELDS]
+  render() {
+    this._dispose?.()
+    this.shadowRoot.innerHTML = `
+      <style>${TYPE}${TIMING}${FIELD}</style>
+      <div class="field anim" style="${fieldStyle(this)}">
+        ${studyChrome(this)}
+        <div class="headline scene sa">${this.esc(this.attr('scene-a', "Close isn't final."))}</div>
+        <div class="headline scene sb">${this.esc(this.attr('scene-b', 'AI gets you moving.'))}</div>
+      </div>`
+    const a = this.shadowRoot.querySelector('.sa')
+    const b = this.shadowRoot.querySelector('.sb')
+    mountStudy(this, this.mode(), (m) => { place(a, m.a); place(b, m.b) })
+  }
+}
+define('rm-study-scenes', RMStudyScenes)
+
+/** The assistant-window mock: a titled bar over placeholder lines. */
+class RMStudyCard extends RMStudyBase {
+  static defaultMode = 'claude'
+  static fields = ['card-title', 'lines', ...FIELD_FIELDS]
+  render() {
+    this._dispose?.()
+    const lines = Math.max(1, Math.min(6, Number(this.attr('lines', 3)) || 3))
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}${FIELD}
+        .card { position:absolute; left:50%; top:50%; width:57.4cqw; transform:translate(-50%,-50%);
+                overflow:hidden; border-radius:2.2cqw; will-change:transform, filter;
+                border:.12cqw solid color-mix(in srgb, var(--paper-ink) 88%, var(--ground));
+                background:color-mix(in srgb, var(--paper-ink) 96%, var(--ground));
+                box-shadow:0 3.9cqw 10.5cqw rgba(0,0,0,.32); }
+        .bar { display:flex; align-items:center; height:5.13cqw; padding:0 2.4cqw;
+               border-bottom:.12cqw solid color-mix(in srgb, var(--paper-ink) 88%, var(--ground));
+               background:color-mix(in srgb, var(--paper-ink) 98%, var(--ground));
+               color:color-mix(in srgb, var(--ground) 62%, var(--paper-ink));
+               font-family:var(--mono); font-size:1.35cqw;
+               letter-spacing:.06em; text-transform:uppercase; }
+        .line { height:2.93cqw; margin:2.93cqw 4.15cqw; border-radius:99cqw;
+                background:color-mix(in srgb, var(--paper-ink) 92%, var(--ground)); }
+        /* The last line stops short and sits right, the way a reply tapers. */
+        .line:last-child { width:62%; margin-left:auto; }
+      </style>
+      <div class="field anim" style="${fieldStyle(this)}">
+        ${studyChrome(this)}
+        <div class="card">
+          <div class="bar">${this.esc(this.attr('card-title', 'Claude'))}</div>
+          ${Array.from({ length: lines }, () => '<div class="line"></div>').join('')}
+        </div>
+      </div>`
+    const card = this.shadowRoot.querySelector('.card')
+    mountStudy(this, this.mode(), (m) => place(card, m.body))
+  }
+}
+define('rm-study-card', RMStudyCard)
+
+/** A single measured claim, held on frosted glass. */
+class RMStudyProof extends RMStudyBase {
+  static defaultMode = 'proof'
+  static fields = ['value', 'label', ...FIELD_FIELDS]
+  render() {
+    this._dispose?.()
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}${FIELD}
+        .proof { position:absolute; left:50%; top:50%; width:57.4cqw; min-height:23.2cqw;
+                 display:flex; flex-direction:column; align-items:center; justify-content:center;
+                 gap:.8cqw; padding:3cqw; transform:translate(-50%,-50%); will-change:transform, filter;
+                 border:.12cqw solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
+                 border-radius:2.93cqw; background:color-mix(in srgb, var(--paper-ink) 12%, transparent);
+                 box-shadow:0 3.9cqw 10.5cqw rgba(0,0,0,.32); backdrop-filter:blur(.98cqw); }
+        .value { color:var(--paper-ink); font-size:7.2cqw; font-weight:950; letter-spacing:-.04em; line-height:1; }
+        .label { color:color-mix(in srgb, var(--paper-ink) 68%, transparent); font-family:var(--mono);
+                 font-size:1.47cqw; letter-spacing:.1em; text-transform:uppercase; text-align:center; }
+      </style>
+      <div class="field anim" style="${fieldStyle(this)}">
+        ${studyChrome(this)}
+        <div class="proof">
+          <div class="value">${this.esc(this.attr('value', '3×'))}</div>
+          <div class="label">${this.esc(this.attr('label', 'faster to a first cut'))}</div>
+        </div>
+      </div>`
+    const card = this.shadowRoot.querySelector('.proof')
+    mountStudy(this, this.mode(), (m) => place(card, m.body))
+  }
+}
+define('rm-study-proof', RMStudyProof)
+
 
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }

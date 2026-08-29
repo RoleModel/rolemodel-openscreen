@@ -241,6 +241,54 @@
     <pre>&lt;rm-bullets at="300" stagger="500" heading="What changed"&gt;&lt;li&gt;…&lt;/li&gt;&lt;/rm-bullets&gt;</pre>
   </section>
 
+  <section>
+    <h2>rm-study-title</h2>
+    <div class="sig">title · accent · axis-left · axis-right · ticker · ground · green · cyan · amber · bloom · at · for</div>
+    <div class="frame">
+      <rm-scene>
+        <rm-study-title at="200" for="4200" title="Creating video should be easy." accent="easy."
+          axis-left="section flow" axis-right="side-to-side current" ticker="slow lateral drift" ground="#07100c" paper="#fff8e9" green="#45d86e" cyan="#19b7d5" amber="#f1b64a" mode="bloom" phase="1.4"></rm-study-title>
+      </rm-scene>
+    </div>
+    <pre>&lt;rm-study-title title="Creating video should be easy." accent="easy."&gt;&lt;/rm-study-title&gt;</pre>
+  </section>
+
+  <section>
+    <h2>rm-study-scenes</h2>
+    <div class="sig">scene-a · scene-b · shift · axis-left · axis-right · ticker · ground · green · cyan · amber · bloom · at · for</div>
+    <div class="frame">
+      <rm-scene>
+        <rm-study-scenes at="200" for="4200" scene-a="Close isn't final." scene-b="AI gets you moving." shift="4"
+          axis-left="soft seam" axis-right="within same section" ticker="matched left flow" ground="#07100c" paper="#fff8e9" green="#45d86e" cyan="#19b7d5" amber="#f1b64a" mode="cutCurveA" phase="2.2"></rm-study-scenes>
+      </rm-scene>
+    </div>
+    <pre>&lt;rm-study-scenes scene-a="Close isn't final." scene-b="AI gets you moving." shift="4"&gt;&lt;/rm-study-scenes&gt;</pre>
+  </section>
+
+  <section>
+    <h2>rm-study-card</h2>
+    <div class="sig">card-title · lines · axis-left · axis-right · ticker · ground · green · cyan · amber · bloom · at · for</div>
+    <div class="frame">
+      <rm-scene>
+        <rm-study-card at="200" for="4200" card-title="Claude" lines="3" bloom="0.28"
+          axis-left="artifact section" axis-right="same modal world" ticker="calmer field" ground="#07100c" paper="#fff8e9" green="#45d86e" cyan="#19b7d5" amber="#f1b64a" mode="claude" phase="3.1"></rm-study-card>
+      </rm-scene>
+    </div>
+    <pre>&lt;rm-study-card card-title="Claude" lines="3"&gt;&lt;/rm-study-card&gt;</pre>
+  </section>
+
+  <section>
+    <h2>rm-study-proof</h2>
+    <div class="sig">value · label · axis-left · axis-right · ticker · ground · green · cyan · amber · bloom · at · for</div>
+    <div class="frame">
+      <rm-scene>
+        <rm-study-proof at="200" for="4200" value="3×" label="faster to a first cut"
+          axis-left="proof beats" axis-right="measured slides" ticker="controlled lateral moves" ground="#07100c" paper="#fff8e9" green="#45d86e" cyan="#19b7d5" amber="#f1b64a" mode="proof" phase="0.8"></rm-study-proof>
+      </rm-scene>
+    </div>
+    <pre>&lt;rm-study-proof value="3×" label="faster to a first cut"&gt;&lt;/rm-study-proof&gt;</pre>
+  </section>
+
   <script type="module">     import { RM } from "./rm-video.js"; const scrub = document.getElementById("scrub"); const tv = document.getElementById("tv"); const play = document.getElementById("play"); await RM.ready();
     const set = (ms) => { RM.seek(ms); scrub.value = ms; tv.textContent = ms + " ms"; }; scrub.oninput = () => set(Number(scrub.value)); set(0);
     let raf = null, t0 = 0; play.onclick = () => { if (raf) { cancelAnimationFrame(raf); raf = null; play.textContent = "Play"; return; } play.textContent = "Pause"; t0 = performance.now() - Number(scrub.value); const tick = () => { const ms = (performance.now() - t0) % Number(scrub.max); set(Math.round(ms)); raf = requestAnimationFrame(tick); }; tick(); };
