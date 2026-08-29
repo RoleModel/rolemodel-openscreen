@@ -140,8 +140,32 @@ These are all environment, and all of them cost someone an hour already.
 | `pnpm install` installs no dev dependencies | `NODE_ENV=production` in your shell. Remove it, then run `pnpm install` again. |
 | Electron dies on `Cannot find module …/record` | `ELECTRON_RUN_AS_NODE` leaked from an editor terminal. The toolkit strips it for children; a shell you ran it in yourself does not. |
 | `cargo not found` with Rust installed | The build script looked only in rustup's `~/.cargo/bin`. Fixed in our fork; it checks `$CARGO`, rustup, then PATH. |
-| A spawn works in your terminal and fails from the app | A GUI app launched from Finder does not inherit your shell's PATH, so `/opt/homebrew/bin` is not on it. |
+| A spawn works in your terminal and fails from the app | A GUI app launched from Finder does not inherit your shell's PATH, so `/opt/homebrew/bin` is not on it. Anything spawned directly needs `env: jobs.childEnv()` — `jobs.addPath()` only reaches children the job runner starts. |
 | The first release build fails | whisper-stt artifacts expire, and the macOS job refuses to package without them. Run `build-whisper-stt.yml` first. |
+| A button in Studio does nothing at all | An older `rm-studio` still serving on that port. The port changes each launch and old processes keep running, so a tab can be talking to a build from days ago. `ps aux \| grep rm-studio`. |
+| A fetch reports "could not reach the Studio" and the server is fine | `.then(r => r.json())` on a reply that is not JSON. The throw is unhandled and the catch beside it blames the connection. Use `responseJson`, which reads the body first. |
+| The machine is slow for hours with nothing running | Orphaned `hyperframes preview` servers. They are reparented to init and can spin at ~100% CPU indefinitely; a wedged one needs `kill -9`. |
+| `hyperframes render --format webm` fills the project with PNGs | WebM renders with alpha, so frames extract as RGBA PNG into the render folder — gigabytes of them. Transcode the finished MP4 with ffmpeg instead. |
+
+### One clock, three copies of it
+
+The class of bug that cost the most in one session, worth naming so it is
+recognised early. When Studio builds a cut it writes three values derived from
+where the clips were at that instant:
+
+- `<main data-duration>` — the composition's length
+- the canvas clock's `data-duration`, and the `.m4a` staged to match it
+- each canvas component's `at=`, offset onto the composition clock
+
+Move clips in the motion editor and every one of them is silently wrong: a title
+that never appears, a video ending in dead air, transitions at boundaries that no
+longer exist. Nothing errors, because none of the three has anything to
+contradict it — the clock in particular is the one element whose duration is not
+evidence of something you can see.
+
+`data-assembly-clock-derived` is emitted alongside the clock as the "derived
+versus deliberate" signal a reconcile pass needs. The pass itself is not written
+yet; until it is, **rebuild the cut rather than repairing a composition by hand.**
 
 ---
 

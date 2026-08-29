@@ -502,7 +502,7 @@ class RMImage extends RMElement {
     const w = Number(this.attr('w', 30))
     const raw = this.attr('src')
     // A name resolves against the stage's base; a path is the author's business.
-    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const src = !raw || raw.includes('/') || /^[a-z]+:/i.test(raw) ? raw : `${base}/${raw}`
     this.shadowRoot.innerHTML = `
       <style>
@@ -585,7 +585,7 @@ class RMShader extends RMElement {
     const showOverlay = this.attr('overlay', 'on') === 'on'
     const showMark = showOverlay && this.attr('mark', 'off') === 'on'
     const rawImage = this.attr('image')
-    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
     const hasImage = Boolean(imageSource)
     this.shadowRoot.innerHTML =
@@ -778,7 +778,7 @@ class RMPixelReveal extends RMElement {
     const colorB = shaderColour(this.attr('color-b'), background)
     const showDuotone = this.attr('show-duotone', 'off') === 'on'
     const rawImage = this.attr('image')
-    const base = this.closest('rm-scene')?.getAttribute('assets') ?? ''
+    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
     const hasImage = Boolean(imageSource)
     this.shadowRoot.innerHTML =

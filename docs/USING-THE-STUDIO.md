@@ -113,6 +113,54 @@ command. The most common causes are ordinary:
   clips this is true of.
 - **A remote will not list.** Storage's **Test** authenticates for real, which is
   the cheapest way to tell a wrong key from a wrong endpoint.
+- **A button does nothing, and no error appears.** Almost always an older Studio
+  still running on that port. The app takes a fresh port each launch and old ones
+  keep serving, so a tab can be talking to yesterday's build, which has no idea
+  about a route added since. Quit every Studio window and start one.
+  `ps aux | grep rm-studio` will show you how many are really running.
+- **"could not reach the Studio" when the Studio is plainly running.** The same
+  cause. An old server answers `404 not found` as plain text, the page cannot
+  parse it as JSON, and the message blames the connection. Restarting fixes it.
+- **A command fails saying a tool is missing that you know is installed.**
+  Launched from Finder, an app inherits `PATH=/usr/bin:/bin` — Homebrew is not on
+  it, so `ffmpeg`, `rclone` and `zip` are invisible even though they work in your
+  terminal. Studio puts `/opt/homebrew/bin` back for the commands it runs; if you
+  meet this anywhere else, launching from a terminal is the quick way past it.
+- **Everything is slow, and it is not the render.** Preview servers can be left
+  behind by earlier sessions and spin at full CPU indefinitely. `ps aux | grep
+  hyperframes` will find them; killing them costs nothing, because a preview is
+  recreated on demand.
+
+## When the video is wrong rather than broken
+
+These come from moving clips in the motion editor *after* Studio built the cut.
+Studio writes several values derived from where the clips were at the time, and
+nothing recomputes them when they move.
+
+- **A title card is blank, or appears at the wrong moment.** A canvas component
+  carries its own `at=` time, fixed to the composition when the cut was built.
+  Move that clip and the two disagree: the element is on screen while its content
+  is still waiting for a moment that has already passed. Rebuild the cut rather
+  than nudging the title.
+- **The video ends with several seconds of black.** The composition's length is
+  its own value, not the sum of what is on screen. Tighten the edit and the
+  footage gets shorter while that number stays, so the end is padded with
+  nothing. Rebuilding the cut sets it again.
+- **A dark flash mid-video, at no cut.** A transition sits at a boundary that has
+  since moved. Same cause, same fix.
+- **A speaker has no name plate.** Lower thirds come from the script, and only if
+  the person is named there. A bare name on its own line is enough:
+
+  ```
+  Jamey Meeker
+  Marketing Director
+  Time wasn't the only problem…
+  ```
+
+  The second line is optional and becomes the smaller line on the plate. A
+  selection made before the script named anybody keeps its own copy of the
+  answer — regenerate the assembly, or the plates stay missing however many times
+  you render.
 
 ## Where things are on disk
 

@@ -21,33 +21,10 @@
          <a class="sidebar__brand sidebar__brand--left" href="/">
             <img height="50" width="50" src="/brand-mark.svg" />
          </a>
+         <h1>RoleModel Studio</h1>
+         <div class="root" id="root">…</div>
          <div class="sidebar__content sidebar__content--start">
-            <h1>RoleModel Studio</h1>
-            <div class="root" id="root">…</div>
-            <!--
-               The nav in the order the work happens.
-               ============================================================
-               It used to be thirteen siblings named after subsystems — cut, compose,
-               scenes, recast — with nothing to say which came first. Every one of them
-               also opened by asking "which project?", so they were all equally step
-               one, and the nav could not have been ordered even if somebody had wanted
-               to. The project moved to the header, which is what freed this.
-
-               Two groups, because the app has two kinds of panel: nine that work
-               inside a project, and five that are about the toolkit and reference
-               `S.projects` zero times.
-
-               The headings are SIBLINGS of the buttons, not wrappers around them.
-               Optics styles this component through `.sidebar__content > *` in four
-               places — the base alignment and all three widths — and `display:
-               contents` on a wrapper does not fool a child combinator: it removes the
-               box, not the parentage. Grouping them cost the buttons their left
-               alignment and, in the rail, the `font-size: 0` that collapses their
-               labels. An <h2> gives the grouping real document structure without
-               putting anything between the content and its children.
-            -->
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>
-
             <h2 class="navgroup" data-group="make">Make a video</h2>
             <button class="btn btn--no-border" data-group="make" data-v="workflow">Video</button>
             <button class="btn btn--no-border" data-group="make" data-v="voice">Voice</button>
@@ -59,50 +36,21 @@
             <button class="btn btn--no-border" data-v="storage">Storage</button>
             <button class="btn btn--no-border" data-v="usage">Usage</button>
             <button class="btn btn--no-border" data-v="console">Console<span class="badge" id="jobn"></span></button>
-            <div class="tools" id="tools"></div>
+            
          </div>
-         <!--
-            Docs sit at the bottom, under the tool indicators, in Optics' own
-            end-aligned block.
-            ============================================================
-            A second `.sidebar__content` rather than one more button in the first:
-            the base class carries `flex-grow: 1`, so two of them share the free
-            space and `--end` pushes this one's content to the floor of the
-            sidebar. That is the difference between "last in the list" and "at the
-            bottom", and Docs is the second thing — it is not another destination
-            in the pipeline, it is where you go when the pipeline has not helped.
-
-            It leaves the app rather than being a view, so `data-v` is deliberately
-            absent: the router would try to render a view called "docs" and the nav
-            painters would mark it current, leaving the sidebar highlighting a page
-            you are not on.
-         -->
          <div class="sidebar__content sidebar__content--end">
+         <div class="tools" id="tools"></div>
             <button class="btn btn--no-border" id="docs">Docs</button>
-            <!--
-               Signing out is an account action, not a storyboard one.
-               ============================================================
-               It lived in the Storyboard's right-hand rail, beside the sharing
-               dial that put it there — which meant the way to sign out was to
-               open one particular panel and scroll to the bottom of its
-               settings. Who you are is app-wide, so it belongs with the other
-               app-wide thing at the floor of the sidebar.
-
-               `hidden` until somebody is signed in: a sign-out button with no
-               session behind it is a control that does nothing, permanently.
-
-               No `data-v`, for the same reason Docs has none — the router would
-               render a view called "signout" and the nav painters would mark it
-               current.
-            -->
             <button class="btn btn--no-border" id="signout" hidden>Sign out</button>
          </div>
       </nav>
    </div>
 
    <div class="op-page__main">
-      <header class="op-page__main-header" id="crumbs"></header>
-      <aside class="activity" id="activity" aria-live="polite" hidden></aside>
+      <header class="op-page__main-header">
+         <div class="op-page__header-context" id="crumbs"></div>
+         <aside class="activity" id="activity" aria-live="polite" hidden></aside>
+      </header>
       <main class="op-page__main-content" id="main"></main>
       <footer class="op-page__main-footer"></footer>
 
@@ -398,6 +346,7 @@
       <div data-region="footer">
          <pre data-el="status" class="status" hidden></pre>
          <button data-el="draft" class="btn">Draft it with Claude</button>
+         <button data-el="restore" class="btn ghost" type="button" hidden>Restore previous save</button>
          <button data-el="save" class="btn ghost">Save scene</button>
       </div>
    </template>

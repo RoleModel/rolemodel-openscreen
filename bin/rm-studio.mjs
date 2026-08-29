@@ -23,7 +23,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { copyFile, cp, lstat, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { copyFile, cp, link, lstat, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { pipeline } from "node:stream/promises";
@@ -35,7 +35,7 @@ import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
-import { createStudioSkill, fetchStudioSkill, fetchStudioSkills, updateStudioSkill } from "../lib/supabase.mjs";
+import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/supabase.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
@@ -43,6 +43,7 @@ import {
 	graphFor,
 	boardToDocument,
 	chosenTake,
+	orderedSlots,
 	slotsFromBrief,
 	takeId as takeIdFor,
 	toCutlist,
@@ -70,6 +71,7 @@ import {
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
+import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
 	agentChoice,
@@ -88,6 +90,8 @@ import {
 	setCurrentProject,
 	setLastView,
 	setOpenFrameSettings,
+	setSlackSettings,
+	slackSettings,
 } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
@@ -201,15 +205,159 @@ const PREVIEWS_KEPT = 8;
 const projectTransfers = new Map();
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
+const sceneFootagePath = (id, name) => join(projectDir(id), "scenes", `${name}.footage.json`);
+const sceneRevisionDir = (id, name) => join(projectDir(id), "scenes", ".history", name);
+
+/* A graph shot is only a visual position for a board slot; it has no life of
+ * its own. Rebuilding slots from an edited brief can retire a slot id, and the
+ * old code retained that now-orphaned shot in `graph.nodes`. It looked editable
+ * on Canvas but the save endpoint correctly rejected it because no slot backed
+ * it any more. Keep real standalone nodes (notes, titles, scene components),
+ * but remove retired shots and wires that lead to them at the same time. */
+function pruneRetiredShotNodes(graph, slots) {
+  if (!graph || !Array.isArray(graph.nodes)) return graph;
+  const slotIds = new Set((slots ?? []).map((slot) => slot.id));
+  const nodes = graph.nodes.filter((node) => slotIds.has(node.id) || (node.kind && node.kind !== "shot"));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const outgoing = new Map();
+  for (const wire of graph.wires ?? []) {
+    const list = outgoing.get(wire.from) ?? [];
+    list.push(wire.to);
+    outgoing.set(wire.from, list);
+  }
+  const wires = (graph.wires ?? []).filter((wire) => nodeIds.has(wire.from) && nodeIds.has(wire.to));
+  const known = new Set(wires.map((wire) => `${wire.from}->${wire.to}`));
+  /* A retired node can be in the middle of an otherwise sound sequence. Follow
+   * through it to heal that one gap rather than turning the last active shot
+   * and the closing card into two unrelated runs. */
+  const visitSuccessors = (from, seen = new Set()) => {
+    if (seen.has(from)) return [];
+    seen.add(from);
+    const result = [];
+    for (const to of outgoing.get(from) ?? []) {
+      if (nodeIds.has(to)) result.push(to);
+      else result.push(...visitSuccessors(to, seen));
+    }
+    return [...new Set(result)];
+  };
+  for (const node of nodes) {
+    for (const to of visitSuccessors(node.id)) {
+      const key = `${node.id}->${to}`;
+      if (known.has(key)) continue;
+      known.add(key);
+      wires.push({ id: graphIdFor("wire", key), from: node.id, to });
+    }
+  }
+  return {
+    ...graph,
+    nodes,
+    wires,
+  };
+}
 
 /*
- * HyperFrames Studio is a second editor, not an export target.
+ * A scene body is reusable markup, but a Canvas scene also has one concrete
+ * source passage beneath that markup. Keep that passage in a sidecar instead
+ * of mixing project media paths into authored HTML: the scene can still be
+ * reused, and reopening it can restore the exact clip and in/out range it was
+ * designed against.
+ */
+async function normalizeSceneFootage(id, raw) {
+  if (raw == null) return null;
+  if (!raw || typeof raw !== "object") throw new Error("scene footage must name a project video");
+  const rel = String(raw.rel ?? "").trim();
+  if (!rel) throw new Error("scene footage needs a project video");
+  const root = resolve(mediaDir(id));
+  const file = resolve(root, rel);
+  if (!file.startsWith(root + sep)) throw new Error("scene footage must stay in this project's media");
+  const info = await stat(file).catch(() => null);
+  if (!info?.isFile()) throw new Error(`scene footage is no longer in this project: ${rel}`);
+  const inSec = Math.max(0, Number(raw.inSec) || 0);
+  const outSec = Number(raw.outSec);
+  if (!Number.isFinite(outSec) || outSec <= inSec) throw new Error("scene footage needs a valid selected range");
+  const takeId = String(raw.takeId ?? "").trim();
+  return {
+    rel: relative(root, file).split(sep).join("/"),
+    inSec: +inSec.toFixed(3),
+    outSec: +outSec.toFixed(3),
+    ...(takeId ? { takeId } : {}),
+  };
+}
+
+async function writeSceneFootage(id, name, footage) {
+  // Undefined means this request did not edit the footage relationship. That
+  // lets a reusable scene be edited from the gallery without wiping the Canvas
+  // passage it already carries; null is the deliberate "clear it" value.
+  if (footage === undefined) return;
+  const file = sceneFootagePath(id, name);
+  if (footage == null) return rm(file, { force: true });
+  await writeFile(file, `${JSON.stringify(footage, null, 2)}\n`, "utf8");
+}
+
+/*
+ * Scene cards are deliberately direct manipulation: removing a part updates the
+ * preview straight away. That only works if Save has a safe way back. Keep the
+ * previous body beside the scene before replacing it, rather than relying on an
+ * editor-wide undo stack that disappears as soon as the page reloads.
+ *
+ * Revisions are hidden beneath scenes/.history, so they are never offered as
+ * scenes themselves or picked up by a HyperFrames render. They are plain HTML
+ * on purpose: a damaged scene is recoverable with Finder as well as Studio.
+ */
+async function archiveSceneBody(id, name) {
+  const file = join(projectDir(id), "scenes", `${name}.html`);
+  const previous = await readFile(file, "utf8").catch(() => null);
+  if (previous == null) return null;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const revision = `${stamp}.html`;
+  const dir = sceneRevisionDir(id, name);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, revision), previous, "utf8");
+  return revision;
+}
+
+async function writeSceneBody(id, name, body) {
+  const dir = join(projectDir(id), "scenes");
+  await mkdir(dir, { recursive: true });
+  const revision = await archiveSceneBody(id, name);
+  const file = join(dir, `${name}.html`);
+  await writeFile(file, String(body ?? ""), "utf8");
+  return { file, revision };
+}
+
+async function readSceneFootage(id, name) {
+  const raw = await readFile(sceneFootagePath(id, name), "utf8")
+    .then(JSON.parse)
+    .catch(() => null);
+  return normalizeSceneFootage(id, raw).catch(() => null);
+}
+
+/* Scenes saved before footage sidecars existed still have their chosen take in
+ * the Canvas board. Recover it once and write the sidecar, so opening an old
+ * scene from the gallery does not make a person reselect material they already
+ * approved. A board pick wins over an unpicked candidate. */
+async function sceneFootageForProject(id, name) {
+  const saved = await readSceneFootage(id, name);
+  if (saved) return saved;
+  const board = await readBoard(projectDir(id), { projectId: id }).catch(() => null);
+  const slot = board?.slots?.find((item) => wpSlug(item.scene ?? "") === name);
+  const takeId = slot ? board?.picks?.[slot.id] ?? slot.takeId : null;
+  const take = takeId ? board?.takes?.find((item) => item.id === takeId && item.slotId === slot.id) : null;
+  const recovered = await normalizeSceneFootage(id, take).catch(() => null);
+  if (recovered) await writeSceneFootage(id, name, recovered);
+  return recovered;
+}
+
+/*
+ * HyperFrames Studio is the motion editor; its exports are project media.
  *
  * Each Make run gets its own folder under media/Renders/.  That folder is the
- * editable source project Claude writes and HyperFrames owns; the MP4 beside it
- * is only one render of that source.  Keep one preview server per project's
- * Renders folder so moving between two generated videos reuses the same Studio
- * instance and preserves its normal filesystem autosave/version history.
+ * editable source project Claude writes and HyperFrames owns. Its own Export
+ * action first writes into that workspace, then Studio promotes the finished
+ * MP4 into the project's Renders collection. Keep one preview server per
+ * project's Renders folder so moving between two generated videos reuses the
+ * same Studio instance and preserves its normal filesystem autosave/version
+ * history.
  */
 const hyperframesStudios = new Map();
 const HYPERFRAMES_VIDEO_EXT = new Set([".mp4", ".mov", ".m4v", ".webm"]);
@@ -259,6 +407,169 @@ async function hyperframesProjects(id) {
 }
 
 /*
+ * HyperFrames' own Export control writes below <composition>/renders/. That is
+ * correct for the editor, but not a useful final destination: the export is
+ * hidden inside a folder which can later be deleted with the composition.
+ *
+ * Treat a completed editor export exactly like any other project render. The
+ * original stays where HyperFrames expects it for its render history, and a
+ * hard link is promoted into media/Renders/ for Studio, storage, sharing, and
+ * the project catalog. A mounted or cross-device library may not support hard
+ * links, so copy in that one case rather than losing the render.
+ */
+const hyperframesExportDir = (root) => join(root, "renders");
+
+async function prepareHyperframesExportDir(root) {
+  const dir = hyperframesExportDir(root);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, ".rmignore"), "HyperFrames working renders are promoted into the project Renders folder.\n", "utf8");
+}
+
+async function readHyperframesExportFiles(root) {
+  const dir = hyperframesExportDir(root);
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && HYPERFRAMES_VIDEO_EXT.has(extname(entry.name).toLowerCase()))
+      .map(async (entry) => {
+        const file = join(dir, entry.name);
+        const info = await stat(file).catch(() => null);
+        return info?.isFile() && info.size > 0
+          ? { file, name: entry.name, bytes: info.size, mtime: info.mtime.toISOString() }
+          : null;
+      }),
+  );
+  return files.filter(Boolean).sort((a, b) => b.mtime.localeCompare(a.mtime));
+}
+
+const hyperframesExportSignature = (entry) => `${entry.bytes}:${entry.mtime}`;
+
+async function promoteHyperframesExport(id, root, entry) {
+  const folder = basename(root);
+  const extension = extname(entry.name).toLowerCase();
+  const stem = safeName(basename(entry.name, extension), "export");
+  const target = join(mediaDir(id), "Renders", `${folder}--${stem}${extension}`);
+  if (resolve(target) === resolve(entry.file)) return null;
+
+  await mkdir(dirname(target), { recursive: true });
+  await rm(target, { force: true }).catch(() => {});
+  try {
+    await link(entry.file, target);
+  } catch {
+    await copyFile(entry.file, target);
+  }
+  return {
+    name: basename(target),
+    rel: relative(mediaDir(id), target).split(sep).join("/"),
+    bytes: entry.bytes,
+    mtime: entry.mtime,
+  };
+}
+
+/*
+ * A render is written over time. Only promote it after two identical polls, so
+ * the project never receives a playable-looking but still-growing MP4.
+ */
+async function syncHyperframesExports(id, root, studio, { baseline = false } = {}) {
+  const files = await readHyperframesExportFiles(root);
+  studio.exportFiles ??= new Map();
+  studio.exports ??= [];
+  let changed = false;
+
+  for (const entry of files) {
+    const signature = hyperframesExportSignature(entry);
+    const prior = studio.exportFiles.get(entry.file);
+    if (baseline && !prior) {
+      studio.exportFiles.set(entry.file, { signature, stable: 0, promoted: signature });
+      continue;
+    }
+    if (!prior || prior.signature !== signature) {
+      studio.exportFiles.set(entry.file, { signature, stable: 0, promoted: null });
+      continue;
+    }
+    prior.stable += 1;
+    if (prior.stable < 1 || prior.promoted === signature) continue;
+    const exported = await promoteHyperframesExport(id, root, entry);
+    if (!exported) continue;
+    prior.promoted = signature;
+    studio.exports = [exported, ...studio.exports.filter((item) => item.rel !== exported.rel)]
+      .sort((a, b) => b.mtime.localeCompare(a.mtime));
+    changed = true;
+  }
+
+  if (changed) await reindex(id).catch(() => {});
+  return { exports: studio.exports, changed };
+}
+
+/*
+ * Before Canvas scenes became real timeline components, generated assemblies
+ * put every title, shader, and pixel reveal inside a single <rm-scene>.  That
+ * made a good scene preview, but a terrible handoff: HyperFrames could only
+ * select the container.  Promote just those direct children in place when an
+ * older assembly opens.  This deliberately does not rebuild the whole file,
+ * so edits somebody has already made to footage, timing, or other components
+ * stay exactly where they put them.
+ */
+const openingAttribute = (source, name) => String(source ?? "").match(new RegExp(`(?:^|\\s)${name}=(['\"])(.*?)\\1`, "i"))?.[2] ?? null;
+
+const setOpeningAttribute = (source, tag, name, value) => {
+  const attribute = new RegExp(`(\\s${name})=(['\"])[^'\"]*\\2`, "i");
+  if (attribute.test(source)) return source.replace(attribute, `$1="${value}"`);
+  return source.replace(new RegExp(`<${tag}\\b`, "i"), `<${tag} ${name}="${value}"`);
+};
+
+function promoteLegacyCanvasTimelineComponents(html) {
+  let changed = false;
+  const promoted = String(html ?? "").replace(/<rm-scene\b([^>]*)>([\s\S]*?)<\/rm-scene>/gi, (scene, sceneAttrs, sceneBody) => {
+    if (openingAttribute(sceneAttrs, "id") !== "canvas-scene-overlays") return scene;
+    const baseStartMs = Math.max(0, Number(openingAttribute(sceneAttrs, "data-start")) || 0) * 1000;
+    const sceneDurationMs = Math.max(100, (Number(openingAttribute(sceneAttrs, "data-duration")) || 0) * 1000);
+    const trackIndex = Math.max(0, Math.round(Number(openingAttribute(sceneAttrs, "data-track-index")) || 2));
+    const components = [];
+    const remainder = sceneBody.replace(/<(rm-title|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (component, tag, attrs) => {
+      const localAt = Math.max(0, Number(openingAttribute(attrs, "at")) || 0);
+      const authoredDuration = Number(openingAttribute(attrs, "for"));
+      const durationMs = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
+        ? authoredDuration
+        : Math.max(100, sceneDurationMs - localAt)));
+      const isTitle = tag.toLowerCase() === "rm-title";
+      const componentStartMs = baseStartMs + localAt;
+      const componentClass = isTitle ? "assembly-canvas-title" : "assembly-canvas-background";
+      let direct = offsetCanvasSceneTiming(component, baseStartMs);
+      direct = setOpeningAttribute(direct, tag, "data-assembly-canvas-component", tag);
+      direct = setOpeningAttribute(direct, tag, "data-start", hfSeconds(componentStartMs));
+      direct = setOpeningAttribute(direct, tag, "data-duration", hfSeconds(durationMs));
+      direct = setOpeningAttribute(direct, tag, "data-track-index", String(isTitle ? trackIndex + 1 : trackIndex));
+      if (!isTitle && !openingAttribute(attrs, "assets")) direct = setOpeningAttribute(direct, tag, "assets", "assets/imagery");
+      if (!openingAttribute(attrs, "id")) direct = setOpeningAttribute(direct, tag, "id", `${isTitle ? "canvas-title" : "canvas-background"}-${Math.round(componentStartMs)}`);
+      const existingClass = openingAttribute(attrs, "class");
+      direct = setOpeningAttribute(
+        direct,
+        tag,
+        "class",
+        [existingClass, "clip", componentClass].filter(Boolean).join(" "),
+      );
+      components.push(`    ${direct}`);
+      return "";
+    });
+    if (!components.length) return scene;
+    changed = true;
+    const preservedScene = remainder.trim()
+      ? `<rm-scene${sceneAttrs}>${remainder}</rm-scene>\n`
+      : "";
+    return `${preservedScene}${components.join("\n")}`;
+  });
+  if (!changed) return { html: promoted, changed: false };
+  const componentCss = `\n      rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }\n      rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }\n`;
+  return {
+    html: /rm-title\.assembly-canvas-title/.test(promoted)
+      ? promoted
+      : promoted.replace(/<\/style>/i, `${componentCss}    </style>`),
+    changed: true,
+  };
+}
+
+/*
  * The first generated assembly format staged tokens and fonts but had no
  * wallpaper contract. Its assembly.json identifies it as one of ours, and the
  * absent custom property identifies the pre-wallpaper HTML exactly. Upgrade
@@ -268,23 +579,33 @@ async function hyperframesProjects(id) {
 async function repairLegacyHyperframesAssembly(id, dir) {
   const assemblyPath = join(dir, "assembly.json");
   const indexPath = join(dir, "index.html");
+  const isolatedTitleCard = await isolateStandaloneTitleCard(dir);
   const [assembly, html] = await Promise.all([
     readFile(assemblyPath, "utf8").then(JSON.parse).catch(() => null),
     readFile(indexPath, "utf8").catch(() => ""),
   ]);
-  const needsWallpaper = !html.includes("--assembly-wallpaper");
+  const timelineComponents = promoteLegacyCanvasTimelineComponents(html);
+  const upgradedHtml = timelineComponents.html;
+  const needsWallpaper = !upgradedHtml.includes("--assembly-wallpaper");
   // Timeline track order is audio/timing metadata, not CSS paint order. Older
   // generated cuts had lower-third elements but no z-index, leaving every one
   // underneath the video plane.
-  const needsLowerThirdLayer = html.includes("assembly-lower-third")
-    && !/\.assembly-lower-third\s*\{[^}]*\bz-index\s*:/s.test(html);
+  const needsLowerThirdLayer = upgradedHtml.includes("assembly-lower-third")
+    && !/\.assembly-lower-third\s*\{[^}]*\bz-index\s*:/s.test(upgradedHtml);
   // Normal source clips used to have duplicate, independent <audio> tracks.
   // HyperFrames can instead treat the video's own sound as part of that clip,
   // which is what makes a picture trim or move keep its sound in sync.
   const needsNativeAudioLink = Array.isArray(assembly?.clips)
     && assembly.clips.some((clip) => !clip.audioSource)
-    && !html.includes('data-has-audio="true"');
-  if (!Array.isArray(assembly?.clips) || (!needsWallpaper && !needsLowerThirdLayer && !needsNativeAudioLink)) return false;
+    && !upgradedHtml.includes('data-has-audio="true"');
+  if (!Array.isArray(assembly?.clips) || (!needsWallpaper && !needsLowerThirdLayer && !needsNativeAudioLink)) {
+    if (timelineComponents.changed) {
+      await stageCanvasSceneRuntime(dir);
+      await writeFile(indexPath, upgradedHtml, "utf8");
+      return true;
+    }
+    return isolatedTitleCard;
+  }
 
   const manifest = await readManifest(projectDir(id));
   const staged = await stageRenderAssets(dir, {
@@ -294,7 +615,7 @@ async function repairLegacyHyperframesAssembly(id, dir) {
   });
   await writeFile(
     indexPath,
-    hyperframesAssemblyHtml({ title: assembly.title || "Review cut", clips: assembly.clips, wallpaper: staged.wallpaper }),
+    hyperframesAssemblyHtml({ title: assembly.title || "Review cut", clips: assembly.clips, wallpaper: staged.wallpaper, showAssemblyTitle: assembly.showAssemblyTitle !== false }),
     "utf8",
   );
   await writeFile(
@@ -328,7 +649,7 @@ const waitForHyperframesStudio = async (studio) => {
   throw new Error("HyperFrames Studio took too long to start. Try opening the assembly again.");
 };
 
-async function openHyperframesStudio(id, folder) {
+async function openHyperframesStudio(id, folder, { retry = true } = {}) {
   const renders = resolve(mediaDir(id), "Renders");
   const candidate = resolve(renders, basename(String(folder ?? "")));
   if (!candidate.startsWith(renders + sep) || !(await stat(join(candidate, "index.html")).catch(() => null))?.isFile()) {
@@ -345,12 +666,24 @@ async function openHyperframesStudio(id, folder) {
      Starting it from media/Renders meant every nested project had no index.html,
      so Studio opened an empty/error page even though the project existed. */
   const root = candidate;
+  // Keep HyperFrames' working output folder out of the media catalog. Each
+  // completed export is promoted to the project-level Renders folder below.
+  await prepareHyperframesExportDir(root);
   let studio = hyperframesStudios.get(root);
   if (!studio?.child) {
     const port = await freeLocalPort();
     // Studio is already the visible app. HyperFrames otherwise opens this same
     // editor in the system browser as a second window.
-    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--no-open", "--port", String(port)], {
+    /*
+     * Keep the process we start in the foreground.
+     *
+     * Without this, HyperFrames forks a background server and lets its launcher
+     * exit 0. That is a successful handoff, but `close` below correctly reads an
+     * exited child as stopped — Studio then rejects the iframe before it can use
+     * the server HyperFrames just created. A foreground preview is the server we
+     * supervise, stays on the allocated port, and dies only when Studio closes it.
+     */
+    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--no-open", "--foreground", "--port", String(port)], {
       cwd: root,
       env: jobs.childEnv(),
       stdio: ["ignore", "pipe", "pipe"],
@@ -380,12 +713,24 @@ async function openHyperframesStudio(id, folder) {
     });
   }
 
-  await waitForHyperframesStudio(studio);
+  try {
+    await waitForHyperframesStudio(studio);
+  } catch (error) {
+    /* A preview server can be reclaimed by the OS while Studio's iframe still
+       has its old URL. One clean replacement is cheap and makes Reload mean
+       "recover the editor" rather than "reload the stopped error page". */
+    if (retry && (studio.state === "stopped" || studio.state === "failed")) {
+      hyperframesStudios.delete(root);
+      return openHyperframesStudio(id, folder, { retry: false });
+    }
+    throw error;
+  }
 
   return {
     folder: basename(candidate),
     state: studio.state,
     error: studio.error,
+    exports: (await syncHyperframesExports(id, root, studio)).exports,
     url: `http://localhost:${studio.port}/#project/${encodeURIComponent(basename(candidate))}`,
   };
 }
@@ -619,6 +964,46 @@ async function materializeSharedSkill(skill) {
   }
 }
 
+/*
+ * Slack settings, local first and the team's table underneath.
+ *
+ * Order is deliberate and matches sql/studio-settings.sql: the environment, then
+ * this machine's 0600 file, then the shared row. So one person can point at a
+ * different channel for an afternoon without changing it for everybody, and a
+ * fresh install with nothing local still finds the workspace token a teammate
+ * already set up.
+ *
+ * Every failure to reach Supabase is swallowed. This is a convenience layer over
+ * a local setting: not being signed in, or being offline, must leave Slack
+ * exactly as usable as it was before the table existed.
+ */
+async function teamSlackSettings() {
+  try {
+    const { cfg, token } = await SUPABASE_SYNC.token();
+    if (!cfg?.url || !cfg?.key || !token) return null;
+    return await fetchSetting({ url: cfg.url, key: cfg.key, token, name: "slack" });
+  } catch {
+    return null;
+  }
+}
+
+async function effectiveSlackSettings() {
+  const local = await slackSettings();
+  if (local.token && local.channel) return { ...local, shared: false };
+  const team = await teamSlackSettings();
+  if (!team) return { ...local, shared: false };
+  return {
+    token: local.token ?? team.token ?? null,
+    channel: local.channel ?? team.channel ?? null,
+    source: {
+      token: local.source.token ?? (team.token ? "shared" : null),
+      channel: local.source.channel ?? (team.channel ? "shared" : null),
+    },
+    /** True when anything came from the team table, so the panel can say so. */
+    shared: Boolean((!local.token && team.token) || (!local.channel && team.channel)),
+  };
+}
+
 async function sharedSkillClient() {
   const { cfg, token } = await SUPABASE_SYNC.token();
   const userId = cfg.session?.user?.id;
@@ -726,7 +1111,7 @@ async function archiveLocalSkill(file) {
     await mkdir(scratch, { recursive: true });
     const result = await new Promise((done) => {
       const args = rootInstruction ? ["-q", "-j", archive, file] : ["-q", "-r", archive, basename(dir)];
-      const child = spawn("zip", args, { cwd: rootInstruction ? undefined : dirname(dir), stdio: ["ignore", "ignore", "pipe"] });
+      const child = spawn("zip", args, { cwd: rootInstruction ? undefined : dirname(dir), stdio: ["ignore", "ignore", "pipe"], env: jobs.childEnv() });
       let err = "";
       child.stderr.on("data", (chunk) => {
         err += String(chunk);
@@ -1025,6 +1410,7 @@ async function recoverMultiAssemblySelection(id, state = null) {
   const sources = await multiAssemblySources(id, state.sources);
   const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources, {
     scriptBeats: state?.scriptBeats ?? [],
+    transcriptCut: Boolean(state?.transcriptCut),
   });
   const recovered = {
     ...state,
@@ -1145,15 +1531,237 @@ async function linkHyperframesProjectMedia(id, outDir) {
   await symlink(mediaDir(id), link, "dir");
 }
 
-function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920, height = 1080, fps = 30 }) {
-  const titleDuration = title ? 1800 : 0;
+/*
+ * Canvas scenes use the same custom components as the visual scene editor.
+ *
+ * A HyperFrames project is portable, so do not make its `index.html` reach
+ * back into this toolkit. Stage the component runtime beside the render assets
+ * instead. The shader's Standard mark normally resolves through the toolkit's
+ * brand folder; its staged neighbour is `assets/brand`, hence the one relative
+ * URL adjustment below.
+ */
+async function stageCanvasSceneRuntime(outDir) {
+  const componentDir = join(outDir, "assets", "canvas-components");
+  await mkdir(componentDir, { recursive: true });
+  const source = await readFile(join(TOOLKIT, "components", "rm-video.js"), "utf8");
+  const runtime = source.replace('../brand/logos/standard-icon.svg', '../brand/standard-icon.svg');
+  await writeFile(join(componentDir, "rm-video.js"), runtime, "utf8");
+  await copyFile(join(TOOLKIT, "brand", "logos", "standard-icon.svg"), join(outDir, "assets", "brand", "standard-icon.svg"));
+  return "assets/canvas-components/rm-video.js";
+}
+
+/*
+ * Timing attributes are matched after whitespace or `<`, NOT after \b.
+ *
+ * `-` is a non-word character, so `\bat=` finds a word boundary between the `-`
+ * and the `a` of `data-at="500"` — and every hyphenated attribute ending in
+ * `-at` or `-for` was silently rewritten along with the bare one this is for.
+ * No shipping rm-* component uses such a name today, but scene bodies are
+ * written verbatim from authored HTML and only tag NAMES are validated, so a
+ * `data-at` arriving later would have had its value shifted by the clip offset
+ * with nothing to show for it but one subtly wrong number in a render.
+ */
+const TIMING_ATTR = (name, flags = "") => new RegExp(`(?<=[\\s<])${name}=(["'])(-?\\d+(?:\\.\\d+)?)\\1`, flags);
+
+/* A saved scene's timings start at zero because it can be previewed alone.
+   Once it is mounted on the final assembly, advance each component by the
+   clip's actual timeline position so the same deterministic scene works there
+   as an overlay rather than only on the first clip. */
+const offsetCanvasSceneTiming = (body, startMs) =>
+  String(body ?? "").replace(TIMING_ATTR("at", "g"), (_match, quote, raw) => `at=${quote}${Math.max(0, Number(raw) || 0) + startMs}${quote}`);
+
+/*
+ * Canvas owns the authored scene, but title and full-frame background parts
+ * are also real edit points. Keep their deterministic `at`/`for` timing for
+ * the Canvas runtime while promoting them to direct HyperFrames timeline
+ * components. That gives a person title and background clips to move or trim
+ * instead of one opaque `rm-scene` container.
+ */
+function splitCanvasTimelineComponents(body, startMs, sceneDurationMs, trackIndex = 2) {
+  const components = [];
+  const sceneBody = String(body ?? "").replace(/<(rm-title|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (match, tag, attrs) => {
+    const localAt = Math.max(0, Number(attrs.match(TIMING_ATTR("at"))?.[2]) || 0);
+    const authoredDuration = Number(attrs.match(TIMING_ATTR("for"))?.[2]);
+    const duration = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
+      ? authoredDuration
+      : Math.max(100, sceneDurationMs - localAt)));
+    const shifted = offsetCanvasSceneTiming(match, startMs);
+    const isTitle = tag.toLowerCase() === "rm-title";
+    const timelineId = attrs.match(/\bid=(["'])([^"']+)\1/i)?.[2]
+      ?? `${isTitle ? "canvas-title" : "canvas-background"}-${Math.round(startMs + localAt)}`;
+    const timelineTrack = isTitle ? trackIndex + 1 : trackIndex;
+    const timelineClass = isTitle ? "assembly-canvas-title" : "assembly-canvas-background";
+    let timelineComponent = shifted.replace(
+      new RegExp(`<${tag}\\b`, "i"),
+      `<${tag} data-assembly-canvas-component="${tag}" data-start="${hfSeconds(startMs + localAt)}" data-duration="${hfSeconds(duration)}" data-track-index="${timelineTrack}"${isTitle ? "" : ' assets="assets/imagery"'}`,
+    );
+    if (!/\bid=(["'])[^"']+\1/i.test(timelineComponent)) {
+      timelineComponent = timelineComponent.replace(new RegExp(`<${tag}\\b`, "i"), `<${tag} id="${hf(timelineId)}"`);
+    }
+    if (/\bclass=(["'])[^"']*\1/i.test(timelineComponent)) {
+      timelineComponent = timelineComponent.replace(/\bclass=(["'])([^"']*)\1/i, (_whole, quote, classes) => `class=${quote}${classes} clip ${timelineClass}${quote}`);
+    } else {
+      timelineComponent = timelineComponent.replace(new RegExp(`<${tag}\\b`, "i"), `<${tag} class="clip ${timelineClass}"`);
+    }
+    components.push(
+      `    ${timelineComponent}`,
+    );
+    return "";
+  });
+  return { sceneBody, components };
+}
+
+/* A title, shader, or transition can be a complete Canvas beat with no source
+   recording. Preserve its authored duration so it keeps its place in the cut. */
+function canvasSceneDurationMs(body, fallback = 2600) {
+  const ends = [];
+  for (const tag of String(body ?? "").match(/<[^>]+>/g) ?? []) {
+    const at = Number(tag.match(TIMING_ATTR("at"))?.[2]);
+    const duration = Number(tag.match(TIMING_ATTR("for"))?.[2]);
+    if (Number.isFinite(at) && Number.isFinite(duration) && duration > 0) ends.push(at + duration);
+  }
+  return Math.max(100, Math.round(Math.max(fallback, ...ends)));
+}
+
+/*
+ * Canvas parts are seekable DOM, not media tracks.  During a HyperFrames
+ * preview their clock normally comes from whichever source video is active.
+ * That leaves an authored closing title stranded after the final video: there
+ * is no video left to emit a timeupdate, so it remains at t=0 and invisible.
+ *
+ * Give the composition one tiny silent audio track spanning its full duration.
+ * It is never part of the mix in any meaningful sense, but it gives every
+ * Canvas beat — including an intro before footage and an outro after it — the
+ * same seekable composition clock in preview and export.
+ */
+async function stageCanvasSceneClock(outDir, durationMs) {
+  const seconds = Math.max(1, Math.ceil(Number(durationMs) / 1000));
+  const file = `canvas-clock-${seconds}s.m4a`;
+  const target = join(outDir, "assets", file);
+  if (!(await stat(target).catch(() => null))) {
+    await mkdir(dirname(target), { recursive: true });
+    await new Promise((resolveClock, rejectClock) => {
+      /*
+       * jobs.childEnv(), because this spawn does not go through jobs.run().
+       *
+       * `jobs.addPath("/opt/homebrew/bin")` at the top of this file only reaches
+       * children the job runner starts, and this one is started directly — so it
+       * inherited a bare process.env. From a shell that is harmless; launched
+       * from Finder, where PATH is /usr/bin:/bin, ffmpeg is not on it and the
+       * Canvas assembly died with `spawn ffmpeg ENOENT`, naming a binary the
+       * person can plainly see installed.
+       */
+      const child = spawn("ffmpeg", [
+        "-y",
+        "-f", "lavfi",
+        "-i", "anullsrc=r=8000:cl=mono",
+        "-t", String(seconds),
+        "-c:a", "aac",
+        "-b:a", "8k",
+        "-movflags", "+faststart",
+        target,
+      ], { stdio: "ignore", env: jobs.childEnv() });
+      child.once("error", rejectClock);
+      child.once("close", (code) => code === 0
+        ? resolveClock()
+        : rejectClock(new Error("Studio could not create the Canvas timeline clock")));
+    });
+  }
+  return `assets/${file}`;
+}
+
+/* Every Claude selection becomes a complete first cut, rather than a bare row
+   of source clips. Keep the bookends as Canvas scenes so they use the project
+   wallpaper, brand tokens, and the same editable components as the Canvas. */
+function firstCutTitleScene({ name, eyebrow, title, sub = "", durationMs = 2600 }) {
+  const attrs = [
+    'at="0"',
+    `for="${Math.max(100, Math.round(Number(durationMs) || 2600))}"`,
+    `eyebrow="${hf(eyebrow)}"`,
+    `title="${hf(title)}"`,
+  ];
+  if (sub) attrs.push(`sub="${hf(sub)}"`);
+  return {
+    source: "",
+    mediaStartMs: 0,
+    durationMs: Math.max(100, Math.round(Number(durationMs) || 2600)),
+    scene: {
+      name,
+      body: `<rm-title ${attrs.join(" ")}></rm-title>`,
+    },
+  };
+}
+
+/*
+ * A rough cut needs punctuation, not a flash on every sentence.  Keep a calm
+ * fade-through for true scene changes (speaker/source/card changes) and leave
+ * consecutive selects from the same take as straight edits.  That means audio
+ * stays attached to its source clip and does not smear across a transition.
+ */
+const DEFAULT_FADE_THROUGH_MS = 600;
+const isAssemblySceneBoundary = (current, next) => {
+  if (!current || !next) return false;
+  if (!current.source || !next.source) return true;
+  return current.source !== next.source
+    || String(current.speaker ?? "").trim() !== String(next.speaker ?? "").trim();
+};
+const defaultFadeThroughDuration = (current, next) => isAssemblySceneBoundary(current, next)
+  && Math.min(Number(current.durationMs) || 0, Number(next.durationMs) || 0) >= DEFAULT_FADE_THROUGH_MS
+  ? DEFAULT_FADE_THROUGH_MS
+  : 0;
+
+/* `stageRenderAssets` deliberately provides a standalone title-card starter for
+   a person or an agent to pick up. An assembly already has its one root
+   composition in index.html, though. Leaving that starter as title.html makes
+   HyperFrames discover a second root and can play the same source audio twice. */
+async function removeStandaloneTitleCard(outDir) {
+  await rm(join(outDir, "title.html"), { force: true }).catch(() => {});
+}
+
+/*
+ * Early Make runs staged a reusable title-card template next to the real
+ * composition. HyperFrames discovers every root-level HTML file with a
+ * `data-composition-id`, so that otherwise harmless helper made a project look
+ * like it had two entry points. Preserve the template for a person to reuse,
+ * but move it outside the composition discovery path before opening Studio.
+ *
+ * Only touch the exact starter we generated. A person's independently-authored
+ * `title.html` remains a separate project rather than being silently moved.
+ */
+async function isolateStandaloneTitleCard(outDir) {
+  const titlePath = join(outDir, "title.html");
+  const indexPath = join(outDir, "index.html");
+  const [title, index] = await Promise.all([
+    readFile(titlePath, "utf8").catch(() => ""),
+    readFile(indexPath, "utf8").catch(() => ""),
+  ]);
+  const isStagedStarter = /<template\b[^>]*\bid=["']rm-title-template["']/i.test(title)
+    && /\bdata-composition-id=["']rm-title["']/i.test(title);
+  const isMountedByIndex = /(?:data-composition-src|src)=["'][^"']*title\.html["']/i.test(index);
+  if (!isStagedStarter || isMountedByIndex) return false;
+
+  const templates = join(outDir, "templates");
+  await mkdir(templates, { recursive: true });
+  const archived = join(templates, "rm-title-template.html");
+  if (await stat(archived).catch(() => null)) await rm(titlePath, { force: true });
+  else await rename(titlePath, archived);
+  return true;
+}
+
+function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock = null, showAssemblyTitle = true, width = 1920, height = 1080, fps = 30 }) {
+  const titleDuration = showAssemblyTitle && title ? 1800 : 0;
   let cursor = titleDuration;
+  const hasCanvasScenes = clips.some((clip) => typeof clip.scene?.body === "string" && clip.scene.body.trim());
+  const canvasRuntime = hasCanvasScenes ? '<script type="module" src="assets/canvas-components/rm-video.js"></script>' : "";
+  const canvasSceneBodies = [];
+  const canvasTimelineComponents = [];
+  const transitions = [];
   const media = clips.map((clip, index) => {
     const duration = Math.max(100, Math.round(Number(clip.durationMs) || 0));
     const start = hfSeconds(cursor);
     const span = hfSeconds(duration);
     const mediaStart = hfSeconds(clip.mediaStartMs);
-    const source = `source/${String(clip.source).replace(/^\/+/, "")}`;
+    const source = clip.source ? `source/${String(clip.source).replace(/^\/+/, "")}` : null;
     const id = `clip-${String(index + 1).padStart(2, "0")}`;
     /*
      * A video's native audio is the one case HyperFrames can keep intrinsically
@@ -1161,21 +1769,83 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920,
      * second audio timeline element. A deliberately substituted narration file
      * is different media, so it remains a separate editable audio clip.
      */
-    const hasReplacementAudio = Boolean(clip.audioSource && clip.audioSource !== source);
+    const hasReplacementAudio = Boolean(source && clip.audioSource && clip.audioSource !== source);
     const audio = hasReplacementAudio
       ? `    <audio id="${id}-audio" src="${hf(clip.audioSource)}" data-start="${start}" data-duration="${span}" data-media-start="${hfSeconds(clip.audioStartMs ?? clip.mediaStartMs)}" data-track-index="${index + 1}"></audio>`
       : "";
-    const lowerThird = clip.speaker
-      ? `    <aside class="assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span>${hf(clip.speaker)}</span></aside>`
+    const hasCanvasScene = typeof clip.scene?.body === "string" && clip.scene.body.trim();
+    const lowerThird = clip.speaker && !hasCanvasScene
+      ? `    <aside class="clip assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span class="assembly-lower-third__name">${hf(clip.speaker)}</span>${clip.role ? `<span class="assembly-lower-third__role">${hf(clip.role)}</span>` : ""}</aside>`
       : "";
+    /* Keep the real video as a direct timed child. HyperFrames uses that timing
+       to seek the source frame and to keep its native audio attached while a
+       person trims the clip. Canvas components are staged together in one
+       non-timed overlay below: their `at` values have been moved onto the same
+       composition clock, so they remain editable without nesting one timed
+       element inside another. */
+    if (hasCanvasScene) {
+      const { sceneBody, components } = splitCanvasTimelineComponents(clip.scene.body, cursor, duration);
+      if (sceneBody.trim()) canvasSceneBodies.push(offsetCanvasSceneTiming(sceneBody, cursor));
+      canvasTimelineComponents.push(...components);
+    }
+    const next = clips[index + 1];
+    /*
+     * Footage fades to the ground before a closing title, instead of cutting.
+     *
+     * A title card carries no source, so nothing crossfades into it: the last
+     * frame of the last speaker sat on screen and then vanished, and any gap
+     * between that out point and the card's start read as a dropped edit. Fading
+     * the video out on its own out point puts the cut where the eye expects it.
+     *
+     * Same seek-driven idiom as the transitions — paused, positioned by --t — so
+     * scrubbing and rendering agree on the frame.
+     */
+    const nextIsTitleCard = Boolean(next && !next.source && /<rm-title\b/i.test(String(next.scene?.body ?? "")));
+    const fadeOutMs = nextIsTitleCard ? Math.min(600, Math.max(200, Math.round(duration / 4))) : 0;
+    const fadeOut = fadeOutMs
+      ? ` class="assembly-fade-out" style="--assembly-fade-out-start:${Math.round(cursor + duration - fadeOutMs)}ms; --assembly-fade-out-duration:${fadeOutMs}ms"`
+      : "";
+    const canvasScene = source
+      ? `    <video id="${id}"${fadeOut} data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`
+      : "";
+    const transitionDuration = defaultFadeThroughDuration(clip, next);
+    if (transitionDuration) {
+      const boundaryMs = cursor + duration;
+      const transitionStartMs = Math.max(0, boundaryMs - transitionDuration / 2);
+      transitions.push(`    <div id="fade-through-${String(index + 1).padStart(2, "0")}" class="clip assembly-transition assembly-transition--fade-through" data-assembly-transition="fade-through" data-start="${hfSeconds(transitionStartMs)}" data-duration="${hfSeconds(transitionDuration)}" data-track-index="${clips.length + 5}" data-wash="dark" data-strength="0.72" style="--assembly-transition-start:${Math.round(transitionStartMs)}ms; --assembly-transition-duration:${transitionDuration}ms" aria-label="Fade through transition"></div>`);
+    }
     cursor += duration;
     return [
-      `    <video id="${id}" src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`,
+      canvasScene,
       audio,
       lowerThird,
     ].join("\n");
   }).join("\n");
+  const canvasOverlay = canvasSceneBodies.length
+    ? `    <rm-scene id="canvas-scene-overlays" class="assembly-canvas-overlays" assets="assets/imagery">
+${canvasSceneBodies.join("\n")}
+    </rm-scene>`
+    : "";
   const total = hfSeconds(cursor);
+  /*
+   * The clock is the composition's length, so it is marked as derived.
+   *
+   * It is correct at export — `cursor` is the summed clip durations — but it is
+   * the ONE element whose duration is not evidence of content: everything else
+   * is a clip somebody can see. Tighten the edit in HyperFrames afterwards and
+   * every clip shortens while this stays, so the silent track becomes the
+   * longest thing in the file and the composition ends in dead air. That is
+   * exactly what happened to the first CCC Days render: seven seconds of black
+   * after the closing title, because the clips had moved and the clock had not.
+   *
+   * `data-assembly-clock-derived` records the value this was generated from, so
+   * a later pass (or a person) can tell a stale clock from a deliberate tail
+   * without re-deriving the whole timeline.
+   */
+  const canvasClockTrack = canvasClock
+    ? `    <audio id="canvas-scene-clock" class="assembly-canvas-clock" src="${hf(canvasClock)}" data-assembly-clock data-assembly-clock-derived="${total}" data-start="0" data-duration="${total}" data-media-start="0" data-track-index="${clips.length + 3}" preload="auto"></audio>`
+    : "";
+  const hasAssemblyEffects = hasCanvasScenes || transitions.length > 0;
   const wallpaperUrl = wallpaper ? `url("assets/wallpapers/${hf(wallpaper)}")` : "none";
   return `<!doctype html>
 <html lang="en">
@@ -1183,28 +1853,72 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, width = 1920,
     <meta charset="utf-8" />
     <title>${hf(title)}</title>
     <link rel="stylesheet" href="theme.css" />
+    ${canvasRuntime}
     <style>
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--color-dark); }
-      [data-composition-id] { --assembly-wallpaper: ${wallpaperUrl}; position: relative; width: ${width}px; height: ${height}px; overflow: hidden; background: var(--assembly-wallpaper) center / cover, var(--color-dark); font-family: var(--font-display); }
-      video { position: absolute; inset: 2.5%; z-index: 1; width: 95%; height: 95%; object-fit: contain; background: transparent; }
+      [data-composition-id] { --assembly-wallpaper: ${wallpaperUrl}; --op-color-neutral-plus-max: var(--color-dark); --op-color-neutral-minus-max: var(--color-light); --op-color-neutral-minus-seven: color-mix(in srgb, var(--color-light) 76%, var(--color-dark)); --op-color-academy-primary-base: var(--color-primary); --op-color-academy-primary-on-base: var(--color-dark); --duration-base: 400ms; --duration-fast: 200ms; --duration-slow: 520ms; --ease-enter: cubic-bezier(0.16, 1, 0.3, 1); --ease-exit: cubic-bezier(0.55, 0, 1, 0.45); --ease-emphasis: cubic-bezier(0.34, 1.4, 0.64, 1); --distance-sm: 8px; position: relative; width: ${width}px; height: ${height}px; overflow: hidden; background: var(--assembly-wallpaper) center / cover, var(--color-dark); font-family: var(--font-display); }
+      /* Full bleed. This was inset 2.5% at 95% x 95%, which framed every clip
+         inside a wallpaper border — so footage never matched the canvas it was
+         composed against, and re-exporting or re-saving put the inset back after
+         anyone widened a frame by hand. object-fit contain stays: at matching
+         aspect ratio it fills exactly, and refuses to stretch one that does not. */
+      video { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: contain; background: transparent; }
+      /* Applied only to a clip a title card follows — see nextIsTitleCard. */
+      .assembly-fade-out { animation: assembly-fade-out var(--assembly-fade-out-duration, 600ms) var(--ease-exit) both paused; animation-delay: calc(var(--assembly-fade-out-start) - var(--t, 0ms)); }
+      @keyframes assembly-fade-out { from { opacity: 1; } to { opacity: 0; } }
       audio { display: none; }
+      .assembly-canvas-clock { display:block; position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+      .assembly-canvas-overlays { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; background: transparent; pointer-events: none; }
+      rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }
+      rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }
+      .assembly-transition { position:absolute; inset:0; z-index:5; display:block; pointer-events:none; opacity:0; }
+      /* Dips through the dark ground, not through the brand colour. This mixed
+         72% --color-primary, so every scene change flashed green — a wash strong
+         enough to read as a colour is a title card, not a transition, and it fired
+         on each clip boundary in a video whose subject is the footage. */
+      .assembly-transition--fade-through { background:var(--color-dark); animation:assembly-fade-through var(--assembly-transition-duration) var(--ease-enter) both paused; animation-delay:calc(var(--assembly-transition-start) - var(--t, 0ms)); }
+      @keyframes assembly-fade-through { 0%, 100% { opacity:0; } 50% { opacity:var(--assembly-transition-strength, 0.72); } }
       .assembly-title { position: absolute; inset: 0; z-index: 3; display: grid; align-content: center; padding: 0 8%; background: linear-gradient(90deg, color-mix(in srgb, var(--color-dark) 94%, transparent), color-mix(in srgb, var(--color-dark) 62%, transparent)), var(--assembly-wallpaper) center / cover; color: var(--color-light); }
       .assembly-title__eyebrow { color: var(--color-accent); font-family: var(--font-mono); font-size: var(--size-eyebrow); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
       .assembly-title__text { margin-top: 0.35em; max-width: 16ch; font-size: var(--size-title); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
-      .assembly-lower-third { position: absolute; z-index: 2; bottom: 8%; left: 6%; max-width: 52%; padding: 0.55% 1.2%; background: color-mix(in srgb, var(--color-dark) 86%, transparent); color: var(--color-light); font-size: var(--size-lower-third); font-weight: 700; letter-spacing: -0.02em; }
+      /* Two lines, the way rm-lower-third sets them: the name in display weight,
+         the role beneath in mono at a smaller size. Grid rather than two blocks so
+         the plate wraps to the longer of the two and neither line stretches it. */
+      .assembly-lower-third { position: absolute; z-index: 2; bottom: 8%; left: 6%; max-width: 52%; padding: 0.55% 1.2%; background: color-mix(in srgb, var(--color-dark) 86%, transparent); color: var(--color-light); font-size: var(--size-lower-third); font-weight: 700; letter-spacing: -0.02em; display: grid; justify-items: start; }
+      .assembly-lower-third__role { margin-top: 0.15em; font-family: var(--font-mono); font-size: 0.62em; font-weight: 400; letter-spacing: 0.04em; color: color-mix(in srgb, var(--color-light) 76%, var(--color-dark)); }
     </style>
   </head>
   <body>
     <main id="assembly" data-composition-id="assembly" data-start="0" data-duration="${total}" data-width="${width}" data-height="${height}" data-fps="${fps}" data-no-timeline>
-${title ? `    <section class="assembly-title" data-start="0" data-duration="${hfSeconds(titleDuration)}" data-track-index="0"><div class="assembly-title__eyebrow">Review cut</div><div class="assembly-title__text">${hf(title)}</div></section>` : ""}
+${showAssemblyTitle && title ? `    <section id="assembly-title" class="clip assembly-title" data-start="0" data-duration="${hfSeconds(titleDuration)}" data-track-index="0"><div class="assembly-title__eyebrow">Review cut</div><div class="assembly-title__text">${hf(title)}</div></section>` : ""}
 ${media}
+${canvasClockTrack}
+${canvasOverlay}
+${canvasTimelineComponents.join("\n")}
+${transitions.join("\n")}
     </main>
-  </body>
+${hasAssemblyEffects ? `  <script>
+    /* HyperFrames seeks and plays each timed media element. Source-video events
+       cover footage; the silent assembly clock covers title-only spans. The same
+       composition clock drives Canvas components and default transitions. */
+    const syncAssemblyEffects = (event) => {
+      const media = event.target;
+      if (!(media instanceof HTMLMediaElement) || !media.matches('[data-assembly-media], [data-assembly-clock]')) return;
+      const compositionMs = (Number(media.dataset.start) || 0) * 1000
+        + Math.max(0, media.currentTime - (Number(media.dataset.mediaStart) || 0)) * 1000;
+      document.documentElement.style.setProperty('--t', \`${'${compositionMs}'}ms\`);
+      window.RM?.seek(compositionMs);
+    };
+    document.addEventListener('timeupdate', syncAssemblyEffects, true);
+    document.addEventListener('seeked', syncAssemblyEffects, true);
+    document.addEventListener('loadeddata', syncAssemblyEffects, true);
+  </script>` : ""}
+</body>
 </html>
 `;
 }
 
-async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {} }) {
+async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {}, showAssemblyTitle = true }) {
   if (!clips.length) throw new Error("choose at least one clip for the HyperFrames assembly");
   const outDir = join(mediaDir(id), "Renders", folder);
   await mkdir(outDir, { recursive: true });
@@ -1215,19 +1929,32 @@ async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {
     wallpaper: manifest.wallpaper ?? null,
     quiet: true,
   });
-  const normalized = clips.map((clip) => ({
-    source: String(clip.source ?? ""),
-    mediaStartMs: Math.max(0, Math.round(Number(clip.mediaStartMs) || 0)),
-    durationMs: Math.max(100, Math.round(Number(clip.durationMs) || 0)),
-    ...(clip.audioSource ? { audioSource: String(clip.audioSource) } : {}),
-    ...(Number.isFinite(Number(clip.audioStartMs)) ? { audioStartMs: Math.max(0, Math.round(Number(clip.audioStartMs))) } : {}),
-    ...(String(clip.speaker ?? "").trim() ? { speaker: String(clip.speaker).trim() } : {}),
-  }));
-  if (normalized.some((clip) => !clip.source || clip.source.includes(".."))) throw new Error("one of the assembly clips is outside this project");
+  await removeStandaloneTitleCard(outDir);
+  const normalized = clips.map((clip) => {
+    const scene = typeof clip.scene?.body === "string" && clip.scene.body.trim()
+      ? { name: String(clip.scene.name ?? "Canvas scene"), body: String(clip.scene.body) }
+      : null;
+    return {
+      source: String(clip.source ?? ""),
+      mediaStartMs: Math.max(0, Math.round(Number(clip.mediaStartMs) || 0)),
+      durationMs: Math.max(100, Math.round(Number(clip.durationMs) || 0)),
+      ...(clip.audioSource ? { audioSource: String(clip.audioSource) } : {}),
+      ...(Number.isFinite(Number(clip.audioStartMs)) ? { audioStartMs: Math.max(0, Math.round(Number(clip.audioStartMs))) } : {}),
+      ...(String(clip.speaker ?? "").trim() ? { speaker: String(clip.speaker).trim() } : {}),
+      ...(String(clip.role ?? "").trim() ? { role: String(clip.role).trim() } : {}),
+      ...(scene ? { scene } : {}),
+    };
+  });
+  if (normalized.some((clip) => (!clip.source && !clip.scene) || clip.source.includes(".."))) throw new Error("one of the assembly clips is outside this project");
   const durationSec = normalized.reduce((total, clip) => total + clip.durationMs, 0) / 1000;
-  await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper }), "utf8");
+  const hasCanvasScenes = normalized.some((clip) => clip.scene);
+  const canvasClock = hasCanvasScenes
+    ? await stageCanvasSceneClock(outDir, durationSec * 1000)
+    : null;
+  if (hasCanvasScenes) await stageCanvasSceneRuntime(outDir);
+  await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper, canvasClock, showAssemblyTitle }), "utf8");
   await writeFile(join(outDir, "brief.md"), `# ${title}\n\nEditable source assembly created by Studio. Media remains linked from this project's media folder.\n`, "utf8");
-  await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, ...metadata }, null, 2)}\n`, "utf8");
+  await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, showAssemblyTitle, ...metadata }, null, 2)}\n`, "utf8");
   return { folder, outDir, clips: normalized.length, durationSec };
 }
 const multiPickKey = (pick) => Buffer.from(`${pick.source}:${pick.inSec}:${pick.outSec}`).toString("base64url").slice(-18);
@@ -1262,12 +1989,14 @@ function scriptAssemblyBeats(body) {
     return groups;
   };
   const groups = sections.length
-    ? sections.map((section) => ({ speaker: section.speaker, lines: parseScript(section.text) }))
+    ? sections.map((section) => ({ speaker: section.speaker, role: section.role ?? null, lines: parseScript(section.text) }))
     : namedParagraphs();
   let number = 0;
-  return groups.flatMap(({ speaker, lines }) => lines.map((text) => {
+  /* `role` rides alongside `speaker` from here on: it is the lower third's
+     second line, and losing it here means losing it in the render. */
+  return groups.flatMap(({ speaker, role = null, lines }) => lines.map((text) => {
     number += 1;
-    return { id: `B${String(number).padStart(2, "0")}`, number, speaker, text };
+    return { id: `B${String(number).padStart(2, "0")}`, number, speaker, role, text };
   }));
 }
 
@@ -1381,7 +2110,7 @@ async function multiAssemblyTranscripts(id, rawRels) {
   })));
 }
 
-function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats = [] }) {
+function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats = [], transcriptCut = false }) {
   const catalog = sources.map((source) => {
     const lines = source.transcript.cues.map((cue) => `${Number(cue.startSec).toFixed(2)}-${Number(cue.endSec).toFixed(2)} | ${cue.text}`).join("\n");
     const frames = source.visual.frames.map((frame) => `${Number(frame.atSec).toFixed(2)}s | ${join(visualBeatDir(source.projectId, source.rel), frame.file)}`).join("\n");
@@ -1391,7 +2120,12 @@ function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats =
     "You are building the first rough assembly from several real recordings.",
     scriptBeats.length
       ? "This is a script-location pass. Find where each script beat is actually spoken in the supplied recordings. You may use a source more than once, but only name a source and times that appear below."
-      : "Choose the strongest passages across the sources. You may use a source more than once, but only name a source and times that appear below.",
+      : transcriptCut
+        ? "This is a transcript-cut pass. Make clean, reviewable spoken trims from the selected sources. You may use a source more than once, but only name a source and times that appear below."
+        : "Choose the strongest passages across the sources. You may use a source more than once, but only name a source and times that appear below.",
+    transcriptCut
+      ? "TRANSCRIPT CUT MODE: Work through each selected recording from its own timed transcript. Use those source-specific words to make clean, reviewable trims: remove false starts, repetitions, filler, long dead air, and setup or tail time, but keep complete thoughts and natural breaths. You may return several passages from one source. Every inSec and outSec must sit on a phrase that appears in that same source's timed transcript; never borrow words or timecodes from another recording. Inspect the frames to reject a visibly broken take or choose between duplicates, but the transcript decides what is spoken and where the cuts land."
+      : "",
     scriptBeats.length
       ? "Start with the spoken words: match exact wording first, then an unmistakable close paraphrase only when the full thought is clearly delivered. Inspect the visual-beat image files to choose between duplicate takes and flag visual conflicts, but do not replace a spoken script match with unrelated material because it looks better."
       : "You MUST inspect the visual-beat image files. Select a passage only when its screen state supports what the chosen words say; a transcript match alone is not enough.",
@@ -1401,7 +2135,9 @@ function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats =
     "Return JSON only, with this exact shape:",
     scriptBeats.length
       ? '{"version":1,"title":"A concise factual title drawn from the recorded script","picks":[{"beatId":"B01","source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"spokenText":"the words actually spoken in this range","evidence":"source-specific timed transcript plus supporting frame timestamps","reason":"why this is the best delivery of that script beat"}],"gaps":[{"beatId":"B02","reason":"not verified from the available transcript and frames"}],"parked":[{"source":"Footage/alternate.mp4","inSec":3,"outSec":8,"reason":"useful later, but not part of the script"}]}'
-      : '{"version":1,"title":"A concise factual title drawn from the selected speech","picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
+      : transcriptCut
+        ? '{"version":1,"title":"A concise factual title drawn from the retained speech","picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"spokenText":"the words actually spoken in this trimmed range","evidence":"source-specific timed transcript plus supporting frame timestamps","reason":"why this complete thought stays in the cut"}],"parked":[{"source":"Footage/alternate.mp4","inSec":3,"outSec":8,"reason":"not a clean or complete spoken thought"}]}'
+        : '{"version":1,"title":"A concise factual title drawn from the selected speech","picks":[{"source":"Footage/example.mp4","inSec":12.4,"outSec":19.8,"reason":"what this adds"}]}',
     scriptBeats.length
       ? "Preserve script order. The title is metadata for the opening title card: make it concise and factual from the recorded script, never a new claim. Do not invent footage, narration, timecodes, or a new story. Each script beat has exactly one result: its best matching spoken passage or a visible gap."
       : "Keep the order that tells the clearest story. Propose one concise, factual title from the selected speech; it must not make a claim the recordings do not support. Do not invent footage, narration, or timecodes.",
@@ -1411,7 +2147,9 @@ function multiAssemblyPrompt({ sources, notes = "", script = null, scriptBeats =
           "The script beats below are the source of truth. Return the exact location where each line is spoken, preserving beat order. Never replace a missing beat with a different idea. Every beat must appear exactly once either in a pick's beatId or in gaps. Park strong unused material rather than inventing a place for it.",
           `SCRIPT BEATS (use these exact ids):\n${scriptBeats.map((beat) => `${beat.id}${beat.speaker ? ` · ${beat.speaker}` : ""} | ${beat.text}`).join("\n")}`,
         ].join("\n\n")
-      : "WORKFLOW: this is a best-parts assembly, not a script match. Choose only the passages that genuinely support the story notes.",
+      : transcriptCut
+        ? "WORKFLOW: this is a transcript edit, not a script match. Work through each source’s own spoken passages and return the clean, complete thoughts worth retaining; leave unrelated or unusable material parked for review."
+        : "WORKFLOW: this is a best-parts assembly, not a script match. Choose only the passages that genuinely support the story notes.",
     notes ? `EDITOR NOTES:\n${notes}` : "",
     "SOURCE CATALOG:",
     catalog,
@@ -1430,7 +2168,7 @@ function parseMultiAssemblySelection(raw) {
   };
 }
 
-function validateMultiAssemblySelection(selection, sources, { scriptBeats = [] } = {}) {
+function validateMultiAssemblySelection(selection, sources, { scriptBeats = [], transcriptCut = false } = {}) {
   const byRel = new Map(sources.map((source) => [source.rel, source]));
   const beatsById = new Map(scriptBeats.map((beat) => [beat.id, beat]));
   const picks = [];
@@ -1446,6 +2184,8 @@ function validateMultiAssemblySelection(selection, sources, { scriptBeats = [] }
     if (scriptBeats.length && !beat) problems.push(`unknown or missing script beat: ${beatId || "(none)"}`);
     else if (scriptBeats.length && !String(item?.spokenText ?? "").trim()) problems.push(`script beat ${beatId} is missing its recorded spoken text`);
     else if (scriptBeats.length && !String(item?.evidence ?? "").trim()) problems.push(`script beat ${beatId} is missing its source evidence`);
+    else if (transcriptCut && !String(item?.spokenText ?? "").trim()) problems.push(`transcript cut for ${basename(String(item?.source ?? "recording"))} is missing its recorded spoken text`);
+    else if (transcriptCut && !String(item?.evidence ?? "").trim()) problems.push(`transcript cut for ${basename(String(item?.source ?? "recording"))} is missing its source evidence`);
     else if (beat && beat.number < lastBeat) problems.push(`script beats are out of order at ${beatId}`);
     else if (!source) problems.push(`unknown source: ${String(item?.source ?? "")}`);
     else if (!Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec || inSec < 0 || outSec > last + 0.15) problems.push(`invalid range for ${basename(source.rel)}`);
@@ -1457,7 +2197,7 @@ function validateMultiAssemblySelection(selection, sources, { scriptBeats = [] }
         .join(" ");
       if (beat && picks.some((pick) => pick.beatId === beat.id)) problems.push(`script beat ${beat.id} was selected more than once`);
       if (beat) lastBeat = beat.number;
-      picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), evidence: String(item?.evidence ?? "").trim(), text, spokenText: String(item?.spokenText ?? text).trim(), id: multiPickKey({ source: source.rel, inSec, outSec }), ...(beat ? { beatId: beat.id, beat: beat.text, speaker: beat.speaker } : {}) });
+      picks.push({ source: source.rel, inSec: +inSec.toFixed(3), outSec: +outSec.toFixed(3), reason: String(item?.reason ?? "").trim(), evidence: String(item?.evidence ?? "").trim(), text, spokenText: String(item?.spokenText ?? text).trim(), id: multiPickKey({ source: source.rel, inSec, outSec }), ...(beat ? { beatId: beat.id, beat: beat.text, speaker: beat.speaker, role: beat.role ?? null } : {}) });
     }
   }
   const pickedBeatIds = new Set(picks.map((pick) => pick.beatId).filter(Boolean));
@@ -2192,7 +2932,7 @@ const server = createServer(async (req, res) => {
       if (!manifest) return json(res, 404, { error: "pick a project" });
       if (!(await stat(assets).catch(() => null))?.isDirectory()) return json(res, 404, { error: "this project has no media to download" });
       const filename = `${safeName(manifest.name || id, "project")}-assets.zip`.replace(/\s+/g, "-");
-      const archive = spawn("zip", ["-q", "-r", "-y", "-", join(id, "media")], { cwd: LIB, stdio: ["ignore", "pipe", "pipe"] });
+      const archive = spawn("zip", ["-q", "-r", "-y", "-", join(id, "media")], { cwd: LIB, stdio: ["ignore", "pipe", "pipe"], env: jobs.childEnv() });
       const errors = [];
       archive.stderr.on("data", (chunk) => errors.push(String(chunk)));
       archive.on("error", (error) => {
@@ -2671,8 +3411,8 @@ const server = createServer(async (req, res) => {
       const subject = isUrl ? `a ${body.seconds || 20}-second ${brand}-branded promo for ${src}` : `a ${brand}-branded video that faithfully renders the script below`;
       const templateDirection = output === "template"
         ? [
-            `Create a reviewable HyperFrames template for ${subject}.`,
-            `Write the project entry point to ${join(outDir, "index.html")} and do not render an MP4.`,
+            `Create an editable HyperFrames source project for ${subject}.`,
+            `Write the project entry point to ${join(outDir, "index.html")} and do not render an MP4 in this source-building run.`,
             "Use a standalone root composition with data-composition-id, data-start, data-duration, data-width and data-height.",
             "Keep every GSAP timeline paused and registered on window.__timelines. Do not use remote media or fonts.",
             templateAudio
@@ -2684,7 +3424,11 @@ const server = createServer(async (req, res) => {
                 : "There is no audio track. Keep the template silent.",
             templateWebcam ? `Use this exact webcam clip when a picture-in-picture is called for: \"${templateWebcam}\".` : "",
             templateAssets.length ? `Use these staged project assets where they help, rather than placeholders:\n${templateAssets.map((file) => `  ${file}`).join("\n")}` : "",
-            "The next human step is HyperFrames lint and review, then a manual render from this folder.",
+            templateAssets.length || templateAudio || templateWebcam
+              ? "Use every supplied source where it materially supports the script. Do not claim to have used a source that is not in the composition."
+              : "No footage or audio was supplied. This is a silent, text-only motion source; do not imply that it contains real speakers, recorded delivery, or a finished video.",
+            "Before responding, run `npx hyperframes check` from this project folder. Correct every error and every rendering-relevant layout, contrast, or media warning before you finish.",
+            "Your final response is a factual handoff, not a creative recap: state the source path, the actual HyperFrames check result, and which supplied footage/audio were used or missing. Do not call this a completed video, an MP4, ready to share, or tell the user to run a command.",
           ].filter(Boolean).join("\n")
         : `Using /hyperframes, make ${subject}.\nRender the MP4 into ${outDir}.`;
       const prompt = `${templateDirection}${direction}${await globalSkillDirection()}${scriptFidelity}${speakerDirection ? `\n\n${speakerDirection}` : ""}${isUrl ? "" : `\n\n${spokenSrc}`}`;
@@ -2779,6 +3523,56 @@ const server = createServer(async (req, res) => {
       } catch (error) {
         return json(res, 400, { error: String(error.message ?? error) });
       }
+    }
+
+    /*
+     * HyperFrames renders from its own iframe, so it does not flow through
+     * Studio's normal job runner. The embedded workspace polls this tiny bridge:
+     * it waits for a stable editor export, promotes it into project media, and
+     * refreshes the catalog before reporting it back to the header.
+     */
+    if (p === "/api/hyperframes/exports" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const folder = basename(String(url.searchParams.get("folder") ?? ""));
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const renders = resolve(mediaDir(id), "Renders");
+      const root = resolve(renders, folder);
+      if (!folder || folder === "." || folder === ".." || !root.startsWith(`${renders}${sep}`) || !(await stat(join(root, "index.html")).catch(() => null))?.isFile()) {
+        return json(res, 404, { error: "that motion project is not in this project" });
+      }
+      await prepareHyperframesExportDir(root);
+      let studio = hyperframesStudios.get(root);
+      if (!studio) {
+        // Keep export stability state even if the preview was restarted between
+        // the editor's render completion and its next status poll.
+        studio = { exportFiles: new Map(), exports: [] };
+        hyperframesStudios.set(root, studio);
+      }
+      const synced = await syncHyperframesExports(id, root, studio);
+      return json(res, 200, synced);
+    }
+
+    /* A motion project is an editable composition folder, including any render
+       outputs made inside it. Deleting it must never be able to reach sibling
+       project media, and it must retire a live embedded Studio first. */
+    if (p === "/api/hyperframes/delete" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const folder = basename(String(body.folder ?? ""));
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const renders = resolve(mediaDir(id), "Renders");
+      const target = resolve(renders, folder);
+      if (!folder || folder === "." || folder === ".." || !target.startsWith(`${renders}${sep}`) || !(await stat(join(target, "index.html")).catch(() => null))?.isFile()) {
+        return json(res, 404, { error: "that motion project is not in this project" });
+      }
+      const studio = hyperframesStudios.get(target);
+      if (studio?.child) studio.child.kill();
+      hyperframesStudios.delete(target);
+      await rm(target, { recursive: true, force: false });
+      await reindex(id).catch(() => {});
+      return json(res, 200, { deleted: folder });
     }
 
     /**
@@ -3244,6 +4038,122 @@ const server = createServer(async (req, res) => {
      * out, because a settings panel that shows you your own credential is a
      * settings panel that shows it to whoever is looking at your screen.
      */
+    /*
+     * Slack: is it set up, and which workspace did the token reach?
+     *
+     * The token never comes back out — a settings panel that shows you your own
+     * credential is a way to leak it over a shoulder. `auth.test` is called
+     * instead, so the answer is "posting to RoleModel as @rm-video", which is
+     * the thing somebody actually wants confirmed.
+     */
+    if (p === "/api/slack") {
+      const { token, channel, source, shared } = await effectiveSlackSettings();
+      if (!token) return json(res, 200, { configured: false, channel, source, shared });
+      try {
+        const who = await slack({ token }).whoami();
+        return json(res, 200, { configured: true, channel, source, ...who });
+      } catch (err) {
+        return json(res, 200, { configured: true, channel, source, error: err.message });
+      }
+    }
+
+    if (p === "/api/slack/settings" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        let channel = body.channel === undefined ? undefined : String(body.channel).trim();
+        /*
+         * A name is resolved to an id here, so nobody has to go and find one.
+         *
+         * Slack needs a channel_id to attach an upload and then does not show it:
+         * it is absent from the channel header and moves around the details pane
+         * between versions. Asking for "#demos" and looking it up is the same
+         * work, done by the thing that already holds a token. Only an id is ever
+         * stored, so everything downstream still sees exactly one shape.
+         */
+        if (channel && !/^[CGD][A-Z0-9]{6,}$/i.test(channel)) {
+          const { token } = await effectiveSlackSettings();
+          const using = body.token ? String(body.token) : token;
+          if (!using) return json(res, 400, { error: "add the bot token first — a channel name can only be looked up with one" });
+          const found = await slack({ token: using }).findChannel(channel);
+          channel = found.id;
+        }
+        const file = await setSlackSettings({
+          ...(body.token !== undefined ? { token: String(body.token) } : {}),
+          ...(channel !== undefined ? { channel } : {}),
+        });
+        /*
+         * Also written to the team's table, so the next person does not set this
+         * up again — and a reimaged machine does not lose it.
+         *
+         * Best effort, and reported rather than thrown: the local write has
+         * already succeeded, so failing here means "saved for you, not yet for
+         * everyone", which is a true and useful thing to say. Silently pretending
+         * it synced would be worse than not offering it.
+         */
+        let sharedWith = null;
+        let shareProblem = null;
+        try {
+          const { cfg, token: authToken } = await SUPABASE_SYNC.token();
+          if (cfg?.url && cfg?.key && authToken) {
+            const now = await effectiveSlackSettings();
+            await putSetting({
+              url: cfg.url,
+              key: cfg.key,
+              token: authToken,
+              name: "slack",
+              value: { token: now.token ?? null, channel: now.channel ?? null },
+              userId: cfg.session?.user?.id ?? null,
+            });
+            sharedWith = cfg.session?.user?.email ?? "the team";
+          } else {
+            shareProblem = "kept on this machine only — sign in on the Canvas to share it with the team";
+          }
+        } catch (err) {
+          shareProblem = `kept on this machine only — the team copy failed: ${err.message}`;
+        }
+        return json(res, 200, { ok: true, stored: file, channel, sharedWith, shareProblem });
+      } catch (err) {
+        // slackSettingProblem() validates; a mistyped token is the user's to see.
+        return json(res, 400, { error: err.message });
+      }
+    }
+
+    /*
+     * Post a rendered video into the channel.
+     *
+     * The file is named the way every other media route here names one — by its
+     * place in the project, never by a path the browser supplies — so a caller
+     * cannot talk this into uploading something outside the library.
+     */
+    if (p === "/api/slack/post" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const { token, channel: fallback } = await effectiveSlackSettings();
+      if (!token) return json(res, 400, { error: "Slack is not set up yet — add a bot token on the Storage page" });
+      const id = String(body.projectId ?? "");
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man) return json(res, 404, { error: "pick a project" });
+      const rel = String(body.rel ?? "");
+      if (!rel || rel.includes("..")) return json(res, 400, { error: "need the video's place in this project" });
+      const file = join(mediaDir(id), rel);
+      if (!file.startsWith(mediaDir(id) + sep)) return json(res, 403, { error: "that file is outside this project's media" });
+      const info = await stat(file).catch(() => null);
+      if (!info?.isFile()) return json(res, 404, { error: "no such video" });
+      const channel = String(body.channel ?? fallback ?? "");
+      try {
+        const posted = await slack({ token }).postVideo({
+          file,
+          channel,
+          title: String(body.title ?? "") || basename(rel),
+          comment: String(body.comment ?? "") || undefined,
+        });
+        return json(res, 200, posted);
+      } catch (err) {
+        /* Slack's refusals are already translated into sentences in lib/slack.mjs;
+           passing the status through would only add a number to a finished one. */
+        return json(res, 502, { error: err.message });
+      }
+    }
+
     if (p === "/api/review/settings" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
@@ -3410,6 +4320,45 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { shareUrl });
       } catch (err) {
         return json(res, 200, { shareUrl: null, error: err.message });
+      }
+    }
+
+    /*
+     * Remove the review copy, not the source render.
+     *
+     * Studio's library is the source of truth for a project video. A review card
+     * represents the copy sent to OpenFrame, and deleting that copy must never
+     * delete the render a person may want to re-send under a new title or version.
+     */
+    if (p === "/api/review/video" && req.method === "DELETE") {
+      const { url: base, token } = await openFrameSettings();
+      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
+      const body = JSON.parse(await text(req));
+      const projectId = String(body.projectId ?? "");
+      const videoId = String(body.videoId ?? "");
+      if (!projectId || !videoId) return json(res, 400, { error: "need project and video" });
+      try {
+        await openFrame({ base, token }).removeVideo(projectId, videoId);
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        /*
+         * 401/403 here is not a bad token, and saying "Unauthorized" invites an
+         * afternoon of re-pasting one that was never the problem.
+         *
+         * It is the same wall the comments route hits, one paragraph up: only
+         * the upload-and-share routes use OpenFrame's token-aware
+         * `authFromRequest`. DELETE on a video authenticates with `auth()`, which
+         * only ever sees a browser session, so this refuses every API token that
+         * has ever been issued. Verified against the live instance: the same
+         * token that returns 200 on GET /api/projects returns 401 here.
+         */
+        if (/\b(401|403)\b/.test(err.message)) {
+          return json(res, 501, {
+            error:
+              "OpenFrame will not accept an API token on this route — deleting a video needs a browser session, so Studio cannot do it. Remove the video from the OpenFrame project page instead. The local render is untouched either way.",
+          });
+        }
+        return json(res, 502, { error: err.message });
       }
     }
 
@@ -4900,6 +5849,7 @@ async function fetchVoiceList() {
       const copy = spawn("rclone", ["copy", dir, destination, "--create-empty-src-dirs", "--stats-one-line", "--stats", "2s"], {
         cwd: dir,
         stdio: "ignore",
+        env: jobs.childEnv(),
       });
       copy.on("error", (err) => {
         projectTransfers.set(id, { ...transfer, state: "failed", finishedAt: new Date().toISOString(), error: String(err.message) });
@@ -4976,7 +5926,7 @@ async function fetchVoiceList() {
       const target = remotePath(opRemote, dir ? `${dir}/${file}` : file);
       if (!target) return json(res, 400, { error: "that is not a path this can write to" });
 
-      const child = spawn("rclone", ["rcat", target], { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn("rclone", ["rcat", target], { stdio: ["pipe", "pipe", "pipe"], env: jobs.childEnv() });
       let err = "";
       child.stderr.on("data", (d) => {
         err += d;
@@ -5011,7 +5961,7 @@ async function fetchVoiceList() {
         return res.end();
       }
       const file = basename(String(q.get("path") ?? "")) || "download";
-      const child = spawn("rclone", ["cat", target], { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn("rclone", ["cat", target], { stdio: ["ignore", "pipe", "pipe"], env: jobs.childEnv() });
       res.writeHead(200, {
         "content-type": MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
         "content-disposition": `inline; filename="${file.replace(/"/g, "")}"`,
@@ -5272,7 +6222,19 @@ async function fetchVoiceList() {
         });
         return createReadStream(file, { start, end }).pipe(res);
       }
-      res.writeHead(200, { "content-type": type, "content-length": s.size, "accept-ranges": "bytes" });
+      /*
+       * `?download` asks the browser to save rather than play.
+       *
+       * Without it a video URL simply plays in a tab, which is the one thing you
+       * do not want from a control labelled Download — and Save-as from a <video>
+       * element names the file after the page, not the render. The filename is
+       * the asset's own, quoted, so a name with a space survives the trip.
+       */
+      const headers = { "content-type": type, "content-length": s.size, "accept-ranges": "bytes" };
+      if (url.searchParams.has("download")) {
+        headers["content-disposition"] = `attachment; filename="${basename(file).replace(/["\\]/g, "")}"`;
+      }
+      res.writeHead(200, headers);
       return createReadStream(file).pipe(res);
     }
 
@@ -5300,12 +6262,26 @@ async function fetchVoiceList() {
     }
 
     if (p.startsWith("/components/") || p.startsWith("/brand/") || p.startsWith("/assets/")) {
-      const file = resolve(TOOLKIT, `.${p}`);
+      let file = resolve(TOOLKIT, `.${p}`);
       if (!file.startsWith(TOOLKIT)) {
         res.writeHead(403);
         return res.end();
       }
-      const s2 = await stat(file).catch(() => null);
+      let s2 = await stat(file).catch(() => null);
+      /*
+       * Brand uploads are deliberately outside the installed toolkit, but a
+       * scene refers to every image by the same portable bare filename. Let the
+       * preview resolve an uploaded image through that normal imagery base when
+       * it is not a vendored file. The render path already stages these files in
+       * its assets/imagery directory, so the scene body remains portable.
+       */
+      if (!s2 && p.startsWith("/brand/imagery/")) {
+        const name = basename(decodeURIComponent(p.slice("/brand/imagery/".length)));
+        if ((await readAdded()).some((item) => item.file === name)) {
+          file = join(ADDED_DIR, name);
+          s2 = await stat(file).catch(() => null);
+        }
+      }
       if (!s2?.isFile()) {
         res.writeHead(404);
         return res.end();
@@ -5530,11 +6506,19 @@ async function fetchVoiceList() {
         res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         return res.end("no such scene\n");
       }
+      const savedFootage = await sceneFootageForProject(id, name);
+      const footage = savedFootage
+        ? {
+            src: `/media/${encodeURIComponent(id)}/${encodeURI(savedFootage.rel)}`,
+            inSec: savedFootage.inSec,
+            outSec: savedFootage.outSec,
+          }
+        : undefined;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
       // Title and other entering components are invisible at frame zero. This
       // is a Canvas thumbnail, not a playback start position, so seek a moment
       // into the saved scene where its authored treatment can actually be seen.
-      return res.end(sceneHtml({ body, title: name, base: "", previewAt: 750 }));
+      return res.end(sceneHtml({ body, title: name, base: "", footage, previewAt: 750 }));
     }
 
     if (p.startsWith("/api/scene/preview/")) {
@@ -5626,11 +6610,10 @@ async function fetchVoiceList() {
       if (!kept) return json(res, 422, { error: "the draft came back with no usable elements — try saying it differently" });
 
       const nm = wpSlug(b.name);
-      const dir = join(projectDir(id), "scenes");
-      await mkdir(dir, { recursive: true });
-      const dest = join(dir, `${nm}.html`);
-      await writeFile(dest, `${kept}\n`, "utf8");
-      return json(res, 200, { ok: true, name: nm, file: dest, body: kept });
+      const saved = await writeSceneBody(id, nm, `${kept}\n`);
+      const footage = b.footage === undefined ? undefined : await normalizeSceneFootage(id, b.footage);
+      await writeSceneFootage(id, nm, footage);
+      return json(res, 200, { ok: true, name: nm, file: saved.file, body: kept, revision: saved.revision, footage: footage ?? await readSceneFootage(id, nm) });
     }
 
     /* Read and write an authored scene body. */
@@ -5642,10 +6625,41 @@ async function fetchVoiceList() {
       // over any previous one. The raw value is what has to be present.
       if (!String(b.name ?? "").trim()) return json(res, 400, { error: "give the scene a name" });
       const nm = wpSlug(b.name);
-      const dir = join(projectDir(b.projectId), "scenes");
-      await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, `${nm}.html`), String(b.body ?? ""), "utf8");
-      return json(res, 200, { ok: true, name: nm, file: join(dir, `${nm}.html`) });
+      const saved = await writeSceneBody(b.projectId, nm, b.body);
+      const footage = b.footage === undefined ? undefined : await normalizeSceneFootage(b.projectId, b.footage);
+      await writeSceneFootage(b.projectId, nm, footage);
+      return json(res, 200, { ok: true, name: nm, file: saved.file, revision: saved.revision, footage: footage ?? await readSceneFootage(b.projectId, nm) });
+    }
+
+    /* The earlier body is a deliberate, durable undo point. Restoring one also
+       archives what is currently on the stage, so this button is never a
+       destructive cliff. */
+    if (p === "/api/scene/revisions" && req.method === "GET") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const id = String(q.get("project") ?? "");
+      const name = wpSlug(String(q.get("scene") ?? ""));
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man || !String(q.get("scene") ?? "").trim()) return json(res, 404, { error: "pick a saved scene" });
+      const revisions = (await readdir(sceneRevisionDir(id, name)).catch(() => []))
+        .filter((file) => /^\d{4}-\d\d-\d\dT[\d-]+Z\.html$/.test(file))
+        .sort()
+        .reverse();
+      return json(res, 200, { revisions });
+    }
+
+    if (p === "/api/scene/restore" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(b.projectId ?? "");
+      const rawName = String(b.name ?? "").trim();
+      const name = wpSlug(rawName);
+      const revision = String(b.revision ?? "");
+      const man = await readManifest(projectDir(id)).catch(() => null);
+      if (!man || !rawName) return json(res, 404, { error: "pick a saved scene" });
+      if (!/^\d{4}-\d\d-\d\dT[\d-]+Z\.html$/.test(revision)) return json(res, 400, { error: "that saved version is not valid" });
+      const prior = await readFile(join(sceneRevisionDir(id, name), revision), "utf8").catch(() => null);
+      if (prior == null) return json(res, 404, { error: "that saved version is no longer available" });
+      const saved = await writeSceneBody(id, name, prior);
+      return json(res, 200, { ok: true, name, body: prior, file: saved.file, revision: saved.revision });
     }
 
     /*
@@ -5901,6 +6915,7 @@ async function fetchVoiceList() {
         if (rels.length > 8) throw new Error("choose up to eight recordings for one assembly");
         const prior = await readMultiAssembly(id);
         const script = await assemblyScript(id, body.scriptName, prior?.scriptName);
+        const transcriptCut = body.transcriptCut === undefined ? Boolean(prior?.transcriptCut) : Boolean(body.transcriptCut);
         const sameSources = rels.length === (prior?.sources ?? []).length && rels.every((rel) => prior.sources.includes(rel));
         await writeMultiAssembly(id, {
           version: 1,
@@ -5909,6 +6924,7 @@ async function fetchVoiceList() {
           title: prior?.title ?? "",
           scriptName: script?.name ?? null,
           scriptBeats: script ? scriptAssemblyBeats(script.body) : [],
+          transcriptCut,
           picks: sameSources ? prior?.picks ?? [] : [],
           comments: sameSources ? prior?.comments ?? {} : {},
           selectionFinalized: false,
@@ -5945,15 +6961,16 @@ async function fetchVoiceList() {
         const notes = [String(body.notes ?? "").trim(), feedback ? `REVIEW COMMENTS TO APPLY:\n${feedback}` : ""].filter(Boolean).join("\n\n");
         const script = await assemblyScript(id, body.scriptName, prior?.scriptName);
         const scriptBeats = script ? scriptAssemblyBeats(script.body) : [];
+        const transcriptCut = body.transcriptCut === undefined ? Boolean(prior?.transcriptCut) : Boolean(body.transcriptCut);
         if (script && !scriptBeats.length) throw new Error("the selected script has no spoken lines to match");
         const scriptContract = script
           ? "\n\nFINAL, NON-NEGOTIABLE ASSEMBLY CONTRACT: This is not a best-parts edit and not a rewrite. Do not choose material for story quality, runtime, screen appearance, or a new beat. For each supplied beatId, locate the place its words are spoken in a source transcript. Use that beatId in the pick; if the words are not recorded, emit exactly one object in gaps with that beatId. Never use a person name or prose in place of beatId. The JSON schema above is the only allowed response — no markdown, analysis, or text after the closing brace."
           : "";
-        const prompt = `${multiAssemblyPrompt({ sources, notes, script, scriptBeats })}${await globalSkillDirection()}${scriptContract}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the exact script beats, every visible gap, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
+        const prompt = `${multiAssemblyPrompt({ sources, notes, script, scriptBeats, transcriptCut })}${await globalSkillDirection()}${scriptContract}\n\nWrite the JSON to ${multiAssemblySelectionPath(id)}. Also write a concise EDL to ${join(multiAssemblyDir(id), "multi-clip.edl.md")} with one row per selected passage: order, source, spoken text, and editorial reason.${script ? ` Write a skeleton-manifest.json beside it that records the exact script beats, every visible gap, and parked material for the later video-b-roll pass.` : ""} Do not alter source recordings or transcripts.`;
         await mkdir(multiAssemblyDir(id), { recursive: true });
         await rm(multiAssemblySelectionPath(id), { force: true });
         await writeFile(join(multiAssemblyDir(id), "multi-clip.prompt.txt"), `${prompt}\n`, "utf8");
-        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), title: prior?.title ?? "", scriptName: script?.name ?? null, scriptBeats, picks: prior?.picks ?? [], gaps: prior?.gaps ?? [], parked: prior?.parked ?? [], comments: prior?.comments ?? {}, selectionFinalized: false });
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: String(body.notes ?? ""), title: prior?.title ?? "", scriptName: script?.name ?? null, scriptBeats, transcriptCut, picks: prior?.picks ?? [], gaps: prior?.gaps ?? [], parked: prior?.parked ?? [], comments: prior?.comments ?? {}, selectionFinalized: false });
         return json(res, 200, { step: { ...await studioAgentStep({ prompt, cwd: multiAssemblyDir(id), label: "multi-clip assembly" }), project: id } });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -5969,9 +6986,10 @@ async function fetchVoiceList() {
         const raw = body.fromFile ? await readFile(multiAssemblySelectionPath(id), "utf8") : JSON.stringify(body.selection ?? {});
         const script = await assemblyScript(id, prior?.scriptName);
         const scriptBeats = script ? scriptAssemblyBeats(script.body) : (prior?.scriptBeats ?? []);
-        const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources, { scriptBeats });
+        const transcriptCut = Boolean(prior?.transcriptCut);
+        const checked = validateMultiAssemblySelection(parseMultiAssemblySelection(raw), sources, { scriptBeats, transcriptCut });
         const comments = prior?.comments ?? {};
-        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: prior?.notes ?? "", title: checked.title || prior?.title || "Review cut", scriptName: script?.name ?? null, scriptBeats, picks: checked.picks, gaps: checked.gaps, parked: checked.parked, comments, selectionFinalized: true, reviewApprovedAt: null, hyperframesProject: null });
+        await writeMultiAssembly(id, { version: 1, sources: sources.map((source) => source.rel), notes: prior?.notes ?? "", title: checked.title || prior?.title || "Review cut", scriptName: script?.name ?? null, scriptBeats, transcriptCut, picks: checked.picks, gaps: checked.gaps, parked: checked.parked, comments, selectionFinalized: true, reviewApprovedAt: null, hyperframesProject: null });
         return json(res, 200, { state: await readMultiAssembly(id), problems: checked.problems });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -6028,19 +7046,39 @@ async function fetchVoiceList() {
         const state = await readMultiAssembly(id);
         if (!state?.picks?.length) throw new Error("ask Claude to choose clips first");
         await Promise.all((state.sources ?? []).map((rel) => paperEditMedia(id, rel)));
+        const title = state.title || "Review cut";
+        const opening = firstCutTitleScene({
+          name: "Opening title",
+          eyebrow: "First cut",
+          title,
+          sub: "Selected from your recordings",
+        });
+        const closing = firstCutTitleScene({
+          name: "Closing screen",
+          eyebrow: "Review cut",
+          title: "Ready for feedback",
+          sub: title,
+        });
         const built = await writeHyperframesAssembly(id, {
           folder: "multi-clip-assembly",
-          title: state.title || "Review cut",
-          clips: state.picks.map((pick) => ({
-            source: pick.source,
-            mediaStartMs: Number(pick.inSec) * 1000,
-            durationMs: (Number(pick.outSec) - Number(pick.inSec)) * 1000,
-            speaker: pick.speaker,
-          })),
-          metadata: { title: state.title || "Review cut", picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "hard-cut-on-beat" },
+          title,
+          clips: [
+            opening,
+            ...state.picks.map((pick) => ({
+              source: pick.source,
+              mediaStartMs: Number(pick.inSec) * 1000,
+              durationMs: (Number(pick.outSec) - Number(pick.inSec)) * 1000,
+              speaker: pick.speaker,
+            })),
+            closing,
+          ],
+          // The two explicit Canvas scenes above are the complete branded
+          // opening and closing; do not also add the legacy generic title.
+          showAssemblyTitle: false,
+          metadata: { title, picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "fade-through-on-scene-change", firstCut: { opening: opening.scene, closing: closing.scene } },
         });
         await writeMultiAssembly(id, { ...state, hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), reviewApprovedAt: new Date().toISOString() });
-        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, durationSec: built.durationSec });
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, selections: state.picks.length, durationSec: built.durationSec });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -6427,6 +7465,7 @@ async function fetchVoiceList() {
         (b) => {
           b.brief = brief;
           b.slots = slotsFromBrief(id, brief);
+		  b.graph = pruneRetiredShotNodes(b.graph, b.slots);
           return b;
         },
       );
@@ -6732,6 +7771,10 @@ async function fetchVoiceList() {
       const dir = projectDir(id);
       const board = await readBoard(dir, { projectId: id });
       if (!(board.slots ?? []).some((x) => x.id === nodeId)) return json(res, 404, { error: "no such shot on this board" });
+      const takeId = body.takeId ? String(body.takeId) : null;
+      if (takeId && !(board.takes ?? []).some((take) => take.id === takeId && take.slotId === nodeId)) {
+        return json(res, 400, { error: "that selected passage does not belong to this scene" });
+      }
       const at = new Date().toISOString();
       const by = await reviewerName();
       const next = await applyToBoard(dir, board, { type: "rename", at, by, nodeId }, (b) => {
@@ -6751,6 +7794,12 @@ async function fetchVoiceList() {
                 scene: typeof body.scene === "string" && body.scene.trim() ? body.scene.trim() : sl.scene,
               },
         );
+        if (takeId) {
+          b.picks ??= {};
+          b.picks[nodeId] = takeId;
+          b.pickedAt ??= {};
+          b.pickedAt[nodeId] = at;
+        }
         b.graph = graphFor(b);
         return b;
       });
@@ -6820,13 +7869,9 @@ async function fetchVoiceList() {
       return json(res, 200, { board: r.board, progress: boardProgress(r.board), synced: r.synced, reason: r.reason });
     }
 
-    /*
-     * The picks, as a document the editor opens.
-     *
-     * `toCutlist` is a projection of the picks rather than an export of them, so
-     * this route copies nothing and cannot fall behind the board. A slot with no
-     * pick is a hole in the assembly and is left as one — see toCutlist.
-     */
+    /* Canvas owns the editorial decision. HyperFrames owns the resulting cut:
+       selected footage is trimmed to the picked range and its saved scene sits
+       over it as the editable title/shader/lower-third layer. */
     if (p === "/api/board/cut" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
@@ -6847,29 +7892,148 @@ async function fetchVoiceList() {
         if (!(f === LIB || f.startsWith(LIB + sep))) throw new Error(`outside ${LIB}: ${r}`);
         return f;
       };
-      let doc;
-      try {
-        doc = boardToDocument(board, {
-          title: m?.name ? `${m.name} · ${name}` : name,
-          createdAt: new Date().toISOString(),
-          resolve: resolveRel,
-        });
-      } catch (err) {
-        return json(res, 400, { error: String(err.message) });
-      }
+      const cuts = toCutlist(board);
       // Every picked take must still be on disk. A cut that references a deleted
-      // file opens in the editor as a timeline of missing media, which reads as a
-      // broken app rather than as footage somebody moved.
-      for (const c of toCutlist(board)) {
+      // file opens as missing media, which reads as a broken app rather than as
+      // footage somebody moved.
+      for (const c of cuts) {
         if (!(await stat(resolveRel(c.rel)).catch(() => null))) {
           return json(res, 404, { error: `the take chosen for "${c.label}" is gone: ${c.rel}` });
         }
       }
-      const outDir = join(dir, "media", "Renders");
-      await mkdir(outDir, { recursive: true });
-      const dest = join(outDir, `${name}.openscreen`);
-      await writeFile(dest, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-      return json(res, 200, { document: dest, clips: toCutlist(board).length, seconds: boardProgress(board).seconds });
+      const missingScenes = [];
+      const cutsBySlot = new Map(cuts.map((cut) => [cut.slotId, cut]));
+      /*
+       * A Canvas title or transition does not need a recorded take to be a real
+       * part of the video. Walk slots rather than cutlist entries so those
+       * designed beats retain their place before, between, or after footage.
+       */
+      const authoredClips = (await Promise.all(orderedSlots(board).map(async (slot) => {
+        const cut = cutsBySlot.get(slot.id);
+        let scene = null;
+        let sceneFootage = null;
+        if (slot.scene) {
+          const sceneName = wpSlug(slot.scene);
+          const body = await readFile(join(dir, "scenes", `${sceneName}.html`), "utf8").catch(() => null);
+          if (body == null) missingScenes.push(slot.name);
+          else {
+            scene = { name: sceneName, body };
+            // A scene saved from the visual editor owns the exact passage it was
+            // designed over. The board pick wins when present, but a scene must
+            // still remain renderable after it has been opened outside Canvas.
+            sceneFootage = await sceneFootageForProject(id, sceneName);
+          }
+        }
+        const selected = cut ?? sceneFootage;
+        if (selected && !(await stat(resolveRel(selected.rel)).catch(() => null))) {
+          throw new Error(`the footage saved with "${slot.name}" is gone: ${selected.rel}`);
+        }
+        if (!selected && !scene) return null;
+        return {
+          source: selected?.rel ?? "",
+          mediaStartMs: Number(selected?.inSec) * 1000 || 0,
+          durationMs: selected
+            ? (Number(selected.outSec) - Number(selected.inSec)) * 1000
+            : canvasSceneDurationMs(scene.body),
+          scene,
+        };
+      }))).filter(Boolean);
+      if (!authoredClips.length) {
+        const progress = boardProgress(board);
+        /*
+         * Both reasons a scene can be unusable, counted separately.
+         *
+         * `empty` is "no takes at all"; `undecided` is "takes exist, none won" —
+         * which is what a slot whose only takes were rated `reject` looks like,
+         * because `chosenTake` falls back to a suggestion and `suggestedTake`
+         * requires `mean > 0`. Reporting only `empty` produced the reading
+         * "nothing is chosen yet — 0 of 5 scenes have no takes", which sends
+         * somebody looking for a bug in the cut builder when the answer is that
+         * they need to pick a take.
+         */
+        const counts = [
+          progress.empty.length && `${progress.empty.length} with no takes`,
+          progress.undecided.length && `${progress.undecided.length} with no pick`,
+        ].filter(Boolean);
+        /* Neither count fires when every slot is settled but no take resolved to
+           media on disk — a moved or deleted recording. Say that, rather than
+           printing an empty list after the comma. */
+        const why = counts.length ? `of ${progress.slots} scene${progress.slots === 1 ? "" : "s"}, ${counts.join(" and ")}` : "the chosen takes no longer point at media in this project";
+        return json(res, 400, { error: progress.slots ? `nothing is chosen yet — ${why}` : "this canvas has no scenes yet" });
+      }
+      const cutTitle = m?.name ? `${m.name} · ${name}` : name;
+      /*
+       * A Canvas may carry its own opening and closing title scenes. When it
+       * does, preserve those exact authored components. When it does not, a cut
+       * still needs both bookends — a Canvas handoff should not quietly become
+       * a footage-only sequence just because only one end was designed there.
+       */
+      const isTitleScene = (clip) => /<rm-title\b/i.test(String(clip?.scene?.body ?? ""));
+      const clips = [
+        ...(isTitleScene(authoredClips[0])
+          ? []
+          : [firstCutTitleScene({
+              name: "Opening title",
+              eyebrow: "First cut",
+              title: cutTitle,
+              sub: "Built from your Canvas",
+            })]),
+        ...authoredClips,
+        ...(isTitleScene(authoredClips.at(-1))
+          ? []
+          : [firstCutTitleScene({
+              name: "Closing screen",
+              eyebrow: "Review cut",
+              title: "Ready for feedback",
+              sub: cutTitle,
+            })]),
+      ];
+      try {
+        const built = await writeHyperframesAssembly(id, {
+          folder: `canvas-${safeName(name, "storyboard-cut")}`,
+          title: cutTitle,
+          clips,
+          // Canvas owns its own title card. A generic Review cut header would
+          // hide the saved shader/title template during the most important beat.
+          showAssemblyTitle: false,
+          metadata: {
+            sourceType: "canvas-picks",
+            canvasScenes: clips.filter((clip) => clip.scene).map((clip) => clip.scene.name),
+            bookends: {
+              opening: isTitleScene(authoredClips[0]) ? "canvas" : "generated",
+              closing: isTitleScene(authoredClips.at(-1)) ? "canvas" : "generated",
+            },
+            missingScenes,
+            transition: "fade-through-on-scene-change",
+          },
+        });
+        /*
+         * The MP4 is a handoff too, not only the editable project.
+         *
+         * This route used to return the folder and stop, on the reasoning that
+         * the render "can always be made again after someone adjusts the
+         * timeline in HyperFrames" — which quietly made a visual timeline editor
+         * a required step in every video, for a person PRODUCT.md defines as not
+         * a designer. The same `hyperframes render` the template path has always
+         * used works here; handing the step back lets Studio finish the job
+         * without opening anything.
+         *
+         * A step rather than a started job: the client decides whether this run
+         * wants an MP4 or an edit, and every other long task in this app is
+         * started the same way, through /api/run and the Console stream.
+         */
+        const renderOut = join(mediaDir(id), "Renders", built.folder);
+        const renderStep = {
+          label: `render ${built.folder}`,
+          project: id,
+          bin: "npx",
+          args: ["--yes", "hyperframes", "render", "--output", join(renderOut, `${built.folder}.mp4`), "--quality", "draft"],
+          cwd: renderOut,
+        };
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, seconds: built.durationSec, scenes: clips.filter((clip) => clip.scene).length, missingScenes, renderStep });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
     }
 
     if (p === "/api/scenes") {
@@ -6877,13 +8041,17 @@ async function fetchVoiceList() {
       const dir = join(projectDir(id), "scenes");
       const names = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith(".html"));
       const scenes = await Promise.all(
-        names.map(async (f) => ({
-        name: f.replace(/\.html$/, ""),
+        names.map(async (f) => {
+        const name = f.replace(/\.html$/, "");
+        return {
+        name,
         // The path too: a composition references the FILE, so that a scene
         // edited later updates every composition using it.
         file: join(dir, f),
         body: await readFile(join(dir, f), "utf8"),
-      })),
+        footage: await sceneFootageForProject(id, name),
+      };
+      }),
       );
       return json(res, 200, { scenes });
     }
@@ -6906,7 +8074,14 @@ async function fetchVoiceList() {
       const scales = [...new Set([...scaleCss.matchAll(/--op-color-([a-z-]+)-h\s*:/g)].map((x) => x[1]))].sort();
 
 
-      const recipes = await loadRecipes(TOOLKIT);
+      const [recipes, brandImagery, addedImagery] = await Promise.all([
+        loadRecipes(TOOLKIT),
+        readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8")
+          .then((text) => JSON.parse(text).imagery)
+          .catch(() => []),
+        readAdded(),
+      ]);
+      const vendoredFiles = new Set(brandImagery.filter((item) => item.file).map((item) => item.file));
       return json(res, 200, {
         components: await readComponentCatalogue(TOOLKIT),
     colors: {
@@ -6936,7 +8111,12 @@ async function fetchVoiceList() {
          * `assets` base, which is the only thing that knows whether this scene is
          * being rendered or previewed.
          */
-        imagery: JSON.parse(await readFile(join(TOOLKIT, "brand/imagery/index.json"), "utf8").catch(() => '{"imagery":[]}')).imagery.filter((i) => i.file),
+        imagery: [
+          ...brandImagery.filter((item) => item.file).map((item) => ({ ...item, source: "brand" })),
+          // A colliding filename would resolve to the vendored image in a
+          // standalone scene, so do not offer a deceptive duplicate tile.
+          ...addedImagery.filter((item) => item.file && !vendoredFiles.has(item.file)).map((item) => ({ ...item, source: "added" })),
+        ],
       });
     }
 
@@ -7248,7 +8428,27 @@ async function fetchVoiceList() {
       return createReadStream(file).pipe(res);
     }
 
-    res.writeHead(404);
+    /*
+     * An unknown /api route answers in JSON, because its caller parses JSON.
+     *
+     * This used to end the response with the bare text "not found" for every
+     * path, so a client doing `.then(r => r.json())` threw a parse error rather
+     * than reading a reason — and the catch beside it reported "could not reach
+     * the Studio" about a Studio that had just answered.
+     *
+     * The case that produces it is not a typo in a path. It is an old server:
+     * `rm-studio` takes a fresh port per launch, several can be left running for
+     * days, and a tab pointed at yesterday's process asks it for a route that
+     * only exists in today's code. Saying so here is the difference between a
+     * minute and an afternoon.
+     */
+    if (p.startsWith("/api/")) {
+      return json(res, 404, {
+        error: `this Studio has no route ${req.method} ${p} — it is probably an older \`rm-studio\` still running on this port. Restart it and reload.`,
+      });
+    }
+
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found");
   } catch (err) {
     json(res, 500, { error: String(err?.message ?? err) });

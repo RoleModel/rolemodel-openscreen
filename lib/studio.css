@@ -255,6 +255,15 @@ body.op-page {
   background-color: var(--op-color-neutral-plus-eight);
 }
 
+.sidebar .sidebar__content:not(.sidebar__content--start) {
+  flex: 0 0 auto; 
+}
+
+.sidebar .sidebar__content .sidebar__content--start {
+  flex-grow: 1;
+  overflow: auto;
+}
+
 .container {
   display: flex;
   flex-direction: column;
@@ -709,6 +718,10 @@ select.form-control:not([multiple], [type='radio'], [type='checkbox']) {
   --op-encoded-images-dropdown-arrow: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="9" viewBox="0 0 12 9" fill="none"%3E%3Cpath d="M6 8.37501L0 2.37501L1.4 0.975006L6 5.57501L10.6 0.975006L12 2.37501L6 8.37501Z" fill="%23FFFFFF"/%3E%3C/svg%3E');
 }
 
+.form .form-group {
+  padding-block: var(--op-space-2x-small);
+}
+
 /* A delete is quiet until it is armed. Danger is text, never a filled
          alarm block — same rule the rest of the interface follows. */
 button.btn.ghost.del {
@@ -1005,20 +1018,43 @@ button.btn:disabled {
   max-inline-size: 60ch;
 }
 
-/* Background work belongs to the current task, not on a different page. This
-   stays just below the trail so it is visible while someone moves between stages
-   without becoming a second navigation surface. */
+/* The one place background work reports from. It sits in the sticky page header,
+   not inside whichever form happened to launch it, so it stays put while the
+   person reads, scrolls, or moves to another stage. */
+.op-page__header-context {
+  align-items: center;
+  display: flex;
+  flex: 1 1 42rem;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+  min-inline-size: 0;
+}
+
 .activity {
-  border-block-end: var(--op-border-width) solid var(--line);
-  padding: var(--op-space-x-small) var(--op-space-large);
+  flex: 0 1 36rem;
+  margin-inline-start: auto;
+  min-inline-size: 0;
+  padding: 0;
 }
 
 .activity__status {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--op-space-x-small);
   margin: 0;
+  min-inline-size: 0;
+}
+
+.activity__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity__status .btn {
+  flex: none;
 }
 
 /* Under the two-column breakpoint the rail would leave the stage no room, so
@@ -2505,14 +2541,21 @@ button.usage-run:focus-visible {
 
 /* HyperFrames is hosted inside Studio. The Studio header owns the surrounding
    navigation and actions; this surface is only the editor itself. */
+/* A column, so a handed-over confirmation can sit above the editor and take its
+   own height. The frame was `block-size: 100%` of a plain block, which meant any
+   sibling pushed it past the bottom of the workspace instead of sharing it. */
 .hyperframes-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
   block-size: calc(100dvh - 7rem);
   min-block-size: var(--frame-h);
+  margin: calc(var(--op-space-medium) * -1);
 }
 
 .hyperframes-workspace__frame {
   inline-size: 100%;
-  block-size: 100%;
+  flex: 1 1 auto;
   min-block-size: 0;
   border: 0;
   border-radius: 0;
@@ -3870,10 +3913,13 @@ textarea.fills.form-control {
 }
 
 .multi-assembly__setup {
+  background-color: var(--panel);
+  padding: var(--op-space-large);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
   display: grid;
   gap: var(--op-space-small);
   margin-block: var(--op-space-small);
-  max-inline-size: 60rem;
 }
 
 .multi-assembly__setup textarea {
@@ -4289,6 +4335,7 @@ textarea.fills.form-control {
 .paper-edit__transcript {
   background: var(--panel);
   border-inline-end: 1px solid var(--line);
+  overflow: hidden;
 }
 
 /* A visible, keyboard-reachable divider — not a hidden drag target. */
@@ -4339,6 +4386,14 @@ textarea.fills.form-control {
 .paper-edit__controls {
   border-block-end: 1px solid var(--line);
   flex: none;
+}
+
+/* Setup can be longer than the editor on a laptop. Keep it contained while it
+   is open; once a transcript loads, the UI closes it and makes the transcript
+   itself the full-height working surface. */
+.paper-edit__controls[open] {
+  max-block-size: 100%;
+  overflow: auto;
 }
 
 .paper-edit__controls-summary {
@@ -4602,6 +4657,8 @@ textarea.fills.form-control {
 .paper-edit__word--selected:focus-visible {
   background: color-mix(in oklch, var(--accent) 24%, var(--panel));
   color: var(--fg);
+  outline: 1px solid var(--accent);
+  padding-inline: 0.12em;
 }
 
 .paper-edit__preview {
