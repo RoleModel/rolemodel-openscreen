@@ -1,0 +1,109 @@
+<!-- Project: one project's page, its shelves and dialogs. -->
+<template data-panel="project">
+   <div class="project-head" data-region="main">
+      <p data-el="lede" class="lede"></p>
+      <p data-el="storageStatus" class="hint" hidden></p>
+   </div>
+   <div class="row margin-y-md" style="justify-content:space-between;flex-wrap:wrap;gap:var(--op-space-small)" data-region="main">
+      <div class="btn-group">
+         <button data-el="addRecentCapture" class="btn ghost btn--pill" type="button">Add recording</button>
+         <button data-el="reindex" class="btn ghost btn--pill" type="button">Re-index</button>
+      </div>
+      <div data-el="filters" class="btn-group" style="margin-inline-start:auto"></div>
+   </div>
+   <details data-el="recentCaptures" class="project-capture-import" data-region="main">
+      <summary>Choose a recent OpenScreen recording</summary>
+      <div class="project-capture-import__controls">
+         <select data-el="captureSelect" aria-label="Recent OpenScreen recordings" disabled></select>
+         <button data-el="addCapture" class="btn secondary btn--small" type="button" disabled>Add to project</button>
+         <button data-el="refreshCaptures" class="btn ghost btn--small" type="button">Refresh</button>
+      </div>
+      <p data-el="captureHint" class="hint project-capture-import__status" hidden></p>
+   </details>
+   <div class="full" data-region="main">
+      <button data-el="drop" class="dropzone" type="button">
+         <span class="dropzone__lead">Add other media</span>
+         <span class="dropzone__sub">Drop or choose video, audio or stills</span>
+      </button>
+      <input data-el="picker" type="file" multiple accept="video/*,audio/*,image/*" hidden />
+      <div data-el="dropHint" class="hint"></div>
+   </div>
+   <div data-el="rootPath" class="path" data-region="main"></div>
+   <p data-el="emptyNote" class="empty" data-region="main" hidden></p>
+   <div data-el="grid" class="grid" data-region="main"></div>
+</template>
+
+<!-- A script, as a card on the project shelf. -->
+<template data-row="script-shelf-card">
+   <div class="card">
+      <div class="thumbwrap">
+         <div data-el="thumb" class="thumb" style="display:grid;place-items:center;background:var(--sunk)"></div>
+      </div>
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="meta" class="path"></div>
+      </div>
+   </div>
+</template>
+
+<!-- One file on the project shelf: pickable, playable in place, one menu. -->
+<template data-row="file-card">
+   <div class="card" style="cursor:pointer">
+      <input data-el="pick" class="card__pick" type="checkbox" title="Use this in a video" />
+      <div class="thumbwrap">
+         <div data-el="thumb" class="thumb"></div>
+         <button data-el="play" class="thumbwrap__play" type="button" hidden></button>
+      </div>
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="path" class="path"></div>
+         <div data-el="meta" class="meta"></div>
+         <div data-el="note" class="path" style="flex-basis:100%"></div>
+      </div>
+   </div>
+</template>
+
+<!-- One modal asking one question about one asset: move, or rename. -->
+<template data-row="asset-dialog">
+   <dialog class="move-asset">
+      <form class="move-asset__form" method="dialog">
+         <h2 data-el="title"></h2>
+         <p data-el="lede" class="hint"></p>
+         <label class="form-group">
+            <span data-el="label" class="form-label"></span>
+            <span data-el="slot" style="display:contents"></span>
+         </label>
+         <p data-el="status" class="hint" hidden></p>
+         <div class="move-asset__actions">
+            <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
+            <button data-el="confirm" class="btn" type="button"></button>
+         </div>
+      </form>
+   </dialog>
+</template>
+
+<template data-row="media-name-dialog">
+   <dialog class="media-name-dialog">
+      <form class="media-name-dialog__form" method="dialog">
+         <h2 data-el="title"></h2>
+         <p class="hint">Use the person’s name when it matters. Claude sees these names when it matches footage to /speaker sections in the script.</p>
+         <div data-el="fields" style="display:contents"></div>
+         <p data-el="status" class="hint" hidden></p>
+         <div class="move-asset__actions">
+            <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
+            <button data-el="add" class="btn btn--primary" type="button"></button>
+         </div>
+      </form>
+   </dialog>
+</template>
+
+<template data-row="media-name-field">
+   <label class="form-group">
+      <span class="form-label">Save as</span>
+      <div class="media-name-dialog__name">
+         <input data-el="input" class="form-control" />
+         <span data-el="extension" class="media-name-dialog__extension"></span>
+      </div>
+      <span data-el="original" class="form-hint"></span>
+   </label>
+</template>

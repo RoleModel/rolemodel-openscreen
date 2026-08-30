@@ -1,0 +1,36 @@
+<!-- Interview: capturing answers on camera. -->
+<template data-panel="interview">
+   <p class="lede" data-region="main">
+      Answer a few practical questions about the video. Claude turns the conversation
+      into a plan, then uses that plan to draft the script.
+   </p>
+   <p data-el="skillHint" class="hint" data-region="main"></p>
+   <div class="form interview" data-region="main">
+      <section class="interview__question full">
+         <div data-el="questionCount" class="interview__count" hidden></div>
+         <div data-el="questionTitle" class="paper-edit__title" hidden></div>
+         <p data-el="questionHint" class="hint" hidden></p>
+      </section>
+      <div data-el="answerGroup" class="form-group">
+         <label class="form-label" for="interview-answer">Your answer</label>
+         <textarea data-el="answer" id="interview-answer" class="form-control" rows="5"
+            placeholder="Write what you know. A rough answer is enough to move the plan forward."></textarea>
+      </div>
+      <div class="row">
+         <button data-el="submit" class="btn btn--primary" type="button" hidden>Submit answer</button>
+         <button data-el="loadReply" class="btn" type="button" hidden>Load Claude’s reply</button>
+         <button data-el="continueScript" class="btn btn--primary" type="button" hidden>Continue to script</button>
+         <button data-el="openCanvas" class="btn ghost" type="button" hidden>Open canvas</button>
+         <button data-el="startOver" class="btn ghost" type="button" hidden>Start over</button>
+      </div>
+      <section class="interview__plan full">
+         <ol data-el="shots" class="interview__shots" hidden></ol>
+         <p data-el="problems" class="hint" hidden></p>
+      </section>
+      <div data-el="status" class="form-hint full"></div>
+   </div>
+</template>
+
+<template data-row="interview-shot">
+   <li><strong data-el="name"></strong><span data-el="intent"></span><span data-el="seconds" class="interview__seconds" hidden></span></li>
+</template>

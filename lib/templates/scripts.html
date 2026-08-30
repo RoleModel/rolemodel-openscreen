@@ -1,0 +1,72 @@
+<!-- Scripts: writing and saving narration scripts. -->
+<template data-panel="scripts">
+   <p class="lede" data-region="main">
+      Narration and outlines as markdown — greppable, and they diff. A script
+      saved to a project lands in that project's scripts/ folder; the shared
+      shelf is for the ones that travel. Voice reads from here.
+   </p>
+   <div data-region="main" class="panel-card script-form">
+      <div class="form-group">
+         <label class="form-label" for="script-about">About</label>
+         <textarea data-el="about" id="script-about" class="form-control" rows="3"
+            placeholder="A URL, or a couple of sentences about what the video is for and who is watching."></textarea>
+         <div class="form-hint">The brief Claude drafts from. Type / for a directive.</div>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="script-body">Script</label>
+         <textarea data-el="body" id="script-body" class="form-control script-body" spellcheck="false"
+            placeholder="Write the script…"></textarea>
+         <div data-el="count" class="form-hint"></div>
+			<div class="form-hint">Type <code>/speaker "Name"</code> before a section to assign it to that person. Claude keeps those sections with that person’s named footage.</div>
+      </div>
+      <div data-el="draftOut"></div>
+   </div>
+   <!--
+      The rail is the settings and the shelf.
+      Main is where you write; the name, the length and where it saves are knobs
+      about the thing being written, not the thing itself.
+   -->
+   <div data-region="side">
+      <div class="form-group">
+         <label class="form-label" for="script-name">Name</label>
+         <input data-el="name" id="script-name" class="form-control" placeholder="case-study-opener" />
+         <div class="form-hint">The filename, without .md. Voice matches a narration run to a script by this.</div>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="script-shelf">Save to</label>
+         <select data-el="shelf" id="script-shelf" class="form-control">
+            <option value="project">This project</option>
+            <option value="shared">Shared shelf</option>
+         </select>
+         <div class="form-hint">
+            A project script lands in its scripts/ folder. The shared shelf is for the
+            ones that travel between projects.
+         </div>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="script-seconds">Seconds</label>
+         <input data-el="seconds" id="script-seconds" class="form-control" type="number" value="30" min="10" max="180"
+            step="5" />
+         <div class="form-hint">How long the draft should run. Drafting only.</div>
+      </div>
+      <div class="client">Saved</div>
+      <div data-el="saved" class="saved-list"></div>
+   </div>
+   <div data-region="footer">
+      <div data-el="status" class="hint"></div>
+      <button data-el="draft" class="btn ghost">Draft it with Claude</button>
+      <button data-el="save" class="btn">Save script</button>
+      <button data-el="build" class="btn btn--primary">Build with Claude</button>
+   </div>
+</template>
+
+<!-- A saved script, as a card on the Scripts shelf. -->
+<template data-row="script-saved">
+   <div class="card" style="cursor:pointer">
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="snippet" class="path"></div>
+         <div data-el="brief" class="path" hidden></div>
+      </div>
+   </div>
+</template>

@@ -1,0 +1,32 @@
+<!-- Wallpapers: the branded backdrop grid and editor. -->
+<template data-panel="wallpapers">
+   <p class="lede" data-region="main">The backdrop behind the recording — the biggest branded surface in the video. Everything here is linear: no radial gradients, no vignette.</p>
+   <div data-el="grid" class="grid wpgrid" data-region="main"></div>
+   <div data-el="editor" data-region="main" style="margin-top:var(--op-space-large)"></div>
+</template>
+
+<template data-row="wallpaper-new-card">
+   <button class="card cardnew" type="button">
+      <div class="nm">New wallpaper</div>
+      <div class="path">from the brand defaults</div>
+   </button>
+</template>
+
+<template data-row="wallpaper-card">
+   <div class="card">
+      <canvas data-el="cv" style="width:100%;height:auto;display:block"></canvas>
+      <div class="body">
+         <div data-el="nm" class="nm"></div>
+         <div data-el="path" class="path"></div>
+      </div>
+   </div>
+</template>
+
+<template data-row="wp-editor">
+   <div data-el="left" class="wpprev">
+      <canvas data-el="cv"></canvas>
+      <div data-el="status" class="path" style="margin-top:var(--op-space-x-small)"></div>
+   </div>
+   <div data-el="panel" class="panel2"></div>
+   <button data-el="save" class="btn" type="button">Save wallpaper</button>
+</template>

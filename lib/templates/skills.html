@@ -1,0 +1,51 @@
+<!-- Skills: what this machine can run. -->
+<!--
+   Skills: the first panel of the second batch. Everything static is here; the
+   card list is cloned per skill from the row template beneath, so JS fills
+   text and toggles buttons but builds no structure.
+-->
+<template data-panel="skills">
+   <p class="lede" data-region="main">
+      Shared instructions Claude uses across RoleModel Studio. Install a zip once,
+      edit its instructions here, and every signed-in teammate gets the same skill.
+   </p>
+   <div class="row" data-region="main">
+      <button data-el="install" class="btn btn--primary" type="button">Install skill .zip</button>
+      <input data-el="picker" type="file" accept=".zip,application/zip" hidden />
+      <button data-el="refresh" class="btn ghost" type="button">Refresh</button>
+      <span data-el="status" class="hint">Checking the shared skill directory…</span>
+   </div>
+   <div class="client" data-region="main">Studio skills</div>
+   <div data-el="list" class="grid" data-region="main"></div>
+   <section data-el="editor" class="client" data-region="main" hidden>
+      <div class="row">
+         <strong data-el="editorName">Skill editor</strong>
+         <span data-el="editorNote" class="hint"></span>
+      </div>
+      <textarea data-el="editorField" class="form-control" rows="22" spellcheck="false"></textarea>
+      <div class="row">
+         <button data-el="save" class="btn btn--primary" type="button">Save shared skill</button>
+         <button data-el="close" class="btn ghost" type="button">Close</button>
+      </div>
+   </section>
+   <div class="client" data-region="main">Standard shared skills</div>
+   <div data-el="standard" class="hint" data-region="main"></div>
+   <div class="client" data-region="main">Supporting skills</div>
+   <div data-el="support" class="hint" data-region="main"></div>
+</template>
+
+<!-- One skill card. Cloned by mountRow('skill-card'); the view fills the text. -->
+<template data-row="skill-card">
+   <article class="card">
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="description" class="path"></div>
+         <div data-el="source" class="path"></div>
+         <span data-el="kind" class="kind"></span>
+         <div class="row">
+            <button data-el="edit" class="btn ghost" type="button">Edit</button>
+            <button data-el="publish" class="btn ghost" type="button" hidden>Publish to team</button>
+         </div>
+      </div>
+   </article>
+</template>

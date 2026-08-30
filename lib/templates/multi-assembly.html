@@ -1,0 +1,160 @@
+<!-- Multi-clip assembly: picking passages across clips. -->
+<template data-panel="multi-assembly">
+   <p class="lede" data-region="main">Choose up to eight project recordings. Studio transcribes and samples their screens in the background, then Claude returns a reviewable set of timestamped selects — never invented footage.</p>
+   <button data-el="switchMode" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main">Use one recording instead</button>
+   <p data-el="noVideos" class="empty" data-region="main" hidden>Add recordings to this project first.</p>
+   <div data-el="sourceHeader" class="multi-assembly__source-header" data-region="main" hidden>
+      <div class="paper-edit__title">Source recordings · choose up to 8</div>
+      <button data-el="updateSources" class="btn ghost btn--small" type="button" hidden>Update selected recordings</button>
+   </div>
+   <div data-el="sourceList" class="multi-assembly__sources" data-region="main" hidden></div>
+   <section data-el="setup" class="multi-assembly__setup" data-region="main" hidden>
+      <div data-el="scriptGroup" class="form-group" hidden>
+         <label class="form-label">Script to match</label>
+         <select data-el="scriptSelect" class="form-control"></select>
+         <div class="form-hint">Choose this when the recordings are takes of a script. Studio applies the Video from script workflow: script order wins, missing beats stay visible, and unused material is parked for later.</div>
+      </div>
+   </section>
+</template>
+
+<!-- One selectable source recording. -->
+<template data-row="assembly-source">
+   <label class="multi-assembly__source">
+      <input data-el="input" type="checkbox" />
+      <span data-el="thumb" class="multi-assembly__source-thumb"></span>
+      <span class="multi-assembly__source-details">
+         <span data-el="name" class="multi-assembly__source-name"></span>
+         <span data-el="meta" class="multi-assembly__source-meta"></span>
+         <span data-el="readiness" class="multi-assembly__source-ready">Not prepared</span>
+      </span>
+   </label>
+</template>
+
+<!-- The second workflow: align an audio recording to a screen recording. -->
+<template data-row="assembly-align">
+   <details class="multi-assembly__align">
+      <summary>Align an audio recording to a screen recording</summary>
+      <p class="hint">Studio first transcribes the narration and samples the screen. Claude maps each spoken range to a matching on-screen moment; it does not lay the entire audio over the original recording.</p>
+      <div data-el="row" class="multi-assembly__align-row">
+         <select data-el="screen"></select>
+         <select data-el="audio"></select>
+         <select data-el="script"></select>
+         <button data-el="build" class="btn ghost btn--small" type="button">Build visual alignment</button>
+      </div>
+   </details>
+</template>
+
+<!-- The assembly's recovery card: what the last pass left, and the way on. -->
+<template data-row="assembly-recovery">
+   <section class="card card--padded">
+      <div data-el="title" class="paper-edit__title"></div>
+      <p data-el="copy" class="hint"></p>
+      <ul data-el="gaps" class="multi-assembly__script-gaps" hidden></ul>
+      <div data-el="actions" class="row">
+         <button data-el="retry" class="btn btn--primary btn--small" type="button">Make a new Claude pass</button>
+      </div>
+   </section>
+</template>
+
+<!-- The review head: the cut's title, the script beats, and its actions. -->
+<template data-row="assembly-head">
+   <section class="card card--padded">
+      <div data-el="title" class="paper-edit__title"></div>
+      <p data-el="next" class="hint"></p>
+      <div data-el="beats" class="multi-assembly__script-status" hidden></div>
+      <div data-el="actions" class="row">
+         <button data-el="revise" class="btn ghost btn--small" type="button">Revise from comments</button>
+         <button data-el="newPass" class="btn ghost btn--small" type="button">Make a new pass</button>
+      </div>
+   </section>
+</template>
+
+<template data-row="assembly-beat"><span class="multi-assembly__script-beat"></span></template>
+
+<!-- One audible player, one sequence, and the transcript alongside it. -->
+<template data-row="assembly-review">
+   <section class="multi-assembly__review-surface">
+      <div data-el="timeline" class="multi-assembly__timeline" aria-label="Assembly timeline"></div>
+      <div data-el="fillers" class="multi-assembly__fillers" hidden>
+         <p data-el="fillersHint" class="hint"></p>
+      </div>
+      <div class="multi-assembly__review-body">
+         <div class="multi-assembly__stage">
+            <video data-el="player" class="multi-assembly__review-player" controls playsinline preload="metadata" aria-label="Selected assembly passage"></video>
+            <p data-el="selectedLabel" class="multi-assembly__selected-label"></p>
+            <p data-el="selectedText" class="multi-assembly__selected-text"></p>
+            <p data-el="selectedReason" class="multi-assembly__selected-reason"></p>
+            <button data-el="playSelection" class="btn ghost btn--small" type="button">Play Claude’s selection</button>
+            <button data-el="removeSelection" class="btn ghost btn--small" type="button">Remove from assembly</button>
+            <textarea data-el="comment" class="multi-assembly__comment" rows="2" placeholder="Comment for the next edit…"></textarea>
+         </div>
+         <div class="multi-assembly__transcript">
+            <div class="multi-assembly__transcript-head">
+               <strong data-el="transcriptName"></strong>
+               <span class="multi-assembly__transcript-hint">The green range is what Claude selected.</span>
+            </div>
+            <div data-el="transcriptLines" class="multi-assembly__transcript-lines"></div>
+         </div>
+      </div>
+   </section>
+</template>
+
+<template data-row="assembly-cue">
+   <button class="multi-assembly__transcript-line" type="button">
+      <time data-el="time"></time>
+      <span data-el="copy" class="multi-assembly__transcript-copy"></span>
+   </button>
+</template>
+
+<template data-row="assembly-badge"><span class="multi-assembly__selection-badge">Claude selected</span></template>
+
+<template data-row="assembly-pick">
+   <button class="multi-assembly__timeline-pick" type="button">
+      <span data-el="number" class="multi-assembly__timeline-number"></span>
+      <span data-el="label" class="multi-assembly__timeline-label"></span>
+      <span data-el="time" class="multi-assembly__timeline-time"></span>
+   </button>
+</template>
+
+<template data-row="assembly-filler">
+   <div class="multi-assembly__filler">
+      <span data-el="text" class="multi-assembly__filler-text"></span>
+      <button data-el="trim" class="btn btn--small" type="button"></button>
+   </div>
+</template>
+
+<!-- The visual-alignment review: the screen recording and its mapped cuts. -->
+<template data-row="assembly-alignment">
+   <div style="display:contents">
+      <div class="card card--padded multi-assembly__review-head">
+         <div>
+            <div data-el="title" class="paper-edit__title"></div>
+            <p class="hint">Edit the screen cuts and narration together in HyperFrames. Rendered review video includes the matching narration.</p>
+         </div>
+         <div data-el="actions" class="multi-assembly__alignment-actions"></div>
+      </div>
+      <div class="multi-assembly__alignment-body">
+         <video data-el="player" class="multi-assembly__alignment-video" playsinline controls preload="metadata"></video>
+         <div data-el="cuts" class="multi-assembly__alignment-cuts"></div>
+      </div>
+   </div>
+</template>
+
+<template data-row="assembly-alignment-cut">
+   <button class="multi-assembly__alignment-cut" type="button">
+      <span data-el="number" class="multi-assembly__alignment-number"></span>
+      <span data-el="range" class="multi-assembly__alignment-range"></span>
+      <span class="multi-assembly__alignment-detail">
+         <strong data-el="screen"></strong>
+         <span data-el="reason"></span>
+      </span>
+   </button>
+</template>
+
+<template data-row="multi-assembly-review">
+   <section class="multi-assembly__review"></section>
+</template>
+
+<template data-row="multi-assembly-alignment-review">
+   <section class="multi-assembly__alignment-review"></section>
+</template>

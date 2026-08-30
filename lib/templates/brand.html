@@ -1,0 +1,80 @@
+<!-- Brand: swatches, marks, imagery and wallpaper entries. -->
+<template data-panel="brand">
+   <p class="lede" data-region="main">Wallpapers and title treatments, generated from the Optics palette. Change the export, re-run sync-brand, and everything here follows.</p>
+   <div class="client" data-region="main">Sub-brands</div>
+   <div data-el="subBrands" class="grid" data-region="main"></div>
+   <div class="client" data-region="main">Marks</div>
+   <p data-el="noMarks" class="hint" data-region="main" hidden>No marks vendored yet. Run <code>pnpm run logos</code> with the rolemodel-brand checkout beside this one.</p>
+   <div data-el="marks" class="grid" data-region="main" hidden></div>
+   <div data-el="imageryHead" class="client" data-region="main" hidden>Imagery</div>
+   <div data-el="imageryHint" class="hint" data-region="main" hidden>Staged into every render at assets/imagery/, so a composition can use one with no network. Not all are cut out — several carry a light background in the file itself.</div>
+   <div data-el="imagery" class="grid" data-region="main" hidden></div>
+   <div data-el="marksCount" class="path" data-region="main" hidden></div>
+   <div class="client" data-region="main">Title &amp; lower third</div>
+   <div class="row" data-region="main">
+      <select data-el="wpSel" class="form-control" aria-label="Wallpaper behind the preview"></select>
+      <input data-el="tIn" class="form-control" value="Dock Designer" placeholder="Title" aria-label="Title" />
+      <input data-el="eIn" class="form-control" value="Product tour" placeholder="Eyebrow" aria-label="Eyebrow" />
+      <input data-el="nIn" class="form-control" value="Dallas Peters" placeholder="Name" aria-label="Name" />
+      <input data-el="sIn" class="form-control" value="Senior Designer" placeholder="Subtitle" aria-label="Subtitle" />
+   </div>
+   <div data-el="prev" class="grid" data-region="main" style="grid-template-columns:repeat(auto-fill,minmax(var(--preview-min),1fr))"></div>
+   <div class="client" data-region="main">Added assets</div>
+   <div class="hint" data-region="main">Kept in your library beside the projects, so an upgrade cannot take them, and staged into renders the same way the vendored imagery is.</div>
+   <button data-el="addDrop" class="dropzone" type="button">
+      <span class="dropzone__lead">Drop a logo, product shot or texture</span>
+      <span class="dropzone__sub">or click to choose — png, jpg, webp, svg, gif or avif</span>
+   </button>
+   <input data-el="addPicker" type="file" multiple accept="image/*" hidden data-region="main" />
+   <div data-el="addedHint" class="hint" data-region="main"></div>
+   <div data-el="addedGrid" class="grid" data-region="main"></div>
+   <div class="client" data-region="main">Wallpapers</div>
+   <div data-el="wallGrid" class="grid" data-region="main"></div>
+   <div data-region="footer"><button data-el="addAction" class="btn" type="button">Add brand assets</button></div>
+</template>
+
+<template data-row="brand-swatch">
+   <div class="card">
+      <div data-el="swatch" class="thumb" style="aspect-ratio:var(--swatch-ar)"></div>
+      <div class="body"><div data-el="name" class="nm"></div><div data-el="meta" class="path"></div></div>
+   </div>
+</template>
+
+<template data-row="brand-mark">
+   <div class="card">
+      <div class="thumbwrap">
+         <!-- The mark itself as an <img>, so the SVG scales without cropping. -->
+         <div data-el="ground" class="thumb" style="display:grid;place-items:center"><img data-el="img" class="brandmark" /></div>
+         <span data-el="kind" class="kind"></span>
+      </div>
+      <div class="body"><div data-el="name" class="nm"></div><div data-el="variant" class="path"></div><div data-el="file" class="path"></div></div>
+   </div>
+</template>
+
+<template data-row="brand-imagery">
+   <div class="card">
+      <div class="thumbwrap">
+         <div class="thumb" style="display:grid;place-items:center;background:var(--op-color-neutral-plus-six)"><img data-el="img" class="brandmark brandmark--photo" loading="lazy" /></div>
+         <span data-el="kind" class="kind"></span>
+      </div>
+      <div class="body"><div data-el="name" class="nm"></div><div data-el="file" class="path"></div></div>
+   </div>
+</template>
+
+<template data-row="brand-preview">
+   <div class="card" style="padding:0">
+      <div data-el="box" class="lt" style="container-type:inline-size"></div>
+      <div class="body"><div data-el="caption" class="path"></div></div>
+   </div>
+</template>
+
+<template data-row="brand-wallpaper-new">
+   <button class="card cardnew" type="button"><div class="nm">New wallpaper</div><div class="path">from the brand defaults</div></button>
+</template>
+
+<template data-row="brand-wallpaper">
+   <div class="card" style="cursor:pointer">
+      <div data-el="art" class="wp"></div>
+      <div class="body"><div data-el="name" class="nm"></div><div data-el="file" class="path"></div></div>
+   </div>
+</template>

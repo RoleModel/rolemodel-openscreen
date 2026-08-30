@@ -1,0 +1,65 @@
+<!-- Paper edit: choosing passages from a transcript. -->
+<template data-panel="paper-edit">
+   <p class="lede" data-region="main">Claude finds the usable passages first. Review the visual picks, keep the ones that tell the story, then build the editable assembly.</p>
+   <button data-el="useMulti" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main">Assemble multiple clips instead</button>
+   <div data-el="workspace" class="paper-edit" data-region="main">
+      <section data-el="transcript" class="paper-edit__transcript">
+         <details data-el="controls" class="paper-edit__controls" open>
+            <summary class="paper-edit__controls-summary">Assembly settings</summary>
+            <div data-el="form" class="form paper-edit__setup"></div>
+         </details>
+         <div data-el="status" class="form-hint full"></div>
+         <section data-el="review" class="paper-edit__review"></section>
+      </section>
+      <div data-el="splitter" class="paper-edit__splitter" role="separator" aria-label="Resize transcript panel" aria-orientation="vertical" tabindex="0"></div>
+      <section class="paper-edit__preview">
+         <p data-el="previewName" class="paper-edit__preview-name">Choose a recording to preview it here.</p>
+         <video data-el="player" class="paper-edit__video" controls playsinline preload="metadata"></video>
+      </section>
+   </div>
+</template>
+
+<template data-row="paper-edit-head">
+   <div class="full">
+      <div data-el="title" class="paper-edit__title"></div>
+      <p data-el="hint" class="hint"></p>
+   </div>
+</template>
+
+<template data-row="paper-edit-beats"><div class="paper-edit__beats"></div></template>
+
+<template data-row="paper-edit-beat"><button class="paper-edit__beat-chip" type="button"></button></template>
+
+<template data-row="paper-edit-picks">
+   <section class="paper-edit__picks">
+      <div class="paper-edit__picks-title">Claude’s suggested clips</div>
+      <p class="hint">Choose a card to inspect it. Keep or remove whole picks here; use the transcript below for a finer cut.</p>
+      <div data-el="grid" class="paper-edit__pick-grid"></div>
+   </section>
+</template>
+
+<!-- One suggested pick: a frame from the recording, the passage, the reason. -->
+<template data-row="paper-edit-pick">
+   <article class="paper-edit__pick">
+      <button data-el="inspect" class="paper-edit__pick-preview" type="button">
+         <video data-el="thumb" class="paper-edit__pick-thumb" muted playsinline preload="metadata"></video>
+         <span data-el="time" class="paper-edit__pick-time"></span>
+      </button>
+      <div class="paper-edit__pick-copy">
+         <div data-el="shot" class="paper-edit__pick-shot"></div>
+         <p data-el="text" class="paper-edit__pick-text"></p>
+         <p data-el="why" class="paper-edit__pick-why" hidden></p>
+      </div>
+      <button data-el="toggle" type="button"></button>
+   </article>
+</template>
+
+<template data-row="paper-edit-lines"><div class="paper-edit__lines"></div></template>
+
+<template data-row="paper-edit-line">
+   <div class="paper-edit__line"><time data-el="time" class="paper-edit__time"></time><span data-el="text" class="paper-edit__text paper-edit__words"></span></div>
+</template>
+
+<template data-row="paper-edit-word-button"><button class="paper-edit__word" type="button"></button></template>
+
+<template data-row="paper-edit-word"><span class="paper-edit__word"></span></template>

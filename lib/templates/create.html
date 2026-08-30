@@ -1,0 +1,37 @@
+<!-- Create: the guided project kickoff. -->
+<!--
+   Three ways in, as three cards.
+   ================================================================
+   This was a row of chips above whichever panel was active, so the choice and
+   the work competed for the same screen and the two you did not pick sat there
+   taking width. A picture says which is which faster than three similar
+   sentences do — and the difference between recording a screen, writing a
+   script and replaying a test is exactly the kind that is easier shown.
+   The chooser is what you see with nothing picked; picking one replaces it, and
+   the breadcrumb is the way back. `<img>` with an empty alt because the name is
+   right beneath it in text — reading the picture out as well would say it twice.
+-->
+<template data-panel="create">
+   <p class="lede" data-region="main">
+      Three ways to start. Record what you do, write it and let the browser act
+      it out, or replay a test you already have.
+   </p>
+   <div data-el="chooser" data-region="main" class="choose-grid">
+      <button class="choose-card" data-tab="record">
+         <img src="/assets/screen-recording.svg" alt="" />
+         <span class="choose-card__name">Record a screen</span>
+         <span class="choose-card__note">Capture what you do, as you do it.</span>
+      </button>
+      <button class="choose-card" data-tab="make">
+         <img src="/assets/script.svg" alt="" />
+         <span class="choose-card__name">Make from a script</span>
+         <span class="choose-card__note">Write the demo; the browser performs it.</span>
+      </button>
+      <button class="choose-card" data-tab="recast">
+         <img src="/assets/test.svg" alt="" />
+         <span class="choose-card__name">From a test</span>
+         <span class="choose-card__note">Replay a Playwright run you already have.</span>
+      </button>
+   </div>
+   <div data-el="host" data-region="main"></div>
+</template>

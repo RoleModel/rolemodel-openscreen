@@ -1,0 +1,33 @@
+<!-- New project: the creation form. -->
+<template data-panel="new">
+   <p class="lede" data-region="main">
+      A project is a folder with a manifest. Client is separate from project name
+      — Ridgeline and Hershey are two clients, not one project.
+   </p>
+   <div data-region="main" class="form">
+      <div class="form-group">
+         <label class="form-label" for="new-name">Project</label>
+         <input data-el="name" id="new-name" class="form-control" placeholder="Railing Case Study" />
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="new-client">Client</label>
+         <input data-el="client" id="new-client" class="form-control" placeholder="Ridgeline" />
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="new-brand">Brand</label>
+         <select data-el="brand" id="new-brand" class="form-control"></select>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="new-store">Storage</label>
+         <select data-el="store" id="new-store" class="form-control"></select>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="new-bucket">Bucket</label>
+         <input data-el="bucket" id="new-bucket" class="form-control" placeholder="rm-video (remote only)" />
+      </div>
+   </div>
+   <div data-region="footer">
+      <pre data-el="status" class="status" hidden></pre>
+      <button data-el="go" class="btn">Create project</button>
+   </div>
+</template>
