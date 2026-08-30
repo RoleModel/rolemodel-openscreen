@@ -174,6 +174,43 @@ Precise and unfussy. Controls are `40px` tall, type inside them is `14px`, and p
 - **Hint**—italic, `form-hint`, directly under the control it explains. Tone modifiers: ok, warn, bad.
 - **Plan**—a numbered list of what is about to happen, with the real paths, shown before the buttons that do it.
 
+## Motion
+
+**Restrained, and mostly in the background.** The videos this toolkit makes are
+talking heads and screen recordings with brand bookends; motion that draws
+attention to itself competes with the person speaking. The reference is HeyGen's
+`inspector-launch` study: titles large and still, no stacked word pills, no
+character stagger — the motion lives in the background, which shifts a beat
+*before* each cut so the eye is told a change is coming.
+
+Every rule below is a token or a component default, not a per-video choice.
+
+- **One curve, one distance.** Entrances use `--ease-enter` over
+  `--duration-base` (400ms) with a rise of `--distance-sm`; exits use
+  `--ease-exit` over `--duration-fast` (200ms). Nothing bounces, nothing
+  overshoots. `--ease-emphasis` exists for a single accent, never for text.
+- **Parts arrive in reading order, a beat apart.** A title's eyebrow, headline,
+  sub and rule enter 0 / 120 / 240 / 320ms after its `at`, on the same curve
+  (`--lead` in `components/rm-video.js`). The rule draws in from the left. The
+  whole card leaves together. That is the entire vocabulary for type: no
+  per-word or per-character motion.
+- **Lower thirds enter and leave.** A 24px slide from the left over 400ms on the
+  brand curve, a 200ms fade out. The assembly exporter writes this as a GSAP
+  tween on the composition clock — the animation the renderer actually seeks —
+  and the reconcile pass moves it with its clip.
+- **Transitions are cross-dissolves, 800ms, only at scene changes.** Consecutive
+  selects from one take are straight cuts. Never a wash through black.
+- **The background leads the cut.** `rm-pixel-reveal` takes `flow-beats` (the
+  clip boundaries) and shifts its field 100ms before each one. A script asks for
+  it with `/reveal <brand image>`; the exporter fills the beats from the cut.
+  This is where the motion budget goes.
+- **Seek-driven or nothing.** Components animate as paused CSS animations
+  positioned by `--t`; compositions animate with GSAP on `window.__timelines`.
+  A CSS animation keyed off `--t` inside an exported composition is asserted
+  against, because the renderer never seeks it.
+
+Motion is where a branded video becomes a cheap one. When in doubt, less.
+
 ## Dos and don'ts
 
 **Do**

@@ -140,7 +140,9 @@ const TIMING = `
   .anim {
     animation-name: rm-in, rm-out;
     animation-duration: var(--dur), var(--out-dur);
-    animation-delay: calc(var(--at) - var(--t)), calc(var(--at) + var(--hold) - var(--t));
+    /* --lead lets the parts of one component arrive in order — an eyebrow a
+       beat before its title — without a second clock. The exit is shared. */
+    animation-delay: calc(var(--at) + var(--lead, 0ms) - var(--t)), calc(var(--at) + var(--hold) - var(--t));
     animation-timing-function: var(--ease), var(--ease-out-curve);
     animation-fill-mode: both, both;
     animation-play-state: paused, paused;
@@ -396,12 +398,24 @@ class RMTitle extends RMElement {
         h1 { margin:0; font-size:5.4cqw; font-weight:800; letter-spacing:-.03em; line-height:1.02; color:var(--fg); max-width:24ch; }
         .sub { font-size:1.7cqw; color:var(--fg); max-width:46ch; line-height:1.45;  }
         .rule { width:6cqw; height:.26cqw; border-radius:.2cqw; background:var(--brand-text); margin-top:.6cqw; }
+        /*
+         * The lines arrive in reading order, a beat apart: eyebrow, title, sub,
+         * then the rule draws in from the left. Each is the same 26px rise on
+         * the same brand curve — one motion, staggered — rather than four
+         * different tricks. The whole card still leaves together. Kept small
+         * on purpose: the reference this follows puts motion in the
+         * background and leaves titles large and still.
+         */
+        .eb   { --lead: 0ms; }
+        h1    { --lead: 120ms; }
+        .sub  { --lead: 240ms; }
+        .rule { --lead: 320ms; transform-origin: left center; transform: scaleX(var(--rm-in-o)); opacity: var(--rm-out-o); }
       </style>
-      <div class="wrap anim">
-        ${this.attr('eyebrow') ? `<div class="eb">${this.esc(this.attr('eyebrow'))}</div>` : ''}
-        <h1>${this.esc(this.attr('title', 'Title'))}</h1>
-        ${this.attr('sub') ? `<div class="sub">${this.esc(this.attr('sub'))}</div>` : ''}
-        <div class="rule"></div>
+      <div class="wrap">
+        ${this.attr('eyebrow') ? `<div class="eb anim">${this.esc(this.attr('eyebrow'))}</div>` : ''}
+        <h1 class="anim">${this.esc(this.attr('title', 'Title'))}</h1>
+        ${this.attr('sub') ? `<div class="sub anim">${this.esc(this.attr('sub'))}</div>` : ''}
+        <div class="rule anim"></div>
       </div>`
   }
 }
@@ -726,6 +740,8 @@ class RMPixelReveal extends RMElement {
     'color-fringing',
     'flow-intensity',
     'flow',
+    'flow-beats',
+    'flow-step',
     'at',
     'for',
   ]
@@ -746,6 +762,24 @@ class RMPixelReveal extends RMElement {
     const colorFringing = shaderClamp(Number(this.attr('color-fringing', 0.6)) || 0, 0, 3)
     const flowIntensity = shaderClamp(Number(this.attr('flow-intensity', 1.5)) || 0, 0, 3.5)
     const flowing = this.attr('flow', 'still') === 'flow'
+    /*
+     * The background leads the cut.
+     *
+     * `flow-beats` is a list of seconds — the composition's clip boundaries —
+     * and `flow-step` how far the field jumps at each one. The jump lands 100ms
+     * BEFORE the boundary, so the eye is told a change is coming a beat before
+     * the picture changes, and the edit reads as intended rather than abrupt.
+     * (HeyGen's inspector-launch study: "the halftone should make a major shift
+     * about 0.1s before each scene transition begins".) The assembly exporter
+     * fills the list from the cut; a scene can hand-write it.
+     */
+    const flowBeats = this.attr('flow-beats', '').split(/[\s,]+/).map(Number).filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b)
+    /* Half the field's period (sin over t*.001 repeats every ~6.28s), so a step
+       is the largest change the shader can make. Measured: a 900ms step barely
+       read in a render; this one does, without being a flash. */
+    const flowStep = Math.max(0, Number(this.attr('flow-step', 3100)) || 0)
+    const FLOW_LEAD_MS = 100
+    const flowTime = (ms) => ms + flowBeats.filter((beat) => beat * 1000 - FLOW_LEAD_MS <= ms).length * flowStep
     const background = dark ? 'var(--op-color-neutral-plus-max, #242424)' : 'var(--op-color-neutral-minus-max, #ffffff)'
     const border = shaderColour(this.attr('border-color'), 'var(--op-color-neutral-plus-four, #424242)')
     const paper = shaderColour(this.attr('paper'), background)
@@ -821,7 +855,7 @@ class RMPixelReveal extends RMElement {
         gl.viewport(0, 0, width, height)
       }
       gl.uniform2f(resolution, canvas.width, canvas.height)
-      gl.uniform1f(time, flowing ? RM.t : 0)
+      gl.uniform1f(time, flowing ? flowTime(RM.t) : 0)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
     }
     const observer = new ResizeObserver(draw)
