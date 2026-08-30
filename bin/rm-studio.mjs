@@ -4018,20 +4018,33 @@ const server = createServer(async (req, res) => {
        * Checked here for the same reason the clip path is: a bad pair should be
        * a sentence in the panel, not a paid job that dies minutes in.
        */
-      if (takesOf(spec) === "image+audio") {
-        const image = inside(b.image);
+      if (takesOf(spec) !== "video") {
+        const lipsync = takesOf(spec) === "video+audio";
+        /* A lipsync keeps the real take and re-times its mouth, so its subject
+           is a clip from the grid; an avatar's is a photograph. */
+        const faceRel = lipsync ? String(b.file ?? "") : String(b.image ?? "");
+        const face = inside(faceRel);
         const audio = inside(b.audio);
-        if (!image || !audio) return json(res, 400, { error: "pick a picture and a voice track" });
-        const wrong = await avatarProblem({ image, audio });
+        if (!face || !audio) return json(res, 400, { error: `pick a ${lipsync ? "clip" : "picture"} and a voice track` });
+        const wrong = await avatarProblem({ ...(lipsync ? { video: face } : { image: face }), audio, model });
         if (wrong) return json(res, 400, { error: wrong });
         const args = [
           join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--model", model,
-          "--image", String(b.image), "--audio", String(b.audio),
+          ...(lipsync ? ["--file", faceRel] : ["--image", faceRel]),
+          "--audio", String(b.audio),
         ];
         const say = String(b.prompt ?? "").trim();
         if (say) args.push("--prompt", say);
+        const mode = String(b.syncMode ?? "");
+        if (lipsync && spec.limits.syncModes?.includes(mode)) args.push("--sync-mode", mode);
         return json(res, 200, {
-          step: { bin: process.execPath, args, label: `avatar ${basename(String(b.audio))}`, project: id, cwd: TOOLKIT },
+          step: {
+            bin: process.execPath,
+            args,
+            label: `${lipsync ? "lipsync" : "avatar"} ${basename(faceRel)}`,
+            project: id,
+            cwd: TOOLKIT,
+          },
         });
       }
 
@@ -6223,10 +6236,17 @@ async function fetchVoiceList() {
         buildSource = join("voice", "builds", `${safeName(body.script, "narration")}-${buildId}.md`);
       }
 
-      // `rm-voice` exists on PATH only after a Homebrew install. In a checkout it
-      // does not, so resolve the script ourselves rather than handing the user a
-      // command that works on one machine and not the other.
-      const onPath = await capture("sh", ["-c", "command -v rm-voice"]);
+      /*
+       * This server's own rm-voice, never whatever is on PATH.
+       *
+       * PATH was preferred here and nowhere else in this file, and PATH is a
+       * Homebrew install that can be any age. A 0.1.0 rm-voice predates
+       * `--source`, ignored it, and read scripts/<name>.md instead — so every
+       * narration edit was saved, snapshotted, passed on the command line, and
+       * then silently discarded, and the build spoke the original script. The
+       * flags this endpoint sends are this checkout's flags, so it has to be
+       * this checkout's command that receives them.
+       */
       const script = join(TOOLKIT, "bin", "rm-voice.mjs");
       const provider = body.provider || "kokoro";
       const rest = [
@@ -6244,8 +6264,8 @@ async function fetchVoiceList() {
         step: {
           label: `voice ${body.script}`,
           project: id,
-          bin: onPath.ok ? "rm-voice" : "node",
-          args: onPath.ok ? rest : [script, ...rest],
+          bin: process.execPath,
+          args: [script, ...rest],
           cwd: projectDir(id),
           note: "first run downloads ~27MB of Kokoro voice data; after that it is local and offline",
         },
@@ -6257,15 +6277,14 @@ async function fetchVoiceList() {
      * job so the pip output streams into Console rather than disappearing.
      */
     if (p === "/api/voice/setup" && req.method === "POST") {
-      const onPath = await capture("sh", ["-c", "command -v rm-voice"]);
       const script = join(TOOLKIT, "bin", "rm-voice.mjs");
       const rest = ["--setup"];
       return json(res, 200, {
         venv: venvDir(),
         step: {
           label: "set up voice",
-          bin: onPath.ok ? "rm-voice" : "node",
-          args: onPath.ok ? rest : [script, ...rest],
+          bin: process.execPath,
+          args: [script, ...rest],
           cwd: TOOLKIT,
           note: "creates a private Python virtualenv — nothing is installed into your system Python",
         },

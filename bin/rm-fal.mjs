@@ -14,8 +14,15 @@
  * The avatar models take no clip at all — a photograph and a voice track, which
  * is normally one this project already built under Voice:
  *
- *   rm-fal --project <id> --model fal-ai/kling-video/ai-avatar/v2/pro
+ *   rm-fal --project <id> --model fal-ai/bytedance/omnihuman
  *          --image Stills/blaine.png --audio Audio/intro.wav [--prompt "..."]
+ *
+ * And the lipsync models keep a real take, re-timing only its mouth to a new
+ * voice — a clip and a voice, with --sync-mode deciding what happens when the
+ * two are different lengths:
+ *
+ *   rm-fal --project <id> --model fal-ai/sync-lipsync/v3
+ *          --file Footage/becky.mp4 --audio Audio/ccc-days.wav --sync-mode remap
  */
 import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -52,7 +59,8 @@ if (!key) die("no fal key is configured — add one in Studio's Restyle panel, o
 const model = flag("model") ?? DEFAULT_MODEL;
 const spec = modelById(model);
 if (!spec) die(`${model} is not a model this app knows`);
-const avatar = takesOf(spec) === "image+audio";
+const takes = takesOf(spec);
+const avatar = takes !== "video";
 if (!avatar && (!file || !prompt)) die("--file and --prompt are required");
 
 /*
@@ -104,31 +112,46 @@ const send = async (path) => client.upload(path, await readFile(path)).catch((er
  * default output is named after it.
  */
 if (avatar) {
-	const imageArg = all("image")[0];
+	/* Two shapes here, not one: a photograph and a voice, or a real clip and a
+	   voice. The second is a lipsync — the take is kept and only the mouth is
+	   re-timed — so it takes --file where the first takes --image. */
+	const lipsync = takes === "video+audio";
+	const faceArg = lipsync ? file : all("image")[0];
 	const audioArg = flag("audio");
-	if (!imageArg || !audioArg) die("--image and --audio are required for an avatar model");
-	const image = inProject(imageArg, "that picture");
+	if (!faceArg || !audioArg) die(`${lipsync ? "--file" : "--image"} and --audio are required for ${spec.label}`);
+	const face = inProject(faceArg, lipsync ? "that clip" : "that picture");
 	const audio = inProject(audioArg, "that voice track");
 
-	const problem = await avatarProblem({ image, audio });
+	const problem = await avatarProblem({ ...(lipsync ? { video: face } : { image: face }), audio, model });
 	if (problem) die(problem);
 
 	const spoken = await durationOf(audio);
 	console.log(`  model     ${spec.label}  (${spec.id})`);
-	console.log(`  picture   ${imageArg}`);
+	console.log(`  ${lipsync ? "clip     " : "picture  "} ${faceArg}`);
 	console.log(`  voice     ${audioArg}${spoken ? `  (${spoken.toFixed(1)}s)` : ""}`);
+	if (lipsync) console.log(`  mismatch  ${flag("sync-mode") ?? spec.limits.defaultSyncMode ?? "cut_off"}`);
 	console.log("");
 
-	console.log("  uploading the picture and the voice…");
-	const imageUrl = await send(image);
+	console.log(`  uploading the ${lipsync ? "clip" : "picture"} and the voice…`);
+	const faceUrl = await send(face);
 	const audioUrl = await send(audio);
 
 	console.log("  generating — this takes a few minutes…");
 	const { url } = await client
-		.edit({ model, imageUrl, audioUrl, prompt }, { onLog: (line) => console.log(`  ${line}`) })
+		.edit(
+			{
+				model,
+				...(lipsync ? { videoUrl: faceUrl } : { imageUrl: faceUrl }),
+				audioUrl,
+				prompt,
+				syncMode: flag("sync-mode") ?? undefined,
+			},
+			{ onLog: (line) => console.log(`  ${line}`) },
+		)
 		.catch((error) => die(error.message));
 
-	await deliver(url, flag("output") ?? join("Footage", `${basename(audioArg, extname(audioArg))}-avatar.mp4`));
+	const stem = basename(lipsync ? faceArg : audioArg, extname(lipsync ? faceArg : audioArg));
+	await deliver(url, flag("output") ?? join("Footage", `${stem}-${lipsync ? "lipsync" : "avatar"}.mp4`));
 	process.exit(0);
 }
 

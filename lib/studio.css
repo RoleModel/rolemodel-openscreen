@@ -1049,8 +1049,11 @@ button.btn:disabled {
 }
 
 .activity {
+  position: absolute;
+  top: 0px;
+  right: 12px;
   flex: 0 1 36rem;
-  margin-inline-start: auto;
+  width: fit-content;
   min-inline-size: 0;
   padding: 0;
 }
@@ -1854,7 +1857,7 @@ how to remove the virtical space around the range input in IE*/
   z-index: 5;
   margin-block-start: var(--op-space-3x-small);
   padding: var(--op-space-2x-small) var(--op-space-x-small);
-  background: var(--panel2);
+  background-color: var(--panel2);
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-medium);
   opacity: 0;
@@ -1862,6 +1865,32 @@ how to remove the virtical space around the range input in IE*/
   transition:
     opacity var(--op-transition-input),
     visibility var(--op-transition-input);
+}
+
+
+.hint {
+  font-size: var(--op-font-small);
+  line-height: var(--op-line-height-loose);
+  /* Same reason as .lede — a hint is a sentence, not a layout. */
+  max-inline-size: 80ch;
+  padding-inline: var(--op-space-small);
+  border-radius: var(--op-radius-medium);
+  margin-block: var(--op-space-small);
+}
+
+.hint.ok {
+  background-color: var(--accent);
+  color: var(--op-color-academy-primary-on-base);
+}
+
+:is(.form, .panel-card) .form-group > .form-hint.warn {
+  background-color: var(--op-color-alerts-warning-plus-two);
+  color: var(--op-color-alerts-warning-on-plus-two);
+}
+
+.hint.bad {
+  background-color: var(--danger-fg);
+  color: var(--op-color-alerts-danger-on-base);
 }
 
 :is(.form, .panel-card) .form-group:focus-within > .form-hint {
@@ -2461,6 +2490,12 @@ button.usage-run:focus-visible {
   white-space: pre-wrap;
 }
 
+/* Not a primary action: it sits under the note it belongs to, at its own width,
+   rather than stretching the width of the editor like Build does. */
+.voice__reload {
+  align-self: start;
+}
+
 .voice__estimate,
 .voice__saved,
 .voice__status,
@@ -2551,31 +2586,6 @@ button.usage-run:focus-visible {
   font-family: var(--m);
   font-size: var(--op-font-2x-small);
   color: var(--muted);
-}
-
-.hint {
-  font-size: var(--op-font-small);
-  line-height: var(--op-line-height-loose);
-  /* Same reason as .lede — a hint is a sentence, not a layout. */
-  max-inline-size: 80ch;
-  padding-inline: var(--op-space-small);
-  border-radius: var(--op-radius-medium);
-  margin-block: var(--op-space-small);
-}
-
-.hint.ok {
-  background-color: var(--accent);
-  color: var(--op-color-academy-primary-on-base);
-}
-
-.hint.warn {
-  background-color: var(--op-color-alerts-warning-minus-two);
-  color: var(--op-color-alerts-warning-on-minus-two);
-}
-
-.hint.bad {
-  background-color: var(--danger-fg);
-  color: var(--op-color-alerts-danger-on-base);
 }
 
 /* An ordered account of what a Run button is about to do. */
@@ -5669,6 +5679,29 @@ textarea.form-control.board__brief {
   max-inline-size: calc(100dvh * 16 / 9);
 }
 
+/*
+ * Listening, not watching.
+ *
+ * The frame is built to hold a 16:9 video at the full height of the window. A
+ * waveform in that is a thin strip of transport floating on the backdrop with
+ * the page showing through behind it. Audio gets a card the size of what is
+ * actually in it.
+ */
+.player--listen {
+  display: grid;
+  place-content: center;
+}
+
+.player--listen .player__frame {
+  block-size: auto;
+  inline-size: min(52rem, 90vw);
+  max-inline-size: min(52rem, 90vw);
+  padding: var(--op-space-medium);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
 .player__bar {
   display: flex;
   align-items: center;
@@ -5851,6 +5884,81 @@ textarea.form-control.board__brief {
 }
 
 /*
+ * The avatar pickers: a face and a voice, both sized to what they are.
+ *
+ * These sit in the main column, not the rail, and .refshelf's auto-fit tracks
+ * stretch to fill it — with one picture in the project that made a single tile
+ * as wide as the page, cropped to a letterbox strip through the middle of
+ * somebody's face. Fixed square tracks instead, laid out from the left, so one
+ * picture is one picture whether there are one or twenty.
+ */
+.refshelf--faces {
+  grid-template-columns: repeat(auto-fill, var(--shelf-art-size));
+  justify-content: start;
+}
+
+.refshelf--faces .refshelf__art {
+  inline-size: var(--shelf-art-size);
+}
+
+/*
+ * And the voice list stays a column of rows.
+ *
+ * A voice track has nothing to look at, so the card is a name, a length and a
+ * player — which wants one readable row, not a 312px card grid sized for
+ * posters.
+ */
+.voiceshelf {
+  grid-template-columns: minmax(0, 34rem);
+  gap: var(--op-space-2x-small);
+}
+
+.voiceshelf audio {
+  inline-size: 100%;
+  block-size: calc(var(--op-size-unit) * 8);
+}
+
+/*
+ * The waveform, where a file has no picture of its own.
+ *
+ * WaveSurfer draws into this container and sizes its own canvas, so the only
+ * job here is to give it a width to fill and put the transport beside it.
+ */
+.wave {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
+}
+
+.wave--row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.wave__canvas {
+  min-inline-size: 0;
+  /* Seeking is a click on the picture, so say so before the click. */
+  cursor: pointer;
+}
+
+.wave__row {
+  display: flex;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.wave__play {
+  flex: none;
+}
+
+.wave__clock {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
  * A chosen clip says so by being outlined, not by keeping a button.
  *
  * "Use this clip" stayed on the card after it was pressed, so the only way to
@@ -5895,9 +6003,10 @@ textarea.form-control.board__brief {
 /*
  * The mark animates itself, so nothing here drives it.
  *
- * It is an <object> rather than an <img> because the motion lives in a script
- * inside the file. That makes it a nested document, which would take the click
- * meant for the card it is sitting on.
+ * An <img>: the motion is a CSS @keyframes block inside the file, which an
+ * <img>-referenced SVG still runs. It was an <object> first, and an <object> is
+ * a nested browsing context — the browser paints an opaque white base behind
+ * one, so the mark sat on a white square over the clip.
  */
 .working__mark {
   inline-size: 56px;
