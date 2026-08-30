@@ -5924,6 +5924,7 @@ textarea.form-control.board__brief {
   inset-block-start: var(--op-space-small);
   inset-inline-end: var(--op-space-small);
   padding: var(--op-space-3x-small);
+  width: fit-content;
   color: var(--op-color-neutral-minus-seven);
 }
 
