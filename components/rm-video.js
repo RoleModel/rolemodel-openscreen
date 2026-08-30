@@ -1187,7 +1187,7 @@ function sPaintWash(ctx, w, h, st, pal) {
   }
   ctx.save()
   ctx.globalCompositeOperation = 'screen'
-  ctx.filter = `blur(${28 + st.blend * 18}px)`
+  ctx.filter = `blur(${28 + st.blend * 10}px)`
   soft(st.massAX * w, st.massAY * h, w * (0.32 + st.blend * 0.08), h * 0.42, pal.green, (0.17 + st.blend * 0.08) * haze)
   soft(st.massBX * w, st.massBY * h, w * 0.3, h * (0.4 + st.blend * 0.06), pal.cyan, (0.14 + st.blend * 0.07) * haze)
   soft(st.massCX * w, st.massCY * h, w * 0.46, h * 0.2, pal.amber, (0.08 + st.blend * 0.04) * haze)
@@ -1210,8 +1210,8 @@ function sPaintWash(ctx, w, h, st, pal) {
 /* The dot field. Grain comes from the cell's own hash, not from a running RNG,
    so a frame drawn on its own matches the same frame drawn in sequence. */
 function sDrawField(ctx, w, h, st, pal) {
-  const spacing = 3.15 / st.density
-  const radius = 2 * st.radius
+  const spacing = 5.15 / st.density
+  const radius = 1.5 * st.radius
   const bg = ctx.createLinearGradient(0, 0, w, h)
   bg.addColorStop(0, sRgba(sMix(pal.ground, pal.green, 0.07), 1))
   bg.addColorStop(0.52, sRgba(pal.ground, 1))
