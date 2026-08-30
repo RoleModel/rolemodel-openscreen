@@ -8420,6 +8420,57 @@ async function fetchVoiceList() {
       return json(res, 200, await sharingState());
     }
 
+    /*
+     * Sign in with a provider — Slack, as configured on the Supabase project.
+     *
+     * Two endpoints because the browser leaves and comes back. The first hands
+     * out a URL; the second is where Supabase returns it, so it answers with a
+     * page rather than JSON — it is a navigation, not a fetch.
+     *
+     * The callback is this server's own origin, which means Supabase has to
+     * allow it. Studio takes a new port each launch, so the allow-list needs a
+     * wildcard for the port rather than one fixed address — the loopback host
+     * with a star where the port goes, and the same for localhost. Without them
+     * Supabase refuses the redirect and the browser lands on an error page
+     * belonging to somebody else, which is a hard thing to diagnose from here.
+     */
+    if (p === "/api/board/oauth/start" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const origin = String(body.origin ?? "").replace(/\/+$/, "");
+      if (!/^https?:\/\/(127\.0\.0\.1|localhost):\d+$/.test(origin)) {
+        return json(res, 400, { error: "that sign-in has to start from the Studio in a browser" });
+      }
+      try {
+        const started = await SUPABASE_SYNC.beginOAuth({
+          provider: String(body.provider ?? "slack_oidc"),
+          redirectTo: `${origin}/api/board/oauth/callback`,
+        });
+        return json(res, 200, started);
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/board/oauth/callback") {
+      const code = url.searchParams.get("code");
+      const refused = url.searchParams.get("error_description") || url.searchParams.get("error");
+      const page = (heading, detail) => {
+        res.writeHead(refused || !code ? 400 : 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        /* Plain markup on purpose: this page is shown for a second inside
+           whatever browser the person happens to use, and it must not depend on
+           Studio's stylesheet, fonts or client script having loaded. */
+        res.end(`<!doctype html><meta charset="utf-8"><title>${heading}</title><body style="font:16px/1.5 system-ui;margin:3rem auto;max-width:34rem;color:#1a1a1a"><h1 style="font-size:1.3rem">${heading}</h1><p>${detail}</p><p><a href="/#storyboard">Back to the Studio</a></p>`);
+      };
+      if (refused) return page("Slack did not sign you in", `Slack said: ${refused}`);
+      if (!code) return page("That sign-in did not come back with a code", "Start it again from Canvas.");
+      try {
+        const session = await SUPABASE_SYNC.completeOAuth({ code });
+        return page("Signed in", `You are signed in as ${session.user?.email ?? "your Slack account"}. This tab can be closed.`);
+      } catch (err) {
+        return page("That sign-in could not be finished", String(err.message));
+      }
+    }
+
     if (p === "/api/board/signin" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
