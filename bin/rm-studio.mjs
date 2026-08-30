@@ -90,14 +90,17 @@ import {
 	setCurrentProject,
 	setLastView,
 	setOpenFrameSettings,
+	setFalSettings,
 	setSlackSettings,
 	slackSettings,
+	falSettings,
 } from "../lib/settings.mjs";
 import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 import { stageRenderAssets } from "../lib/render-assets.mjs";
+import { MODELS, DEFAULT_MODEL, modelById, clipProblem } from "../lib/fal.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -3781,6 +3784,103 @@ const server = createServer(async (req, res) => {
      * composition.  Start HyperFrames' own Studio against the project's Renders
      * folder instead; the browser URL selects the one composition folder to edit.
      */
+    /*
+     * The fal key, and what the one model will accept.
+     *
+     * Write-only, like the Slack token: the panel can say whether a key is
+     * present and where it came from, and never reads one back out.
+     */
+    if (p === "/api/fal/settings" && req.method === "GET") {
+      const { key, source } = await falSettings();
+      return json(res, 200, {
+        configured: Boolean(key),
+        source,
+        defaultModel: DEFAULT_MODEL,
+        models: MODELS.map((m) => ({ id: m.id, label: m.label, hint: m.hint, controls: m.controls, limits: m.limits })),
+      });
+    }
+    if (p === "/api/fal/settings" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      try {
+        await setFalSettings({ key: String(b.key ?? "") });
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, configured: true });
+    }
+
+    /*
+     * Which clips this model could actually take.
+     *
+     * Answered before anything is spent: the model wants 3-15s of .mp4/.mov
+     * under 200MB, and a cut is minutes long, so most of a project's footage is
+     * not eligible. Saying so in the picker beats a rejected job.
+     */
+    if (p === "/api/fal/clips" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const model = String(url.searchParams.get("model") ?? DEFAULT_MODEL);
+      if (!modelById(model)) return json(res, 400, { error: "that is not a model this app knows" });
+      const catalog = await reindex(id).catch(() => null);
+      const clips = [];
+      for (const item of catalog?.files ?? []) {
+        const rel = String(item.path ?? item.rel ?? "");
+        if (![".mp4", ".mov"].includes(extname(rel).toLowerCase())) continue;
+        const file = join(mediaDir(id), rel);
+        const { durationOf } = await import("../lib/narration.mjs");
+        const seconds = Number(item.durationSec ?? item.seconds) || (await durationOf(file));
+        const problem = await clipProblem(file, { seconds: seconds || null, model });
+        clips.push({ rel, seconds: Number(Number(seconds).toFixed(2)) || null, problem });
+      }
+      return json(res, 200, { clips: clips.sort((a, b) => Number(Boolean(a.problem)) - Number(Boolean(b.problem)) || a.rel.localeCompare(b.rel)) });
+    }
+
+    /*
+     * The command that restyles one clip, built here.
+     *
+     * A step rather than a started job, like the render step: the client decides
+     * when to run it, and every long task in this app goes through /api/run and
+     * the Console stream. Built server-side so the client never needs to know
+     * where the toolkit lives, and validated here so a bad clip is a sentence
+     * rather than a job that dies a minute in.
+     */
+    if (p === "/api/fal/edit" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(b.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+
+      const { key } = await falSettings();
+      if (!key) return json(res, 400, { error: "add a fal key first" });
+
+      const model = String(b.model ?? DEFAULT_MODEL);
+      const spec = modelById(model);
+      if (!spec) return json(res, 400, { error: "that is not a model this app knows" });
+
+      const rel = String(b.file ?? "");
+      const file = resolve(mediaDir(id), rel);
+      if (!rel || !file.startsWith(`${mediaDir(id)}${sep}`)) return json(res, 400, { error: "that clip is outside this project" });
+
+      const prompt = String(b.prompt ?? "").trim();
+      if (spec.controls.includes("prompt") && !prompt) return json(res, 400, { error: "say what you want changed" });
+
+      const { durationOf } = await import("../lib/narration.mjs");
+      const problem = await clipProblem(file, { seconds: (await durationOf(file)) || null, model });
+      if (problem) return json(res, 400, { error: problem });
+
+      const args = [join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--file", rel, "--model", model];
+      if (prompt) args.push("--prompt", prompt);
+      if (b.keepAudio === false) args.push("--no-audio");
+      if (b.resolution) args.push("--resolution", String(b.resolution));
+      for (const image of Array.isArray(b.images) ? b.images.slice(0, spec.limits.maxImages ?? 0) : []) {
+        args.push("--image", String(image));
+      }
+      return json(res, 200, {
+        step: { bin: process.execPath, args, label: `restyle ${basename(rel)}`, project: id, cwd: TOOLKIT },
+      });
+    }
+
     if (p === "/api/hyperframes" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);

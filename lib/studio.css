@@ -2540,6 +2540,8 @@ button.usage-run:focus-visible {
   line-height: var(--op-line-height-loose);
   /* Same reason as .lede — a hint is a sentence, not a layout. */
   max-inline-size: 80ch;
+  padding-inline: var(--op-space-small);
+  border-radius: var(--op-radius-medium);
   margin-block: var(--op-space-small);
 }
 

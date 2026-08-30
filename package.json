@@ -11,6 +11,7 @@
     "rm-render-hyperframes": "./bin/rm-render-hyperframes.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
+    "rm-fal": "./bin/rm-fal.mjs",
     "rm-insert": "./bin/rm-insert.mjs",
     "rm-library": "./bin/rm-library.mjs",
     "rm-mux": "./bin/rm-mux.mjs",
@@ -92,6 +93,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@fal-ai/client": "^1.10.1",
     "playwright": "^1.62.1",
     "playwright-recast": "^0.19.2"
   }
