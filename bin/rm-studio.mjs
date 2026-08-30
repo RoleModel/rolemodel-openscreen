@@ -3831,7 +3831,11 @@ const server = createServer(async (req, res) => {
         const { durationOf } = await import("../lib/narration.mjs");
         const seconds = Number(item.durationSec ?? item.seconds) || (await durationOf(file));
         const problem = await clipProblem(file, { seconds: seconds || null, model });
-        clips.push({ rel, seconds: Number(Number(seconds).toFixed(2)) || null, problem });
+        /* Too long is a reason to trim, not a reason to hide it: the panel
+           offers a trimmer, and only a clip too SHORT is genuinely unusable. */
+        const spec = modelById(model);
+        const trimmable = Boolean(problem) && Boolean(spec.limits.maxSeconds) && seconds > spec.limits.maxSeconds;
+        clips.push({ rel, seconds: Number(Number(seconds).toFixed(2)) || null, problem, trimmable });
       }
       return json(res, 200, { clips: clips.sort((a, b) => Number(Boolean(a.problem)) - Number(Boolean(b.problem)) || a.rel.localeCompare(b.rel)) });
     }
@@ -3896,7 +3900,13 @@ const server = createServer(async (req, res) => {
       if (spec.controls.includes("prompt") && !prompt) return json(res, 400, { error: "say what you want changed" });
 
       const { durationOf } = await import("../lib/narration.mjs");
-      const problem = await clipProblem(file, { seconds: (await durationOf(file)) || null, model });
+      /* A chosen range is what gets sent, so it is what gets checked. The file's
+         own size is not, because the trim happens before the upload. */
+      const inSec = Number(b.inSec);
+      const outSec = Number(b.outSec);
+      const trimming = Number.isFinite(inSec) && Number.isFinite(outSec) && outSec > inSec;
+      const seconds = trimming ? outSec - inSec : await durationOf(file);
+      const problem = await clipProblem(file, { seconds: seconds || null, model, ignoreSize: trimming });
       if (problem) return json(res, 400, { error: problem });
 
       const args = [join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--file", rel, "--model", model];
@@ -3906,6 +3916,7 @@ const server = createServer(async (req, res) => {
       const images = Array.isArray(b.images) ? b.images.slice(0, spec.limits.maxImages ?? 0) : [];
       if (spec.requiresImages && !images.length) return json(res, 400, { error: `${spec.label} needs at least one reference image` });
       for (const image of images) args.push("--image", String(image));
+      if (trimming) args.push("--in", inSec.toFixed(2), "--out", outSec.toFixed(2));
       return json(res, 200, {
         step: { bin: process.execPath, args, label: `restyle ${basename(rel)}`, project: id, cwd: TOOLKIT },
       });
@@ -4396,6 +4407,51 @@ const server = createServer(async (req, res) => {
       const st = await stat(spot.dest).catch(() => null);
       await reindex(id, { force: true }).catch(() => {});
       return json(res, 200, { ok: true, into: spot.folder, file: spot.dest, renamed: spot.renamed, bytes: st?.size ?? 0 });
+    }
+
+    /*
+     * Swap the file under a path that other things already reference.
+     *
+     * A composition points at Footage/blaine.mp4, a board slot names it, a
+     * transcript is keyed to it. Importing a new file beside it under a new name
+     * leaves all of those pointing at the old one, so replacing in place is the
+     * only version of "use this instead" that actually takes effect.
+     *
+     * The original is kept next to it rather than overwritten outright: this is
+     * the one media operation with no undo, and a rename is cheap.
+     */
+    if (p === "/api/media/replace" && req.method === "POST") {
+      const q = new URL(req.url, "http://studio.local").searchParams;
+      const id = q.get("project") ?? "";
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+
+      const rel = String(q.get("rel") ?? "");
+      const target = resolve(mediaDir(id), rel);
+      if (!rel || !target.startsWith(`${mediaDir(id)}${sep}`)) return json(res, 400, { error: "that file is outside this project" });
+      if (!(await stat(target).catch(() => null))?.isFile()) return json(res, 404, { error: "there is no such file to replace" });
+
+      /* Same extension, or the path lies about what it holds — a .mp4 that is
+         really a PNG plays nowhere and indexes as video. */
+      const incoming = extname(String(q.get("name") ?? "")).toLowerCase();
+      if (incoming && incoming !== extname(rel).toLowerCase()) {
+        return json(res, 400, { error: `that is ${incoming} and this slot holds ${extname(rel).toLowerCase()} — import it instead` });
+      }
+
+      const staged = `${target}.incoming`;
+      try {
+        await pipeline(req, createWriteStream(staged));
+      } catch (error) {
+        await rm(staged, { force: true }).catch(() => {});
+        return json(res, 500, { error: `that upload did not finish: ${error.message}` });
+      }
+      // Only once the new file is entirely on disk does the old one move aside.
+      const kept = `${target}.replaced-${Date.now()}`;
+      await rename(target, kept).catch(() => {});
+      await rename(staged, target);
+      const info = await stat(target).catch(() => null);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { ok: true, rel, bytes: info?.size ?? 0, kept: basename(kept) });
     }
 
     if (p === "/api/documents") {

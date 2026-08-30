@@ -5763,3 +5763,43 @@ textarea.form-control.board__brief {
     transition: none;
   }
 }
+
+/*
+ * The trimmer is the player with a control strip.
+ *
+ * .player is built for a video and nothing else, so adding handles under it
+ * pushed them off the bottom of the screen — the selection you were setting was
+ * the part you could not see. A column instead: the frame takes what is left
+ * after the bar and the controls, rather than all of it.
+ */
+.player--trim {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--op-space-small);
+}
+
+.player--trim .player__frame {
+  min-block-size: 0;
+}
+
+.player--trim .player__video {
+  block-size: 100%;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+/* The handles read as one strip, not as two unrelated sliders in a form. */
+.player--trim .form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--op-space-2x-small) var(--op-space-small);
+  align-items: center;
+  padding: var(--op-space-small) var(--op-space-medium);
+  border-radius: var(--op-radius-large, 12px);
+  background: var(--op-color-neutral-plus-two);
+}
+
+.player--trim .form > .hint,
+.player--trim .form > .btn {
+  grid-column: 1 / -1;
+}

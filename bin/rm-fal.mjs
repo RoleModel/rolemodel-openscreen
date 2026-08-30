@@ -8,16 +8,17 @@
  * call takes minutes, which is far too long to hold an HTTP request open.
  *
  *   rm-fal --project <id> --file Footage/blaine.mp4 --prompt "..." [--model <id>]
- *          [--no-audio] [--resolution 1080p] [--image Imagery/x.png ...]
- *          [--out Footage/blaine-restyled.mp4]
+ *          [--no-audio] [--resolution 1080p] [--image brand:x.png ...]
+ *          [--in 4.5 --out 12.0] [--output Footage/blaine-restyled.mp4]
  */
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot } from "../lib/library.mjs";
 import { falSettings } from "../lib/settings.mjs";
 import { fal, clipProblem, modelById, DEFAULT_MODEL } from "../lib/fal.mjs";
-import { durationOf } from "../lib/narration.mjs";
+import { capture, durationOf } from "../lib/narration.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -49,8 +50,22 @@ const model = flag("model") ?? DEFAULT_MODEL;
 const spec = modelById(model);
 if (!spec) die(`${model} is not a model this app knows`);
 
-const seconds = await durationOf(source);
-const problem = await clipProblem(source, { seconds: seconds || null, model });
+/*
+ * A range inside the clip, cut before anything is uploaded.
+ *
+ * Most takes are longer than these models accept — Kling stops at fifteen
+ * seconds and a talking head runs twenty to forty — so the alternative to
+ * trimming is that most of a project cannot be restyled at all. Re-encoded
+ * rather than stream-copied: a copy starts at the nearest keyframe, which moves
+ * the in-point by up to a second and changes the duration the model is checking.
+ */
+const inSec = Number(flag("in"));
+const outSec = Number(flag("out"));
+const trimming = Number.isFinite(inSec) && Number.isFinite(outSec) && outSec > inSec;
+
+const whole = await durationOf(source);
+const seconds = trimming ? outSec - inSec : whole;
+const problem = await clipProblem(source, { seconds: seconds || null, model, ignoreSize: trimming });
 if (problem) die(problem);
 
 console.log(`  model     ${spec.label}  (${spec.id})`);
@@ -60,9 +75,23 @@ console.log("");
 
 const client = await fal({ key }).catch((error) => die(error.message));
 
+let sending = source;
+if (trimming) {
+	console.log(`  trimming ${inSec.toFixed(2)}s → ${outSec.toFixed(2)}s…`);
+	sending = join(await mkdtemp(join(tmpdir(), "rm-fal-")), "clip.mp4");
+	const cut = await capture("ffmpeg", [
+		"-y", "-ss", String(inSec), "-to", String(outSec), "-i", source,
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+		"-c:a", "aac", "-movflags", "+faststart", sending,
+	]);
+	if (!cut.ok) die("ffmpeg could not cut that range");
+	const cutProblem = await clipProblem(sending, { seconds, model });
+	if (cutProblem) die(cutProblem);
+}
+
 console.log("  uploading the clip…");
-const bytes = await readFile(source);
-const videoUrl = await client.upload(source, bytes).catch((error) => die(error.message));
+const bytes = await readFile(sending);
+const videoUrl = await client.upload(sending, bytes).catch((error) => die(error.message));
 
 /*
  * Reference images, from one of two roots.
@@ -98,7 +127,7 @@ const { url } = await client
  * obvious in a folder listing.
  */
 const stem = basename(file, extname(file));
-const out = flag("out") ?? join("Footage", `${stem}-restyled.mp4`);
+const out = flag("output") ?? join("Footage", `${stem}-restyled.mp4`);
 const target = resolve(mediaDir, out);
 if (!target.startsWith(`${mediaDir}/`)) die("that output path is outside this project");
 await mkdir(dirname(target), { recursive: true });
