@@ -654,6 +654,91 @@
       </button>
    </template>
 
+   <template data-panel="editor">
+      <p class="lede" data-region="main">
+         Zooms, annotations, trims and captions. The editor opens here, in this window,
+         with the navigation still beside it — nothing is exported until you say so.
+      </p>
+      <div data-el="note" class="note" data-region="main" hidden>
+         <p>The Studio is running in a browser, so there is no editor to hand a document to.</p>
+         <div class="path">Open the app instead — the Studio appears as a window inside it, and this page can then open documents directly.</div>
+      </div>
+      <div data-el="host" data-region="main"></div>
+   </template>
+
+   <!-- The native editor's mount point, measured and tracked by mountEditorInto. -->
+   <template data-row="editor-frame">
+      <div class="editor-frame"></div>
+   </template>
+
+   <!-- One editable document (or a video still needing one). -->
+   <template data-row="editable-doc">
+      <div class="card">
+         <div class="body">
+            <div data-el="name" class="nm"></div>
+            <div data-el="path" class="path"></div>
+            <div class="meta">
+               <span data-el="kind"></span>
+               <span data-el="duration" hidden></span>
+            </div>
+            <button data-el="open" class="btn ghost" type="button"></button>
+            <div data-el="note" class="path" style="flex-basis:100%"></div>
+         </div>
+      </div>
+   </template>
+
+   <!-- A bare card shelf. Cloned wherever a list needs its grid without any
+        other structure around it. -->
+   <template data-row="grid">
+      <div class="grid"></div>
+   </template>
+
+   <template data-panel="console">
+      <!-- Nothing above the list until there is a list: the lede explains a
+           running job's output and the footer Clear acts on jobs; with none of
+           either, the empty state says the useful thing by itself. -->
+      <p data-el="lede" class="lede" data-region="main">Everything the Studio runs, as it runs. Output is live — you don't have to go find a terminal to see whether the export worked.</p>
+      <div class="con" data-region="main">
+         <div data-el="list" class="joblist"></div>
+         <div>
+            <div data-el="status" class="hint"></div>
+            <div class="runrow"><code data-el="command" hidden></code><button data-el="stop" class="btn ghost" type="button" hidden>Stop</button></div>
+            <div data-el="log" class="log"></div>
+            <div>
+               <!-- What the job produced. The directory is always shown, even
+                    when empty, because "nothing was written" is itself the
+                    answer sometimes. -->
+               <div data-el="ranIn" class="path" hidden></div>
+               <div data-el="nothing" class="hint" hidden>Nothing was written there.</div>
+               <div data-el="fileBox" class="joblist" hidden><div data-el="fileCount" class="crumb"></div></div>
+            </div>
+            <div data-el="cmd" class="cmd" hidden><input data-el="cmdInput" placeholder="openscreen info --json" /><button data-el="cmdRun" class="btn" type="button">Run</button></div>
+         </div>
+      </div>
+      <!-- After the list rather than above it: a destructive control at the top
+           is one you reach before reading what it would remove. -->
+      <div data-region="footer">
+         <button data-el="clear" class="btn ghost" type="button" title="Forget every job that has finished, and its saved output. Running jobs stay.">Clear finished</button>
+      </div>
+   </template>
+
+   <template data-row="console-empty">
+      <div class="empty" style="padding:var(--op-space-large)">Nothing has run yet.</div>
+   </template>
+
+   <template data-row="console-job">
+      <div class="job"><div data-el="label" class="jl"></div><div data-el="state" class="js"></div></div>
+   </template>
+
+   <!-- One log line; attach() sets its class per stream. -->
+   <template data-row="console-line">
+      <div></div>
+   </template>
+
+   <template data-row="console-file">
+      <div class="job"><div class="ent"><div data-el="name" class="nm2"></div><div data-el="tag" class="tag"></div></div></div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
