@@ -23,6 +23,14 @@
  *
  *   rm-fal --project <id> --model fal-ai/sync-lipsync/v3
  *          --file Footage/becky.mp4 --audio Audio/ccc-days.wav --sync-mode remap
+ *
+ * And Veo generates a shot from a description, optionally starting from a
+ * still this project already has:
+ *
+ *   rm-fal --project <id> --model fal-ai/veo3.1 --prompt "..." [--duration 8s]
+ *          [--resolution 1080p] [--aspect 16:9] [--no-audio]
+ *   rm-fal --project <id> --model fal-ai/veo3.1/image-to-video
+ *          --image Stills/blaine.png --prompt "he turns to camera"
  */
 import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -60,8 +68,12 @@ const model = flag("model") ?? DEFAULT_MODEL;
 const spec = modelById(model);
 if (!spec) die(`${model} is not a model this app knows`);
 const takes = takesOf(spec);
-const avatar = takes !== "video";
-if (!avatar && (!file || !prompt)) die("--file and --prompt are required");
+/* Three families now: edit a clip, drive a face from a voice, or generate a
+   shot outright. Only the first needs a clip on the way in. */
+const generating = takes === "text" || takes === "image+text";
+const avatar = takes !== "video" && !generating;
+if (takes === "video" && (!file || !prompt)) die("--file and --prompt are required");
+if (generating && !prompt) die("--prompt is required — it is the shot");
 
 /*
  * Two named roots, never an open path.
@@ -101,6 +113,57 @@ const deliver = async (url, out) => {
 
 const client = await fal({ key }).catch((error) => die(error.message));
 const send = async (path) => client.upload(path, await readFile(path)).catch((error) => die(error.message));
+
+/*
+ * Generating a shot, which starts from nothing but words.
+ *
+ * No clip to trim, no ceiling to keep under, no original audio to preserve —
+ * and the result is still footage, so it lands in Footage beside everything
+ * that was actually filmed. Named after the run rather than a source, because
+ * there is no source to name it after.
+ */
+if (generating) {
+	const fromStill = takes === "image+text";
+	const stillArg = all("image")[0];
+	if (fromStill && !stillArg) die(`--image is required for ${spec.label}`);
+	const still = fromStill ? inProject(stillArg, "that picture") : null;
+	if (still) {
+		const wrong = await avatarProblem({ image: still, audio: null });
+		/* avatarProblem asks for a voice too; only the picture matters here. */
+		if (wrong && !/voice track/.test(wrong)) die(wrong);
+	}
+
+	console.log(`  model     ${spec.label}  (${spec.id})`);
+	if (fromStill) console.log(`  picture   ${stillArg}`);
+	console.log(`  shot      ${prompt}`);
+	console.log(`  length    ${flag("duration") ?? spec.limits.defaultDuration}  ·  ${flag("resolution") ?? spec.limits.defaultResolution}  ·  audio ${args.includes("--no-audio") ? "off" : "on"}`);
+	console.log("");
+
+	let imageUrl;
+	if (still) {
+		console.log("  uploading the picture…");
+		imageUrl = await send(still);
+	}
+	console.log("  generating — this takes a few minutes…");
+	const { url } = await client
+		.edit(
+			{
+				model,
+				imageUrl,
+				prompt,
+				aspect: flag("aspect") ?? undefined,
+				duration: flag("duration") ?? undefined,
+				resolution: flag("resolution") ?? undefined,
+				generateAudio: !args.includes("--no-audio"),
+			},
+			{ onLog: (line) => console.log(`  ${line}`) },
+		)
+		.catch((error) => die(error.message));
+
+	const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+	await deliver(url, flag("output") ?? join("Footage", `generated-${stamp}.mp4`));
+	process.exit(0);
+}
 
 /*
  * An avatar is built, not edited.
