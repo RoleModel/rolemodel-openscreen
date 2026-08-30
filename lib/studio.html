@@ -1964,6 +1964,39 @@
       </div>
    </template>
 
+   <template data-panel="voice">
+      <p class="lede" data-region="main">Turn a saved script into narration and timed captions. Each line is measured as it is spoken, so the captions stay in sync.</p>
+      <div data-el="setupBox" class="form" data-region="main" style="margin-bottom:var(--op-space-large)" hidden>
+         <div class="note full">Voice isn't set up on this machine yet. This builds a private Python environment just for it — about 100MB, once. Nothing is installed into your system Python and there's no environment variable to set.</div>
+         <div class="full"><button data-el="setup" class="btn" type="button">Set up voice</button></div>
+         <div data-el="setupOut" class="full"></div>
+      </div>
+      <section class="voice" data-region="main">
+         <section class="voice__script">
+            <h2 class="voice__label">Narration lines</h2>
+            <textarea data-el="preview" class="voice__lines form-control" placeholder="Narration lines appear here when you choose a script." spellcheck="true"></textarea>
+            <p data-el="est" class="voice__estimate"></p>
+            <p data-el="saved" class="voice__saved hint"></p>
+            <button data-el="fromScript" class="btn ghost btn--small voice__reload" type="button" hidden>Load the script</button>
+         </section>
+         <section data-el="out" class="voice__result"></section>
+      </section>
+      <div data-el="rail" class="form rail-form" data-region="side">
+         <!-- Where "Download it now" goes when the voice list could not be read:
+              its own row, not inside the hint text it is answering. -->
+      </div>
+      <div data-region="footer">
+         <button data-el="go" class="btn" type="button">Build the narration</button>
+      </div>
+   </template>
+
+   <template data-row="voice-fix-row">
+      <div class="full" style="display:flex;flex-direction:column;gap:var(--op-space-x-small);align-items:flex-start">
+         <button data-el="go" class="btn ghost" type="button"></button>
+         <div data-el="said" class="hint"></div>
+      </div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
