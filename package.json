@@ -57,7 +57,7 @@
     "icons:check": "node lib/make-icons.mjs --check",
     "logos": "node lib/make-logos.mjs",
     "imagery": "node lib/make-imagery.mjs",
-    "vendor": "cp node_modules/gsap/dist/gsap.min.js brand/vendor/gsap.min.js",
+    "vendor": "cp node_modules/gsap/dist/gsap.min.js brand/vendor/gsap.min.js && cp node_modules/wavesurfer.js/dist/wavesurfer.min.js brand/vendor/wavesurfer.min.js",
     "imagery:check": "node lib/make-imagery.mjs --check",
     "logos:check": "node lib/make-logos.mjs --check",
     "motion": "node lib/make-motion.mjs",
@@ -70,7 +70,8 @@
   "devDependencies": {
     "@rolemodel/optics": "2.4.0",
     "gsap": "^3.14.2",
-    "supabase": "^2.116.0"
+    "supabase": "^2.116.0",
+    "wavesurfer.js": "^7.12.11"
   },
   "repository": {
     "type": "git",

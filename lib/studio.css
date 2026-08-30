@@ -1050,7 +1050,7 @@ button.btn:disabled {
 
 .activity {
   position: absolute;
-  top: 12px;
+  top: 0px;
   right: 12px;
   flex: 0 1 36rem;
   width: fit-content;
@@ -5679,6 +5679,29 @@ textarea.form-control.board__brief {
   max-inline-size: calc(100dvh * 16 / 9);
 }
 
+/*
+ * Listening, not watching.
+ *
+ * The frame is built to hold a 16:9 video at the full height of the window. A
+ * waveform in that is a thin strip of transport floating on the backdrop with
+ * the page showing through behind it. Audio gets a card the size of what is
+ * actually in it.
+ */
+.player--listen {
+  display: grid;
+  place-content: center;
+}
+
+.player--listen .player__frame {
+  block-size: auto;
+  inline-size: min(52rem, 90vw);
+  max-inline-size: min(52rem, 90vw);
+  padding: var(--op-space-medium);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
 .player__bar {
   display: flex;
   align-items: center;
@@ -5893,6 +5916,46 @@ textarea.form-control.board__brief {
 .voiceshelf audio {
   inline-size: 100%;
   block-size: calc(var(--op-size-unit) * 8);
+}
+
+/*
+ * The waveform, where a file has no picture of its own.
+ *
+ * WaveSurfer draws into this container and sizes its own canvas, so the only
+ * job here is to give it a width to fill and put the transport beside it.
+ */
+.wave {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
+}
+
+.wave--row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.wave__canvas {
+  min-inline-size: 0;
+  /* Seeking is a click on the picture, so say so before the click. */
+  cursor: pointer;
+}
+
+.wave__row {
+  display: flex;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.wave__play {
+  flex: none;
+}
+
+.wave__clock {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /*
