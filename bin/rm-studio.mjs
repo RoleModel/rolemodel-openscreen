@@ -3091,6 +3091,22 @@ async function page() {
   return renderStudioHTML({ watch: WATCH });
 }
 
+/*
+ * A read that stops when the reader leaves.
+ *
+ * `stream.pipe(res)` keeps reading a file after the browser has walked away
+ * from it — a preview iframe that gets replaced, a video removed mid-load —
+ * and the socket stays occupied until the whole file has been sent to nobody.
+ * Six of those is Chrome's per-origin limit for HTTP/1.1, and every request
+ * after them queues forever: the symptom is a button that does nothing, in
+ * whatever panel you happen to be looking at.
+ */
+function pipeUntilClosed(stream, res) {
+  res.on("close", () => stream.destroy());
+  stream.on("error", () => res.destroyed || res.end());
+  return stream.pipe(res);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = decodeURIComponent(url.pathname);
@@ -6915,7 +6931,7 @@ async function fetchVoiceList() {
           "accept-ranges": "bytes",
           "content-length": end - start + 1,
         });
-        return createReadStream(file, { start, end }).pipe(res);
+        return pipeUntilClosed(createReadStream(file, { start, end }), res);
       }
       /*
        * `?download` asks the browser to save rather than play.
@@ -6930,7 +6946,7 @@ async function fetchVoiceList() {
         headers["content-disposition"] = `attachment; filename="${basename(file).replace(/["\\]/g, "")}"`;
       }
       res.writeHead(200, headers);
-      return createReadStream(file).pipe(res);
+      return pipeUntilClosed(createReadStream(file), res);
     }
 
     // The component library and its gallery, served from the repo. Static and
