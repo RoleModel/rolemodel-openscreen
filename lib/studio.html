@@ -1997,6 +1997,53 @@
       </div>
    </template>
 
+   <template data-panel="board-scene">
+      <p class="lede" data-region="main">Keep this scene’s source video, transcript, and approved passages together. Use the visual scene editor when you need titles, a shader, or other designed components.</p>
+      <section class="board-scene" data-region="main">
+         <h2 data-el="heading" class="board-scene__title">Scene</h2>
+         <div data-el="form" class="form board-scene__form">
+            <button data-el="save" class="btn btn--primary" type="button">Save scene</button>
+         </div>
+         <div data-el="media" class="board-scene__media">
+            <h3>Video for this scene</h3>
+         </div>
+         <p data-el="status" class="form-hint"></p>
+         <div class="row">
+            <button data-el="visualEditor" class="btn ghost" type="button">Open visual scene editor</button>
+            <button data-el="backButton" class="btn ghost" type="button">Back to canvas</button>
+         </div>
+      </section>
+      <!-- Started on the page by mountPanel, then moved under the media block once
+           its footage field exists — the order the JS composes them in. -->
+      <div data-el="mediaActions" class="row" data-region="main">
+         <button data-el="transcribe" class="btn" type="button">Transcribe and review</button>
+         <button data-el="addTake" class="btn ghost" type="button">Add as scene take</button>
+         <button data-el="upload" class="btn ghost" type="button">Add a video</button>
+         <input data-el="picker" type="file" accept="video/*" hidden>
+      </div>
+      <section data-el="review" class="board-scene__review" data-region="main" hidden></section>
+   </template>
+
+   <template data-row="board-scene-review">
+      <h3>Review the recording</h3>
+      <p data-el="hint" class="hint"></p>
+      <video data-el="player" class="board-scene__player" controls playsinline preload="metadata"></video>
+      <div data-el="head" class="board-scene__review-head">
+         <div data-el="stats"></div>
+         <button data-el="use" class="btn btn--primary" type="button"></button>
+      </div>
+      <div data-el="lines" class="paper-edit__lines board-scene__lines"></div>
+      <button data-el="clear" class="btn ghost btn--small" type="button">Clear passage</button>
+   </template>
+
+   <template data-row="board-scene-line">
+      <div class="paper-edit__line"><time data-el="time" class="paper-edit__time"></time><span data-el="text" class="paper-edit__text paper-edit__words"></span></div>
+   </template>
+
+   <template data-row="board-scene-word">
+      <button class="paper-edit__word" type="button"></button>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
