@@ -912,6 +912,73 @@
       </div>
    </template>
 
+   <template data-row="control-empty"><p class="empty"></p></template>
+   <template data-row="control-pre"><pre class="full"></pre></template>
+   <template data-row="control-link"><a></a></template>
+
+   <template data-panel="storage">
+      <div class="storage__head" data-region="main">
+         <p class="lede">Browse the shared media shelf. Connection details stay out of the way until you need them.</p>
+      </div>
+      <div data-el="slackHost" style="display:contents" data-region="main"></div>
+      <div data-el="form" class="form storage__settings" data-region="main"></div>
+      <div data-el="browseHead" class="client" data-region="main" hidden>Browse</div>
+      <div data-el="crumbRow" class="row s3bar" data-region="main" hidden>
+         <select data-el="remotePick" class="form-control" style="max-inline-size:18rem"></select>
+      </div>
+      <div data-el="listing" class="s3list" data-region="main" hidden></div>
+      <div data-el="dropZone" class="s3drop" data-region="main" hidden>
+         <span class="dropzone__lead">Drop files to upload here</span>
+         <span class="dropzone__sub">or drop them straight onto a folder above</span>
+      </div>
+      <input data-el="picker" type="file" multiple hidden data-region="main" />
+      <div data-el="s3Hint" class="hint" data-region="main"></div>
+      <div data-el="remotesHead" class="client" data-region="main" hidden>Configured remotes</div>
+      <div data-el="remotes" class="grid" data-region="main" hidden></div>
+   </template>
+
+   <template data-row="s3-entry">
+      <div class="s3row" draggable="true">
+         <button data-el="name" class="s3row__name" type="button"></button>
+         <span data-el="meta" class="s3row__meta"></span>
+      </div>
+   </template>
+
+   <template data-row="s3-retry">
+      <div class="row" style="padding:var(--op-space-small)">
+         <button data-el="again" class="btn ghost" type="button">Try again</button>
+      </div>
+   </template>
+
+   <template data-row="storage-remote">
+      <div class="card">
+         <div class="body">
+            <div data-el="name" class="nm"></div>
+            <div data-el="status" class="meta"></div>
+            <div data-el="row" class="row">
+               <button data-el="edit" class="btn ghost" type="button">Edit</button>
+               <button data-el="test" class="btn ghost" type="button">Test</button>
+            </div>
+         </div>
+      </div>
+   </template>
+
+   <template data-row="slack-panel">
+      <section class="panel-card">
+         <h2>Slack</h2>
+         <p data-el="lede" class="hint">Post a finished video straight into a channel. Uploads the file itself, so nothing depends on a link or another service staying up.</p>
+         <div data-el="who" class="hint"></div>
+         <div data-el="form" class="form"></div>
+      </section>
+   </template>
+
+   <!-- Shown when this window is running older Studio code than the disk. -->
+   <template data-row="stale-banner">
+      <button class="btn" type="button"
+         style="position:fixed;inset-block-end:var(--op-space-large);inset-inline-start:50%;transform:translateX(-50%);z-index:60">
+         This window is running older Studio code — click to reload</button>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
