@@ -91,6 +91,8 @@ import {
 	setLastView,
 	setOpenFrameSettings,
 	setFalSettings,
+	setSidebarRail,
+	sidebarRail,
 	setSlackSettings,
 	slackSettings,
 	falSettings,
@@ -3018,6 +3020,7 @@ async function state() {
     // The panel that was open when the app last closed, so a restart lands where
     // the work was rather than back at the Library.
     lastView: await lastView(),
+    sidebarRail: await sidebarRail(),
     /*
      * The project you are working in, verified against the library.
      *
@@ -3790,6 +3793,14 @@ const server = createServer(async (req, res) => {
      * Write-only, like the Slack token: the panel can say whether a key is
      * present and where it came from, and never reads one back out.
      */
+    /* The nav's own shape, stored beside the last panel and for the same reason:
+       a new port each launch makes any browser-side store unreachable. */
+    if (p === "/api/sidebar" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      await setSidebarRail(Boolean(b.rail));
+      return json(res, 200, { ok: true, rail: Boolean(b.rail) });
+    }
+
     if (p === "/api/fal/settings" && req.method === "GET") {
       const { key, source } = await falSettings();
       return json(res, 200, {

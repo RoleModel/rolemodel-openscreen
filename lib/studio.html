@@ -31,6 +31,14 @@
             <img height="50" width="50" src="/brand-mark.svg" />
          </a>
          <h1>RoleModel Studio</h1>
+         <!--
+            Narrow the nav by choice, not only by window width.
+
+            The rail already exists as a shape this nav takes under 48rem; this
+            pins it at any width, for a wide window where the work wants the room
+            more than the labels do.
+         -->
+         <button class="btn btn--no-border btn--icon sidebar__pin" data-el="railPin" type="button" aria-pressed="false" title="Minimise the sidebar"></button>
          <div class="root" id="root">…</div>
          <div class="sidebar__content sidebar__content--start">
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>

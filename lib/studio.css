@@ -5912,3 +5912,40 @@ textarea.form-control.board__brief {
 @media (prefers-reduced-motion: reduce) {
   .working__mark { animation-duration: 4s; }
 }
+
+/*
+ * The control that narrows the nav sits in the nav, top right of the title.
+ *
+ * Small and unlabelled: it is a preference toggle, not a destination, and a
+ * word beside it would be the widest thing in a rail that exists to be narrow.
+ */
+.sidebar__pin {
+  position: absolute;
+  inset-block-start: var(--op-space-small);
+  inset-inline-end: var(--op-space-small);
+  padding: var(--op-space-3x-small);
+  color: var(--op-color-neutral-minus-seven);
+}
+
+.sidebar__pin:hover {
+  color: var(--op-color-neutral-minus-max);
+}
+
+/* In the rail there is no room beside the mark, so it takes its own line. */
+.sidebar--rail .sidebar__pin {
+  position: static;
+  margin-inline: auto;
+}
+
+/*
+ * A rail has no room for words, including its own name.
+ *
+ * The title and the library path were left visible because the rail used to be
+ * something only a narrow window produced, where they were already cramped. Now
+ * it is a choice made at any width, and at 88px both of them wrap into a column
+ * of syllables. The name is in the mark; the path is on the Library page.
+ */
+.sidebar--rail h1,
+.sidebar--rail .root {
+  display: none;
+}
