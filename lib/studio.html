@@ -1618,6 +1618,72 @@
       </dialog>
    </template>
 
+   <template data-row="control-img"><img alt="" loading="lazy" /></template>
+
+   <!-- Claude's proposed passages for a Canvas scene, and the manual selection. -->
+   <template data-row="scene-suggestions">
+      <div class="scene-footage-review__suggestions"><strong>Claude’s proposed passages</strong></div>
+   </template>
+   <template data-row="scene-suggestion">
+      <div class="scene-footage-review__suggestion">
+         <button data-el="use" class="btn ghost btn--small" type="button"></button>
+         <span data-el="text"></span>
+      </div>
+   </template>
+   <template data-row="scene-manual">
+      <div class="scene-footage-review__manual">
+         <span data-el="hint" class="hint"></span>
+         <button data-el="use" class="btn btn--small" type="button"></button>
+         <button data-el="clear" class="btn ghost btn--small" type="button">Clear</button>
+      </div>
+   </template>
+
+   <!-- One part of a scene: a summary row until you open it. -->
+   <template data-row="scene-part">
+      <details class="card">
+         <summary style="cursor:pointer;display:flex;gap:var(--op-space-x-small);align-items:baseline;padding:var(--op-space-small);">
+            <span data-el="tag" class="nm"></span><span data-el="when" class="path"></span><span data-el="first" class="path" style="color:var(--fg)"></span>
+         </summary>
+         <div class="body">
+            <div data-el="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--op-space-2x-small)"></div>
+            <!-- After the fields: reordering and removing are things you do to a
+                 part you have already read. -->
+            <div class="row" style="margin-top:var(--op-space-x-small)">
+               <button data-el="up" class="btn ghost" type="button" title="Earlier in the stack">↑</button>
+               <button data-el="down" class="btn ghost" type="button" title="Later in the stack">↓</button>
+               <button data-el="kill" class="btn btn--icon ghost del kill" type="button" aria-label="Remove this part" title="Remove this part"></button>
+            </div>
+         </div>
+      </details>
+   </template>
+
+   <!-- A picture is picked, not spelled: the whole card width, scrolling sideways. -->
+   <template data-row="scene-image-field">
+      <div class="form-group" style="grid-column:1 / -1">
+         <label data-el="label" class="form-label"></label>
+         <div data-el="strip" style="display:flex;gap:var(--op-space-x-small);overflow-x:auto;padding-block-end:var(--op-space-2x-small);scrollbar-width:thin"></div>
+         <button data-el="upload" class="btn ghost" type="button" hidden>Upload an image</button>
+         <input data-el="picker" type="file" accept="image/*" hidden />
+      </div>
+   </template>
+   <template data-row="scene-image-tile">
+      <button type="button" style="flex:0 0 auto;inline-size:6.5rem;display:flex;flex-direction:column;gap:0.35rem;align-items:center;padding:0.4rem;cursor:pointer;border-radius:var(--op-radius-medium);background:var(--op-color-neutral-plus-six);color:var(--op-color-neutral-minus-two);border:1px solid var(--op-color-neutral-plus-four)">
+         <div data-el="frame" style="inline-size:100%;block-size:3.5rem;display:grid;place-items:center;overflow:hidden"></div>
+         <span data-el="cap" style="font-size:var(--op-font-2x-small);line-height:1.2;text-align:center;overflow-wrap:anywhere"></span>
+      </button>
+   </template>
+
+   <!-- A position is dragged, not typed; two columns so there is room to aim. -->
+   <template data-row="scene-range-field">
+      <div class="form-group" style="grid-column:span 2">
+         <label data-el="label" class="form-label"></label>
+         <div class="range-row">
+            <input data-el="slider" class="form-control form-control--small" type="range" />
+            <span data-el="readout" class="path"></span>
+         </div>
+      </div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
