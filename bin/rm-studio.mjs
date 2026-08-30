@@ -6907,7 +6907,7 @@ async function fetchVoiceList() {
         return res.end();
       }
       res.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-cache" });
-      return createReadStream(file).pipe(res);
+      return pipeUntilClosed(createReadStream(file), res);
     }
 
     if (p.startsWith("/media/")) {
