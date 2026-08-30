@@ -671,7 +671,7 @@ function promoteLegacyCanvasTimelineComponents(html) {
     const sceneDurationMs = Math.max(100, (Number(openingAttribute(sceneAttrs, "data-duration")) || 0) * 1000);
     const trackIndex = Math.max(0, Math.round(Number(openingAttribute(sceneAttrs, "data-track-index")) || 2));
     const components = [];
-    const remainder = sceneBody.replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (component, tag, attrs) => {
+    const remainder = sceneBody.replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal|rm-haze)\b([^>]*)>[\s\S]*?<\/\1>/gi, (component, tag, attrs) => {
       const localAt = Math.max(0, Number(openingAttribute(attrs, "at")) || 0);
       const authoredDuration = Number(openingAttribute(attrs, "for"));
       const durationMs = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
@@ -1766,7 +1766,7 @@ const offsetCanvasSceneTiming = (body, startMs) =>
  */
 function splitCanvasTimelineComponents(body, startMs, sceneDurationMs, trackIndex = 2) {
   const components = [];
-  const sceneBody = String(body ?? "").replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (match, tag, attrs) => {
+  const sceneBody = String(body ?? "").replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal|rm-haze)\b([^>]*)>[\s\S]*?<\/\1>/gi, (match, tag, attrs) => {
     const localAt = Math.max(0, Number(attrs.match(TIMING_ATTR("at"))?.[2]) || 0);
     const authoredDuration = Number(attrs.match(TIMING_ATTR("for"))?.[2]);
     const duration = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
@@ -4161,25 +4161,50 @@ const server = createServer(async (req, res) => {
          bare unknown tag. Staging is idempotent, so this is safe to repeat. */
       await stageCanvasSceneRuntime(root);
 
-      /* A stable id, because Studio's timeline and canvas controls need one to
-         edit against — HyperFrames warns about any timed element without it. */
-      const tagName = (/^<([a-z][\w-]*)/i.exec(body) ?? [])[1] ?? "element";
-      let n = 1;
-      while (html.includes(`id="${tagName}-${n}"`)) n += 1;
-      const id2 = `${tagName}-${n}`;
-
       const start = Math.max(0, Number(b.startMs) || 0);
       const duration = Math.max(100, Number(b.durationMs) || 4000);
-      const timed = body
-        .replace(/\sdata-start="[^"]*"/g, "")
-        .replace(/\sdata-duration="[^"]*"/g, "")
-        .replace(/\sat="[^"]*"/g, "")
-        .replace(/\sfor="[^"]*"/g, "")
-        .replace(/^<([a-z][\w-]*)/i, `<$1 id="${id2}" class="clip" data-start="${hfSeconds(start)}" data-duration="${hfSeconds(duration)}" at="${Math.round(start)}" for="${Math.round(duration)}"`);
+
+      /*
+       * A body can be more than one element, and its timing is its own.
+       *
+       * The designer sends a single component at at="0"; a saved scene sends
+       * several, each with the at/for that sequences them — a title a beat
+       * after its background. Flattening all of that to one start time was
+       * fine while only the designer used this, and it would land every part
+       * of a scene on the same frame. Each element keeps its offset and is
+       * placed relative to where the whole is being inserted.
+       */
+      const elements = [...body.matchAll(/<([a-z][\w-]*)\b[^>]*>[\s\S]*?<\/\1>|<([a-z][\w-]*)\b[^>]*\/>/gi)].map((m) => m[0]);
+      const pieces = elements.length ? elements : [body];
+
+      const taken = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+      const ids = [];
+      const timed = pieces.map((piece) => {
+        const tagName = (/^<([a-z][\w-]*)/i.exec(piece) ?? [])[1] ?? "element";
+        /* A stable id, because Studio's timeline and canvas controls need one
+           to edit against — HyperFrames warns about any timed element without
+           one. Checked against ids already taken in this insert as well as in
+           the file, or two parts of one scene would claim the same name. */
+        let n = 1;
+        while (taken.has(`${tagName}-${n}`)) n += 1;
+        const pieceId = `${tagName}-${n}`;
+        taken.add(pieceId);
+        ids.push(pieceId);
+
+        const localAt = Math.max(0, Number(piece.match(TIMING_ATTR("at"))?.[2]) || 0);
+        const authored = Number(piece.match(TIMING_ATTR("for"))?.[2]);
+        const localFor = Number.isFinite(authored) && authored > 0 ? authored : duration;
+        return piece
+          .replace(/\sdata-start="[^"]*"/g, "")
+          .replace(/\sdata-duration="[^"]*"/g, "")
+          .replace(/\sat="[^"]*"/g, "")
+          .replace(/\sfor="[^"]*"/g, "")
+          .replace(/^<([a-z][\w-]*)/i, `<$1 id="${pieceId}" class="clip" data-start="${hfSeconds(start + localAt)}" data-duration="${hfSeconds(localFor)}" at="${Math.round(start + localAt)}" for="${Math.round(localFor)}"`);
+      });
 
       await writeFile(`${indexPath}.before-insert`, html, "utf8");
-      await writeFile(indexPath, `${html.slice(0, close)}    ${timed}\n  ${html.slice(close)}`, "utf8");
-      return json(res, 200, { ok: true, folder, id: id2, startMs: start, durationMs: duration });
+      await writeFile(indexPath, `${html.slice(0, close)}    ${timed.join("\n    ")}\n  ${html.slice(close)}`, "utf8");
+      return json(res, 200, { ok: true, folder, id: ids[0], ids, count: ids.length, startMs: start, durationMs: duration });
     }
 
     if (p === "/api/hyperframes/delete" && req.method === "POST") {
