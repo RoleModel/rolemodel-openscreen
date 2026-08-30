@@ -102,7 +102,7 @@ import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../l
 import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 import { stageRenderAssets } from "../lib/render-assets.mjs";
-import { MODELS, DEFAULT_MODEL, modelById, clipProblem } from "../lib/fal.mjs";
+import { MODELS, DEFAULT_MODEL, modelById, clipProblem, avatarProblem, takesOf } from "../lib/fal.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -3807,7 +3807,18 @@ const server = createServer(async (req, res) => {
         configured: Boolean(key),
         source,
         defaultModel: DEFAULT_MODEL,
-        models: MODELS.map((m) => ({ id: m.id, label: m.label, hint: m.hint, controls: m.controls, limits: m.limits })),
+        /* takes and requiresImages travel too: the panel shows a different
+           picker for the avatar pair, and its "needs at least one reference"
+           hint was checking a field that was never sent. */
+        models: MODELS.map((m) => ({
+          id: m.id,
+          label: m.label,
+          hint: m.hint,
+          takes: takesOf(m),
+          controls: m.controls,
+          limits: m.limits,
+          requiresImages: Boolean(m.requiresImages),
+        })),
       });
     }
     if (p === "/api/fal/settings" && req.method === "POST") {
@@ -3864,6 +3875,9 @@ const server = createServer(async (req, res) => {
       const catalog = await reindex(id).catch(() => null);
       const named = (catalog?.files ?? [])
         .map((item) => String(item.path ?? item.rel ?? ""))
+        /* Not a render's own staged assets. A composition's wallpaper is
+           machinery, and it listed above the one screenshot actually pasted in. */
+        .filter((rel) => !rel.startsWith("Renders/"))
         .filter((rel) => IMAGE_EXT.has(extname(rel).toLowerCase()) && extname(rel).toLowerCase() !== ".svg")
         .sort();
       /*
@@ -3891,6 +3905,36 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * The project's voice tracks, for the avatar models.
+     *
+     * Those two build a video from a photograph and a voice rather than editing
+     * a clip, and the voice is nearly always one this project already made under
+     * Voice — which writes media/Audio/<script>.wav. Listed with their length,
+     * because that is what the finished video's length will be.
+     */
+    if (p === "/api/fal/voices" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const catalog = await reindex(id).catch(() => null);
+      const { durationOf } = await import("../lib/narration.mjs");
+      const voices = [];
+      for (const item of catalog?.files ?? []) {
+        const rel = String(item.path ?? item.rel ?? "");
+        if (!AUDIO_EXT.has(extname(rel).toLowerCase())) continue;
+        /* A finished render's own working files are not a voice to choose.
+           Renders/<slug>/assets/clock.m4a is a composition's clock track, and
+           offering it alongside the narration is offering a mistake. */
+        if (rel.startsWith("Renders/")) continue;
+        const file = join(mediaDir(id), rel);
+        if (!(await stat(file).catch(() => null))?.isFile()) continue;
+        const seconds = Number(item.durationSec ?? item.seconds) || (await durationOf(file));
+        voices.push({ rel, seconds: Number(Number(seconds).toFixed(2)) || null });
+      }
+      return json(res, 200, { voices: voices.sort((a, b) => a.rel.localeCompare(b.rel)) });
+    }
+
+    /*
      * The command that restyles one clip, built here.
      *
      * A step rather than a started job, like the render step: the client decides
@@ -3912,9 +3956,38 @@ const server = createServer(async (req, res) => {
       const spec = modelById(model);
       if (!spec) return json(res, 400, { error: "that is not a model this app knows" });
 
+      const inside = (given) => {
+        const path = resolve(mediaDir(id), String(given ?? ""));
+        return given && path.startsWith(`${mediaDir(id)}${sep}`) ? path : null;
+      };
+
+      /*
+       * An avatar takes a picture and a voice, and nothing else here applies.
+       *
+       * No clip, so no trim, no duration ceiling and no original audio to keep.
+       * Checked here for the same reason the clip path is: a bad pair should be
+       * a sentence in the panel, not a paid job that dies minutes in.
+       */
+      if (takesOf(spec) === "image+audio") {
+        const image = inside(b.image);
+        const audio = inside(b.audio);
+        if (!image || !audio) return json(res, 400, { error: "pick a picture and a voice track" });
+        const wrong = await avatarProblem({ image, audio });
+        if (wrong) return json(res, 400, { error: wrong });
+        const args = [
+          join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--model", model,
+          "--image", String(b.image), "--audio", String(b.audio),
+        ];
+        const say = String(b.prompt ?? "").trim();
+        if (say) args.push("--prompt", say);
+        return json(res, 200, {
+          step: { bin: process.execPath, args, label: `avatar ${basename(String(b.audio))}`, project: id, cwd: TOOLKIT },
+        });
+      }
+
       const rel = String(b.file ?? "");
-      const file = resolve(mediaDir(id), rel);
-      if (!rel || !file.startsWith(`${mediaDir(id)}${sep}`)) return json(res, 400, { error: "that clip is outside this project" });
+      const file = inside(rel);
+      if (!file) return json(res, 400, { error: "that clip is outside this project" });
 
       const prompt = String(b.prompt ?? "").trim();
       if (spec.controls.includes("prompt") && !prompt) return json(res, 400, { error: "say what you want changed" });

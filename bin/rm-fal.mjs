@@ -10,6 +10,12 @@
  *   rm-fal --project <id> --file Footage/blaine.mp4 --prompt "..." [--model <id>]
  *          [--no-audio] [--resolution 1080p] [--image brand:x.png ...]
  *          [--in 4.5 --out 12.0] [--output Footage/blaine-restyled.mp4]
+ *
+ * The avatar models take no clip at all — a photograph and a voice track, which
+ * is normally one this project already built under Voice:
+ *
+ *   rm-fal --project <id> --model fal-ai/kling-video/ai-avatar/v2/pro
+ *          --image Stills/blaine.png --audio Audio/intro.wav [--prompt "..."]
  */
 import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,7 +23,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot } from "../lib/library.mjs";
 import { falSettings } from "../lib/settings.mjs";
-import { fal, clipProblem, modelById, DEFAULT_MODEL } from "../lib/fal.mjs";
+import { fal, avatarProblem, clipProblem, modelById, takesOf, DEFAULT_MODEL } from "../lib/fal.mjs";
 import { capture, durationOf } from "../lib/narration.mjs";
 
 const args = process.argv.slice(2);
@@ -35,13 +41,10 @@ const die = (message) => {
 const projectId = flag("project");
 const file = flag("file");
 const prompt = flag("prompt");
-if (!projectId || !file || !prompt) die("--project, --file and --prompt are required");
+if (!projectId) die("--project is required");
 
 const LIB = defaultRoot();
 const mediaDir = join(LIB, projectId, "media");
-const source = resolve(mediaDir, file);
-// Never read outside the project's own media, whatever the caller passed.
-if (!source.startsWith(`${mediaDir}/`)) die("that clip is outside this project");
 
 const { key } = await falSettings();
 if (!key) die("no fal key is configured — add one in Studio's Restyle panel, or set FAL_KEY");
@@ -49,6 +52,87 @@ if (!key) die("no fal key is configured — add one in Studio's Restyle panel, o
 const model = flag("model") ?? DEFAULT_MODEL;
 const spec = modelById(model);
 if (!spec) die(`${model} is not a model this app knows`);
+const avatar = takesOf(spec) === "image+audio";
+if (!avatar && (!file || !prompt)) die("--file and --prompt are required");
+
+/*
+ * Two named roots, never an open path.
+ *
+ * A project's own media, or the shared brand shelf under a `brand:` prefix —
+ * most projects keep no pictures of their own and the references are brand
+ * assets. A bare relative name that could escape either one is how a tool reads
+ * a file it was never given.
+ */
+const BRAND_IMAGERY = resolve(dirname(fileURLToPath(import.meta.url)), "..", "brand", "imagery");
+const inProject = (given, what) => {
+	const brand = given.startsWith("brand:");
+	const root = brand ? BRAND_IMAGERY : mediaDir;
+	const path = resolve(root, brand ? given.slice("brand:".length) : given);
+	if (!path.startsWith(`${root}/`)) die(`${what} is outside ${brand ? "the brand shelf" : "this project"}`);
+	return path;
+};
+
+/*
+ * The result lands beside the footage it was made from, not in Renders.
+ *
+ * It is source material — something to cut with — and the catalog treats
+ * Renders as finished output. Named after the original so the pair stays
+ * obvious in a folder listing.
+ */
+const deliver = async (url, out) => {
+	const target = resolve(mediaDir, out);
+	if (!target.startsWith(`${mediaDir}/`)) die("that output path is outside this project");
+	await mkdir(dirname(target), { recursive: true });
+	console.log("  downloading the result…");
+	const response = await fetch(url);
+	if (!response.ok) die(`could not download the result (${response.status})`);
+	await writeFile(target, Buffer.from(await response.arrayBuffer()));
+	console.log("");
+	console.log(`  wrote ${out}`);
+};
+
+const client = await fal({ key }).catch((error) => die(error.message));
+const send = async (path) => client.upload(path, await readFile(path)).catch((error) => die(error.message));
+
+/*
+ * An avatar is built, not edited.
+ *
+ * A photograph and a voice track go up and a video of that person speaking
+ * comes back, so none of the clip machinery below applies: nothing to trim, no
+ * duration to hold under a ceiling, no original audio to preserve. The voice
+ * track is usually one this project already made under Voice, which is why the
+ * default output is named after it.
+ */
+if (avatar) {
+	const imageArg = all("image")[0];
+	const audioArg = flag("audio");
+	if (!imageArg || !audioArg) die("--image and --audio are required for an avatar model");
+	const image = inProject(imageArg, "that picture");
+	const audio = inProject(audioArg, "that voice track");
+
+	const problem = await avatarProblem({ image, audio });
+	if (problem) die(problem);
+
+	const spoken = await durationOf(audio);
+	console.log(`  model     ${spec.label}  (${spec.id})`);
+	console.log(`  picture   ${imageArg}`);
+	console.log(`  voice     ${audioArg}${spoken ? `  (${spoken.toFixed(1)}s)` : ""}`);
+	console.log("");
+
+	console.log("  uploading the picture and the voice…");
+	const imageUrl = await send(image);
+	const audioUrl = await send(audio);
+
+	console.log("  generating — this takes a few minutes…");
+	const { url } = await client
+		.edit({ model, imageUrl, audioUrl, prompt }, { onLog: (line) => console.log(`  ${line}`) })
+		.catch((error) => die(error.message));
+
+	await deliver(url, flag("output") ?? join("Footage", `${basename(audioArg, extname(audioArg))}-avatar.mp4`));
+	process.exit(0);
+}
+
+const source = inProject(file, "that clip");
 
 /*
  * A range inside the clip, cut before anything is uploaded.
@@ -73,8 +157,6 @@ console.log(`  clip      ${file}  (${seconds.toFixed(1)}s)`);
 console.log(`  audio     ${args.includes("--no-audio") ? "replaced by the model" : "kept from the original"}`);
 console.log("");
 
-const client = await fal({ key }).catch((error) => die(error.message));
-
 let sending = source;
 if (trimming) {
 	console.log(`  trimming ${inSec.toFixed(2)}s → ${outSec.toFixed(2)}s…`);
@@ -90,26 +172,10 @@ if (trimming) {
 }
 
 console.log("  uploading the clip…");
-const bytes = await readFile(sending);
-const videoUrl = await client.upload(sending, bytes).catch((error) => die(error.message));
+const videoUrl = await send(sending);
 
-/*
- * Reference images, from one of two roots.
- *
- * A project's own media, or the shared brand shelf under a `brand:` prefix —
- * most projects keep no pictures of their own and the references are brand
- * assets. Two named roots rather than an open path: a bare relative name that
- * could escape either one is how a tool reads a file it was never given.
- */
-const BRAND_IMAGERY = resolve(dirname(fileURLToPath(import.meta.url)), "..", "brand", "imagery");
 const imageUrls = [];
-for (const image of all("image")) {
-	const brand = image.startsWith("brand:");
-	const root = brand ? BRAND_IMAGERY : mediaDir;
-	const path = resolve(root, brand ? image.slice("brand:".length) : image);
-	if (!path.startsWith(`${root}/`)) die(`a reference image is outside ${brand ? "the brand shelf" : "this project"}`);
-	imageUrls.push(await client.upload(path, await readFile(path)).catch((error) => die(error.message)));
-}
+for (const image of all("image")) imageUrls.push(await send(inProject(image, "a reference image")));
 
 console.log("  editing — this takes a few minutes…");
 const { url } = await client
@@ -119,23 +185,5 @@ const { url } = await client
 	)
 	.catch((error) => die(error.message));
 
-/*
- * The result lands beside the footage it was made from, not in Renders.
- *
- * It is source material — something to cut with — and the catalog treats
- * Renders as finished output. Named after the original so the pair stays
- * obvious in a folder listing.
- */
 const stem = basename(file, extname(file));
-const out = flag("output") ?? join("Footage", `${stem}-restyled.mp4`);
-const target = resolve(mediaDir, out);
-if (!target.startsWith(`${mediaDir}/`)) die("that output path is outside this project");
-await mkdir(dirname(target), { recursive: true });
-
-console.log("  downloading the result…");
-const response = await fetch(url);
-if (!response.ok) die(`could not download the result (${response.status})`);
-await writeFile(target, Buffer.from(await response.arrayBuffer()));
-
-console.log("");
-console.log(`  wrote ${out}`);
+await deliver(url, flag("output") ?? join("Footage", `${stem}-restyled.mp4`));
