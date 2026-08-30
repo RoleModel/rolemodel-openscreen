@@ -1551,6 +1551,73 @@
       </div>
    </template>
 
+   <!-- One modal asking one question about one asset: move, or rename. -->
+   <template data-row="asset-dialog">
+      <dialog class="move-asset">
+         <form class="move-asset__form" method="dialog">
+            <h2 data-el="title"></h2>
+            <p data-el="lede" class="hint"></p>
+            <label class="form-group">
+               <span data-el="label" class="form-label"></span>
+               <span data-el="slot" style="display:contents"></span>
+            </label>
+            <p data-el="status" class="hint" hidden></p>
+            <div class="move-asset__actions">
+               <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
+               <button data-el="confirm" class="btn" type="button"></button>
+            </div>
+         </form>
+      </dialog>
+   </template>
+
+   <template data-row="media-name-dialog">
+      <dialog class="media-name-dialog">
+         <form class="media-name-dialog__form" method="dialog">
+            <h2 data-el="title"></h2>
+            <p class="hint">Use the person’s name when it matters. Claude sees these names when it matches footage to /speaker sections in the script.</p>
+            <div data-el="fields" style="display:contents"></div>
+            <p data-el="status" class="hint" hidden></p>
+            <div class="move-asset__actions">
+               <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
+               <button data-el="add" class="btn btn--primary" type="button"></button>
+            </div>
+         </form>
+      </dialog>
+   </template>
+
+   <template data-row="media-name-field">
+      <label class="form-group">
+         <span class="form-label">Save as</span>
+         <div class="media-name-dialog__name">
+            <input data-el="input" class="form-control" />
+            <span data-el="extension" class="media-name-dialog__extension"></span>
+         </div>
+         <span data-el="original" class="form-hint"></span>
+      </label>
+   </template>
+
+   <template data-row="control-audio"><audio></audio></template>
+
+   <!-- Watch or listen in place: video, or a waveform for audio. -->
+   <template data-row="player-dialog">
+      <dialog class="player">
+         <div class="player__frame">
+            <div class="player__bar">
+               <span data-el="name" class="player__name"></span>
+               <button data-el="close" class="btn ghost btn--small" type="button" aria-label="Close the player"></button>
+            </div>
+            <video data-el="video" class="player__video" hidden></video>
+            <div data-el="listen" class="wave" hidden>
+               <div data-el="canvas" class="wave__canvas"></div>
+               <div class="wave__row">
+                  <button data-el="play" class="btn ghost btn--small wave__play" type="button"></button>
+                  <span data-el="clock" class="wave__clock">0:00</span>
+               </div>
+            </div>
+         </div>
+      </dialog>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
