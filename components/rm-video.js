@@ -428,11 +428,14 @@ class RMLowerThird extends RMElement {
         .s { font-family:var(--mono); font-size:1.45cqw; color:var(--muted); margin-top:.18cqw; }
         /* Slides in rather than rising — reads as a reveal, and stays legible
            over busy footage. Uses the same registered properties so it still
-           composes with the exit animation. */
+           composes with the exit animation.
+           The card carries the anim class: this rule existed but nothing wore
+           it, so the plate never animated and never left. Its "for" did nothing
+           and a lower third stayed on screen for the rest of the composition. */
         .anim { transform: translateX(calc(var(--rm-in-y) + var(--rm-out-y))); }
         :host { --rise: -22px; }
       </style>
-      <div class="card">
+      <div class="card anim">
         <div class="bar"></div>
         <div>
           <div class="n">${this.esc(this.attr('name', 'Name'))}</div>
@@ -1207,8 +1210,8 @@ function sPaintWash(ctx, w, h, st, pal) {
 /* The dot field. Grain comes from the cell's own hash, not from a running RNG,
    so a frame drawn on its own matches the same frame drawn in sequence. */
 function sDrawField(ctx, w, h, st, pal) {
-  const spacing = 8.15 / st.density
-  const radius = 1 * st.radius
+  const spacing = 3.15 / st.density
+  const radius = 2 * st.radius
   const bg = ctx.createLinearGradient(0, 0, w, h)
   bg.addColorStop(0, sRgba(sMix(pal.ground, pal.green, 0.07), 1))
   bg.addColorStop(0.52, sRgba(pal.ground, 1))
@@ -1310,7 +1313,7 @@ function sMotion(mode, time, phase) {
   }
 
   if (mode === 'current') {
-    m.body = { x: Math.sin(time * 0.22) * 8, scale: 1, blur: 0 }
+    m.body = { x: Math.sin(time * 0.22) * 8, scale: 1, blur: 10 }
   }
   if (mode === 'bloom') {
     m.swell = sPulse(breakCycle, 0.22, 0.66) * 1.35

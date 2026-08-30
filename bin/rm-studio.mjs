@@ -1974,17 +1974,21 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
       ? `    <aside class="clip assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span class="assembly-lower-third__name">${hf(clip.speaker)}</span>${clip.role ? `<span class="assembly-lower-third__role">${hf(clip.role)}</span>` : ""}</aside>`
       : "";
     /*
-     * preload="metadata", not "auto".
+     * preload="auto", despite the cost.
      *
-     * "auto" asks the browser to fetch each file in full before anything is
-     * played. A cut is a handful of camera-original takes — half a gigabyte at
-     * 30 Mbps is ordinary — and every clip plus every dissolve tail is its own
-     * element, so opening a composition meant downloading all of it up front and
-     * the editor sat there. Metadata gets duration and dimensions, and the
-     * browser range-requests the rest as it seeks.
+     * "auto" fetches each file in full, and a cut of camera originals is half a
+     * gigabyte at 30 Mbps, so opening a composition is slow. metadata is the
+     * obvious fix and it was wrong: a clip does not start at its file's first
+     * frame, it starts at data-media-start, and with only metadata loaded the
+     * browser has to range-request to get there. Measured both ways against the
+     * real composition — with range support every clip seeks to its in-point;
+     * without it every clip reports `seekable 0.0-0.0` and sits on frame 0, so
+     * the first take played the wrong footage entirely.
      *
-     * Safe for rendering: frames come from ffmpeg extraction, not from the
-     * browser's buffered video, so what the renderer produces does not change.
+     * The preview server that serves a composition advertises no accept-ranges,
+     * so this stays until that is confirmed. Load time is a proxy-media problem
+     * anyway: the answer is editing 5 Mbps proxies, not fetching less of a
+     * 30 Mbps original.
      */
     /* Keep the real video as a direct timed child. HyperFrames uses that timing
        to seek the source frame and to keep its native audio attached while a
@@ -2015,7 +2019,7 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
       tweens.push(`      tl.to('#${id}', { opacity: 0, duration: ${hfSeconds(fadeOutMs)}, ease: 'none' }, ${hfSeconds(cursor + duration - fadeOutMs)});`);
     }
     const canvasScene = source
-      ? `    <video id="${id}" data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="metadata"></video>`
+      ? `    <video id="${id}" data-assembly-media src="${hf(source)}" data-start="${start}" data-duration="${span}" data-media-start="${mediaStart}" data-track-index="0"${hasReplacementAudio ? " muted" : ' data-has-audio="true"'} playsinline preload="auto"></video>`
       : "";
     /*
      * The dissolve is carried by a muted clone of the outgoing clip.
@@ -2043,7 +2047,7 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
     const handleMs = sourceMs ? sourceMs - ((Number(clip.mediaStartMs) || 0) + duration) : 0;
     const dissolveMs = handleMs >= defaultDissolveDuration(clip, next) ? defaultDissolveDuration(clip, next) : 0;
     const dissolveTail = dissolveMs && source && next?.source
-      ? `    <video id="${id}-tail" data-assembly-dissolve-tail src="${hf(source)}" data-start="${hfSeconds(cursor + duration)}" data-duration="${hfSeconds(dissolveMs)}" data-media-start="${hfSeconds((Number(clip.mediaStartMs) || 0) + duration)}" data-track-index="0" muted playsinline preload="metadata"></video>`
+      ? `    <video id="${id}-tail" data-assembly-dissolve-tail src="${hf(source)}" data-start="${hfSeconds(cursor + duration)}" data-duration="${hfSeconds(dissolveMs)}" data-media-start="${hfSeconds((Number(clip.mediaStartMs) || 0) + duration)}" data-track-index="0" muted playsinline preload="auto"></video>`
       : "";
     if (dissolveTail) {
       tweens.push(`      tl.fromTo('#clip-${String(index + 2).padStart(2, "0")}', { opacity: 0 }, { opacity: 1, duration: ${hfSeconds(dissolveMs)}, ease: 'none' }, ${hfSeconds(cursor + duration)});`);
