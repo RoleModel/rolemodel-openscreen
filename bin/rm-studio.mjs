@@ -6316,6 +6316,31 @@ async function fetchVoiceList() {
      * keeps this a directory listing: recursing a bucket of renders to draw one
      * folder is minutes of API calls for rows nobody asked to see.
      */
+    /*
+     * A shareable link to one object.
+     *
+     * `rclone link` rather than a URL assembled here: only rclone knows how the
+     * remote is configured, and for S3-shaped backends the answer is a presigned
+     * URL, not a path under a public base. R2 caps the expiry at a week and says
+     * so on stderr, which is worth passing on — a link that quietly stops
+     * working is worse than one you were told the lifetime of.
+     */
+    if (opName === "link" && req.method === "GET") {
+      const target = remotePath(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
+      if (!target) return json(res, 400, { error: "that is not a path this can link" });
+      const r = await capture("rclone", ["link", target]);
+      const url = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
+      if (!r.ok || !/^https?:\/\//.test(url)) {
+        const why = (r.err || "").split("\n").filter(Boolean).pop() ?? "rclone could not make a link for that";
+        // rclone writes both `NOTICE : ` and `NOTICE: `; strip either, and the
+        // timestamp with it, or the reason arrives wearing a log line.
+        return json(res, 400, { error: why.replace(/^\d{4}\/\d{2}\/\d{2} [\d:]+ (?:ERROR|NOTICE|INFO)\s*:\s*/, "") });
+      }
+      // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
+      const expiry = /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null;
+      return json(res, 200, { url, expiry });
+    }
+
     if (opName === "ls" && req.method === "GET") {
       const target = remotePath(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
       if (!target) return json(res, 400, { error: "that is not a path this can list" });

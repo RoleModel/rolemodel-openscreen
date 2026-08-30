@@ -475,6 +475,13 @@ nav button[data-v][aria-current='true'] .navicon {
   padding-inline: var(--op-space-x-small);
 }
 
+.btn.btn--hint {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: contrast-color(var(--accent));
+}
+
 .full.row {
   display: flex;
   gap: var(--op-space-x-small);
@@ -3376,7 +3383,6 @@ textarea.form-control.script-body {
   display: flex;
   flex-direction: column;
   margin-block-end: var(--op-space-small);
-  overflow: hidden;
 }
 
 .s3row {
