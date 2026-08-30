@@ -893,6 +893,25 @@
       <div class="job"><div class="ent"><div data-el="name" class="nm2"></div><div data-el="tag" class="tag"></div></div></div>
    </template>
 
+   <!-- Bare controls, cloned by control(kind). A control handed to field() gets
+        its group, label and .form-control class there; nothing is born in JS. -->
+   <template data-row="control-input"><input /></template>
+   <template data-row="control-number"><input type="number" /></template>
+   <template data-row="control-select"><select></select></template>
+   <template data-row="control-textarea"><textarea></textarea></template>
+   <template data-row="control-hint"><div class="hint"></div></template>
+   <template data-row="control-button"><button class="btn" type="button"></button></template>
+   <template data-row="control-full"><div class="full"></div></template>
+
+   <template data-panel="recast">
+      <p class="lede" data-region="main">Turn a Playwright test run into a narrated demo. The test already clicked through the product, and the trace it left behind holds the actions, the screenshots, the network waits and the cursor positions. Nothing here re-records anything.</p>
+      <div data-el="form" class="form" data-region="main"></div>
+      <div data-el="rail" class="form" data-region="side"></div>
+      <div data-region="footer">
+         <button data-el="build" class="btn" type="button">Work out the steps</button>
+      </div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
