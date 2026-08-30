@@ -1,0 +1,14 @@
+<!--
+  Slack's mark, without the wordmark that comes with the full lockup.
+
+  The button already says "Sign in with Slack", so the lockup made it read
+  "slack Sign in with Slack". The viewBox is cropped to the glyph, and the four
+  colours are kept as they are: that is the only way Slack's mark may be shown,
+  and the only way it is recognisable at the size of a button.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 632.6 632.6" fill-rule="evenodd" clip-rule="evenodd">
+  <path fill="#e01e5a" d="M133.5 399.9c0 36.8-29.7 66.5-66.5 66.5S.5 436.6.5 399.9s29.7-66.5 66.5-66.5h66.5zm33.2 0c0-36.8 29.7-66.5 66.5-66.5s66.5 29.7 66.5 66.5v166.2c0 36.8-29.7 66.5-66.5 66.5s-66.5-29.7-66.5-66.5z"/>
+  <path fill="#36c5f0" d="M233.2 133c-36.8 0-66.5-29.7-66.5-66.5S196.4 0 233.2 0s66.5 29.7 66.5 66.5V133zm0 33.7c36.8 0 66.5 29.7 66.5 66.5s-29.7 66.5-66.5 66.5H66.5C29.7 299.7 0 269.9 0 233.2s29.7-66.5 66.5-66.5z"/>
+  <path fill="#2eb67d" d="M499.6 233.2c0-36.8 29.7-66.5 66.5-66.5s66.5 29.7 66.5 66.5-29.7 66.5-66.5 66.5h-66.5zm-33.2 0c0 36.8-29.7 66.5-66.5 66.5s-66.5-29.7-66.5-66.5V66.5c0-36.8 29.7-66.5 66.5-66.5s66.5 29.7 66.5 66.5z"/>
+  <path fill="#ecb22e" d="M399.9 499.6c36.8 0 66.5 29.7 66.5 66.5s-29.7 66.5-66.5 66.5-66.5-29.7-66.5-66.5v-66.5zm0-33.2c-36.8 0-66.5-29.7-66.5-66.5s29.7-66.5 66.5-66.5h166.7c36.8 0 66.5 29.7 66.5 66.5s-29.7 66.5-66.5 66.5z"/>
+</svg>

@@ -1,6 +1,6 @@
 {
   "name": "rolemodel-openscreen",
-  "version": "0.1.47",
+  "version": "0.1.48",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
@@ -10,6 +10,7 @@
     "rm-render-alignment": "./bin/rm-render-alignment.mjs",
     "rm-reconcile": "./bin/rm-reconcile.mjs",
     "rm-render-hyperframes": "./bin/rm-render-hyperframes.mjs",
+    "rm-render-pip": "./bin/rm-render-pip.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-fal": "./bin/rm-fal.mjs",

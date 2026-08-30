@@ -726,3 +726,23 @@ textarea.form-control.board__brief {
 .board__spacer {
   pointer-events: none;
 }
+
+/*
+ * Sign in with Slack, wearing Slack's own mark.
+ *
+ * The logo is the multicoloured one, so it keeps its own colours rather than
+ * taking the button's — which is the only way Slack's mark is allowed to be
+ * shown, and the only way it is recognisable at this size.
+ */
+.slackin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.slackin__mark {
+  /* Sized from the type beside it, so the pair scales together. */
+  block-size: 1.15em;
+  inline-size: auto;
+  flex: 0 0 auto;
+}

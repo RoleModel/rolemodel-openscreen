@@ -64,7 +64,7 @@
   --track-tight: calc(var(--op-letter-spacing-label) * -1);
   --track-wide: calc(var(--op-letter-spacing-label) * 2);
   --track-wider: calc(var(--op-letter-spacing-label) * 3);
-  --shelf-art-size: calc(var(--op-size-unit) * 24); /* 96px */
+  --shelf-art-size: calc(var(--op-size-unit) * 48);
 
   /* Structure. Optics' space scale tops out at 80px and describes gaps, not the
      width of a sidebar or the label column of a form. The layout dimensions
@@ -311,6 +311,7 @@ nav .btn.btn--no-border {
   padding: var(--op-space-x-small) var(--op-space-large);
   cursor: pointer;
   border-left: var(--op-border-width-large) solid transparent;
+  position: relative;
 }
 
 nav button:hover {
@@ -893,11 +894,16 @@ button.btn:disabled {
      thing it positions against — without this it escapes to the page. */
   position: relative;
   background: var(--panel);
-  border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-large);
+  box-shadow: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-block-size: calc(var(--op-space-scale-unit) * 24);
+}
+
+.card:not(:has(.thumb[style])) {
+  border: var(--op-border-width) solid var(--line);
 }
 
 .card:hover {
@@ -913,15 +919,27 @@ button.btn:disabled {
   font-family: var(--m);
   font-size: var(--op-font-x-large);
   letter-spacing: var(--thumb-track);
-  block-size: calc(var(--op-space-scale-unit) * 20);
+  block-size: calc(var(--op-space-scale-unit) * 24);
 }
 
 .card .body {
+  position: absolute;
+  inset: auto 0 0 0;
   padding: var(--op-space-small);
+  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 20%, transparent 100%));
   display: flex;
   flex-direction: column;
   gap: var(--op-space-2x-small);
 }
+
+details.card .body {
+  padding: var(--op-space-small);
+  background: linear-gradient(to top, var(--panel) 10%, transparent 50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-2x-small);
+}
+
 
 .card .nm {
   font-size: var(--op-font-small);
@@ -970,6 +988,34 @@ button.btn:disabled {
   border-radius: var(--op-radius-pill);
   font-family: var(--m);
   background: var(--scrim);
+}
+
+/*
+ * A card's name and what the thing is, on one line.
+ *
+ * The badge used to be laid over the thumbnail. `.kind` is absolutely
+ * positioned for that, so beside a name it has to be taken out of it — done
+ * here by descent rather than with a kind modifier class, because `kind`
+ * is on the legacy ledger and a modifier would deepen a debt that is meant to
+ * be paid down. It keeps the type and the colours, which are what make it
+ * recognisable at a glance.
+ */
+.cardname {
+  display: flex;
+  align-items: baseline;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
+}
+
+.cardname__text {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.cardname .kind {
+  position: static;
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .kind.video {
@@ -1615,6 +1661,13 @@ pre {
   padding: var(--op-space-2x-small) 0;
 }
 
+.btn .badge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0;
+}
+
 .badge {
   display: inline-block;
   margin-left: var(--op-space-x-small);
@@ -2253,7 +2306,8 @@ textarea.fills.form-control {
   position: fixed;
   z-index: 1000;
   inset-block-start: var(--op-space-medium);
-  /* Top right — beside the header actions, where every status now reports. */
+  /* Top right, which is where this app says things now — every status goes here
+     rather than into the panel that caused it. */
   inset-inline-end: var(--op-space-medium);
   inline-size: fit-content;
   max-inline-size: min(52ch, 90vw);
@@ -2269,6 +2323,7 @@ textarea.fills.form-control {
   transform: translateY(-6px);
   transition: opacity 180ms ease, transform 180ms ease;
   pointer-events: none;
+  text-align: start;
 }
 
 .toast--shown {
@@ -2331,6 +2386,7 @@ textarea.fills.form-control {
 }
 
 /*
+/*
  * A chosen clip says so by being outlined, not by keeping a button.
  *
  * "Use this clip" stayed on the card after it was pressed, so the only way to
@@ -2341,6 +2397,15 @@ textarea.fills.form-control {
 .clipcard {
   position: relative;
   cursor: pointer;
+  /*
+   * A floor, because the body is absolute and adds no height.
+   *
+   * A clip card gets its size from the thumbnail, but a voice card has no
+   * picture — its body IS the card, and absolute it left nothing to stand on,
+   * so the card collapsed to zero and the list looked empty. This is what the
+   * body needs: a name, a line of meta, and the waveform with its transport.
+   */
+  min-block-size: calc(var(--op-size-unit) * 34);
 }
 
 .clipcard.on {
@@ -2357,13 +2422,14 @@ textarea.fills.form-control {
  * Small and unlabelled: it is a preference toggle, not a destination, and a
  * word beside it would be the widest thing in a rail that exists to be narrow.
  */
-.sidebar__pin {
+.btn.btn--no-border.sidebar__pin {
   position: absolute;
   inset-block-start: var(--op-space-small);
   inset-inline-end: var(--op-space-small);
   padding: var(--op-space-3x-small);
   width: fit-content;
   color: var(--op-color-neutral-minus-seven);
+  justify-content: center;
 }
 
 .sidebar__pin:hover {
