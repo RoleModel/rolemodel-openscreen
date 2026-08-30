@@ -2162,6 +2162,29 @@
       <button data-el="save" class="btn" type="button">Save wallpaper</button>
    </template>
 
+   <template data-row="api-key-block">
+      <div class="form-group">
+         <label class="form-label">ElevenLabs key</label>
+         <div class="pick">
+            <input data-el="input" type="password" placeholder="ElevenLabs API key — starts with sk_" class="form-control">
+            <button data-el="save" class="btn ghost" type="button">Save the key</button>
+         </div>
+         <div data-el="note" class="form-hint hint"></div>
+      </div>
+   </template>
+
+   <template data-row="slash-item">
+      <div><span data-el="label" style="font-family:var(--font-mono);min-inline-size:9rem"></span><span data-el="hint" style="color:var(--fg-dim);font-size:var(--op-font-x-small)"></span></div>
+   </template>
+
+   <template data-row="multi-assembly-review">
+      <section class="multi-assembly__review"></section>
+   </template>
+
+   <template data-row="multi-assembly-alignment-review">
+      <section class="multi-assembly__alignment-review"></section>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
