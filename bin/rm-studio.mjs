@@ -6924,7 +6924,21 @@ async function fetchVoiceList() {
       if (range) {
         const [a, b] = range.replace("bytes=", "").split("-");
         const start = Number(a);
-        const end = b ? Number(b) : s.size - 1;
+        /*
+         * An open-ended range is answered a chunk at a time, not to the end.
+         *
+         * "bytes=72318976-" means "the rest of it", and these files are not
+         * faststart, so a <video> asking only for metadata sends exactly that to
+         * find the moov atom at the tail. Streaming eighty megabytes to answer it
+         * holds the socket for the whole transfer, and six of those is Chrome's
+         * per-origin limit — after which every request queues, which is what made
+         * two different sign-in buttons do nothing at all.
+         *
+         * A server is allowed to return less than was asked for. The browser
+         * comes back for more if it wants it, and each round trip is short.
+         */
+        const CHUNK = 2 * 1024 * 1024;
+        const end = b ? Number(b) : Math.min(start + CHUNK - 1, s.size - 1);
         res.writeHead(206, {
           "content-type": type,
           "content-range": `bytes ${start}-${end}/${s.size}`,
