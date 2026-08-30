@@ -502,6 +502,110 @@
       </div>
    </template>
 
+   <!-- One Optics form group, cloned by field(). The control node is handed in
+        by the caller; a boolean control is reordered inline by the same rules
+        field() has always applied. -->
+   <template data-row="form-group">
+      <div class="form-group">
+         <label data-el="label" class="form-label"></label>
+      </div>
+   </template>
+
+   <!-- The one-line confirmation about a handover that just happened. -->
+   <template data-row="handoff-note">
+      <p class="hint"></p>
+   </template>
+
+   <!-- A compact Optics switch. The track's label is visually hidden by Optics
+        and gives the input its accessible name. -->
+   <template data-row="small-switch">
+      <div class="switch switch--small">
+         <input data-el="input" type="checkbox" />
+         <label data-el="label"></label>
+      </div>
+   </template>
+
+   <template data-panel="interview">
+      <p class="lede" data-region="main">
+         Answer a few practical questions about the video. Claude turns the conversation
+         into a plan, then uses that plan to draft the script.
+      </p>
+      <p data-el="skillHint" class="hint" data-region="main"></p>
+      <div class="form interview" data-region="main">
+         <section class="interview__question full">
+            <div data-el="questionCount" class="interview__count" hidden></div>
+            <div data-el="questionTitle" class="paper-edit__title" hidden></div>
+            <p data-el="questionHint" class="hint" hidden></p>
+         </section>
+         <div data-el="answerGroup" class="form-group">
+            <label class="form-label" for="interview-answer">Your answer</label>
+            <textarea data-el="answer" id="interview-answer" class="form-control" rows="5"
+               placeholder="Write what you know. A rough answer is enough to move the plan forward."></textarea>
+         </div>
+         <div class="row">
+            <button data-el="submit" class="btn btn--primary" type="button" hidden>Submit answer</button>
+            <button data-el="loadReply" class="btn" type="button" hidden>Load Claude’s reply</button>
+            <button data-el="continueScript" class="btn btn--primary" type="button" hidden>Continue to script</button>
+            <button data-el="openCanvas" class="btn ghost" type="button" hidden>Open canvas</button>
+            <button data-el="startOver" class="btn ghost" type="button" hidden>Start over</button>
+         </div>
+         <section class="interview__plan full">
+            <ol data-el="shots" class="interview__shots" hidden></ol>
+            <p data-el="problems" class="hint" hidden></p>
+         </section>
+         <div data-el="status" class="form-hint full"></div>
+      </div>
+   </template>
+
+   <template data-row="interview-shot">
+      <li><strong data-el="name"></strong><span data-el="intent"></span><span data-el="seconds" class="interview__seconds" hidden></span></li>
+   </template>
+
+   <template data-panel="hyperframes">
+      <p class="lede" data-region="main">
+         Editable motion projects from Claude live here. OpenScreen remains the editor for
+         captured demos and screenshots; use HyperFrames for the generated video, timing,
+         titles and composition.
+      </p>
+      <p data-el="status" class="hint" data-region="main"></p>
+      <div data-el="empty" class="note" data-region="main" hidden>
+         <p>When you make a video from a script, Claude now creates an editable HyperFrames project first. Its source and every later render stay together in this project.</p>
+         <button data-el="makeOne" class="btn" type="button">Make a HyperFrames video</button>
+      </div>
+      <div data-el="grid" class="grid" data-region="main" hidden></div>
+   </template>
+
+   <template data-row="hyperframes-card">
+      <div class="card">
+         <div class="thumbwrap">
+            <div data-el="art" class="thumb"></div>
+            <span data-el="kind" class="kind"></span>
+         </div>
+         <div class="body">
+            <div data-el="name" class="nm"></div>
+            <div data-el="path" class="path"></div>
+            <div data-el="meta" class="meta"></div>
+            <div class="row">
+               <button data-el="open" class="btn" type="button">Open in HyperFrames</button>
+               <button data-el="remove" class="btn ghost btn--small del" type="button">Delete</button>
+            </div>
+            <p data-el="status" class="hint" hidden></p>
+         </div>
+      </div>
+   </template>
+
+   <!-- The embedded editor. Watch row above the frame; a handoff note is
+        prepended when one is pending. -->
+   <template data-row="hyperframes-workspace">
+      <section class="hyperframes-workspace">
+         <label class="hyperframes-workspace__watch">
+            <input data-el="watch" class="form-control form-control--small" type="checkbox" />
+            <span class="form-label">Reload when the composition changes on disk</span>
+         </label>
+         <iframe data-el="frame" class="hyperframes-workspace__frame" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
+      </section>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
