@@ -1,0 +1,35 @@
+/* Main is the writing surface: a brief and the script, stacked. The knobs moved
+   to the rail. */
+.script-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+}
+
+/* Tall, because writing the script is the point of the screen. */
+/*
+ * Tall enough to write a script in, and specific enough to win.
+ *
+ * Optics sets `textarea.form-control:not([type='radio'], [type='checkbox'])` —
+ * specificity (0,2,1) — to `calc(2 * var(--__op-form-control-height))`, which is
+ * 80px. A plain `textarea.script-body` is (0,2,1)'s inferior at (0,1,1) and loses,
+ * which is why this box came out two rows tall.
+ *
+ * Naming both classes matches that specificity, and this sheet loads after Optics,
+ * so it wins on order. The same fight is why the general
+ * `textarea { block-size: var(--field-tall) }` above has never applied to a
+ * `.form-control` textarea, and why every other tall box in this app is sized with
+ * an inline style instead.
+ */
+textarea.form-control.script-body {
+  block-size: 26rem;
+  min-block-size: 26rem;
+}
+
+/* The saved shelf, in the rail. Cards stack rather than grid: the column is one
+   card wide, and a grid of one column is a list with extra steps. */
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
+}

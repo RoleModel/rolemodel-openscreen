@@ -1,0 +1,728 @@
+.canvas-script {
+  border: 1px solid var(--line);
+  border-left-color: var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--op-radius-medium);
+  display: grid;
+  gap: var(--op-space-small);
+  margin-block: var(--op-space-medium);
+  padding: var(--op-space-medium);
+}
+
+.canvas-script__eyebrow {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  text-transform: uppercase;
+}
+
+.canvas-script__body {
+  margin: 0;
+  max-block-size: 8rem;
+  overflow: auto;
+  white-space: pre-line;
+}
+
+.canvas-script__controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+}
+
+.canvas-script__controls .form-control {
+  flex: 1 1 16rem;
+}
+
+.canvas-script__status {
+  margin: 0;
+}
+
+/* ── Storyboard ────────────────────────────────────────────────────────────
+   A canvas, not a list.
+
+   Shots run across, takes stack down. That axis choice is the whole design:
+   reading across says what the video is, reading down one column says what you
+   have for that shot — and the takes you are comparing end up beside each other
+   at the same size, which is the one thing a comparison cannot do without.
+
+   The surface is transformed as a unit rather than scaled through font-size, so
+   zooming changes how much fits on screen and never reflows a card. Reflowing
+   mid-comparison moves the thing you were looking at.                        */
+
+.board {
+  block-size: calc(100dvh - 32rem);
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  /* Pixels, not a proportion. The header, lede, footer and rail are fixed
+     chrome, so a percentage of the viewport overlapped the footer on a laptop
+     and left a gap on a desktop. */
+  min-block-size: 32rem;
+}
+
+.board__scroller {
+  background-color: var(--sunk);
+  /* A dot grid, so panning has something to move against. Without it the board
+     appears frozen while it scrolls under you — the cards move but nothing says
+     the surface did. */
+  background-image: radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0);
+  background-size: 2.4rem 2.4rem;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  block-size: 100%;
+  cursor: grab;
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
+.board__scroller--panning {
+  cursor: grabbing;
+  /* Text selection while dragging the canvas turns a pan into a highlight. */
+  user-select: none;
+}
+
+/* The canvas proper: a fixed coordinate space, scaled as a unit.
+
+   `position: relative` makes it the containing block every node is positioned
+   against, so a node's `left`/`top` are canvas units and nothing has to convert
+   them. Both layers sit inside this one transform, which is what keeps a node
+   and the wire leaving it from ever disagreeing about where its port is. */
+.board__surface {
+  block-size: 9000px;
+  inline-size: 12000px;
+  position: relative;
+  transform-origin: 0 0;
+}
+
+/* Underneath the nodes, and never in the way of a pointer except on a wire
+   itself — `pointer-events: none` here with `auto` on the hit paths. Without
+   that, an SVG the size of the canvas swallows every click on the board. */
+.board__wires {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.board__nodes {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.board__nodes > * {
+  pointer-events: auto;
+}
+
+.board__wire {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.board__wire-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+/* A fat transparent path over the thin visible one. A 3px line is a 3px click
+   target, which is not one — this makes the wire grabbable without drawing
+   anything. */
+.board__wire-hit {
+  fill: none;
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-width: 22;
+}
+
+.board__wire:hover .board__wire-line {
+  stroke: var(--danger);
+  stroke-width: 4;
+}
+
+/* The wire in the air. Dashed, because it is a proposal rather than a
+   connection, and red the moment it is over something it cannot land on. */
+.board__wire-draft {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 10 8;
+  stroke-width: 3;
+}
+
+.board__wire-draft--bad {
+  stroke: var(--danger);
+}
+
+/* ── a node ── */
+
+.board__node {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  block-size: 260px;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-2x-small);
+  inline-size: 360px;
+  padding: var(--op-space-small);
+  position: absolute;
+  /* Not `transition: left/top` — a dragged node must track the pointer exactly,
+     and easing its position puts the card behind the cursor. */
+}
+
+.board__node:active {
+  cursor: grabbing;
+}
+
+.board__node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.board__node-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+}
+
+.board__node-name {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+  line-height: 1.2;
+}
+
+.board__node-intent {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board__node-actions {
+  display: flex;
+  gap: var(--op-space-2x-small);
+}
+
+.board__node-select,
+.board__node-edit,
+.board__node-remove {
+  flex: 1 1 0;
+  background: transparent;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--op-font-2x-small);
+  min-block-size: 2.5rem;
+  padding: var(--op-space-3x-small) var(--op-space-x-small);
+}
+
+.board__node-select[aria-pressed='true'] {
+  background: color-mix(in oklch, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.board__node-select:hover,
+.board__node-select:focus-visible,
+.board__node-edit:hover,
+.board__node-edit:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.board__node-remove {
+  color: var(--danger);
+}
+
+.board__node-remove:hover,
+.board__node-remove:focus-visible {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.board__node-shot {
+  aspect-ratio: var(--video-ar);
+  overflow: hidden;
+  background-color: var(--sunk);
+  background-position: center;
+  background-size: cover;
+  border-radius: var(--op-radius-small);
+  flex: 1;
+  min-block-size: 0;
+  position: relative;
+}
+
+/* A saved scene is a visual asset. Scale its real stage into the canvas card so
+   the title, shader, image, or other treatment is visible before opening it. */
+.board__scene-preview {
+  aspect-ratio: var(--video-ar);
+  background: var(--sunk);
+  border-radius: var(--op-radius-small);
+  flex: 1;
+  min-block-size: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.board__scene-frame {
+  block-size: 400%;
+  border: 0;
+  display: block;
+  inset: 0;
+  inline-size: 400%;
+  pointer-events: none;
+  position: absolute;
+  transform: scale(0.25);
+  transform-origin: top left;
+}
+
+.board__scene-label {
+  background: color-mix(in oklch, var(--panel) 82%, transparent);
+  border-radius: var(--op-radius-small);
+  bottom: var(--op-space-3x-small);
+  color: var(--fg);
+  font-size: var(--op-font-2x-small);
+  inset-inline-end: var(--op-space-3x-small);
+  padding: 0.15rem 0.35rem;
+  position: absolute;
+}
+
+.board__node-empty {
+  align-items: center;
+  background: var(--panel2);
+  border-radius: var(--op-radius-small);
+  color: var(--muted);
+  display: flex;
+  flex: 1;
+  font-size: var(--op-font-2x-small);
+  justify-content: center;
+}
+
+/* ── ports ── */
+
+/* Half outside the card, so a wire visibly leaves the edge rather than starting
+   inside it. Vertically centred, which is what makes the horizontal Bézier read
+   as a cable. */
+.board__port {
+  background: var(--panel2);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  block-size: 18px;
+  inline-size: 18px;
+  inset-block-start: calc(50% - 9px);
+  position: absolute;
+}
+
+.board__port--in {
+  inset-inline-start: -9px;
+}
+
+.board__port--out {
+  cursor: crosshair;
+  inset-inline-end: -9px;
+}
+
+.board__port--out:hover {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+/* ── a shot ── */
+
+.board__slot {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+  flex: none;
+  inline-size: 26rem;
+  padding: var(--op-space-small);
+}
+
+.board__slot-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+}
+
+/* The number is the running order and therefore the only thing on this board
+   that is not a judgement — set apart from the name for that reason. */
+.board__slot-order {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.board__slot-name {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+  line-height: 1.2;
+}
+
+.board__slot-intent {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  line-height: 1.4;
+}
+
+.board__slot-state {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+  margin-block-start: var(--op-space-3x-small);
+}
+
+/* State reads as a word, not a colour alone: "nothing shot yet" is the thing
+   somebody acts on, and a bare coloured dot would make them hover to find out. */
+.board__flag {
+  border-radius: var(--op-radius-small);
+  font-size: var(--op-font-2x-small);
+  letter-spacing: var(--op-letter-spacing-label);
+  padding: var(--op-space-3x-small) var(--op-space-2x-small);
+  text-transform: uppercase;
+}
+
+.board__flag--empty {
+  background: var(--panel2);
+  color: var(--muted);
+}
+
+.board__flag--open {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+
+.board__flag--set {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.board__slot-target {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.board__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+}
+
+/* ── a take ── */
+
+.board__take {
+  background: var(--bg);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-2x-small);
+  overflow: hidden;
+  padding: 0 0 var(--op-space-2x-small);
+}
+
+/* The winner is outlined, not tinted. A tint competes with the thumbnail, which
+   is the thing being judged; a ring sits outside it and leaves the frame alone. */
+.board__take--chosen {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.board__shot {
+  aspect-ratio: var(--video-ar);
+  background-color: var(--sunk);
+  background-position: center;
+  background-size: cover;
+  display: block;
+  position: relative;
+}
+
+.board__len,
+.board__badge {
+  background: var(--scrim);
+  border-radius: var(--op-radius-small);
+  color: var(--op-color-neutral-plus-max);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  padding: var(--op-space-3x-small) var(--op-space-2x-small);
+  position: absolute;
+}
+
+.board__len {
+  inset-block-end: var(--op-space-2x-small);
+  inset-inline-end: var(--op-space-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.board__badge {
+  background: var(--accent);
+  color: var(--on-accent);
+  inset-block-start: var(--op-space-2x-small);
+  inset-inline-start: var(--op-space-2x-small);
+  letter-spacing: var(--op-letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.board__take-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  padding-inline: var(--op-space-2x-small);
+  padding-block-start: var(--op-space-2x-small);
+}
+
+.board__take-name {
+  font-size: var(--op-font-x-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board__take-span {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── rating ── */
+
+.board__rate {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  grid-template-columns: repeat(4, 1fr);
+  padding-inline: var(--op-space-2x-small);
+}
+
+.board__vote {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-small);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--op-font-2x-small);
+  padding: var(--op-space-3x-small) 0;
+}
+
+.board__vote:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+/* Your own vote, not the winning one. The tally below says what everybody
+   thinks; this says what you said, which is the thing you change. */
+.board__vote--mine {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.board__tally {
+  align-items: baseline;
+  display: flex;
+  gap: var(--op-space-2x-small);
+  padding-inline: var(--op-space-2x-small);
+}
+
+.board__score {
+  font-family: var(--m);
+  font-size: var(--op-font-small);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--op-font-weight-bold);
+}
+
+.board__votes {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+}
+
+.board__take-acts {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  padding-inline: var(--op-space-2x-small);
+}
+
+/* Quiet, because the green already means something here.
+
+   `.btn` in this app is the accent, so a full-width green button on every card
+   put the loudest colour on the screen four times in a column — and the same
+   green is what marks the take that WON. State and action were saying the same
+   thing in the same voice, which left neither legible. The ring and the badge
+   keep the accent; the action that produces them is a bordered button. */
+.board__take-acts .btn {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 var(--op-border-width) var(--line);
+  color: var(--muted);
+  inline-size: 100%;
+}
+
+.board__take-acts .btn:hover {
+  box-shadow: inset 0 0 0 var(--op-border-width) var(--accent);
+  color: var(--fg);
+}
+
+/* Except on the take that won, where the action is to undo it — and that is
+   worth being able to find. */
+.board__take--chosen .board__take-acts .btn {
+  color: var(--fg);
+}
+
+/* ── adding one ── */
+
+.board__take--add {
+  background: var(--panel2);
+  border-style: dashed;
+  gap: var(--op-space-2x-small);
+  padding: var(--op-space-small);
+}
+
+.board__add-head {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+}
+
+.board__add-note {
+  color: var(--muted);
+  font-size: var(--op-font-2x-small);
+  line-height: 1.4;
+}
+
+.board__add-file {
+  inline-size: 100%;
+}
+
+/* Two rows, not three columns. At a 26rem column an in/out pair and a button
+   side by side left the number fields narrower than the word "from", so both
+   placeholders were clipped to "fr(" — the two fields nobody can guess the
+   meaning of were the two that could not show their labels. */
+.board__add-row {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  grid-template-columns: 1fr 1fr;
+}
+
+.board__add-row .btn {
+  grid-column: 1 / -1;
+}
+
+/* min-inline-size:0 or a number input refuses to shrink below its content and
+   the third column is pushed out of the card. */
+.board__add-num {
+  min-inline-size: 0;
+}
+
+/* ── empty, and the rail ── */
+
+.board__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+  margin: auto;
+  max-inline-size: 44rem;
+  padding: var(--op-space-2x-large);
+  text-align: center;
+}
+
+.board__empty-head {
+  font-size: var(--op-font-large);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.board__empty-body {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.board__empty .btn {
+  margin-inline: auto;
+}
+
+textarea.form-control.board__brief {
+  block-size: 18rem;
+  min-block-size: 18rem;
+}
+
+.board__brief {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  inline-size: 100%;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.board__zoom {
+  align-items: center;
+  display: flex;
+  gap: var(--op-space-2x-small);
+}
+
+.board__zoom-label {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  min-inline-size: 5rem;
+  text-align: center;
+}
+
+/* The sharing setup: four fields, a sign-in and a test, and every one of them
+   meaningless while sharing is off. Hidden rather than dimmed, for the reason
+   the Record panel hides its attach fields — a control that cannot apply yet is
+   better absent than disabled, and the rail gets shorter. */
+.board__setup {
+  border-block-start: var(--op-border-width) solid var(--line);
+  margin-block-start: var(--op-space-small);
+  padding-block-start: var(--op-space-small);
+}
+
+.board__setup-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+}
+
+/* The hint carries a two-line explanation with a blank line in it — "what this
+   is", then "why it is not on yet" — and the default collapses that to one
+   paragraph, which is where the reason stops being findable. */
+.board__brief + .hint,
+.form-group + .hint {
+  white-space: pre-line;
+}
+
+/* The selected node, at the top of the rail — the node says what the shot IS,
+   the rail is where its alternatives are compared. */
+.board__picked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  margin-block-end: var(--op-space-small);
+}
+
+.board__picked-name {
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.board__rail-sep {
+  border-block-start: var(--op-border-width) solid var(--line);
+  margin-block: var(--op-space-small);
+}
+
+/* Gives the scroller its extent. The surface is transformed, and a transform
+   does not change layout — without this the board scrolls as if it were always
+   at 100% however far you zoom out. */
+.board__spacer {
+  pointer-events: none;
+}

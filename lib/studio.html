@@ -90,8 +90,8 @@
       `.append()` per view, where the structure was something you reconstructed by
       reading code rather than something you could see. The templates live one
       file per feature in lib/templates/ (each with its styles in a sibling
-      .css); the server folds every one of them back into this document right
-      here, before </body>, so mountPanel and mountRow find them in the page.
+      .css); the server folds every one of them back into this document above the
+      scripts, so they are parsed before any code can ask for one.
 
       `data-region` says where a block goes — `main` into the page content,
       `side` into Optics' right sidebar, `footer` into its page footer. The last
@@ -101,6 +101,9 @@
       `data-el` is a handle. mountPanel() returns a map of them, so the JS wires
       behaviour to named nodes and never builds any.
    -->
+
+   <!-- rm:templates — the server folds lib/templates/*.html in here, before the
+        scripts, so the templates are parsed before any code can ask for one. -->
 
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->

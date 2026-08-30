@@ -1,0 +1,133 @@
+.ctl {
+  display: grid;
+  grid-template-columns: var(--ctl-col) 1fr auto;
+  gap: var(--op-space-x-small);
+  align-items: center;
+  font-size: var(--op-font-x-small);
+}
+
+.ctl label {
+  color: var(--muted);
+}
+
+.ctl .v {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+  min-width: var(--ctl-val);
+  text-align: right;
+}
+
+.ctl .wide {
+  grid-column: 2/-1;
+}
+
+.ctl input[type='color'] {
+  width: 100%;
+  height: var(--op-input-height-small);
+  padding: 0;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  background: none;
+  cursor: pointer;
+}
+
+/* Optics gives .form-control a fixed 40px block-size, right for a text field
+         and wrong for a slider in a dense row. */
+/*
+ * A slider is not a text box.
+ *
+ * Optics' `.form-control` gives every control the same box — a border, a fill and
+ * a fixed 40px block-size — which is right for something you type into and wrong
+ * for a track with a thumb on it. The border drew a rectangle around the track,
+ * so every dial read as an input containing a slider rather than as a slider, and
+ * in the narrow rail that rectangle is what made the row look boxed-in.
+ */
+.ctl input[type='range'].form-control {
+  background: none;
+  block-size: auto;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.ctl input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/*
+ * The wallpaper dials, once they live in a 340px rail.
+ *
+ * `.ctl` is `<label> <control> <value>` on one line, which was right when the
+ * editor drew itself a wide right-hand half. In the page's own rail the label
+ * takes 96px and the control 195px, leaving the value column to collapse to
+ * ZERO — the angle read "12" with the degrees clipped off — and the gradient
+ * stops, which are a four-column grid nested in that 195px, lost their remove
+ * button off the end entirely.
+ *
+ * So in the rail the label goes on its own line and the control gets the width.
+ * Nothing about the editor changes; this is the column telling the row how much
+ * room there is.
+ */
+.panel-config .ctl {
+  grid-template-columns: 1fr auto;
+}
+
+.panel-config .ctl > .form-label,
+.panel-config .ctl > .wide {
+  grid-column: 1 / -1;
+}
+
+/*
+ * Reference pictures in the rail, as pictures.
+ *
+ * Two columns because the rail is 320px and a video reference is judged on what
+ * it looks like; the filename is the tooltip. Selection is a ring rather than a
+ * checkbox — the tile is the control.
+ */
+.refshelf {
+  /* auto-fit, not auto-fill: auto-fill holds empty tracks open and leaves a row
+     of gaps to the right of the last picture. */
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: var(--op-space-2x-small);
+}
+
+.refshelf__tile {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--op-radius-medium, 8px);
+  background: none;
+  cursor: pointer;
+}
+
+.refshelf__tile.on {
+  border-color: var(--op-color-academy-primary-base);
+}
+
+.refshelf__art {
+  /* Square, not 16:9. A reference is a picture of a thing, not a frame, and the
+     widescreen boxes left a column of gaps down the rail. */
+  block-size: var(--shelf-art-size);
+  border-radius: var(--op-radius-small, 6px);
+  background-position: center;
+  background-size: cover;
+}
+
+/*
+ * The avatar pickers: a face and a voice, both sized to what they are.
+ *
+ * These sit in the main column, not the rail, and .refshelf's auto-fit tracks
+ * stretch to fill it — with one picture in the project that made a single tile
+ * as wide as the page, cropped to a letterbox strip through the middle of
+ * somebody's face. Fixed square tracks instead, laid out from the left, so one
+ * picture is one picture whether there are one or twenty.
+ */
+.refshelf--faces {
+  grid-template-columns: repeat(auto-fill, var(--shelf-art-size));
+  justify-content: start;
+}
+
+.refshelf--faces .refshelf__art {
+  inline-size: var(--shelf-art-size);
+}

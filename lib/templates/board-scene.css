@@ -1,0 +1,66 @@
+/* A canvas card is a summary. This is where a person says what it means and
+   attaches the footage that can fulfil it, without competing with pan and drag. */
+.board-scene {
+  display: grid;
+  gap: var(--op-space-large);
+  max-inline-size: 58rem;
+  padding: var(--op-space-large);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--panel);
+}
+
+.board-scene__title {
+  margin: 0;
+  text-wrap: balance;
+}
+
+.board-scene__form {
+  max-inline-size: none;
+}
+
+.board-scene__media {
+  display: grid;
+  gap: var(--op-space-medium);
+  padding-block-start: var(--op-space-large);
+  border-block-start: var(--op-border-width) solid var(--line);
+}
+
+.board-scene__media h3 {
+  margin: 0;
+  font-size: var(--op-font-medium);
+}
+
+/* Footage belongs to the canvas scene it fulfils. Keep the picture and its
+   transcript together here, rather than asking people to leave Canvas, make an
+   unscoped paper edit, then remember which shot it was for. */
+.board-scene__review {
+  display: grid;
+  gap: var(--op-space-small);
+  padding-block-start: var(--op-space-medium);
+  border-block-start: var(--op-border-width) solid var(--line);
+}
+
+.board-scene__review h3 {
+  margin: 0;
+  font-size: var(--op-font-medium);
+}
+
+.board-scene__player {
+  background: var(--op-color-background);
+  border-radius: var(--op-radius-medium);
+  inline-size: 100%;
+  max-block-size: 26rem;
+}
+
+.board-scene__review-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+  justify-content: space-between;
+}
+
+.board-scene__lines {
+  max-block-size: 24rem;
+}

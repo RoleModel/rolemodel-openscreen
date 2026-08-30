@@ -1,0 +1,77 @@
+.con {
+  display: grid;
+  grid-template-columns: var(--joblist-w) 1fr;
+  gap: var(--op-space-medium);
+  align-items: start;
+}
+
+.job .jl {
+  font-size: var(--op-font-x-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  word-break: break-word;
+}
+
+.job .js {
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  color: var(--muted);
+}
+
+.job .js.run {
+  color: var(--accent);
+}
+
+.job .js.bad {
+  color: var(--danger-fg);
+}
+
+.log {
+  background: var(--sunk);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  padding: 0 var(--op-space-small);
+
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  line-height: var(--op-line-height-base);
+  height: var(--panel-h);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+}
+
+.log::before {
+  content: 'Console';
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  margin-inline: calc(var(--op-space-small) * -1);
+  margin-block-end: var(--op-space-small);
+  inset-block-start: 0;
+  padding: var(--op-space-small);
+  block-size: var(--op-space-2x-large);
+  border-block-end: var(--op-border-width) solid var(--line);
+  background-color: var(--op-color-neutral-plus-max);
+}
+
+.log .e {
+  color: var(--danger-fg);
+}
+
+.log .m {
+  color: var(--muted);
+}
+
+.cmd {
+  display: flex;
+  gap: var(--op-space-x-small);
+  margin-top: var(--op-space-small);
+}
+
+.cmd input {
+  flex: 1;
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}

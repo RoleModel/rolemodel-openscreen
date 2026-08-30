@@ -1,0 +1,63 @@
+/* Voice is deliberately a single work surface. The script is the thing being
+   reviewed; provider and voice live in the rail, and progress belongs below the
+   lines instead of turning the page into a terminal transcript. */
+.voice {
+  display: grid;
+  gap: var(--op-space-medium);
+  max-inline-size: none;
+}
+
+.voice__script {
+  display: grid;
+  gap: var(--op-space-small);
+  padding: var(--op-space-large);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
+.voice__label {
+  margin: 0;
+  font-size: var(--op-font-medium);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.voice__lines {
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-block-size: min(48vh, 32rem);
+  min-block-size: 14rem;
+  overflow: auto;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+/* Not a primary action: it sits under the note it belongs to, at its own width,
+   rather than stretching the width of the editor like Build does. */
+.voice__reload {
+  align-self: start;
+}
+
+.voice__estimate,
+.voice__saved,
+.voice__status,
+.voice__output {
+  margin: 0;
+}
+
+.voice__estimate,
+.voice__output {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}
+
+.voice__result {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.voice__status {
+  font-style: normal;
+  line-height: var(--op-line-height-base);
+}

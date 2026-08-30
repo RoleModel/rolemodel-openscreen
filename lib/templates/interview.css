@@ -1,0 +1,34 @@
+/* ── Interview ──────────────────────────────────────────────────────────── */
+
+.interview__question,
+.interview__plan {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  padding: var(--op-space-medium);
+}
+
+.interview__question {
+  background: color-mix(in oklch, var(--accent) 7%, var(--panel));
+}
+
+.interview__count,
+.interview__seconds {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}
+
+.interview__shots {
+  display: grid;
+  gap: var(--op-space-small);
+  margin: 0;
+  padding-inline-start: 1.4rem;
+}
+
+.interview__shots li {
+  padding-inline-start: var(--op-space-3x-small);
+}
+
+.interview__seconds {
+  margin-inline-start: var(--op-space-small);
+}

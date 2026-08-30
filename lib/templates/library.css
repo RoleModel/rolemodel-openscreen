@@ -1,0 +1,131 @@
+/* ── the library index ────────────────────────────────────
+         A project is a card with art, a caption and a footer — the thing you
+         navigate by. It used to be a heading above a wall of every file in every
+         project, which buries the projects themselves. */
+.libbar {
+  display: flex;
+  gap: var(--op-space-medium);
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: var(--op-space-small);
+  margin-bottom: var(--op-space-3x-large);
+  border-bottom: var(--op-border-width) solid var(--line);
+}
+
+.libbar input[type='search'] {
+  flex: 1 1 var(--search-min);
+  min-width: 0;
+}
+
+.seg {
+  display: flex;
+  gap: var(--op-space-3x-small);
+  padding: var(--op-space-3x-small);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--sunk);
+}
+
+.segbtn {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  padding: var(--op-space-2x-small) var(--op-space-small);
+  border-radius: var(--op-radius-medium);
+  cursor: pointer;
+}
+
+.segbtn[aria-pressed='true'] {
+  background: var(--panel2);
+  color: var(--fg);
+}
+
+.libpick {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  align-items: baseline;
+}
+
+.libpicklabel {
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+}
+
+/* Reads as a label you can change, not a form control in a toolbar. */
+.libselect {
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  font-weight: var(--op-font-weight-semi-bold);
+  padding: 0;
+  cursor: pointer;
+  block-size: auto;
+}
+
+.projgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+  gap: var(--op-space-large);
+}
+
+.projgrid--list {
+  display: grid;
+  gap: var(--op-space-x-small);
+}
+
+.projgrid .projcard:not(.projcard--new)::before {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='147' height='20' viewBox='0 0 147 20' fill='none'%3E%3Cmask id='path-1-inside-1_13448_24047' fill='white'%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z'/%3E%3C/mask%3E%3Cpath d='M0 12C0 5.37258 5.37258 0 12 0H135C141.627 0 147 5.37258 147 12V20H0V12Z' fill='oklch(21.38%25 0 285.62)'/%3E%3Cpath d='M-1 12C-1 4.8203 4.8203 -1 12 -1H135C142.18 -1 148 4.8203 148 12H146C146 5.92487 141.075 1 135 1H12C5.92487 1 1 5.92487 1 12H-1ZM1 12M147 20H0H147M-1 20V12C-1 4.8203 4.8203 -1 12 -1V1C5.92487 1 1 5.92487 1 12V20H-1ZM135 -1C142.18 -1 148 4.8203 148 12V20H146V12C146 5.92487 141.075 1 135 1V-1Z' fill='%23323335' mask='url(%23path-1-inside-1_13448_24047)'/%3E%3C/svg%3E%0A");
+  position: absolute;
+  z-index: 0;
+  top: -19px;
+  left: 0px;
+}
+
+/* In list mode the art becomes a stripe: the row is the unit, not the image. */
+.projgrid--list .projcard {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--op-space-small);
+  padding-inline-end: var(--op-space-small);
+}
+
+.projgrid--list .projcard__art {
+  aspect-ratio: auto;
+  inline-size: calc(var(--op-space-scale-unit) * 12);
+  border-radius: var(--op-radius-medium);
+  block-size: var(--op-space-4x-large);
+  flex: 0 0 auto;
+}
+
+.projgrid--list .projcard__cap,
+.projgrid--list .projcard__foot {
+  padding: var(--op-space-x-large);
+  border: 0;
+  flex: 1 1 auto;
+}
+
+.projgrid__plus {
+  inline-size: var(--op-space-2x-large);
+  block-size: var(--op-space-2x-large);
+  border-radius: var(--op-radius-circle);
+  background: var(--panel2);
+  display: grid;
+  place-items: center;
+  font-size: var(--op-font-large);
+  color: var(--fg);
+}
+
+.projgrid__head {
+  display: flex;
+  gap: var(--op-space-x-small);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.projgrid__head .nm {
+  font-size: var(--op-font-medium);
+}

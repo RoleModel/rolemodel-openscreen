@@ -1,0 +1,86 @@
+/* The stage and the parts list, stacked. Explicit because they are no longer
+         inside a `.form`, whose `.full` rule used to supply the gap. */
+.panel-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-small);
+}
+
+.panel-cards {
+  display: grid;
+  gap: var(--op-space-small);
+}
+
+.scene-frame {
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--bg);
+}
+
+/* The bin on a part card. Bigger than the reorder arrows beside it, because it is
+   the one action on the card you cannot undo. 1rem is 10px here — see the top. */
+.kill .hgi-stroke {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+/* A slider and the number it is currently at. The readout is fixed-width so the
+   row does not jitter as the value passes 9 and 99. */
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.range-row input[type='range'] {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.range-row .path {
+  flex: 0 0 auto;
+  min-inline-size: 4rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The real scene editor is also the footage-review surface for a Canvas node.
+   The stage stays put while the rail answers the next question: which spoken
+   passage actually fulfils this scene? */
+.scene-footage-review {
+  display: grid;
+  gap: var(--op-space-small);
+  margin-block-start: var(--op-space-small);
+  grid-template-columns: 1fr;
+}
+
+.scene-footage-review__player {
+  background: var(--op-color-background);
+  border-radius: var(--op-radius-medium);
+  inline-size: 100%;
+  max-block-size: 18rem;
+}
+
+.scene-footage-review__suggestions,
+.scene-footage-review__manual {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.scene-footage-review__suggestion {
+  align-items: start;
+  display: grid;
+  gap: var(--op-space-2x-small);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.scene-footage-review__suggestion span {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+}
+
+.scene-footage-review__lines {
+  max-block-size: 80rem;
+}

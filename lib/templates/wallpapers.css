@@ -1,0 +1,31 @@
+/*
+ * The artwork, in main.
+ *
+ * This used to be the left half of a two-column grid the editor drew for itself,
+ * with the dials in the right half and Save under them. Those are the page's own
+ * columns now — main, the rail, the footer — so the preview is simply as wide as
+ * the column it is in.
+ */
+ 
+ .wpprev {
+  margin-block-end: var(--op-space-medium)
+ }
+
+ 
+.wpprev canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--op-radius-large);
+  border: var(--op-border-width) solid var(--line);
+  background: var(--sunk);
+}
+
+.wpgrid .card {
+  cursor: pointer;
+}
+
+.wpgrid .card[aria-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 var(--op-border-width) var(--accent);
+}

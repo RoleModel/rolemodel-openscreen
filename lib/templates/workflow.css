@@ -1,0 +1,166 @@
+/* ── Guided video workflow ──────────────────────────────────────────────── */
+
+.workflow {
+  display: grid;
+  gap: var(--op-space-large);
+  grid-template-columns: minmax(0, 1fr);
+  margin-block-start: var(--op-space-medium);
+}
+
+/* The stage strip lives in the persistent header. The workflow landing view is
+   intentionally just the next action, not a second large navigation card. */
+.workflow--next {
+  gap: 0;
+  max-inline-size: 48rem;
+}
+
+.workflow__timeline {
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workflow__stage {
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  padding: var(--op-space-small);
+  position: relative;
+}
+
+.workflow__stage:last-child {
+  padding-block-end: var(--op-space-small);
+}
+
+.workflow__stage-button {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--op-space-small);
+  inline-size: 100%;
+  min-block-size: 5.25rem;
+  padding: 0;
+  text-align: start;
+}
+
+.workflow__marker {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+  block-size: var(--op-space-x-large);
+  inline-size: var(--op-space-x-large);
+  min-inline-size: var(--op-space-x-large);
+  position: static;
+}
+
+.workflow__stage-copy {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  min-inline-size: 0;
+}
+
+.workflow__stage-copy strong {
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.workflow__stage-copy span {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.workflow__stage--done .workflow__marker {
+  background: color-mix(in oklch, var(--accent) 18%, var(--panel));
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.workflow__stage--active .workflow__marker {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.workflow__stage--active .workflow__stage-copy strong {
+  color: var(--accent);
+}
+
+.workflow__panel {
+  align-content: start;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  gap: var(--op-space-small);
+  padding: var(--op-space-medium);
+  background-color: var(--panel);
+  border-radius: var(--op-radius-large);
+  box-shadow: 0 0 0 var(--op-border-width) var(--line) inset;
+}
+
+.workflow__eyebrow {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.workflow__title {
+  font-size: var(--op-font-large);
+  margin: 0;
+  text-wrap: balance;
+}
+
+.workflow__body {
+  color: var(--muted);
+  margin: 0;
+  max-inline-size: 44rem;
+  text-wrap: pretty;
+}
+
+.workflow__status {
+  border-block-start: 1px solid var(--line);
+  color: var(--muted);
+  margin: 0;
+  padding-block-start: var(--op-space-medium);
+}
+
+.workflow__action-note {
+  color: var(--muted);
+  margin: 0;
+  min-block-size: 1.5em;
+}
+
+@media (max-width: 780px) {
+  .workflow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workflow__timeline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflow__stage-button {
+    min-block-size: 4.5rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .workflow__timeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
