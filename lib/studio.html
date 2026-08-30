@@ -1432,6 +1432,50 @@
       </div>
    </template>
 
+   <!-- HyperFrames' small navigation set, beside the other page-level controls. -->
+   <template data-row="hyperframes-header-actions">
+      <div class="btn-group">
+         <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">Project media</button>
+         <button data-el="all" class="btn ghost btn--small" type="button">All compositions</button>
+         <button data-el="revise" class="btn btn--primary btn--small" type="button" hidden>Redo with Claude</button>
+         <button data-el="reload" class="btn ghost btn--small" type="button">Reload</button>
+      </div>
+   </template>
+
+   <!-- A saved script, as a card on the Scripts shelf. -->
+   <template data-row="script-saved">
+      <div class="card" style="cursor:pointer">
+         <div class="body">
+            <div data-el="name" class="nm"></div>
+            <div data-el="snippet" class="path"></div>
+            <div data-el="brief" class="path" hidden></div>
+         </div>
+      </div>
+   </template>
+
+   <!-- The project/stage menus share one shell: a trigger and a role=menu list. -->
+   <template data-row="projmenu">
+      <div class="projmenu">
+         <button data-el="trigger" class="projmenu__trigger" type="button" aria-haspopup="menu" aria-expanded="false"></button>
+         <div data-el="menu" class="projmenu__menu" role="menu" hidden></div>
+      </div>
+   </template>
+
+   <template data-row="colormenu">
+      <div class="colormenu">
+         <button data-el="trigger" class="colormenu__trigger" type="button" aria-haspopup="true" aria-expanded="false">
+            <span data-el="chip" class="colormenu__chip"></span><span data-el="label" class="colormenu__label"></span><span class="colormenu__caret">▾</span>
+         </button>
+         <div data-el="panel" class="colormenu__panel" role="listbox" hidden></div>
+      </div>
+   </template>
+   <template data-row="colormenu-row">
+      <div class="colormenu__row"><span data-el="family" class="colormenu__family"></span><div data-el="ramp" class="colormenu__ramp"></div></div>
+   </template>
+   <template data-row="colormenu-swatch"><button class="colormenu__swatch" type="button" role="option"></button></template>
+   <template data-row="colormenu-swatch-none"><button class="colormenu__swatch colormenu__swatch--none" type="button" role="option">—</button></template>
+   <template data-row="colormenu-swatch-dead"><button class="colormenu__swatch colormenu__swatch--dead" type="button" disabled></button></template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
