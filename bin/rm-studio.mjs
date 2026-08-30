@@ -3968,20 +3968,33 @@ const server = createServer(async (req, res) => {
        * Checked here for the same reason the clip path is: a bad pair should be
        * a sentence in the panel, not a paid job that dies minutes in.
        */
-      if (takesOf(spec) === "image+audio") {
-        const image = inside(b.image);
+      if (takesOf(spec) !== "video") {
+        const lipsync = takesOf(spec) === "video+audio";
+        /* A lipsync keeps the real take and re-times its mouth, so its subject
+           is a clip from the grid; an avatar's is a photograph. */
+        const faceRel = lipsync ? String(b.file ?? "") : String(b.image ?? "");
+        const face = inside(faceRel);
         const audio = inside(b.audio);
-        if (!image || !audio) return json(res, 400, { error: "pick a picture and a voice track" });
-        const wrong = await avatarProblem({ image, audio });
+        if (!face || !audio) return json(res, 400, { error: `pick a ${lipsync ? "clip" : "picture"} and a voice track` });
+        const wrong = await avatarProblem({ ...(lipsync ? { video: face } : { image: face }), audio, model });
         if (wrong) return json(res, 400, { error: wrong });
         const args = [
           join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--model", model,
-          "--image", String(b.image), "--audio", String(b.audio),
+          ...(lipsync ? ["--file", faceRel] : ["--image", faceRel]),
+          "--audio", String(b.audio),
         ];
         const say = String(b.prompt ?? "").trim();
         if (say) args.push("--prompt", say);
+        const mode = String(b.syncMode ?? "");
+        if (lipsync && spec.limits.syncModes?.includes(mode)) args.push("--sync-mode", mode);
         return json(res, 200, {
-          step: { bin: process.execPath, args, label: `avatar ${basename(String(b.audio))}`, project: id, cwd: TOOLKIT },
+          step: {
+            bin: process.execPath,
+            args,
+            label: `${lipsync ? "lipsync" : "avatar"} ${basename(faceRel)}`,
+            project: id,
+            cwd: TOOLKIT,
+          },
         });
       }
 
