@@ -899,7 +899,7 @@ button.btn:disabled {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-block-size: calc(var(--op-space-scale-unit) * 24);
+  min-block-size: fit-content;
 }
 
 .card:not(:has(.thumb[style])) {
