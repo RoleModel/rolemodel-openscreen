@@ -1169,6 +1169,96 @@
    <template data-row="paper-edit-word-button"><button class="paper-edit__word" type="button"></button></template>
    <template data-row="paper-edit-word"><span class="paper-edit__word"></span></template>
 
+   <template data-row="control-form"><div class="form"></div></template>
+   <template data-row="control-client"><div class="client"></div></template>
+
+   <template data-panel="review">
+      <div data-el="status" class="hint" data-region="main"></div>
+      <div data-el="body" data-region="main"></div>
+   </template>
+
+   <template data-row="review-note">
+      <div class="note"><p>OpenFrame is where a client leaves timestamped notes on a video. It runs itself — bring it up with Docker, then point this at it.</p></div>
+   </template>
+
+   <template data-row="review-link">
+      <div class="runrow">
+         <code data-el="url"></code>
+         <button data-el="copy" class="btn ghost" type="button">Copy link</button>
+         <button data-el="open" class="btn ghost" type="button">Open</button>
+      </div>
+   </template>
+
+   <!-- One video out for review: art, facts, and a row of icon actions. -->
+   <template data-row="review-card">
+      <div class="card">
+         <div data-el="art" class="projcard__art" hidden></div>
+         <div class="body">
+            <div data-el="title" class="nm"></div>
+            <div data-el="where" class="path"></div>
+            <div data-el="facts" class="path"></div>
+            <div data-el="acts" style="display:flex;gap:var(--op-space-2x-small);flex-wrap:wrap">
+               <button data-el="checkIt" class="btn ghost" type="button" title="Check for feedback" aria-label="Check for feedback"></button>
+               <button data-el="openIt" class="btn ghost" type="button" title="Open in OpenFrame" aria-label="Open in OpenFrame"></button>
+               <button data-el="copyIt" class="btn ghost" type="button" title="Copy link" aria-label="Copy the share link"></button>
+            </div>
+            <div data-el="state" class="hint"></div>
+            <div data-el="why" class="hint"></div>
+         </div>
+      </div>
+   </template>
+
+   <template data-row="control-span"><span></span></template>
+
+   <template data-panel="record">
+      <div data-el="osWarn" class="hint bad" data-region="main" hidden></div>
+      <div data-el="form" class="form" data-region="main"></div>
+      <div data-el="rail" class="form" data-region="side"></div>
+      <div data-region="footer">
+         <button data-el="go" class="btn" type="button">Set up the capture</button>
+      </div>
+   </template>
+
+   <!-- The capture picker and its type-it-yourself fallback share one grid cell:
+        a display:none child leaves grid placement entirely, so hiding the input
+        directly shifted every following cell by one. -->
+   <template data-row="record-capture">
+      <div style="display:grid;gap:var(--op-space-x-small)">
+         <select data-el="pick"></select>
+         <input data-el="typed" placeholder="exact window title" style="display:none" />
+      </div>
+   </template>
+
+   <!-- Not a .form-group: a row of five controls inside one gets boxed into the
+        label's track. A column flexbox has one reading of "stack these". -->
+   <template data-row="record-steps-cell">
+      <div class="full" style="display:flex;flex-direction:column;gap:var(--op-space-small);align-items:stretch">
+         <label class="form-label">Steps</label>
+      </div>
+   </template>
+
+   <template data-row="record-script-form"><div class="form" style="grid-template-columns:1fr"></div></template>
+
+   <template data-row="record-saved-script">
+      <div class="form-group">
+         <label class="form-label">Saved project script</label>
+         <div class="row">
+            <select data-el="pick" class="form-control form-control--small"></select>
+            <button data-el="insert" class="btn ghost btn--small" type="button">Insert saved script</button>
+            <button data-el="refresh" class="btn ghost btn--small" type="button">Refresh</button>
+         </div>
+         <div data-el="hint" class="hint"></div>
+      </div>
+   </template>
+
+   <template data-row="record-open">
+      <div class="runrow">
+         <button data-el="open" class="btn ghost" type="button">Open in OpenScreen</button>
+         <code data-el="path"></code>
+         <div data-el="note" class="path" style="flex-basis:100%"></div>
+      </div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
