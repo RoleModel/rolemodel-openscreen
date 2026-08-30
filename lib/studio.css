@@ -1049,7 +1049,7 @@ button.btn:disabled {
 }
 
 .activity {
-  position: fixed;
+  position: absolute;
   top: 12px;
   right: 12px;
   flex: 0 1 36rem;
@@ -1857,7 +1857,7 @@ how to remove the virtical space around the range input in IE*/
   z-index: 5;
   margin-block-start: var(--op-space-3x-small);
   padding: var(--op-space-2x-small) var(--op-space-x-small);
-  background: var(--panel2);
+  background-color: var(--panel2);
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-medium);
   opacity: 0;
@@ -1865,6 +1865,32 @@ how to remove the virtical space around the range input in IE*/
   transition:
     opacity var(--op-transition-input),
     visibility var(--op-transition-input);
+}
+
+
+.hint {
+  font-size: var(--op-font-small);
+  line-height: var(--op-line-height-loose);
+  /* Same reason as .lede — a hint is a sentence, not a layout. */
+  max-inline-size: 80ch;
+  padding-inline: var(--op-space-small);
+  border-radius: var(--op-radius-medium);
+  margin-block: var(--op-space-small);
+}
+
+.hint.ok {
+  background-color: var(--accent);
+  color: var(--op-color-academy-primary-on-base);
+}
+
+:is(.form, .panel-card) .form-group > .form-hint.warn {
+  background-color: var(--op-color-alerts-warning-plus-two);
+  color: var(--op-color-alerts-warning-on-plus-two);
+}
+
+.hint.bad {
+  background-color: var(--danger-fg);
+  color: var(--op-color-alerts-danger-on-base);
 }
 
 :is(.form, .panel-card) .form-group:focus-within > .form-hint {
@@ -2560,31 +2586,6 @@ button.usage-run:focus-visible {
   font-family: var(--m);
   font-size: var(--op-font-2x-small);
   color: var(--muted);
-}
-
-.hint {
-  font-size: var(--op-font-small);
-  line-height: var(--op-line-height-loose);
-  /* Same reason as .lede — a hint is a sentence, not a layout. */
-  max-inline-size: 80ch;
-  padding-inline: var(--op-space-small);
-  border-radius: var(--op-radius-medium);
-  margin-block: var(--op-space-small);
-}
-
-.hint.ok {
-  background-color: var(--accent);
-  color: var(--op-color-academy-primary-on-base);
-}
-
-.hint.warn {
-  background-color: var(--op-color-alerts-warning-minus-two);
-  color: var(--op-color-alerts-warning-on-minus-two);
-}
-
-.hint.bad {
-  background-color: var(--danger-fg);
-  color: var(--op-color-alerts-danger-on-base);
 }
 
 /* An ordered account of what a Run button is about to do. */
@@ -5939,9 +5940,10 @@ textarea.form-control.board__brief {
 /*
  * The mark animates itself, so nothing here drives it.
  *
- * It is an <object> rather than an <img> because the motion lives in a script
- * inside the file. That makes it a nested document, which would take the click
- * meant for the card it is sitting on.
+ * An <img>: the motion is a CSS @keyframes block inside the file, which an
+ * <img>-referenced SVG still runs. It was an <object> first, and an <object> is
+ * a nested browsing context — the browser paints an opaque white base behind
+ * one, so the mark sat on a white square over the clip.
  */
 .working__mark {
   inline-size: 56px;
