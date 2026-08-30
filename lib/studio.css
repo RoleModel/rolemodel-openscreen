@@ -5848,8 +5848,67 @@ textarea.form-control.board__brief {
  * now and the focus ring is the confirmation — the same ring the rest of the
  * app uses for "this one".
  */
-.clipcard { cursor: pointer; }
+.clipcard {
+  position: relative;
+  cursor: pointer;
+}
 
 .clipcard.on {
+  --op-input-inner-focus: 0 0 0 var(--op-border-width-large);
+  --op-input-focus-primary:
+    var(--op-input-inner-focus) var(--op-color-primary-plus-two),
+    var(--op-input-outer-focus) var(--op-color-primary-plus-five);
   box-shadow: var(--op-input-focus-primary);
+}
+
+/*
+ * Work happening on a card, said on the card.
+ *
+ * The mark is the app's own squircle, stroked and turning: a restyle takes
+ * minutes, and a spinner that looks like this app is working reads better than
+ * a generic throbber over somebody's face. It covers the clip because that clip
+ * is the thing being changed.
+ */
+.working {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--op-space-2x-small);
+  place-content: center;
+  place-items: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--op-color-neutral-plus-max) 78%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.working__mark {
+  inline-size: 44px;
+  block-size: 44px;
+  fill: none;
+  stroke: var(--op-color-academy-primary-base);
+  stroke-width: 10;
+  stroke-linecap: round;
+  /* One long dash and a gap, so the stroke reads as a mark being drawn rather
+     than as a ring rotating in place. */
+  stroke-dasharray: 210 460;
+  animation: working-turn 1.4s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes working-turn {
+  to { transform: rotate(360deg); }
+}
+
+.working__line {
+  margin: 0;
+  max-inline-size: 22ch;
+  color: var(--op-color-neutral-minus-seven);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: var(--op-font-2x-small);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .working__mark { animation-duration: 4s; }
 }
