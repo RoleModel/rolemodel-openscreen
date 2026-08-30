@@ -5803,3 +5803,38 @@ textarea.form-control.board__brief {
 .player--trim .form > .btn {
   grid-column: 1 / -1;
 }
+
+/*
+ * Reference pictures in the rail, as pictures.
+ *
+ * Two columns because the rail is 320px and a video reference is judged on what
+ * it looks like; the filename is the tooltip. Selection is a ring rather than a
+ * checkbox — the tile is the control.
+ */
+.refshelf {
+  /* Fills the row it is given rather than reserving two fixed columns, so one
+     picture is one tile and not a tile beside an empty slot. */
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: var(--op-space-2x-small);
+}
+
+.refshelf__tile {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--op-radius-medium, 8px);
+  background: none;
+  cursor: pointer;
+}
+
+.refshelf__tile.on {
+  border-color: var(--op-color-academy-primary-base);
+}
+
+.refshelf__art {
+  /* Square, not 16:9. A reference is a picture of a thing, not a frame, and the
+     widescreen boxes left a column of gaps down the rail. */
+  aspect-ratio: 1;
+  border-radius: var(--op-radius-small, 6px);
+  background-position: center;
+  background-size: cover;
+}

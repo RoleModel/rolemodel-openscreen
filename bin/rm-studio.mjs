@@ -3856,18 +3856,15 @@ const server = createServer(async (req, res) => {
         .filter((rel) => IMAGE_EXT.has(extname(rel).toLowerCase()) && extname(rel).toLowerCase() !== ".svg")
         .sort();
       /*
-       * The shared imagery as well, under a `brand:` prefix.
+       * This project's pictures only.
        *
-       * A project often has no pictures of its own — the references live in the
-       * brand shelf and are used by every project. The prefix keeps the two
-       * apart in the list and gives rm-fal an unambiguous second root to resolve
-       * against, rather than a bare name that could mean either.
+       * The brand shelf was offered here too and it was noise: twenty clay
+       * renders nobody is editing a video towards, listed above the one
+       * screenshot that was actually pasted in. rm-fal still resolves a
+       * `brand:` reference for a scripted run — the panel just does not push
+       * them at you.
        */
-      const brandImages = (await readdir(join(TOOLKIT, "brand", "imagery")).catch(() => []))
-        .filter((name) => IMAGE_EXT.has(extname(name).toLowerCase()) && extname(name).toLowerCase() !== ".svg")
-        .sort()
-        .map((name) => `brand:${name}`);
-      return json(res, 200, { images: [...images, ...brandImages] });
+      return json(res, 200, { images });
     }
 
     /*
