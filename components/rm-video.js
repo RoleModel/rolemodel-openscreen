@@ -966,7 +966,7 @@ const fieldStyle = (el) => {
  * the only thing this draws.
  */
 const HAZE_FRAGMENT = [
-  'precision highp float;uniform vec2 r;uniform float t;uniform vec3 shadowColour;uniform vec3 highlightColour;uniform vec3 ditherColour;uniform float flowSpeed;uniform float swirlDetail;uniform float colourBalance;uniform float ditherAmount;uniform float ditherPixel;uniform float distortStrength;uniform float distortDetail;uniform float sharpness;uniform float grain;varying vec2 v;',
+  'precision highp float;uniform vec2 r;uniform float t;uniform vec3 shadowColour;uniform vec3 highlightColour;uniform vec3 ditherColour;uniform float flowSpeed;uniform float swirlDetail;uniform float colourBalance;uniform float ditherAmount;uniform float ditherPixel;uniform float distortStrength;uniform float distortDetail;uniform float sharpness;uniform float grain;uniform float hasImage;uniform float imageBlend;uniform float imageAspect;uniform sampler2D imageTex;varying vec2 v;',
   'float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}',
   'float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=h21(i),b=h21(i+vec2(1.,0.)),c=h21(i+vec2(0.,1.)),d=h21(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}',
   'float fbm(vec2 p){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*vnoise(p);p*=2.02;a*=.5;}return s;}',
@@ -986,11 +986,15 @@ const HAZE_FRAGMENT = [
   'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
   'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}',
   'vec3 overlay(vec3 a,vec3 b){return mix(2.*a*b,1.-2.*(1.-a)*(1.-b),step(.5,a));}',
-  'void main(){vec2 uv=distort(v);float n=swirlField(uv);if(sharpness>.001){float e=1./max(r.x,r.y);float around=(swirlField(uv+vec2(e,0.))+swirlField(uv-vec2(e,0.))+swirlField(uv+vec2(0.,e))+swirlField(uv-vec2(0.,e)))*.25;n=clamp(n+(n-around)*sharpness*2.,0.,1.);}float x=clamp((n-.5)*1.6+colourBalance,0.,1.);vec3 col=mixHSL(shadowColour,highlightColour,x);if(ditherAmount>.001){vec2 px=floor(uv*r/max(1.,ditherPixel));float thr=(b4(mod(px,4.))+.5)/16.;float lum=dot(col,vec3(.299,.587,.114));vec3 pattern=mix(vec3(0.),ditherColour,step(thr,lum));col=mix(col,overlay(col,pattern),ditherAmount);}col+=(h21(gl_FragCoord.xy+fract(t)*vec2(37.7,17.3))-.5)*grain;gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
+  // Cover, not stretch: a portrait in a 16:9 frame is cropped, never squashed.
+  'vec2 coverUV(vec2 uv){float frame=r.x/max(1.,r.y);vec2 s=frame>imageAspect?vec2(1.,imageAspect/frame):vec2(frame/imageAspect,1.);return(uv-.5)*s+.5;}',
+  'void main(){vec2 uv=distort(v);float n=swirlField(uv);if(sharpness>.001){float e=1./max(r.x,r.y);float around=(swirlField(uv+vec2(e,0.))+swirlField(uv-vec2(e,0.))+swirlField(uv+vec2(0.,e))+swirlField(uv-vec2(0.,e)))*.25;n=clamp(n+(n-around)*sharpness*2.,0.,1.);}float x=clamp((n-.5)*1.6+colourBalance,0.,1.);if(hasImage>.5){vec4 shot=texture2D(imageTex,coverUV(uv));float luma=dot(shot.rgb,vec3(.299,.587,.114));x=clamp(mix(x,luma,imageBlend),0.,1.);}vec3 col=mixHSL(shadowColour,highlightColour,x);if(ditherAmount>.001){vec2 px=floor(uv*r/max(1.,ditherPixel));float thr=(b4(mod(px,4.))+.5)/16.;float lum=dot(col,vec3(.299,.587,.114));vec3 pattern=mix(vec3(0.),ditherColour,step(thr,lum));col=mix(col,overlay(col,pattern),ditherAmount);}col+=(h21(gl_FragCoord.xy+fract(t)*vec2(37.7,17.3))-.5)*grain;gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
 ].join('')
 
 class RMHaze extends RMElement {
   static fields = [
+    'image',
+    'image-blend',
     'eyebrow',
     'title',
     'body',
@@ -1037,6 +1041,21 @@ class RMHaze extends RMElement {
        than `motion` — which on rm-shader means still|drift, and one attribute
        name offering two different sets of values in one editor is a trap. */
     const still = this.attr('flow', 'flow') === 'still'
+    /*
+     * A picture, optionally, read through the same gradient.
+     *
+     * Without one this draws its own swirl and nothing else. With one, the
+     * picture's luminance takes over the position in the shadow-to-highlight
+     * ramp, so a photograph comes through duotoned into the brand's colours
+     * and the swirl keeps it moving underneath — and the dither, the
+     * distortion and the grain then apply to the result, which is the whole
+     * point of the treatment. `image-blend` is how much of the picture is in
+     * that mix, so it can be dialled back to a suggestion.
+     */
+    const imageBlend = shaderClamp(Number(this.attr('image-blend', 0.75)), 0, 1)
+    const rawImage = this.attr('image')
+    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
+    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
 
     const shadowColour = shaderColour(this.attr('gradient-shadow'), 'var(--op-color-neutral-plus-max, #242424)')
     const highlightColour = shaderColour(this.attr('gradient-highlight'), 'var(--brand, var(--op-color-academy-primary-base, #00b871))')
@@ -1083,6 +1102,9 @@ class RMHaze extends RMElement {
     gl.uniform1f(uniform('distortDetail'), distortDetail)
     gl.uniform1f(uniform('sharpness'), sharpness)
     gl.uniform1f(uniform('grain'), grain)
+    gl.uniform1f(uniform('imageBlend'), imageBlend)
+    gl.uniform1f(uniform('hasImage'), 0)
+    gl.uniform1f(uniform('imageAspect'), 1)
     gl.uniform3fv(uniform('shadowColour'), shaderVector(this.shadowRoot, shadowColour, [0.13, 0.13, 0.23]))
     gl.uniform3fv(uniform('highlightColour'), shaderVector(this.shadowRoot, highlightColour, [0.97, 0.87, 0.47]))
     gl.uniform3fv(uniform('ditherColour'), shaderVector(this.shadowRoot, ditherColour, [1, 1, 1]))
@@ -1103,10 +1125,43 @@ class RMHaze extends RMElement {
       gl.uniform1f(time, still ? 0 : RM.t / 1000)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
     }
+    /*
+     * The picture is a texture, and the frame waits for it.
+     *
+     * RM.waitFor, because RM.ready() is what the renderer waits on before it
+     * grabs a frame — without it the first frames are the swirl with no
+     * photograph in them, and nothing anywhere says why.
+     */
+    const texture = gl.createTexture()
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+    gl.uniform1i(uniform('imageTex'), 0)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+
     const observer = new ResizeObserver(draw)
     const onSeek = () => draw()
     observer.observe(canvas)
     root.addEventListener('rmseek', onSeek)
+
+    let settleTexture = () => {}
+    if (imageSource) {
+      RM.waitFor(new Promise((resolve) => (settleTexture = resolve)))
+      const picture = new Image()
+      picture.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture)
+        gl.uniform1f(uniform('imageAspect'), picture.naturalWidth / Math.max(1, picture.naturalHeight))
+        gl.uniform1f(uniform('hasImage'), 1)
+        draw()
+        settleTexture()
+      }
+      /* A picture that will not load leaves the swirl, which is a background
+         rather than a blank frame. */
+      picture.onerror = () => settleTexture()
+      picture.src = imageSource
+    }
 
     /*
      * A lost context is a blank frame, silently.
@@ -1129,6 +1184,8 @@ class RMHaze extends RMElement {
       root.removeEventListener('rmseek', onSeek)
       canvas.removeEventListener('webglcontextlost', onLost)
       canvas.removeEventListener('webglcontextrestored', onRestored)
+      settleTexture()
+      gl.deleteTexture(texture)
       gl.deleteBuffer(buffer)
       gl.deleteProgram(program)
       gl.deleteShader(vertex)
