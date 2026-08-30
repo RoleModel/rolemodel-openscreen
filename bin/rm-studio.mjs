@@ -6857,6 +6857,7 @@ async function fetchVoiceList() {
           args: step.args,
           label: step.label,
           cwd: step.cwd,
+          project,
           onDone: project
             ? async () => {
                 if (await readManifest(projectDir(project)).catch(() => null)) await reindex(project);
@@ -6896,6 +6897,36 @@ async function fetchVoiceList() {
       };
       const files = (await walk(j.cwd)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 40);
       return json(res, 200, { dir: j.cwd, files });
+    }
+
+    /*
+     * Start a finished job again, from the argv it kept.
+     *
+     * Interrupted is the case worth having: the server restarted under a render
+     * and the work simply stopped. Rebuilding it by hand means remembering
+     * which panel began it and which options were set, twenty minutes after the
+     * fact.
+     *
+     * The reindex that followed the original is rebuilt here from the project
+     * the job recorded — it is a closure and cannot be journaled, so it is
+     * attached again rather than lost.
+     */
+    if (p.startsWith("/api/jobs/") && p.endsWith("/rerun") && req.method === "POST") {
+      const id = p.split("/")[3];
+      try {
+        const before = jobs.get(id);
+        const project = before?.project ?? null;
+        const j = jobs.replay(id, {
+          onDone: project
+            ? async () => {
+                if (await readManifest(projectDir(project)).catch(() => null)) await reindex(project);
+              }
+            : undefined,
+        });
+        return json(res, 200, { job: jobs.summary(j) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
     }
 
     if (p.startsWith("/api/jobs/") && p.endsWith("/stop") && req.method === "POST") {
