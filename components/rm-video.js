@@ -591,36 +591,12 @@ class RMShader extends RMElement {
     const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
     const hasImage = Boolean(imageSource)
-    this.shadowRoot.innerHTML =
-      '<style>' +
-      TYPE +
-      TIMING +
-      ':host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:' +
-      background +
-      ';}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:' +
-      text +
-      ';text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:' +
-      shaderInk +
-      ';mask:url(' +
-      SHADER_ICON +
-      ') center/contain no-repeat;-webkit-mask:url(' +
-      SHADER_ICON +
-      ') center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:' +
-      dots +
-      ';}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:' +
-      dots +
-      ';font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">' +
-      (hasImage
-        ? '<canvas aria-hidden="true"></canvas>' +
-          (showOverlay
-            ? '<div class="lockup">' +
-              (showMark ? '<i class="mark" aria-hidden="true"></i>' : '') +
-              (title ? '<h2>' + title + '</h2>' : '') +
-              (subtitle ? '<p>' + this.esc(subtitle) + '</p>' : '') +
-              '</div>'
-            : '')
-        : '<div class="empty"><span>Choose or upload an image to make a halftone</span></div>') +
-      '</div>'
+    const lockup = showOverlay
+      ? `<div class="lockup">${showMark ? '<i class="mark" aria-hidden="true"></i>' : ''}${title ? `<h2>${title}</h2>` : ''}${subtitle ? `<p>${this.esc(subtitle)}</p>` : ''}</div>`
+      : ''
+    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${background};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:${text};text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:${shaderInk};mask:url(${SHADER_ICON}) center/contain no-repeat;-webkit-mask:url(${SHADER_ICON}) center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:${dots};}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:${dots};font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
+      hasImage ? `<canvas aria-hidden="true"></canvas>${lockup}` : '<div class="empty"><span>Choose or upload an image to make a halftone</span></div>'
+    }</div>`
 
     const canvas = this.shadowRoot.querySelector('canvas')
     if (!canvas) return
@@ -784,20 +760,10 @@ class RMPixelReveal extends RMElement {
     const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
     const hasImage = Boolean(imageSource)
-    this.shadowRoot.innerHTML =
-      '<style>' +
-      TYPE +
-      TIMING +
-      ':host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:' +
-      paper +
-      ';border:' +
-      (borderRadius ? '.12cqw solid ' : '0 solid ') +
-      border +
-      ';border-radius:' +
-      borderRadius +
-      'cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">' +
-      (hasImage ? '<canvas aria-hidden="true"></canvas>' : '<div class="empty"><span>Choose or upload an image to make a pixel reveal</span></div>') +
-      '</div>'
+    const stroke = `${borderRadius ? '.12cqw solid ' : '0 solid '}${border}`
+    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${paper};border:${stroke};border-radius:${borderRadius}cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
+      hasImage ? '<canvas aria-hidden="true"></canvas>' : '<div class="empty"><span>Choose or upload an image to make a pixel reveal</span></div>'
+    }</div>`
 
     const canvas = this.shadowRoot.querySelector('canvas')
     if (!canvas) return
