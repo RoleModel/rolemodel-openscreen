@@ -1814,6 +1814,17 @@ how to remove the virtical space around the range input in IE*/
        * control hides until that control has focus; a hint belonging to the panel
        * is just a line of text.
        */
+:is(.panel-actions) .form-hint {
+  margin-block-start: var(--op-space-3x-small);
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  background: var(--panel2);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  transition:
+    opacity var(--op-transition-input),
+    visibility var(--op-transition-input);
+}
+
 :is(.form, .panel-card) .form-group > .form-hint {
   position: absolute;
   inset-inline: 0;

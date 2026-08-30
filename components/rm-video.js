@@ -1452,13 +1452,10 @@ const FIELD = `
   .eyebrow { color:color-mix(in srgb, var(--paper-ink) 74%, transparent);
              font-family:var(--mono); font-size:calc(var(--size, 6.6cqw) * 0.2);
              letter-spacing:.16em; text-transform:uppercase; }
-  .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:950;
-           line-height:.92; letter-spacing:-.04em;
-           text-shadow:.12cqw 0 color-mix(in srgb, var(--cyan) 42%, transparent),
-                       -.12cqw 0 color-mix(in srgb, var(--paper-ink) 0%, transparent),
-                       0 2.44cqw 6.35cqw rgba(0,0,0,.46); }
+  .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:700;
+           line-height:.92; letter-spacing:-.03em;}
   .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
-          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:34ch; }
+          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:64ch; }
   /* Oversized and centred: the plate travels during a cut, and a plate the size
      of the frame would show the ground along the edge it moves away from. */
   canvas { position:absolute; left:50%; top:50%; width:126%; height:126%;
