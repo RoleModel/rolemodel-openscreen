@@ -1748,6 +1748,27 @@ async function stageCanvasSceneRuntime(outDir) {
  * `data-at` arriving later would have had its value shifted by the clip offset
  * with nothing to show for it but one subtly wrong number in a render.
  */
+/*
+ * Where the last clip ends, which is not the same as how long the composition
+ * says it is.
+ *
+ * `<main data-duration>` is stretched to cover whatever was inserted into it
+ * and never shrinks back, so it drifts past the content. Appending "at the end"
+ * has to mean after the last thing anybody can see, so this reads the clips —
+ * and skips the composition root itself, which is the element carrying that
+ * stretched number.
+ */
+const compositionEndMs = (html) => {
+  let end = 0;
+  for (const [tag] of String(html).matchAll(/<[a-z][\w-]*\b[^>]*\bdata-start="[^"]*"[^>]*>/gi)) {
+    if (/\bdata-composition-id=/i.test(tag)) continue;
+    const start = Number(/\bdata-start="([\d.]+)"/.exec(tag)?.[1]);
+    const span = Number(/\bdata-duration="([\d.]+)"/.exec(tag)?.[1]) || 0;
+    if (Number.isFinite(start)) end = Math.max(end, (start + span) * 1000);
+  }
+  return Math.round(end);
+};
+
 const TIMING_ATTR = (name, flags = "") => new RegExp(`(?<=[\\s<])${name}=(["'])(-?\\d+(?:\\.\\d+)?)\\1`, flags);
 
 /* A saved scene's timings start at zero because it can be previewed alone.
@@ -4161,7 +4182,12 @@ const server = createServer(async (req, res) => {
          bare unknown tag. Staging is idempotent, so this is safe to repeat. */
       await stageCanvasSceneRuntime(root);
 
-      const start = Math.max(0, Number(b.startMs) || 0);
+      /* "end" is asked for by name rather than computed in the browser: only
+         the file knows where its last clip finishes, and a client that guessed
+         would be wrong the moment anything else was inserted. */
+      const start = String(b.at ?? "") === "end"
+        ? compositionEndMs(html)
+        : Math.max(0, Number(b.startMs) || 0);
       const duration = Math.max(100, Number(b.durationMs) || 4000);
 
       /*
