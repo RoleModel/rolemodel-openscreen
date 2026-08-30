@@ -5771,10 +5771,10 @@ textarea.form-control.board__brief {
   position: fixed;
   z-index: 1000;
   inset-block-start: var(--op-space-medium);
-  inset-inline: 0;
+  /* Top right — beside the header actions, where every status now reports. */
+  inset-inline-end: var(--op-space-medium);
   inline-size: fit-content;
   max-inline-size: min(52ch, 90vw);
-  margin-inline: auto;
   padding: var(--op-space-x-small) var(--op-space-medium);
   border: 1px solid var(--op-color-neutral-plus-four);
   border-radius: var(--op-radius-large, 12px);
