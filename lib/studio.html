@@ -2044,6 +2044,92 @@
       <button class="paper-edit__word" type="button"></button>
    </template>
 
+   <template data-panel="restyle">
+      <p data-el="lede" class="lede" data-region="main">Hand one clip to a model with an instruction, and the result comes back as project footage. The original is never replaced.</p>
+      <div data-el="clipHead" class="sec" data-region="main">The clip</div>
+      <div data-el="list" class="grid" data-region="main"></div>
+      <div data-el="faceHead" class="sec" data-region="main">The face</div>
+      <div data-el="faces" class="grid refshelf refshelf--faces" data-region="main"></div>
+      <div data-el="voiceHead" class="sec" data-region="main">The voice</div>
+      <div data-el="voices" class="grid voiceshelf" data-region="main"></div>
+      <div data-el="promptHead" class="sec" data-region="main">The instruction</div>
+      <textarea data-el="promptIn" class="wide form-control" data-region="main" rows="3" placeholder="What should change? The rest of the scene is kept."></textarea>
+      <p data-el="clipNote" class="form-hint hint" data-region="main" hidden></p>
+      <p data-el="dropHint" class="form-hint hint" data-region="main"></p>
+      <div data-el="panel" class="panel2" data-region="side"></div>
+      <div data-region="footer">
+         <button data-el="runBtn" class="btn" type="button">Restyle the clip</button>
+      </div>
+   </template>
+
+   <template data-row="restyle-ref-tile">
+      <button class="card refshelf__tile" type="button"><div data-el="art" class="thumb refshelf__art"></div></button>
+   </template>
+
+   <template data-row="restyle-voice-card">
+      <div class="card clipcard">
+         <div class="body">
+            <div data-el="nm" class="nm"></div>
+            <div data-el="path" class="path"></div>
+            <div data-el="listen" class="wave wave--row">
+               <button data-el="play" class="btn ghost btn--small wave__play" type="button"></button>
+               <div data-el="canvas" class="wave__canvas"></div>
+               <audio data-el="fallback" controls preload="none" hidden></audio>
+            </div>
+         </div>
+      </div>
+   </template>
+
+   <template data-row="restyle-add-voice">
+      <button data-el="add" class="btn ghost btn--small" type="button">Add a voice…</button>
+      <input data-el="picker" type="file" accept="audio/*" multiple hidden>
+   </template>
+
+   <template data-row="restyle-clip-card">
+      <div class="card">
+         <div class="thumbwrap"><div data-el="frame" class="thumb"></div></div>
+         <div class="body">
+            <div data-el="nm" class="nm"></div>
+            <div data-el="path" class="path"></div>
+            <div class="row">
+               <button data-el="trim" class="btn ghost btn--small" type="button">Trim…</button>
+               <button data-el="replace" class="btn ghost btn--small" type="button">Replace…</button>
+               <input data-el="picker" type="file" accept="video/*" hidden>
+            </div>
+         </div>
+      </div>
+   </template>
+
+   <template data-row="restyle-trim-dialog">
+      <dialog class="player player--trim">
+         <div class="player__bar">
+            <span data-el="name" class="player__name"></span>
+            <button data-el="close" class="btn ghost btn--small" type="button" aria-label="Close the trimmer"></button>
+         </div>
+         <div class="player__frame"><video data-el="video" class="player__video" playsinline preload="metadata"></video></div>
+         <div class="form">
+            <label class="form-label">Start</label>
+            <input data-el="inRange" type="range" min="0" max="1000" value="0" class="form-control">
+            <label class="form-label">End</label>
+            <input data-el="outRange" type="range" min="0" max="1000" value="1000" class="form-control">
+            <p data-el="readout" class="form-hint hint"></p>
+            <button data-el="play" class="btn ghost btn--small" type="button">Play the range</button>
+            <button data-el="use" class="btn" type="button">Use this range</button>
+         </div>
+      </dialog>
+   </template>
+
+   <template data-row="restyle-working">
+      <div class="working">
+         <img class="working__mark" src="/assets/mark-animated.svg" alt="" aria-hidden="true">
+         <p data-el="line" class="working__line">Starting…</p>
+      </div>
+   </template>
+
+   <template data-row="restyle-label">
+      <label class="form-label"></label>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
