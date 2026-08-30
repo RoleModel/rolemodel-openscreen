@@ -3851,10 +3851,22 @@ const server = createServer(async (req, res) => {
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
       const catalog = await reindex(id).catch(() => null);
-      const images = (catalog?.files ?? [])
+      const named = (catalog?.files ?? [])
         .map((item) => String(item.path ?? item.rel ?? ""))
         .filter((rel) => IMAGE_EXT.has(extname(rel).toLowerCase()) && extname(rel).toLowerCase() !== ".svg")
         .sort();
+      /*
+       * Only what is still on disk.
+       *
+       * The catalog is a snapshot, so a picture deleted since it was written is
+       * still listed — and the panel drew a tile for it whose image never
+       * loaded. An empty square is worse than an absent one: it looks like a
+       * broken picker rather than a file that is gone.
+       */
+      const images = [];
+      for (const rel of named) {
+        if ((await stat(join(mediaDir(id), rel)).catch(() => null))?.isFile()) images.push(rel);
+      }
       /*
        * This project's pictures only.
        *

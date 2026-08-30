@@ -64,6 +64,7 @@
   --track-tight: calc(var(--op-letter-spacing-label) * -1);
   --track-wide: calc(var(--op-letter-spacing-label) * 2);
   --track-wider: calc(var(--op-letter-spacing-label) * 3);
+  --shelf-art-size: calc(var(--op-size-unit) * 24); /* 96px */
 
   /* Structure. Optics' space scale tops out at 80px and describes gaps, not the
      width of a sidebar or the label column of a form. The layout dimensions
@@ -5812,9 +5813,9 @@ textarea.form-control.board__brief {
  * checkbox — the tile is the control.
  */
 .refshelf {
-  /* Fills the row it is given rather than reserving two fixed columns, so one
-     picture is one tile and not a tile beside an empty slot. */
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  /* auto-fit, not auto-fill: auto-fill holds empty tracks open and leaves a row
+     of gaps to the right of the last picture. */
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   gap: var(--op-space-2x-small);
 }
 
@@ -5833,8 +5834,22 @@ textarea.form-control.board__brief {
 .refshelf__art {
   /* Square, not 16:9. A reference is a picture of a thing, not a frame, and the
      widescreen boxes left a column of gaps down the rail. */
-  aspect-ratio: 1;
+  block-size: var(--shelf-art-size);
   border-radius: var(--op-radius-small, 6px);
   background-position: center;
   background-size: cover;
+}
+
+/*
+ * A chosen clip says so by being outlined, not by keeping a button.
+ *
+ * "Use this clip" stayed on the card after it was pressed, so the only way to
+ * tell what was selected was to remember pressing it. The card is the control
+ * now and the focus ring is the confirmation — the same ring the rest of the
+ * app uses for "this one".
+ */
+.clipcard { cursor: pointer; }
+
+.clipcard.on {
+  box-shadow: var(--op-input-focus-primary);
 }
