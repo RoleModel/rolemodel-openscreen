@@ -3997,6 +3997,35 @@ const server = createServer(async (req, res) => {
        * Checked here for the same reason the clip path is: a bad pair should be
        * a sentence in the panel, not a paid job that dies minutes in.
        */
+      /*
+       * Generating a shot: words, and optionally a still to start from.
+       *
+       * Nothing to trim and no clip to check, so none of the machinery below
+       * applies. The still is checked for being a picture inside this project,
+       * which is the only thing that can be wrong before the call is paid for.
+       */
+      if (takesOf(spec) === "text" || takesOf(spec) === "image+text") {
+        const say = String(b.prompt ?? "").trim();
+        if (!say) return json(res, 400, { error: "describe the shot first" });
+        const fromStill = takesOf(spec) === "image+text";
+        const stillRel = String(b.image ?? "");
+        const still = fromStill ? inside(stillRel) : null;
+        if (fromStill && !still) return json(res, 400, { error: "pick a picture to start from" });
+        if (still) {
+          const wrong = await avatarProblem({ image: still, audio: null });
+          if (wrong && !/voice track/.test(wrong)) return json(res, 400, { error: wrong });
+        }
+        const args = [join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--model", model, "--prompt", say];
+        if (fromStill) args.push("--image", stillRel);
+        for (const [flagName, value] of [["aspect", b.aspect], ["duration", b.duration], ["resolution", b.resolution]]) {
+          if (value) args.push(`--${flagName}`, String(value));
+        }
+        if (b.generateAudio === false) args.push("--no-audio");
+        return json(res, 200, {
+          step: { bin: process.execPath, args, label: `generate ${say.slice(0, 40)}`, project: id, cwd: TOOLKIT },
+        });
+      }
+
       if (takesOf(spec) !== "video") {
         const lipsync = takesOf(spec) === "video+audio";
         /* A lipsync keeps the real take and re-times its mouth, so its subject
