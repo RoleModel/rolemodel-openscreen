@@ -1010,7 +1010,7 @@ class RMHaze extends RMElement {
     'distortion-detail',
     'sharpness',
     'film-grain',
-    'motion',
+    'flow',
     'at',
     'for',
   ]
@@ -1033,7 +1033,10 @@ class RMHaze extends RMElement {
     const distortDetail = shaderClamp(Number(this.attr('distortion-detail', 75)), 8, 128)
     const sharpness = shaderClamp(Number(this.attr('sharpness', 1)), 0, 3)
     const grain = shaderClamp(Number(this.attr('film-grain', 0.05)), 0, 1)
-    const still = this.attr('motion', 'flow') === 'still'
+    /* `flow`, the name rm-pixel-reveal already uses for exactly this, rather
+       than `motion` — which on rm-shader means still|drift, and one attribute
+       name offering two different sets of values in one editor is a trap. */
+    const still = this.attr('flow', 'flow') === 'still'
 
     const shadowColour = shaderColour(this.attr('gradient-shadow'), 'var(--op-color-neutral-plus-max, #242424)')
     const highlightColour = shaderColour(this.attr('gradient-highlight'), 'var(--brand, var(--op-color-academy-primary-base, #00b871))')
