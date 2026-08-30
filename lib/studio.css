@@ -5892,31 +5892,17 @@ textarea.form-control.board__brief {
   backdrop-filter: blur(2px);
 }
 
-.working__mark {
-  inline-size: 52px;
-  block-size: 52px;
-}
-
-.working__mark svg {
-  inline-size: 100%;
-  block-size: 100%;
-}
-
 /*
- * Only the triangle moves; the rounded square it sits in stays put.
+ * The mark animates itself, so nothing here drives it.
  *
- * fill-box so it turns about its own centre rather than the middle of the
- * viewBox, which would send it orbiting around the inside of the mark instead
- * of spinning in place.
+ * It is an <object> rather than an <img> because the motion lives in a script
+ * inside the file. That makes it a nested document, which would take the click
+ * meant for the card it is sitting on.
  */
-.working__play {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: working-turn 1.2s linear infinite;
-}
-
-@keyframes working-turn {
-  to { transform: rotate(360deg); }
+.working__mark {
+  inline-size: 56px;
+  block-size: 56px;
+  pointer-events: none;
 }
 
 .working__line {
@@ -5928,9 +5914,6 @@ textarea.form-control.board__brief {
   text-align: center;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .working__mark { animation-duration: 4s; }
-}
 
 /*
  * The control that narrows the nav sits in the nav, top right of the title.
