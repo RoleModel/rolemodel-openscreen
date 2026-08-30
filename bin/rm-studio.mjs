@@ -3837,6 +3837,36 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * The project's own pictures, for models that edit towards a reference.
+     *
+     * Several take reference images and one requires them, so the panel needs a
+     * list to choose from rather than a path to type.
+     */
+    if (p === "/api/fal/images" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const catalog = await reindex(id).catch(() => null);
+      const images = (catalog?.files ?? [])
+        .map((item) => String(item.path ?? item.rel ?? ""))
+        .filter((rel) => IMAGE_EXT.has(extname(rel).toLowerCase()) && extname(rel).toLowerCase() !== ".svg")
+        .sort();
+      /*
+       * The shared imagery as well, under a `brand:` prefix.
+       *
+       * A project often has no pictures of its own — the references live in the
+       * brand shelf and are used by every project. The prefix keeps the two
+       * apart in the list and gives rm-fal an unambiguous second root to resolve
+       * against, rather than a bare name that could mean either.
+       */
+      const brandImages = (await readdir(join(TOOLKIT, "brand", "imagery")).catch(() => []))
+        .filter((name) => IMAGE_EXT.has(extname(name).toLowerCase()) && extname(name).toLowerCase() !== ".svg")
+        .sort()
+        .map((name) => `brand:${name}`);
+      return json(res, 200, { images: [...images, ...brandImages] });
+    }
+
+    /*
      * The command that restyles one clip, built here.
      *
      * A step rather than a started job, like the render step: the client decides
@@ -3873,9 +3903,9 @@ const server = createServer(async (req, res) => {
       if (prompt) args.push("--prompt", prompt);
       if (b.keepAudio === false) args.push("--no-audio");
       if (b.resolution) args.push("--resolution", String(b.resolution));
-      for (const image of Array.isArray(b.images) ? b.images.slice(0, spec.limits.maxImages ?? 0) : []) {
-        args.push("--image", String(image));
-      }
+      const images = Array.isArray(b.images) ? b.images.slice(0, spec.limits.maxImages ?? 0) : [];
+      if (spec.requiresImages && !images.length) return json(res, 400, { error: `${spec.label} needs at least one reference image` });
+      for (const image of images) args.push("--image", String(image));
       return json(res, 200, {
         step: { bin: process.execPath, args, label: `restyle ${basename(rel)}`, project: id, cwd: TOOLKIT },
       });

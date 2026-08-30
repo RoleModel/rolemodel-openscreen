@@ -13,6 +13,7 @@
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defaultRoot } from "../lib/library.mjs";
 import { falSettings } from "../lib/settings.mjs";
 import { fal, clipProblem, modelById, DEFAULT_MODEL } from "../lib/fal.mjs";
@@ -63,11 +64,21 @@ console.log("  uploading the clip…");
 const bytes = await readFile(source);
 const videoUrl = await client.upload(source, bytes).catch((error) => die(error.message));
 
-// Reference images are optional and small; they go up the same way.
+/*
+ * Reference images, from one of two roots.
+ *
+ * A project's own media, or the shared brand shelf under a `brand:` prefix —
+ * most projects keep no pictures of their own and the references are brand
+ * assets. Two named roots rather than an open path: a bare relative name that
+ * could escape either one is how a tool reads a file it was never given.
+ */
+const BRAND_IMAGERY = resolve(dirname(fileURLToPath(import.meta.url)), "..", "brand", "imagery");
 const imageUrls = [];
 for (const image of all("image")) {
-	const path = resolve(mediaDir, image);
-	if (!path.startsWith(`${mediaDir}/`)) die("a reference image is outside this project");
+	const brand = image.startsWith("brand:");
+	const root = brand ? BRAND_IMAGERY : mediaDir;
+	const path = resolve(root, brand ? image.slice("brand:".length) : image);
+	if (!path.startsWith(`${root}/`)) die(`a reference image is outside ${brand ? "the brand shelf" : "this project"}`);
 	imageUrls.push(await client.upload(path, await readFile(path)).catch((error) => die(error.message)));
 }
 

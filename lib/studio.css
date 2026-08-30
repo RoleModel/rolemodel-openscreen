@@ -3382,6 +3382,7 @@ textarea.form-control.script-body {
   border-radius: var(--op-radius-large);
   display: flex;
   flex-direction: column;
+  position: relative;
   margin-block-end: var(--op-space-small);
 }
 
