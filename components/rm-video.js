@@ -889,6 +889,57 @@ class RMPixelReveal extends RMElement {
 }
 define('rm-pixel-reveal', RMPixelReveal)
 
+/*
+ * One lockup, for every component that carries copy over a full-frame treatment.
+ *
+ * The field had these rules to itself and the haze needed the same three lines
+ * in the same places — a second copy would be two typographic scales drifting
+ * apart, which is the failure nobody notices until two backgrounds are cut
+ * together. The colours come from --paper-ink, which each host defines from the
+ * brand token, so the block itself names nothing.
+ */
+const LOCKUP = `
+  /*
+   * Type over the field, positioned as a percentage of the frame and sized in
+   * cqw, so a lockup keeps its place and its proportion at any render width.
+   * All three lines are optional: with none of them this is a background.
+   */
+  /* x is the anchor, and which edge it anchors follows the alignment. Always
+     centring the block meant a left-aligned lockup moved toward the left edge
+     ran half its width off the frame. */
+  .lockup { position:absolute; left:var(--x, 50%); top:var(--y, 50%); width:78%;
+            transform:translate(var(--tx, -50%), -50%); display:grid; gap:.5em;
+            justify-items:var(--just, center); text-align:var(--align, center); }
+  .eyebrow { color:color-mix(in srgb, var(--paper-ink) 74%, transparent);
+             font-family:var(--mono); font-size:calc(var(--size, 6.6cqw) * 0.2);
+             letter-spacing:.16em; text-transform:uppercase; }
+  .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:700;
+           line-height:.92; letter-spacing:-.03em;}
+  .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
+          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:94ch; }
+`
+
+/*
+ * The field's colours arrive as attributes so they can be driven from the
+ * timeline. Written onto the host as custom properties rather than interpolated
+ * into the stylesheet, so the shadow CSS stays one shared constant.
+ */
+const fieldStyle = (el) => {
+  const set = (name, value) => (value ? `${name}:${value};` : '')
+  const align = el.attr('align', 'center')
+  return set('--x', el.attr('x') ? `${el.attr('x')}%` : '')
+    + set('--y', el.attr('y') ? `${el.attr('y')}%` : '')
+    + set('--size', el.attr('size') ? `${el.attr('size')}cqw` : '')
+    + set('--align', align)
+    + set('--just', align === 'center' ? 'center' : align === 'right' ? 'end' : 'start')
+    + set('--tx', align === 'center' ? '-50%' : align === 'right' ? '-100%' : '0%')
+    + set('--ground', el.attr('ground'))
+    + set('--paper-ink', el.attr('paper'))
+    + set('--green', el.attr('green'))
+    + set('--cyan', el.attr('cyan'))
+    + set('--amber', el.attr('amber'))
+}
+
 /* ── rm-haze ─────────────────────────────────────────────────────────────── */
 
 /*
@@ -940,6 +991,13 @@ const HAZE_FRAGMENT = [
 
 class RMHaze extends RMElement {
   static fields = [
+    'eyebrow',
+    'title',
+    'body',
+    'size',
+    'x',
+    'y',
+    'align',
     'gradient-shadow',
     'gradient-highlight',
     'flow-speed',
@@ -981,7 +1039,15 @@ class RMHaze extends RMElement {
     const highlightColour = shaderColour(this.attr('gradient-highlight'), 'var(--brand, var(--op-color-academy-primary-base, #00b871))')
     const ditherColour = shaderColour(this.attr('dither-color'), 'var(--op-color-neutral-minus-max, #ffffff)')
 
-    this.shadowRoot.innerHTML = `<style>${TIMING}:host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${shadowColour};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset anim"><canvas aria-hidden="true"></canvas></div>`
+    /*
+     * The same three lines, in the same places, as every other full-frame
+     * treatment. LOCKUP is shared with the field rather than restated, so two
+     * backgrounds cut together cannot carry two typographic scales.
+     */
+    const copy = this.attr('eyebrow') || this.attr('title') || this.attr('body')
+      ? `<div class="lockup">${this.attr('eyebrow') ? `<div class="eyebrow">${this.esc(this.attr('eyebrow'))}</div>` : ''}${this.attr('title') ? `<div class="title">${this.esc(this.attr('title'))}</div>` : ''}${this.attr('body') ? `<div class="body">${this.esc(this.attr('body'))}</div>` : ''}</div>`
+      : ''
+    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{--paper-ink: var(--op-color-neutral-minus-max, #fff8e9);display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${shadowColour};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}${LOCKUP}</style><div class="asset anim" style="${fieldStyle(this)}"><canvas aria-hidden="true"></canvas>${copy}</div>`
 
     const canvas = this.shadowRoot.querySelector('canvas')
     if (!canvas) return
@@ -1635,50 +1701,12 @@ const FIELD = `
     display: block; inset: 0; width: 100%; height: 100%;
   }
   .field { position:absolute; inset:0; overflow:hidden; background:var(--ground); --rise:0px; }
-  /*
-   * Type over the field, positioned as a percentage of the frame and sized in
-   * cqw, so a lockup keeps its place and its proportion at any render width.
-   * All three lines are optional: with none of them this is a background.
-   */
-  /* x is the anchor, and which edge it anchors follows the alignment. Always
-     centring the block meant a left-aligned lockup moved toward the left edge
-     ran half its width off the frame. */
-  .lockup { position:absolute; left:var(--x, 50%); top:var(--y, 50%); width:78%;
-            transform:translate(var(--tx, -50%), -50%); display:grid; gap:.5em;
-            justify-items:var(--just, center); text-align:var(--align, center); }
-  .eyebrow { color:color-mix(in srgb, var(--paper-ink) 74%, transparent);
-             font-family:var(--mono); font-size:calc(var(--size, 6.6cqw) * 0.2);
-             letter-spacing:.16em; text-transform:uppercase; }
-  .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:700;
-           line-height:.92; letter-spacing:-.03em;}
-  .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
-          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:94ch; }
+${LOCKUP}
   /* Oversized and centred: the plate travels during a cut, and a plate the size
      of the frame would show the ground along the edge it moves away from. */
   canvas { position:absolute; left:50%; top:50%; width:126%; height:126%;
            transform:translate(-50%,-50%); will-change:transform, filter; }
 `
-
-/*
- * The field's colours arrive as attributes so they can be driven from the
- * timeline. Written onto the host as custom properties rather than interpolated
- * into the stylesheet, so the shadow CSS stays one shared constant.
- */
-const fieldStyle = (el) => {
-  const set = (name, value) => (value ? `${name}:${value};` : '')
-  const align = el.attr('align', 'center')
-  return set('--x', el.attr('x') ? `${el.attr('x')}%` : '')
-    + set('--y', el.attr('y') ? `${el.attr('y')}%` : '')
-    + set('--size', el.attr('size') ? `${el.attr('size')}cqw` : '')
-    + set('--align', align)
-    + set('--just', align === 'center' ? 'center' : align === 'right' ? 'end' : 'start')
-    + set('--tx', align === 'center' ? '-50%' : align === 'right' ? '-100%' : '0%')
-    + set('--ground', el.attr('ground'))
-    + set('--paper-ink', el.attr('paper'))
-    + set('--green', el.attr('green'))
-    + set('--cyan', el.attr('cyan'))
-    + set('--amber', el.attr('amber'))
-}
 
 /**
  * The animated halftone field on its own.
