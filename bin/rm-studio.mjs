@@ -50,7 +50,7 @@ import {
 } from "../lib/storyboard.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
-import { clientStamp, renderStudioHTML } from "../lib/studio-ui.mjs";
+import { clientStamp, renderStudioHTML, templateStyles } from "../lib/studio-ui.mjs";
 import {
 	buildCatalog,
 	capture,
@@ -7155,7 +7155,7 @@ async function fetchVoiceList() {
         return res.end("lib/studio.css is missing\n");
       }
       res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": "no-store" });
-      return res.end(src);
+      return res.end(src + (await templateStyles()));
     }
 
     if (p === "/studio.js" || p === "/live-reload.js") {

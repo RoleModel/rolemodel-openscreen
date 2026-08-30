@@ -1,0 +1,77 @@
+<!-- Cut: the clip-and-title cutting surface. -->
+<template data-panel="cut">
+   <p class="lede" data-region="main">Pick the footage and put it in order. This hands the editor a first assembly — stitching, trimming to the frame and titles happen there, on its timeline. A rough in and out here is optional, and nothing is re-encoded either way.</p>
+   <div data-el="form" class="form" data-region="main"></div>
+</template>
+
+<template data-row="cut-shelf">
+   <div class="full" style="display:flex;flex-wrap:wrap;gap:var(--op-space-x-small);align-items:center">
+      <span class="path">Footage</span>
+      <span data-el="empty" class="hint" hidden>Nothing indexed in this project yet — record a screen, then index it from the project page.</span>
+   </div>
+</template>
+
+<template data-row="cut-title-head"><div class="full"><span class="path">Titles</span></div></template>
+
+<template data-row="cut-title-list"><div class="full" style="display:flex;flex-direction:column;gap:var(--op-space-x-small)"></div></template>
+
+<!-- One clip: running-order controls, and the folded-away rough trim whose
+     handles seek the video as they move. -->
+<template data-row="cut-clip">
+   <div class="card">
+      <div data-el="body" class="body">
+         <div class="row">
+            <div data-el="title" class="nm"></div>
+            <button data-el="up" class="btn ghost" type="button" title="Move earlier">↑</button>
+            <button data-el="down" class="btn ghost" type="button" title="Move later">↓</button>
+            <button data-el="dup" class="btn ghost" type="button" title="Another span from the same recording">Again</button>
+            <button data-el="kill" class="btn ghost del" type="button">Remove</button>
+         </div>
+         <details data-el="trim">
+            <summary style="cursor:pointer;color:var(--op-color-neutral-minus-four);font-size:var(--op-font-x-small)">Rough in and out (optional)</summary>
+            <!-- Sized by the picture, not by the panel, so the card is not black bars. -->
+            <video data-el="video" preload="metadata" muted playsinline style="inline-size:auto;max-inline-size:100%;display:block;margin-inline:auto;border-radius:var(--op-radius-medium)"></video>
+            <!-- The whole recording, with the kept span lit and a handle at each
+                 end. The handles stand proud of the bar, in the opposite colour,
+                 so they read as the two things on it you are meant to grab. -->
+            <div data-el="strip" style="position:relative;block-size:2.25rem;margin-block:calc(var(--op-space-x-small) + 0.25rem) var(--op-space-x-small);background:var(--op-color-neutral-plus-six);border-radius:var(--op-radius-small);cursor:pointer;touch-action:none;user-select:none">
+               <div data-el="kept" style="position:absolute;inset-block:0;background:var(--op-color-primary-base);opacity:0.55;border-radius:var(--op-radius-small)"></div>
+               <div data-el="playhead" style="position:absolute;inset-block:0;inline-size:2px;background:var(--op-color-neutral-base);pointer-events:none"></div>
+               <div data-el="hIn" data-side="in" role="slider" aria-label="Trim from the start" tabindex="0" style="position:absolute;inset-block:-0.25rem;inline-size:0.6rem;background:var(--op-color-academy-primary-base);border:1px solid var(--op-color-primary-base);border-radius:var(--op-radius-small);cursor:ew-resize;touch-action:none;box-shadow:0 1px 3px rgb(0 0 0 / 0.45)"></div>
+               <div data-el="hOut" data-side="out" role="slider" aria-label="Trim from the end" tabindex="0" style="position:absolute;inset-block:-0.25rem;inline-size:0.6rem;background:var(--op-color-academy-primary-base);border:1px solid var(--op-color-primary-base);border-radius:var(--op-radius-small);cursor:ew-resize;touch-action:none;box-shadow:0 1px 3px rgb(0 0 0 / 0.45)"></div>
+            </div>
+            <div class="row"><span data-el="label" class="path"></span><span data-el="at" class="hint"></span></div>
+            <div class="row">
+               <button data-el="play" class="btn ghost" type="button">Play the trim</button>
+               <button data-el="setIn" class="btn ghost" type="button" title="Trim the start to the frame on screen">In here</button>
+               <button data-el="setOut" class="btn ghost" type="button" title="Trim the end to the frame on screen">Out here</button>
+               <button data-el="whole" class="btn ghost" type="button">Whole file</button>
+            </div>
+         </details>
+      </div>
+   </div>
+</template>
+
+<!-- One title over the finished cut: eyebrow, the words, sub, at and for. -->
+<template data-row="cut-title">
+   <div class="row">
+      <input data-el="eyebrow" class="form-control form-control--small" placeholder="eyebrow" style="max-inline-size:9rem" />
+      <input data-el="text" class="form-control form-control--small" placeholder="the title" />
+      <input data-el="sub" class="form-control form-control--small" placeholder="subtitle" style="max-inline-size:9rem" />
+      <input data-el="atSec" class="form-control form-control--small" type="number" step="0.5" min="0" title="appears at (seconds into the cut)" style="max-inline-size:5.5rem" />
+      <input data-el="forSec" class="form-control form-control--small" type="number" step="0.5" min="0" title="stays for (seconds)" style="max-inline-size:5.5rem" />
+      <button data-el="remove" class="btn ghost del" type="button" title="Remove this title">×</button>
+   </div>
+</template>
+
+<!-- A frame from the recording, not its filename. -->
+<template data-row="shelf-clip">
+   <button class="shelfclip" type="button">
+      <div class="shelfclip__shot">
+         <img data-el="img" alt="" loading="lazy" />
+         <span data-el="len" class="shelfclip__len" hidden></span>
+         <span data-el="mute" class="shelfclip__mute" hidden>silent</span>
+      </div>
+      <span data-el="name" class="shelfclip__name"></span>
+   </button>
+</template>

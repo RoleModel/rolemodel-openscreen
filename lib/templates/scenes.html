@@ -1,0 +1,149 @@
+<!-- Scenes: the visual scene editor and its parts. -->
+<template data-panel="scenes">
+   <p class="lede" data-region="main">
+      A scene is a stage with parts on it. Add a part, fill it in, watch it.
+      Everything is seeked rather than played, so what you scrub to is what
+      gets encoded.
+   </p>
+   <div data-region="main" class="panel-card panel-stage">
+      <iframe data-el="frame" class="scene-frame" title="Scene preview"></iframe>
+      <div class="row">
+         <input data-el="scrub" class="form-control" type="range" min="0" max="8000" step="16" value="0"
+            aria-label="Scrub the scene" />
+         <span data-el="time" class="path">0 ms</span>
+      </div>
+      <div data-el="palette" class="row">
+         <span class="path">Add a part</span>
+      </div>
+      <div data-el="cards" class="panel-cards"></div>
+      <!-- Visible because an editor that cannot show its output is one nobody
+           can debug; collapsed because it is no longer the thing you work in. -->
+      <details data-el="raw">
+         <summary>Markup</summary>
+         <textarea data-el="rawText" class="form-control" rows="6" spellcheck="false"></textarea>
+      </details>
+   </div>
+   <div data-region="side">
+      <div class="form-group">
+         <label class="form-label" for="scene-pick">Scene</label>
+         <select data-el="pick" id="scene-pick" class="form-control"></select>
+         <div class="form-hint">Saved in the project under scenes/.</div>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="scene-name">Name</label>
+         <input data-el="name" id="scene-name" class="form-control" placeholder="opening-card" />
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="scene-wallpaper">Wallpaper</label>
+         <select data-el="wallpaper" id="scene-wallpaper" class="form-control"></select>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="scene-brand">Brand</label>
+         <select data-el="brand" id="scene-brand" class="form-control">
+            <option value="">RoleModel — DM Sans</option>
+            <option value="academy">Craftsmanship Academy — Space Grotesk</option>
+         </select>
+         <div class="form-hint">Academy scenes set in Space Grotesk. RoleModel keeps DM Sans.</div>
+      </div>
+      <div class="form-group">
+         <label class="form-label">Accent</label>
+         <div data-el="accent"></div>
+         <div class="form-hint">The brand colour the parts pick up. Leave it unset for the preset default.</div>
+      </div>
+      <div class="form-group">
+         <label class="form-label" for="scene-brief">Ask Claude for one</label>
+         <textarea data-el="brief" id="scene-brief" class="form-control" rows="3"
+            placeholder="What is this scene? One or two sentences."></textarea>
+      </div>
+      <div data-el="footageGroup" class="form-group" hidden>
+         <label class="form-label" for="scene-footage">Footage for this Canvas shot</label>
+         <select data-el="footage" id="scene-footage" class="form-control"></select>
+         <div class="row">
+            <button data-el="transcribeFootage" type="button" class="btn btn--small">Transcribe</button>
+            <button data-el="suggestFootage" type="button" class="btn ghost btn--small">Ask Claude to find it</button>
+            <button data-el="attachFootage" type="button" class="btn ghost btn--small">Use whole file</button>
+            <button data-el="addFootage" type="button" class="btn ghost btn--small">Add video</button>
+            <input data-el="footagePicker" type="file" accept="video/*" hidden />
+         </div>
+         <div data-el="footageHint" class="form-hint"></div>
+         <section data-el="footageReview" class="scene-footage-review" hidden>
+            <video data-el="footagePlayer" class="scene-footage-review__player" controls playsinline preload="metadata"></video>
+            <div data-el="footageReviewStatus" class="form-hint"></div>
+            <div data-el="footageTranscript" class="scene-footage-review__transcript"></div>
+         </section>
+      </div>
+   </div>
+   <div data-region="footer">
+      <pre data-el="status" class="status" hidden></pre>
+      <button data-el="draft" class="btn">Draft it with Claude</button>
+      <button data-el="restore" class="btn ghost" type="button" hidden>Restore previous save</button>
+      <button data-el="save" class="btn ghost">Save scene</button>
+   </div>
+</template>
+
+<!-- Claude's proposed passages for a Canvas scene, and the manual selection. -->
+<template data-row="scene-suggestions">
+   <div class="scene-footage-review__suggestions"><strong>Claude’s proposed passages</strong></div>
+</template>
+
+<template data-row="scene-suggestion">
+   <div class="scene-footage-review__suggestion">
+      <button data-el="use" class="btn ghost btn--small" type="button"></button>
+      <span data-el="text"></span>
+   </div>
+</template>
+
+<template data-row="scene-manual">
+   <div class="scene-footage-review__manual">
+      <span data-el="hint" class="hint"></span>
+      <button data-el="use" class="btn btn--small" type="button"></button>
+      <button data-el="clear" class="btn ghost btn--small" type="button">Clear</button>
+   </div>
+</template>
+
+<!-- One part of a scene: a summary row until you open it. -->
+<template data-row="scene-part">
+   <details class="card">
+      <summary style="cursor:pointer;display:flex;gap:var(--op-space-x-small);align-items:baseline;padding:var(--op-space-small);">
+         <span data-el="tag" class="nm"></span><span data-el="when" class="path"></span><span data-el="first" class="path" style="color:var(--fg)"></span>
+      </summary>
+      <div class="body">
+         <div data-el="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--op-space-2x-small)"></div>
+         <!-- After the fields: reordering and removing are things you do to a
+              part you have already read. -->
+         <div class="row" style="margin-top:var(--op-space-x-small)">
+            <button data-el="up" class="btn ghost" type="button" title="Earlier in the stack">↑</button>
+            <button data-el="down" class="btn ghost" type="button" title="Later in the stack">↓</button>
+            <button data-el="kill" class="btn btn--icon ghost del kill" type="button" aria-label="Remove this part" title="Remove this part"></button>
+         </div>
+      </div>
+   </details>
+</template>
+
+<!-- A picture is picked, not spelled: the whole card width, scrolling sideways. -->
+<template data-row="scene-image-field">
+   <div class="form-group" style="grid-column:1 / -1">
+      <label data-el="label" class="form-label"></label>
+      <div data-el="strip" style="display:flex;gap:var(--op-space-x-small);overflow-x:auto;padding-block-end:var(--op-space-2x-small);scrollbar-width:thin"></div>
+      <button data-el="upload" class="btn ghost" type="button" hidden>Upload an image</button>
+      <input data-el="picker" type="file" accept="image/*" hidden />
+   </div>
+</template>
+
+<template data-row="scene-image-tile">
+   <button type="button" style="flex:0 0 auto;inline-size:6.5rem;display:flex;flex-direction:column;gap:0.35rem;align-items:center;padding:0.4rem;cursor:pointer;border-radius:var(--op-radius-medium);background:var(--op-color-neutral-plus-six);color:var(--op-color-neutral-minus-two);border:1px solid var(--op-color-neutral-plus-four)">
+      <div data-el="frame" style="inline-size:100%;block-size:3.5rem;display:grid;place-items:center;overflow:hidden"></div>
+      <span data-el="cap" style="font-size:var(--op-font-2x-small);line-height:1.2;text-align:center;overflow-wrap:anywhere"></span>
+   </button>
+</template>
+
+<!-- A position is dragged, not typed; two columns so there is room to aim. -->
+<template data-row="scene-range-field">
+   <div class="form-group" style="grid-column:span 2">
+      <label data-el="label" class="form-label"></label>
+      <div class="range-row">
+         <input data-el="slider" class="form-control form-control--small" type="range" />
+         <span data-el="readout" class="path"></span>
+      </div>
+   </div>
+</template>

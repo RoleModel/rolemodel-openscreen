@@ -1,0 +1,6 @@
+.editor-frame {
+  flex: 1;
+  min-height: 240px;
+  background: var(--op-color-neutral-plus-two);
+  overflow: hidden;
+}

@@ -1,0 +1,97 @@
+/*
+ * Adopting an existing OpenScreen recording is an occasional project action,
+ * not a form. Keep the chooser and its two actions in one short row instead of
+ * borrowing Optics' label/control grid, which made each button occupy a full
+ * second line across the page.
+ */
+.project-capture-import {
+  margin-block: var(--op-space-small);
+}
+
+.project-capture-import > summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--op-font-small);
+}
+
+.project-capture-import__controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin-block-start: var(--op-space-x-small);
+}
+
+.project-capture-import__controls > select {
+  flex: 1 1 28rem;
+  min-inline-size: 0;
+  max-inline-size: 42rem;
+}
+
+.project-capture-import__controls > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.project-capture-import__status {
+  margin-block: var(--op-space-x-small) 0;
+}
+
+dialog.media-name-dialog {
+  border: solid 1px var(--line);
+  border-radius: var(--op-radius-medium);
+}
+
+/*
+ * The kebab on a card.
+ *
+ * Top-right of the body and out of the reading order of the name and the meta,
+ * because it is a control ABOUT the card rather than part of what the card says.
+ */
+.project-head {
+  position: relative;
+  min-block-size: 3.2rem;
+  padding-inline-end: calc(3.2rem + var(--op-space-small));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  place-content: space-between;
+}
+
+.project-head > .lede {
+  margin-block: 0 var(--op-space-small);
+}
+
+.project-head > .hint {
+  margin-block: 0;
+}
+
+.move-asset {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  box-shadow: var(--op-shadow-large);
+  color: var(--ink);
+  inline-size: min(28rem, calc(100vw - var(--op-space-large)));
+  margin: auto;
+  padding: var(--op-space-medium);
+}
+
+.move-asset::backdrop {
+  background: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.move-asset__form {
+  display: grid;
+  gap: var(--op-space-small);
+}
+
+.move-asset__form h2,
+.move-asset__form p {
+  margin: 0;
+}
+
+.move-asset__actions {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  justify-content: flex-end;
+}

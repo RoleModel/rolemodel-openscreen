@@ -1,0 +1,100 @@
+/*
+ * And the voice list stays a column of rows.
+ *
+ * A voice track has nothing to look at, so the card is a name, a length and a
+ * player — which wants one readable row, not a 312px card grid sized for
+ * posters.
+ */
+.voiceshelf {
+  grid-template-columns: minmax(0, 34rem);
+  gap: var(--op-space-2x-small);
+}
+
+.voiceshelf audio {
+  inline-size: 100%;
+  block-size: calc(var(--op-size-unit) * 8);
+}
+
+/*
+ * The waveform, where a file has no picture of its own.
+ *
+ * WaveSurfer draws into this container and sizes its own canvas, so the only
+ * job here is to give it a width to fill and put the transport beside it.
+ */
+.wave {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 0;
+}
+
+.wave--row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.wave__canvas {
+  min-inline-size: 0;
+  /* Seeking is a click on the picture, so say so before the click. */
+  cursor: pointer;
+}
+
+.wave__row {
+  display: flex;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.wave__play {
+  flex: none;
+}
+
+.wave__clock {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Work happening on a card, said on the card.
+ *
+ * The mark is the app's own squircle, stroked and turning: a restyle takes
+ * minutes, and a spinner that looks like this app is working reads better than
+ * a generic throbber over somebody's face. It covers the clip because that clip
+ * is the thing being changed.
+ */
+.working {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--op-space-2x-small);
+  place-content: center;
+  place-items: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--op-color-neutral-plus-max) 78%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+/*
+ * The mark animates itself, so nothing here drives it.
+ *
+ * An <img>: the motion is a CSS @keyframes block inside the file, which an
+ * <img>-referenced SVG still runs. It was an <object> first, and an <object> is
+ * a nested browsing context — the browser paints an opaque white base behind
+ * one, so the mark sat on a white square over the clip.
+ */
+.working__mark {
+  inline-size: 56px;
+  block-size: 56px;
+  pointer-events: none;
+}
+
+.working__line {
+  margin: 0;
+  max-inline-size: 22ch;
+  color: var(--op-color-neutral-minus-seven);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: var(--op-font-2x-small);
+  text-align: center;
+}

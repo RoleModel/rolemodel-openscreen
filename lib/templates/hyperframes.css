@@ -1,0 +1,35 @@
+/* HyperFrames is hosted inside Studio. The Studio header owns the surrounding
+   navigation and actions; this surface is only the editor itself. */
+/* A column, so a handed-over confirmation can sit above the editor and take its
+   own height. The frame was `block-size: 100%` of a plain block, which meant any
+   sibling pushed it past the bottom of the workspace instead of sharing it. */
+.hyperframes-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
+  block-size: calc(100dvh - 7rem);
+  min-block-size: var(--frame-h);
+  margin: calc(var(--op-space-medium) * -1);
+}
+
+/* Sits above the frame rather than floating over it: the frame is HyperFrames'
+   own surface, and this is Studio's control over when it reloads. */
+.hyperframes-workspace__watch {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  padding-inline: var(--op-space-medium);
+  padding-block-start: var(--op-space-2x-small);
+  color: var(--op-color-neutral-minus-three);
+  font-size: var(--op-font-x-small);
+  cursor: pointer;
+}
+
+.hyperframes-workspace__frame {
+  inline-size: 100%;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--op-color-neutral-plus-two);
+}

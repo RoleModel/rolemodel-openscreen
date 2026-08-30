@@ -1,0 +1,176 @@
+<!-- App chrome: crumbs, menus, icons, dialogs and other shared rows. -->
+<!-- A numbered list of what is about to happen, with the real paths. -->
+<template data-row="plan"><ul class="plan"></ul></template>
+
+<template data-row="plan-item">
+   <li><div><span data-el="what"></span><br data-el="break" hidden /><span data-el="why" class="w" hidden></span></div></li>
+</template>
+
+<!-- A Run button beside the exact argv it will execute. The command is
+     always visible; the button never hides what it does. -->
+<template data-row="runrow">
+   <div class="runrow">
+      <button data-el="run" class="btn" type="button"></button>
+      <code data-el="argv"></code>
+      <p data-el="status" class="runrow__status hint" hidden></p>
+      <div data-el="note" class="path" style="flex-basis:100%" hidden></div>
+   </div>
+</template>
+
+<!-- A path field: label, the input+Browse row as the control, then the hint
+     and the file browser, which Optics stacks under it. -->
+<template data-row="path-field">
+   <div class="form-group">
+      <label data-el="label" class="form-label"></label>
+      <div class="pick">
+         <input data-el="input" class="form-control" />
+         <button data-el="browse" class="btn ghost" type="button">Browse…</button>
+      </div>
+      <div data-el="hint" class="form-hint hint"></div>
+      <div data-el="panel"></div>
+   </div>
+</template>
+
+<!-- One open folder: the places chips, a clickable breadcrumb, type-to-narrow
+     filter, the entries, and the "n hidden" note. -->
+<template data-row="browser">
+   <div class="joblist">
+      <div data-el="chips" style="display:flex;flex-wrap:wrap;gap:var(--op-space-2x-small);padding:var(--op-space-x-small)" hidden></div>
+      <div data-el="trail" class="crumb" style="display:flex;flex-wrap:wrap;gap:var(--op-space-2x-small);align-items:baseline"></div>
+      <input data-el="filter" class="form-control" type="search" placeholder="Filter this folder…" style="margin:var(--op-space-x-small);inline-size:calc(100% - var(--op-space-medium))" />
+      <div data-el="rows"></div>
+      <div data-el="note" class="crumb" style="display:none"></div>
+   </div>
+</template>
+
+<template data-row="browser-error"><div class="job"></div></template>
+
+<template data-row="browser-chip">
+   <button class="btn ghost" type="button" style="padding:var(--op-space-2x-small) var(--op-space-x-small);font-size:var(--op-font-x-small)"></button>
+</template>
+
+<template data-row="crumb-text"><span></span></template>
+
+<template data-row="crumb-link">
+   <button class="btn ghost" type="button" style="padding:0 var(--op-space-2x-small);font-size:var(--op-font-x-small);background:none;border:0;text-decoration:underline"></button>
+</template>
+
+<template data-row="browser-entry">
+   <div class="job"><div class="ent"><div data-el="name" class="nm2"></div><div data-el="tag" class="tag"></div></div></div>
+</template>
+
+<template data-row="breadcrumbs-nav"><nav class="breadcrumbs" aria-label="Breadcrumb"></nav></template>
+
+<template data-row="crumb-label"><span class="breadcrumbs__text"></span></template>
+
+<template data-row="crumb-anchor"><a class="breadcrumbs__link" href="#"></a></template>
+
+<template data-row="crumb-slash"><span class="crumb-sep" aria-hidden="true">/</span></template>
+
+<template data-row="icon-glyph"><span class="hgi-stroke" aria-hidden="true"></span></template>
+
+<template data-row="kebab">
+   <div class="kebab">
+      <button data-el="trigger" class="kebab__trigger" type="button" aria-haspopup="menu" aria-expanded="false"></button>
+      <div data-el="menu" class="kebab__menu" role="menu" hidden></div>
+   </div>
+</template>
+
+<template data-row="kebab-item">
+   <button class="kebab__item" type="button" role="menuitem"><span data-el="text" class="kebab__text"></span></button>
+</template>
+
+<!-- Shown when this window is running older Studio code than the disk. -->
+<template data-row="stale-banner">
+   <button class="btn" type="button"
+      style="position:fixed;inset-block-end:var(--op-space-large);inset-inline-start:50%;transform:translateX(-50%);z-index:60">
+      This window is running older Studio code — click to reload</button>
+</template>
+
+<!-- The kind, beside the name, on every media card. -->
+<template data-row="name-with-kind">
+   <div class="nm cardname">
+      <span data-el="text" class="cardname__text"></span>
+      <span data-el="kind" class="kind" hidden></span>
+   </div>
+</template>
+
+<!-- What is picked, and the one thing to do with it. -->
+<template data-row="pickbar">
+   <div class="pickbar">
+      <span data-el="count" class="status"></span>
+      <button data-el="clear" class="btn ghost" type="button">Clear</button>
+      <button data-el="make" class="btn" type="button">Make a video from these</button>
+   </div>
+</template>
+
+<template data-row="slash-item">
+   <div><span data-el="label" style="font-family:var(--font-mono);min-inline-size:9rem"></span><span data-el="hint" style="color:var(--fg-dim);font-size:var(--op-font-x-small)"></span></div>
+</template>
+
+<template data-row="api-key-block">
+   <div class="form-group">
+      <label class="form-label">ElevenLabs key</label>
+      <div class="pick">
+         <input data-el="input" type="password" placeholder="ElevenLabs API key — starts with sk_" class="form-control">
+         <button data-el="save" class="btn ghost" type="button">Save the key</button>
+      </div>
+      <div data-el="note" class="form-hint hint"></div>
+   </div>
+</template>
+
+<!-- The project/stage menus share one shell: a trigger and a role=menu list. -->
+<template data-row="projmenu">
+   <div class="projmenu">
+      <button data-el="trigger" class="projmenu__trigger" type="button" aria-haspopup="menu" aria-expanded="false"></button>
+      <div data-el="menu" class="projmenu__menu" role="menu" hidden></div>
+   </div>
+</template>
+
+<template data-row="projmenu-item">
+   <button class="projmenu__item" type="button" role="menuitem">
+      <span data-el="text" class="projmenu__text"></span>
+      <span data-el="note" class="projmenu__note" hidden></span>
+   </button>
+</template>
+
+<template data-row="projmenu-sep"><div class="projmenu__sep"></div></template>
+
+<template data-row="colormenu">
+   <div class="colormenu">
+      <button data-el="trigger" class="colormenu__trigger" type="button" aria-haspopup="true" aria-expanded="false">
+         <span data-el="chip" class="colormenu__chip"></span><span data-el="label" class="colormenu__label"></span><span class="colormenu__caret">▾</span>
+      </button>
+      <div data-el="panel" class="colormenu__panel" role="listbox" hidden></div>
+   </div>
+</template>
+
+<template data-row="colormenu-row">
+   <div class="colormenu__row"><span data-el="family" class="colormenu__family"></span><div data-el="ramp" class="colormenu__ramp"></div></div>
+</template>
+
+<template data-row="colormenu-swatch"><button class="colormenu__swatch" type="button" role="option"></button></template>
+
+<template data-row="colormenu-swatch-none"><button class="colormenu__swatch colormenu__swatch--none" type="button" role="option">—</button></template>
+
+<template data-row="colormenu-swatch-dead"><button class="colormenu__swatch colormenu__swatch--dead" type="button" disabled></button></template>
+
+<!-- Watch or listen in place: video, or a waveform for audio. -->
+<template data-row="player-dialog">
+   <dialog class="player">
+      <div class="player__frame">
+         <div class="player__bar">
+            <span data-el="name" class="player__name"></span>
+            <button data-el="close" class="btn ghost btn--small" type="button" aria-label="Close the player"></button>
+         </div>
+         <video data-el="video" class="player__video" hidden></video>
+         <div data-el="listen" class="wave" hidden>
+            <div data-el="canvas" class="wave__canvas"></div>
+            <div class="wave__row">
+               <button data-el="play" class="btn ghost btn--small wave__play" type="button"></button>
+               <span data-el="clock" class="wave__clock">0:00</span>
+            </div>
+         </div>
+      </div>
+   </dialog>
+</template>

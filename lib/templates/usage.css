@@ -1,0 +1,121 @@
+/* Usage is a ledger, not another Console. The summary is deliberately compact:
+   four actual totals, then the evidence underneath. */
+.usage-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin-block-end: var(--op-space-medium);
+}
+
+.usage-head > .hint {
+  margin: 0;
+  margin-inline-end: auto;
+}
+
+.usage-overview {
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin-block-end: var(--op-space-large);
+}
+
+.usage-stat {
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  display: grid;
+  gap: var(--op-space-3x-small);
+  padding: var(--op-space-medium);
+}
+
+.usage-stat__label,
+.usage-stat__note {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  margin: 0;
+}
+
+.usage-stat__value {
+  font-family: var(--m);
+  font-size: var(--op-font-x-large);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--op-line-height-dense);
+}
+
+.usage-detail {
+  display: grid;
+  gap: var(--op-space-large);
+}
+
+.usage-accounting,
+.usage-models,
+.usage-runs {
+  display: grid;
+  gap: var(--op-space-small);
+}
+
+.usage-accounting .hint,
+.usage-models .hint {
+  margin: 0;
+}
+
+.usage-model {
+  align-items: baseline;
+  border-block-end: var(--op-border-width) solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  justify-content: space-between;
+  padding-block: var(--op-space-x-small);
+}
+
+.usage-model span {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-runs__list {
+  max-height: none;
+}
+
+button.usage-run {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-block-end: var(--op-border-width) solid var(--line);
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: var(--op-space-3x-small);
+  inline-size: 100%;
+  padding: var(--op-space-small);
+  text-align: start;
+}
+
+button.usage-run:last-child {
+  border-block-end: 0;
+}
+
+button.usage-run:hover,
+button.usage-run:focus-visible {
+  background: var(--panel2);
+  outline: none;
+}
+
+.usage-run__label {
+  font-size: var(--op-font-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-run__when,
+.usage-run__meta {
+  color: var(--muted);
+  font-family: var(--m);
+  font-size: var(--op-font-2x-small);
+  font-variant-numeric: tabular-nums;
+}

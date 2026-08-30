@@ -1,0 +1,53 @@
+.storage__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--op-space-medium);
+}
+
+.storage__head .lede {
+  margin: 0;
+}
+
+.storage__settings {
+  margin-block: var(--op-space-medium);
+}
+
+/*
+ * Looking inside a remote.
+ *
+ * A list rather than a grid of cards: what you want from a bucket listing is
+ * name, size and when — three columns you read down — and a card per object
+ * turns forty renders into a page of scrolling.
+ */
+.s3bar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+  margin-block-end: var(--op-space-small);
+}
+
+/* Same target as the project drop zone, at half the height: here it is the
+   second way in, not the only one. */
+.s3drop {
+  align-items: center;
+  background-color: transparent;
+  border: var(--op-border-width) dashed var(--line);
+  border-radius: var(--op-radius-large);
+  color: var(--op-color-neutral-on-plus-max);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-3x-small);
+  padding: var(--op-space-medium);
+  text-align: center;
+}
+
+.s3drop:hover {
+  border-color: var(--op-color-primary-base);
+}
+
+.s3drop .hgi-stroke {
+  color: var(--op-color-primary-base);
+  font-size: var(--op-font-x-large);
+}

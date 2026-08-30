@@ -1,0 +1,36 @@
+<!-- First run: the empty-state welcome. -->
+<!--
+   First run: no projects yet.
+   ================================================================
+   Shown INSTEAD of whatever panel was asked for, because every scoped panel is
+   about a project and there is not one — a Scenes page with an empty footage
+   shelf and a dead Save button teaches nothing except that the tool is broken.
+   The art is assets/empty-state.svg, served through the same static route as
+   brand/ and components/. It is decorative — the heading and the steps carry the
+   meaning — so the frame is aria-hidden and the img's alt is empty rather than
+   describing a picture a screen reader gains nothing from.
+-->
+<template data-panel="firstrun">
+   <div data-region="main" class="panel-card firstrun">
+      <div class="firstrun__art" aria-hidden="true">
+         <img data-el="art" src="/assets/empty-state.svg" alt="" />
+      </div>
+      <h2 class="firstrun__title">Make your first video</h2>
+      <p class="firstrun__lede">
+         Everything here happens inside a project — a folder with your footage,
+         scripts, scenes and renders in it. Make one and the rest of the app has
+         somewhere to put things.
+      </p>
+      <ol class="firstrun__steps">
+         <li><strong>Record or drop in footage.</strong> A screen capture, or files you already have.</li>
+         <li><strong>Write the script.</strong> Or describe the video and let Claude draft it.</li>
+         <li><strong>Give it a voice.</strong> Narration is synthesised from the script.</li>
+         <li><strong>Build the scenes.</strong> Titles, callouts and brand boards.</li>
+         <li><strong>Assemble and review.</strong> Cut it together, then share it.</li>
+      </ol>
+   </div>
+   <div data-region="footer">
+      <div data-el="status" class="hint"></div>
+      <button data-el="start" class="btn">Create a project</button>
+   </div>
+</template>

@@ -1,0 +1,37 @@
+<!-- Shared form rows: groups, switches, labels and grids. -->
+<!-- One Optics form group, cloned by field(). The control node is handed in
+     by the caller; a boolean control is reordered inline by the same rules
+     field() has always applied. -->
+<template data-row="form-group">
+   <div class="form-group">
+      <label data-el="label" class="form-label"></label>
+   </div>
+</template>
+
+<!-- The one-line confirmation about a handover that just happened. -->
+<template data-row="handoff-note">
+   <p class="hint"></p>
+</template>
+
+<!-- A compact Optics switch. The track's label is visually hidden by Optics
+     and gives the input its accessible name. -->
+<template data-row="small-switch">
+   <div class="switch switch--small">
+      <input data-el="input" type="checkbox" />
+      <label data-el="label"></label>
+   </div>
+</template>
+
+<template data-row="form-group-bare"><div class="form-group"></div></template>
+
+<template data-row="form-label">
+   <label class="form-label"></label>
+</template>
+
+<template data-row="rail-form"><div class="rail-form"></div></template>
+
+<!-- A bare card shelf. Cloned wherever a list needs its grid without any
+     other structure around it. -->
+<template data-row="grid">
+   <div class="grid"></div>
+</template>

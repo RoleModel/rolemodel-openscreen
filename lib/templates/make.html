@@ -1,0 +1,69 @@
+<!-- Make: rendering assets and the demo builder. -->
+<template data-panel="make">
+   <div data-el="form" class="form" data-region="main"></div>
+   <div data-el="rail" class="form" data-region="side"></div>
+   <div data-region="footer">
+      <div class="row">
+         <button data-el="go" class="btn" type="button">Build the brief</button>
+         <div data-el="runSlot"></div>
+      </div>
+   </div>
+</template>
+
+<template data-row="make-assets">
+   <div class="form-group">
+      <label data-el="label" class="form-label"></label>
+      <div data-el="list" class="s3list"></div>
+      <div class="form-hint">Named in the brief, so the composition can use them by path rather than inventing placeholders.</div>
+   </div>
+</template>
+
+<template data-row="make-asset">
+   <div class="s3row">
+      <span data-el="name" class="s3row__name"></span>
+      <span data-el="meta" class="s3row__meta"></span>
+      <button data-el="drop" class="btn ghost" type="button">Remove</button>
+   </div>
+</template>
+
+<template data-row="make-argv"><div class="runrow"><code data-el="code"></code></div></template>
+
+<template data-row="make-template-actions">
+   <div class="note full">Claude writes the editable project first. Review and edit it in HyperFrames, then render when the direction is right.</div>
+   <div class="row">
+      <button data-el="open" class="btn" type="button">Open in HyperFrames</button>
+      <button data-el="check" class="btn ghost" type="button">Check the template</button>
+      <button data-el="render" class="btn ghost" type="button">Render the template</button>
+      <p data-el="status" class="runrow__status hint" hidden></p>
+   </div>
+</template>
+
+<!-- The demo step builder: rows above, the bar with Add a step below. -->
+<template data-row="demo-builder">
+   <div style="display:grid;gap:var(--op-space-small)">
+      <div data-el="list" style="display:grid;gap:var(--op-space-small)"></div>
+      <div data-el="bar" style="display:flex;gap:var(--op-space-x-small);flex-wrap:wrap">
+         <button data-el="add" class="btn ghost" type="button"></button>
+      </div>
+   </div>
+</template>
+
+<!-- One step: number, the action, its fields, move/remove icons, then the
+     narration line and what it costs to say. -->
+<template data-row="demo-step">
+   <div class="card">
+      <div class="body" style="display:grid;gap:var(--op-space-x-small)">
+         <div data-el="head" style="display:flex;gap:var(--op-space-x-small);align-items:center;flex-wrap:wrap">
+            <div data-el="number" class="path" style="min-inline-size:1.5em"></div>
+            <select data-el="what" class="form-control" style="min-inline-size:14rem"></select>
+            <div data-el="args" style="display:grid;gap:var(--op-space-x-small);flex:1 1 18rem"></div>
+            <button data-el="up" class="btn btn--small ghost" type="button" aria-label="Move this step earlier" title="Move earlier"></button>
+            <button data-el="down" class="btn btn--small ghost" type="button" aria-label="Move this step later" title="Move later"></button>
+            <button data-el="kill" class="btn btn--small ghost" type="button" aria-label="Remove this step" title="Remove"></button>
+         </div>
+         <div data-el="tip" class="path" hidden></div>
+         <input data-el="say" class="form-control" placeholder="Say this while it happens (optional)" />
+         <div data-el="cost" class="path"></div>
+      </div>
+   </div>
+</template>

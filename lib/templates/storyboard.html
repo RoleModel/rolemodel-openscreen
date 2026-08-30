@@ -1,0 +1,130 @@
+<!-- Storyboard: the Canvas board, its nodes and takes. -->
+<template data-panel="storyboard">
+   <p class="lede" data-region="main">Turn the approved script into the scenes this video needs. For each scene, be clear about the visual, the screen recording or footage to generate, and the take that best fulfils it.</p>
+   <section data-el="scriptGuide" class="canvas-script" data-region="main" hidden></section>
+   <div class="board" data-region="main">
+      <div data-el="scroller" class="board__scroller">
+         <div data-el="surface" class="board__surface">
+            <div data-el="nodeLayer" class="board__nodes"></div>
+         </div>
+         <div data-el="spacer" class="board__spacer"></div>
+      </div>
+   </div>
+   <div data-el="status" class="form-hint full" data-region="main" hidden></div>
+</template>
+
+<!-- The script-to-canvas guide: which script, and the one button. -->
+<template data-row="canvas-script-guide">
+   <div style="display:contents">
+      <div class="canvas-script__copy">
+         <div class="canvas-script__eyebrow">Script to canvas</div>
+         <p data-el="body" class="canvas-script__body"></p>
+      </div>
+      <div class="canvas-script__controls">
+         <select data-el="pick" class="form-control"></select>
+         <button data-el="build" class="btn btn--small" type="button"></button>
+      </div>
+      <p data-el="status" class="canvas-script__status"></p>
+   </div>
+</template>
+
+<template data-row="board-empty">
+   <div class="board__empty">
+      <div class="board__empty-head">No shots yet</div>
+      <p class="board__empty-body">A shot is a hole in the video — "open on the problem", "the price appears", "the logo". The brief lists them, and each one becomes a column here that you fill with takes.</p>
+      <button data-el="add" class="btn btn--primary" type="button">Create slots from script</button>
+   </div>
+</template>
+
+<!-- One shot on the canvas: name, state, actions, preview, and its ports. -->
+<template data-row="board-node">
+   <div class="board__node">
+      <div class="board__node-head">
+         <div data-el="name" class="board__node-name"></div>
+         <div data-el="intent" class="board__node-intent" hidden></div>
+         <div class="board__slot-state">
+            <span data-el="flag" class="board__flag"></span>
+            <span data-el="target" class="board__slot-target" hidden></span>
+         </div>
+      </div>
+      <div class="board__node-actions">
+         <button data-el="choose" class="board__node-select" type="button" title="Select this scene and show its inspector"></button>
+         <button data-el="edit" class="board__node-edit" type="button">Edit scene</button>
+         <button data-el="reviewFootage" class="board__node-edit" type="button">Review footage</button>
+         <button data-el="remove" class="board__node-remove" type="button">Delete</button>
+      </div>
+      <div data-el="scenePreview" class="board__scene-preview" hidden>
+         <iframe data-el="sceneFrame" class="board__scene-frame" tabindex="-1" aria-hidden="true"></iframe>
+         <span data-el="sceneLabel" class="board__scene-label"></span>
+      </div>
+      <div data-el="shot" class="board__node-shot" hidden>
+         <span data-el="len" class="board__len"></span>
+      </div>
+      <div data-el="emptyNote" class="board__node-empty" hidden></div>
+      <div data-el="inPort" class="board__port board__port--in"></div>
+      <div data-el="outPort" class="board__port board__port--out" title="Drag to the next shot"></div>
+   </div>
+</template>
+
+<!-- One candidate take: a frame from it, its span, the votes, and the pick. -->
+<template data-row="board-take">
+   <div class="board__take">
+      <div data-el="shot" class="board__shot">
+         <span data-el="len" class="board__len"></span>
+         <span data-el="badge" class="board__badge" hidden></span>
+      </div>
+      <div class="board__take-meta">
+         <div data-el="name" class="board__take-name"></div>
+         <div data-el="span" class="board__take-span"></div>
+      </div>
+      <div data-el="rate" class="board__rate"></div>
+      <div data-el="tally" class="board__tally" hidden>
+         <span data-el="score" class="board__score"></span>
+         <span data-el="votes" class="board__votes"></span>
+      </div>
+      <div class="board__take-acts">
+         <button data-el="pick" class="btn btn--small" type="button"></button>
+      </div>
+   </div>
+</template>
+
+<template data-row="board-vote"><button class="board__vote" type="button"></button></template>
+
+<!-- Offer a clip for this shot; it says what happened on the card itself. -->
+<template data-row="board-add-take">
+   <div class="board__take board__take--add">
+      <div data-el="note" class="board__add-note" hidden>No footage in this project yet. Record something, or drop a file on the project page.</div>
+      <div data-el="head" class="board__add-head" hidden></div>
+      <select data-el="pickFile" class="board__add-file" hidden></select>
+      <div data-el="row" class="board__add-row" hidden>
+         <input data-el="from" class="board__add-num" type="number" min="0" step="0.5" placeholder="from" />
+         <input data-el="to" class="board__add-num" type="number" min="0" step="0.5" placeholder="to" />
+         <button data-el="add" class="btn btn--small" type="button">Add take</button>
+      </div>
+      <div data-el="said" class="form-hint" hidden></div>
+   </div>
+</template>
+
+<template data-row="board-rail-sep"><div class="board__rail-sep"></div></template>
+
+<template data-row="board-stack"><div class="board__stack"></div></template>
+
+<template data-row="board-setup"><div class="board__setup"></div></template>
+
+<!-- The zoom cluster: out, the label, in, fit. -->
+<template data-row="board-zoom">
+   <div class="board__zoom">
+      <button data-el="out" class="btn btn--small" type="button">−</button>
+      <span data-el="label" class="board__zoom-label">100%</span>
+      <button data-el="inn" class="btn btn--small" type="button">+</button>
+      <button data-el="fit" class="btn btn--small" type="button">Fit</button>
+   </div>
+</template>
+
+<template data-row="board-setup-acts"><div class="board__setup-acts"></div></template>
+
+<!-- One way in: the account people already have. The mark keeps Slack's own
+     colours, which is the only way it is allowed to be shown. -->
+<template data-row="board-slack-sign-in">
+   <button class="btn ghost btn--small slackin" type="button"><img class="slackin__mark" src="/assets/slack.svg" alt=""><span>Sign in with Slack</span></button>
+</template>

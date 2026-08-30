@@ -1,0 +1,19 @@
+/*
+ * The footage shelf: pictures, not filenames.
+ *
+ * A row rather than a grid, and it scrolls sideways inside itself — a project
+ * with fifteen takes would otherwise push the running order you are building
+ * down past the fold, and the running order is the thing you are looking at.
+ */
+.shelfstrip {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--op-space-x-small);
+  overflow-x: auto;
+  padding-block-end: var(--op-space-2x-small);
+}
+
+.shelfstrip > .path {
+  align-self: center;
+  flex: none;
+}

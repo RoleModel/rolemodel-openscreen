@@ -1,0 +1,43 @@
+<!-- Scene gallery: browsing saved scenes. -->
+<template data-panel="scene-gallery">
+   <p data-el="lede" class="lede" data-region="main"></p>
+   <div data-el="grid" class="grid" data-region="main">
+      <button data-el="add" class="card cardnew" type="button">
+         <div class="nm">New scene</div>
+         <div class="path">start from the components</div>
+      </button>
+   </div>
+   <p data-el="empty" class="empty" data-region="main" hidden>No scenes yet. Build one and it lands here, and in Compose.</p>
+</template>
+
+<!-- One scene card. The frame is drawn at 1920×1080 and scaled, never reflowed. -->
+<template data-row="scene-card">
+   <div class="card" style="cursor:pointer">
+      <div class="thumbwrap">
+         <div data-el="shot" class="thumb" style="display:block;position:relative;overflow:hidden;background:var(--sunk)">
+            <iframe data-el="frame" loading="lazy" scrolling="no" hidden
+               style="inline-size:1920px;block-size:1080px;border:0;transform-origin:top left;pointer-events:none;position:absolute;inset-block-start:0;inset-inline-start:0"></iframe>
+         </div>
+      </div>
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="path" class="path"></div>
+      </div>
+   </div>
+</template>
+
+<!-- The three ways a designed component leaves a designer page: insert into a
+     composition, copy the tag, save as a scene. Cloned by sceneOutlets(). -->
+<template data-row="scene-outlets">
+   <div style="display:contents">
+      <select data-el="target" class="form-control"></select>
+      <select data-el="where" class="form-control">
+         <option value="end">At the end</option>
+         <option value="playhead">At the playhead</option>
+      </select>
+      <button data-el="insert" class="btn" type="button" disabled>Insert into composition</button>
+      <button data-el="copy" class="btn ghost" type="button">Copy tag</button>
+      <input data-el="name" class="form-control" placeholder="scene name" />
+      <button data-el="save" class="btn" type="button">Save as scene</button>
+   </div>
+</template>

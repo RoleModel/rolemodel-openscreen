@@ -1,0 +1,33 @@
+<!-- Editor: the embedded OpenScreen document editor. -->
+<template data-panel="editor">
+   <p class="lede" data-region="main">
+      Zooms, annotations, trims and captions. The editor opens here, in this window,
+      with the navigation still beside it — nothing is exported until you say so.
+   </p>
+   <div data-el="note" class="note" data-region="main" hidden>
+      <p>The Studio is running in a browser, so there is no editor to hand a document to.</p>
+      <div class="path">Open the app instead — the Studio appears as a window inside it, and this page can then open documents directly.</div>
+   </div>
+   <div data-el="host" data-region="main"></div>
+</template>
+
+<!-- The native editor's mount point, measured and tracked by mountEditorInto. -->
+<template data-row="editor-frame">
+   <div class="editor-frame"></div>
+</template>
+
+<!-- One editable document (or a video still needing one). -->
+<template data-row="editable-doc">
+   <div class="card">
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="path" class="path"></div>
+         <div class="meta">
+            <span data-el="kind"></span>
+            <span data-el="duration" hidden></span>
+         </div>
+         <button data-el="open" class="btn ghost" type="button"></button>
+         <div data-el="note" class="path" style="flex-basis:100%"></div>
+      </div>
+   </div>
+</template>

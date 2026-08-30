@@ -1,0 +1,67 @@
+<!-- Designers: Field and Haze panels and the shared dial rows. -->
+<!-- The designer pages' shared control vocabulary. Rows are SIBLINGS, not a
+     wrapper: .ctl lays out its direct children, so mountRow hands back every
+     top-level node and the caller spreads them in. -->
+<template data-row="designer-panel"><div class="panel2"></div></template>
+
+<template data-row="designer-sec"><div class="sec"></div></template>
+
+<template data-row="designer-group"><div class="ctl"></div></template>
+
+<template data-row="designer-text">
+   <label data-el="label" class="form-label"></label><input data-el="input" class="wide form-control" />
+</template>
+
+<template data-row="designer-textarea">
+   <label data-el="label" class="form-label"></label><textarea data-el="input" class="wide form-control" rows="3"></textarea>
+</template>
+
+<template data-row="designer-range">
+   <label data-el="label" class="form-label"></label><input data-el="input" type="range" class="form-control" /><span data-el="readout" class="v"></span>
+</template>
+
+<template data-row="designer-select">
+   <label data-el="label" class="form-label"></label><select data-el="input" class="wide form-control"></select>
+</template>
+
+<!-- The colour row's menu is built by colorMenu(); the caller slots it
+     between the label and the readout. -->
+<template data-row="designer-color">
+   <label data-el="label" class="form-label"></label><span data-el="readout" class="v"></span>
+</template>
+
+<!-- The brand shelf as pictures; .refshelf, not the --faces variant, which
+     gives one picture per row in a 320px rail. -->
+<template data-row="refshelf"><div class="grid refshelf"></div></template>
+
+<template data-row="refshelf-tile">
+   <button class="card refshelf__tile" type="button"><div data-el="art" class="thumb refshelf__art"></div></button>
+</template>
+
+<template data-panel="field">
+   <p class="lede" data-region="main">Eight motions over one halftone field. Save it as a scene and Canvas can mount it into a composition.</p>
+   <div class="wpprev" data-region="main">
+      <rm-scene><rm-study-field data-el="field" at="0" for="60000"></rm-study-field></rm-scene>
+   </div>
+   <div class="ctl" data-region="main">
+      <button data-el="play" class="btn ghost" type="button">Play</button>
+      <input data-el="scrub" type="range" min="0" max="10400" step="20" value="0" class="form-control" />
+      <span data-el="clock" class="v">0 ms</span>
+   </div>
+   <pre data-el="markup" class="cmd-note" data-region="main"></pre>
+</template>
+
+<template data-panel="haze">
+   <p class="lede" data-region="main">A swirling, dithered gradient field. One seekable WebGL pass, so the same instant is always the same frame — insert it into a composition as a background, or save it as a scene.</p>
+   <!-- assets: where a bare filename resolves from — the same shelf the
+        scene editor serves its pictures out of, so a copied tag works there. -->
+   <div class="wpprev" data-region="main">
+      <rm-scene assets="/brand/imagery"><rm-haze data-el="haze" at="0" for="60000"></rm-haze></rm-scene>
+   </div>
+   <div class="ctl" data-region="main">
+      <button data-el="play" class="btn ghost" type="button">Play</button>
+      <input data-el="scrub" type="range" min="0" max="10400" step="20" value="0" class="form-control" />
+      <span data-el="clock" class="v">0 ms</span>
+   </div>
+   <pre data-el="markup" class="cmd-note" data-region="main"></pre>
+</template>

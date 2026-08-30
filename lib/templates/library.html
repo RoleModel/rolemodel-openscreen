@@ -1,0 +1,43 @@
+<!-- Library: the project index and its cards. -->
+<template data-panel="library">
+   <div class="libbar" data-region="main">
+      <div class="seg">
+         <button data-el="gridBtn" class="segbtn" type="button">Grid</button>
+         <button data-el="listBtn" class="segbtn" type="button">List</button>
+      </div>
+      <div class="libpick"><span class="libpicklabel">Filtered by</span><select data-el="filter" class="libselect"></select></div>
+      <div class="libpick"><span class="libpicklabel">Sorted by</span><select data-el="sort" class="libselect"></select></div>
+      <input data-el="search" type="search" class="form-control" aria-label="Search projects" placeholder="Search projects…" />
+   </div>
+   <div id="items" data-region="main"></div>
+   <p id="library-no-match" class="empty" data-region="main" hidden>No project matches that.</p>
+   <p id="library-none" class="empty" data-region="main" hidden>No projects yet — the tile above starts one.</p>
+</template>
+
+<!-- The card shelf; drawItems flips its class for List view. -->
+<template data-row="projgrid"><div class="projgrid"></div></template>
+
+<!-- One project. cardArt() is prepended; the kebab menu appended. -->
+<template data-row="project-card">
+   <div class="projcard" style="cursor:pointer">
+      <div class="projcard__cap">
+         <div data-el="name" class="projcard__name"></div>
+         <div data-el="client" class="projcard__client"></div>
+         <div data-el="stage" class="projcard__when" hidden></div>
+      </div>
+      <div class="projcard__foot">
+         <div data-el="summary" class="projcard__when"></div>
+         <div data-el="updated" class="projcard__when"></div>
+      </div>
+   </div>
+</template>
+
+<!-- The only way to a new project, now that the nav item is gone. -->
+<template data-row="project-card-new">
+   <div class="projcard projcard--new" style="cursor:pointer">
+      <div class="projgrid__plus">+</div>
+      <div class="projcard__name">New project</div>
+   </div>
+</template>
+
+<template data-row="projcard-art"><div class="projcard__art"></div></template>

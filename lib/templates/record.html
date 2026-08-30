@@ -1,0 +1,49 @@
+<!-- Record: driving a scripted capture. -->
+<template data-panel="record">
+   <div data-el="osWarn" class="hint bad" data-region="main" hidden></div>
+   <div data-el="form" class="form" data-region="main"></div>
+   <div data-el="rail" class="form" data-region="side"></div>
+   <div data-region="footer">
+      <button data-el="go" class="btn" type="button">Set up the capture</button>
+   </div>
+</template>
+
+<!-- The capture picker and its type-it-yourself fallback share one grid cell:
+     a display:none child leaves grid placement entirely, so hiding the input
+     directly shifted every following cell by one. -->
+<template data-row="record-capture">
+   <div style="display:grid;gap:var(--op-space-x-small)">
+      <select data-el="pick"></select>
+      <input data-el="typed" placeholder="exact window title" style="display:none" />
+   </div>
+</template>
+
+<!-- Not a .form-group: a row of five controls inside one gets boxed into the
+     label's track. A column flexbox has one reading of "stack these". -->
+<template data-row="record-steps-cell">
+   <div class="full" style="display:flex;flex-direction:column;gap:var(--op-space-small);align-items:stretch">
+      <label class="form-label">Steps</label>
+   </div>
+</template>
+
+<template data-row="record-script-form"><div class="form" style="grid-template-columns:1fr"></div></template>
+
+<template data-row="record-saved-script">
+   <div class="form-group">
+      <label class="form-label">Saved project script</label>
+      <div class="row">
+         <select data-el="pick" class="form-control form-control--small"></select>
+         <button data-el="insert" class="btn ghost btn--small" type="button">Insert saved script</button>
+         <button data-el="refresh" class="btn ghost btn--small" type="button">Refresh</button>
+      </div>
+      <div data-el="hint" class="hint"></div>
+   </div>
+</template>
+
+<template data-row="record-open">
+   <div class="runrow">
+      <button data-el="open" class="btn ghost" type="button">Open in OpenScreen</button>
+      <code data-el="path"></code>
+      <div data-el="note" class="path" style="flex-basis:100%"></div>
+   </div>
+</template>

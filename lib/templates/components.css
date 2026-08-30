@@ -1,0 +1,8 @@
+/* A panel whose whole content is an embedded page. */
+.tall-frame {
+  inline-size: 100%;
+  block-size: var(--frame-h);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  background: var(--bg);
+}

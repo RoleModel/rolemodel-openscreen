@@ -1,0 +1,54 @@
+<!-- HyperFrames: compositions hosted inside Studio. -->
+<template data-panel="hyperframes">
+   <p class="lede" data-region="main">
+      Editable motion projects from Claude live here. OpenScreen remains the editor for
+      captured demos and screenshots; use HyperFrames for the generated video, timing,
+      titles and composition.
+   </p>
+   <p data-el="status" class="hint" data-region="main"></p>
+   <div data-el="empty" class="note" data-region="main" hidden>
+      <p>When you make a video from a script, Claude now creates an editable HyperFrames project first. Its source and every later render stay together in this project.</p>
+      <button data-el="makeOne" class="btn" type="button">Make a HyperFrames video</button>
+   </div>
+   <div data-el="grid" class="grid" data-region="main" hidden></div>
+</template>
+
+<template data-row="hyperframes-card">
+   <div class="card">
+      <div class="thumbwrap">
+         <div data-el="art" class="thumb"></div>
+      </div>
+      <div class="body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="path" class="path"></div>
+         <div data-el="meta" class="meta"></div>
+         <div class="row">
+            <button data-el="open" class="btn" type="button">Open in HyperFrames</button>
+            <button data-el="remove" class="btn ghost btn--small del" type="button">Delete</button>
+         </div>
+         <p data-el="status" class="hint" hidden></p>
+      </div>
+   </div>
+</template>
+
+<!-- The embedded editor. Watch row above the frame; a handoff note is
+     prepended when one is pending. -->
+<template data-row="hyperframes-workspace">
+   <section class="hyperframes-workspace">
+      <label class="hyperframes-workspace__watch">
+         <input data-el="watch" class="form-control form-control--small" type="checkbox" />
+         <span class="form-label">Reload when the composition changes on disk</span>
+      </label>
+      <iframe data-el="frame" class="hyperframes-workspace__frame" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
+   </section>
+</template>
+
+<!-- HyperFrames' small navigation set, beside the other page-level controls. -->
+<template data-row="hyperframes-header-actions">
+   <div class="btn-group">
+      <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">Project media</button>
+      <button data-el="all" class="btn ghost btn--small" type="button">All compositions</button>
+      <button data-el="revise" class="btn btn--primary btn--small" type="button" hidden>Redo with Claude</button>
+      <button data-el="reload" class="btn ghost btn--small" type="button">Reload</button>
+   </div>
+</template>

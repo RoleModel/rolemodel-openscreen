@@ -1,0 +1,57 @@
+/* Three ways in. auto-fit rather than a fixed three, so the cards drop to two and
+   then one as the column narrows without a media query deciding when. */
+.choose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--op-space-medium);
+}
+
+.choose-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-large);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+  cursor: pointer;
+  text-align: center;
+  color: inherit;
+  font: inherit;
+}
+
+.choose-card:hover,
+.choose-card:focus-visible {
+  border-color: var(--accent);
+}
+
+/* A fixed frame so three pictures of different proportions line up as a row rather
+   than making the cards different heights. */
+.choose-card img {
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: 12rem;
+  object-fit: contain;
+}
+
+/* The stand-in when the picture does not arrive: the same size as the frame it
+   replaces, so the row of cards keeps its shape. */
+.choose-card__glyph {
+  color: var(--accent);
+  display: grid;
+  font-size: var(--op-font-3x-large);
+  block-size: 12rem;
+  place-items: center;
+}
+
+.choose-card__name {
+  font-weight: var(--op-font-weight-semi-bold);
+  font-size: var(--op-font-medium);
+}
+
+.choose-card__note {
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  max-inline-size: 30ch;
+}

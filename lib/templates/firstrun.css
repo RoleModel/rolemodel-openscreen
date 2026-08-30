@@ -1,0 +1,62 @@
+/* First run. Measured for reading, and centred, because there is nothing else on
+   the page to align to. */
+.firstrun {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-medium);
+  text-align: center;
+  padding-block: var(--op-space-2x-large);
+}
+
+/*
+ * The art.
+ *
+ * A capped block-size rather than a free one: the file is a square 1536 viewBox
+ * declaring width="100%" height="100%", so inside a grid cell with no height of its
+ * own it would take whatever it was given and push the steps off the screen.
+ */
+.firstrun__art {
+  inline-size: min(100%, 34rem);
+  display: grid;
+  place-items: center;
+}
+
+.firstrun__art:empty {
+  min-block-size: var(--op-space-large);
+}
+
+.firstrun__art img,
+.firstrun__art svg {
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: 24rem;
+}
+
+.firstrun__title {
+  margin: 0;
+  font-size: var(--op-font-x-large);
+}
+
+.firstrun__lede {
+  margin: 0;
+  max-inline-size: 60ch;
+  color: var(--muted);
+}
+
+/* Numbered because it IS a sequence — the pipeline's order is the one thing the
+   nav has never said out loud. */
+.firstrun__steps {
+  margin: 0;
+  text-align: start;
+  max-inline-size: 60ch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
+  color: var(--muted);
+}
+
+.firstrun__steps strong {
+  color: var(--fg);
+}
