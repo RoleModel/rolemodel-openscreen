@@ -606,6 +606,54 @@
       </section>
    </template>
 
+   <template data-panel="usage">
+      <p class="lede" data-region="main">
+         A running total from Studio’s retained job history. Claude reports token and cost
+         data when a run finishes; local work has time but no model spend.
+      </p>
+      <div class="usage-head" data-region="main">
+         <p data-el="status" class="hint"></p>
+         <button data-el="refresh" class="btn ghost" type="button">Refresh</button>
+      </div>
+      <div data-el="overview" class="usage-overview" data-region="main"></div>
+      <div class="usage-detail" data-region="main">
+         <p data-el="empty" class="empty" hidden>When Studio runs work, its time and any Claude-reported tokens and spend will appear here.</p>
+         <section data-el="accounting" class="usage-accounting" hidden>
+            <h2>What is included</h2>
+            <p data-el="accountingCopy" class="hint"></p>
+            <p data-el="localNote" class="hint" hidden></p>
+            <p data-el="unknownNote" class="hint warn" hidden></p>
+         </section>
+         <section data-el="models" class="usage-models" hidden>
+            <h2>By model</h2>
+         </section>
+         <section data-el="runs" class="usage-runs" hidden>
+            <h2>Past jobs</h2>
+            <div data-el="runList" class="joblist usage-runs__list"></div>
+         </section>
+      </div>
+   </template>
+
+   <template data-row="usage-stat">
+      <section class="usage-stat">
+         <p data-el="label" class="usage-stat__label"></p>
+         <strong data-el="value" class="usage-stat__value"></strong>
+         <p data-el="note" class="usage-stat__note" hidden></p>
+      </section>
+   </template>
+
+   <template data-row="usage-model">
+      <div class="usage-model"><strong data-el="model"></strong><span data-el="meta"></span></div>
+   </template>
+
+   <template data-row="usage-run">
+      <button class="usage-run" type="button">
+         <strong data-el="label" class="usage-run__label"></strong>
+         <span data-el="when" class="usage-run__when"></span>
+         <span data-el="meta" class="usage-run__meta"></span>
+      </button>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
