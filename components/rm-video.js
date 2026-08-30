@@ -889,6 +889,186 @@ class RMPixelReveal extends RMElement {
 }
 define('rm-pixel-reveal', RMPixelReveal)
 
+/* ── rm-haze ─────────────────────────────────────────────────────────────── */
+
+/*
+ * A swirling, dithered gradient field — the "pixel haze" treatment.
+ *
+ * Ported from a Framer component that composes five nodes from the `shaders`
+ * package: Swirl, Dither, GridDistortion, Sharpness, FilmGrain. That stack
+ * cannot be a scene asset for the same two reasons rm-pixel-reveal could not —
+ * it is React loaded from a CDN, and it advances on wall-clock time. A render
+ * has no network and must produce the same pixels for the same instant every
+ * time it is asked.
+ *
+ * So it is one fragment shader, and `RM.seek()` is the only clock it reads.
+ * The node order is preserved by construction rather than by passes: a warp of
+ * a composed image is the composition evaluated at warped coordinates, so the
+ * grid distortion is applied to the coordinates the swirl and the dither are
+ * read at, which is why the dither grid bends with the field instead of sitting
+ * flat on top of it. Grain is added last, in screen space, because it is film
+ * on the lens rather than paint on the subject.
+ *
+ * Sharpness is local contrast on the swirl field, not an unsharp mask of the
+ * finished frame — sharpening the composite would mean evaluating the whole
+ * chain four more times per pixel. It reads the same on a gradient, which is
+ * the only thing this draws.
+ */
+const HAZE_FRAGMENT = [
+  'precision highp float;uniform vec2 r;uniform float t;uniform vec3 shadowColour;uniform vec3 highlightColour;uniform vec3 ditherColour;uniform float flowSpeed;uniform float swirlDetail;uniform float colourBalance;uniform float ditherAmount;uniform float ditherPixel;uniform float distortStrength;uniform float distortDetail;uniform float sharpness;uniform float grain;varying vec2 v;',
+  'float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}',
+  'float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=h21(i),b=h21(i+vec2(1.,0.)),c=h21(i+vec2(0.,1.)),d=h21(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}',
+  'float fbm(vec2 p){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*vnoise(p);p*=2.02;a*=.5;}return s;}',
+  // The swirl: polar coordinates rotated more the closer to the centre they are,
+  // then noise read through that rotation. Two octaves of it, drifting apart.
+  'float swirlField(vec2 uv){vec2 q=uv-.5;q.x*=r.x/max(1.,r.y);float rad=length(q);float ang=atan(q.y,q.x);ang+=(1.5-rad*1.2)*(.9+swirlDetail)+t*flowSpeed*.35;vec2 p=vec2(cos(ang),sin(ang))*rad;float n=fbm(p*(1.2+swirlDetail*2.5)+vec2(t*flowSpeed*.12,-t*flowSpeed*.08));n=mix(n,fbm(p*(3.+swirlDetail*4.)-vec2(t*flowSpeed*.2)),.35);return clamp(n,0.,1.);}',
+  // HSL, because a gradient between a deep shadow and a warm highlight goes
+  // through the hues between them rather than through mud, which is what the
+  // Framer node meant by colorSpace="hsl".
+  'vec3 rgb2hsl(vec3 c){float mx=max(max(c.r,c.g),c.b);float mn=min(min(c.r,c.g),c.b);float l=(mx+mn)*.5;float h=0.;float s=0.;float d=mx-mn;if(d>.0001){s=l>.5?d/max(.0001,2.-mx-mn):d/max(.0001,mx+mn);if(mx==c.r)h=(c.g-c.b)/d+(c.g<c.b?6.:0.);else if(mx==c.g)h=(c.b-c.r)/d+2.;else h=(c.r-c.g)/d+4.;h/=6.;}return vec3(h,s,l);}',
+  'float hue2rgb(float p,float q,float x){if(x<0.)x+=1.;if(x>1.)x-=1.;if(x<1./6.)return p+(q-p)*6.*x;if(x<.5)return q;if(x<2./3.)return p+(q-p)*(2./3.-x)*6.;return p;}',
+  'vec3 hsl2rgb(vec3 c){if(c.y<=.0001)return vec3(c.z);float q=c.z<.5?c.z*(1.+c.y):c.z+c.y-c.z*c.y;float p=2.*c.z-q;return vec3(hue2rgb(p,q,c.x+1./3.),hue2rgb(p,q,c.x),hue2rgb(p,q,c.x-1./3.));}',
+  'vec3 mixHSL(vec3 a,vec3 b,float x){vec3 A=rgb2hsl(a);vec3 B=rgb2hsl(b);float dh=B.x-A.x;if(dh>.5)dh-=1.;if(dh<-.5)dh+=1.;return hsl2rgb(vec3(fract(A.x+dh*x),mix(A.y,B.y,x),mix(A.z,B.z,x)));}',
+  // Mirrored edges, so a coordinate pushed outside the frame folds back in
+  // rather than clamping to a smeared row of pixels.
+  'vec2 distort(vec2 uv){if(distortStrength<=.001)return uv;vec2 cell=floor(uv*distortDetail);float n1=vnoise(cell+vec2(t*flowSpeed*.1,0.));float n2=vnoise(cell+vec2(0.,t*flowSpeed*.1)+31.4);uv+=(vec2(n1,n2)-.5)*(distortStrength/max(8.,distortDetail))*.9;uv=abs(mod(uv,2.));return min(uv,2.-uv);}',
+  'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
+  'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}',
+  'vec3 overlay(vec3 a,vec3 b){return mix(2.*a*b,1.-2.*(1.-a)*(1.-b),step(.5,a));}',
+  'void main(){vec2 uv=distort(v);float n=swirlField(uv);if(sharpness>.001){float e=1./max(r.x,r.y);float around=(swirlField(uv+vec2(e,0.))+swirlField(uv-vec2(e,0.))+swirlField(uv+vec2(0.,e))+swirlField(uv-vec2(0.,e)))*.25;n=clamp(n+(n-around)*sharpness*2.,0.,1.);}float x=clamp((n-.5)*1.6+colourBalance,0.,1.);vec3 col=mixHSL(shadowColour,highlightColour,x);if(ditherAmount>.001){vec2 px=floor(uv*r/max(1.,ditherPixel));float thr=(b4(mod(px,4.))+.5)/16.;float lum=dot(col,vec3(.299,.587,.114));vec3 pattern=mix(vec3(0.),ditherColour,step(thr,lum));col=mix(col,overlay(col,pattern),ditherAmount);}col+=(h21(gl_FragCoord.xy+fract(t)*vec2(37.7,17.3))-.5)*grain;gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
+].join('')
+
+class RMHaze extends RMElement {
+  static fields = [
+    'gradient-shadow',
+    'gradient-highlight',
+    'flow-speed',
+    'swirl-detail',
+    'color-balance',
+    'dither-amount',
+    'dither-color',
+    'dither-pixel',
+    'distortion-strength',
+    'distortion-detail',
+    'sharpness',
+    'film-grain',
+    'motion',
+    'at',
+    'for',
+  ]
+
+  disconnectedCallback() {
+    this._dispose?.()
+    this._dispose = null
+  }
+
+  render() {
+    this._dispose?.()
+    // The Framer control ranges, kept: a value outside them is a mistake rather
+    // than a style, and clamping says so quietly instead of drawing nothing.
+    const flowSpeed = shaderClamp(Number(this.attr('flow-speed', 0.6)), 0, 5)
+    const swirlDetail = shaderClamp(Number(this.attr('swirl-detail', 0.7)), 0, 5)
+    const colourBalance = shaderClamp(Number(this.attr('color-balance', 58)), 0, 100) / 100
+    const ditherAmount = shaderClamp(Number(this.attr('dither-amount', 0.45)), 0, 1)
+    const ditherPixel = shaderClamp(Number(this.attr('dither-pixel', 4)), 1, 32)
+    const distortStrength = shaderClamp(Number(this.attr('distortion-strength', 5)), 0, 5)
+    const distortDetail = shaderClamp(Number(this.attr('distortion-detail', 75)), 8, 128)
+    const sharpness = shaderClamp(Number(this.attr('sharpness', 1)), 0, 3)
+    const grain = shaderClamp(Number(this.attr('film-grain', 0.05)), 0, 1)
+    const still = this.attr('motion', 'flow') === 'still'
+
+    const shadowColour = shaderColour(this.attr('gradient-shadow'), 'var(--op-color-neutral-plus-max, #242424)')
+    const highlightColour = shaderColour(this.attr('gradient-highlight'), 'var(--brand, var(--op-color-academy-primary-base, #00b871))')
+    const ditherColour = shaderColour(this.attr('dither-color'), 'var(--op-color-neutral-minus-max, #ffffff)')
+
+    this.shadowRoot.innerHTML = `<style>${TIMING}:host{display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${shadowColour};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset anim"><canvas aria-hidden="true"></canvas></div>`
+
+    const canvas = this.shadowRoot.querySelector('canvas')
+    if (!canvas) return
+    const gl = canvas.getContext('webgl', { alpha: false, antialias: false })
+    const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
+    const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, HAZE_FRAGMENT)
+    const program = gl?.createProgram()
+    if (!(gl && vertex && fragment && program)) return
+    gl.attachShader(program, vertex)
+    gl.attachShader(program, fragment)
+    gl.linkProgram(program)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return
+    gl.useProgram(program)
+
+    const buffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW)
+    const position = gl.getAttribLocation(program, 'p')
+    gl.enableVertexAttribArray(position)
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+
+    const uniform = (name) => gl.getUniformLocation(program, name)
+    const resolution = uniform('r')
+    const time = uniform('t')
+    gl.uniform1f(uniform('flowSpeed'), flowSpeed)
+    gl.uniform1f(uniform('swirlDetail'), swirlDetail)
+    gl.uniform1f(uniform('colourBalance'), colourBalance)
+    gl.uniform1f(uniform('ditherAmount'), ditherAmount)
+    gl.uniform1f(uniform('distortStrength'), distortStrength)
+    gl.uniform1f(uniform('distortDetail'), distortDetail)
+    gl.uniform1f(uniform('sharpness'), sharpness)
+    gl.uniform1f(uniform('grain'), grain)
+    gl.uniform3fv(uniform('shadowColour'), shaderVector(this.shadowRoot, shadowColour, [0.13, 0.13, 0.23]))
+    gl.uniform3fv(uniform('highlightColour'), shaderVector(this.shadowRoot, highlightColour, [0.97, 0.87, 0.47]))
+    gl.uniform3fv(uniform('ditherColour'), shaderVector(this.shadowRoot, ditherColour, [1, 1, 1]))
+
+    const draw = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+      const width = Math.max(1, Math.round(canvas.clientWidth * ratio))
+      const height = Math.max(1, Math.round(canvas.clientHeight * ratio))
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width
+        canvas.height = height
+        gl.viewport(0, 0, width, height)
+      }
+      gl.uniform2f(resolution, canvas.width, canvas.height)
+      // The dither cell is measured in CSS pixels, so it stays the same size on
+      // screen whatever the backing store is scaled to.
+      gl.uniform1f(uniform('ditherPixel'), ditherPixel * (canvas.width / Math.max(1, canvas.clientWidth)))
+      gl.uniform1f(time, still ? 0 : RM.t / 1000)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+    }
+    const observer = new ResizeObserver(draw)
+    const onSeek = () => draw()
+    observer.observe(canvas)
+    root.addEventListener('rmseek', onSeek)
+
+    /*
+     * A lost context is a blank frame, silently.
+     *
+     * Browsers cap how many live WebGL contexts a document may hold and drop
+     * the oldest when the cap is passed, which a scene using several of these
+     * will do. The default behaviour then is that this element draws nothing
+     * and says nothing — the worst possible outcome for a renderer that only
+     * checks whether a file appeared. Preventing the default makes the loss
+     * recoverable, and restoring rebuilds the whole pass.
+     */
+    const onLost = (event) => event.preventDefault()
+    const onRestored = () => this.render()
+    canvas.addEventListener('webglcontextlost', onLost)
+    canvas.addEventListener('webglcontextrestored', onRestored)
+
+    draw()
+    this._dispose = () => {
+      observer.disconnect()
+      root.removeEventListener('rmseek', onSeek)
+      canvas.removeEventListener('webglcontextlost', onLost)
+      canvas.removeEventListener('webglcontextrestored', onRestored)
+      gl.deleteBuffer(buffer)
+      gl.deleteProgram(program)
+      gl.deleteShader(vertex)
+      gl.deleteShader(fragment)
+    }
+  }
+}
+define('rm-haze', RMHaze)
+
 /* ── rm-stat ─────────────────────────────────────────────────────────────── */
 
 /**
