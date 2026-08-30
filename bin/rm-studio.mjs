@@ -4004,9 +4004,12 @@ const server = createServer(async (req, res) => {
        * applies. The still is checked for being a picture inside this project,
        * which is the only thing that can be wrong before the call is paid for.
        */
-      if (takesOf(spec) === "text" || takesOf(spec) === "image+text") {
+      if (takesOf(spec) === "text" || takesOf(spec) === "image+text" || takesOf(spec) === "video+text") {
         const say = String(b.prompt ?? "").trim();
         if (!say) return json(res, 400, { error: "describe the shot first" });
+        const fromShot = takesOf(spec) === "video+text";
+        const shotRel = String(b.file ?? "");
+        if (fromShot && !inside(shotRel)) return json(res, 400, { error: "pick the shot to continue" });
         const fromStill = takesOf(spec) === "image+text";
         const stillRel = String(b.image ?? "");
         const still = fromStill ? inside(stillRel) : null;
@@ -4017,6 +4020,7 @@ const server = createServer(async (req, res) => {
         }
         const args = [join(TOOLKIT, "bin", "rm-fal.mjs"), "--project", id, "--model", model, "--prompt", say];
         if (fromStill) args.push("--image", stillRel);
+        if (fromShot) args.push("--file", shotRel);
         for (const [flagName, value] of [["aspect", b.aspect], ["duration", b.duration], ["resolution", b.resolution]]) {
           if (value) args.push(`--${flagName}`, String(value));
         }

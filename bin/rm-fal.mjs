@@ -70,7 +70,7 @@ if (!spec) die(`${model} is not a model this app knows`);
 const takes = takesOf(spec);
 /* Three families now: edit a clip, drive a face from a voice, or generate a
    shot outright. Only the first needs a clip on the way in. */
-const generating = takes === "text" || takes === "image+text";
+const generating = takes === "text" || takes === "image+text" || takes === "video+text";
 const avatar = takes !== "video" && !generating;
 if (takes === "video" && (!file || !prompt)) die("--file and --prompt are required");
 if (generating && !prompt) die("--prompt is required — it is the shot");
@@ -124,9 +124,12 @@ const send = async (path) => client.upload(path, await readFile(path)).catch((er
  */
 if (generating) {
 	const fromStill = takes === "image+text";
+	const fromShot = takes === "video+text";
 	const stillArg = all("image")[0];
 	if (fromStill && !stillArg) die(`--image is required for ${spec.label}`);
+	if (fromShot && !file) die(`--file is required for ${spec.label} — the shot it continues`);
 	const still = fromStill ? inProject(stillArg, "that picture") : null;
+	const shot = fromShot ? inProject(file, "that clip") : null;
 	if (still) {
 		const wrong = await avatarProblem({ image: still, audio: null });
 		/* avatarProblem asks for a voice too; only the picture matters here. */
@@ -135,14 +138,20 @@ if (generating) {
 
 	console.log(`  model     ${spec.label}  (${spec.id})`);
 	if (fromStill) console.log(`  picture   ${stillArg}`);
+	if (fromShot) console.log(`  shot so far  ${file}`);
 	console.log(`  shot      ${prompt}`);
 	console.log(`  length    ${flag("duration") ?? spec.limits.defaultDuration}  ·  ${flag("resolution") ?? spec.limits.defaultResolution}  ·  audio ${args.includes("--no-audio") ? "off" : "on"}`);
 	console.log("");
 
 	let imageUrl;
+	let videoUrl;
 	if (still) {
 		console.log("  uploading the picture…");
 		imageUrl = await send(still);
+	}
+	if (shot) {
+		console.log("  uploading the shot…");
+		videoUrl = await send(shot);
 	}
 	console.log("  generating — this takes a few minutes…");
 	const { url } = await client
@@ -150,6 +159,7 @@ if (generating) {
 			{
 				model,
 				imageUrl,
+				videoUrl,
 				prompt,
 				aspect: flag("aspect") ?? undefined,
 				duration: flag("duration") ?? undefined,
@@ -161,7 +171,10 @@ if (generating) {
 		.catch((error) => die(error.message));
 
 	const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-	await deliver(url, flag("output") ?? join("Footage", `generated-${stamp}.mp4`));
+	/* An extension is named after what it continues, so a chain of them reads in
+	   order in a folder listing rather than as unrelated timestamps. */
+	const named = fromShot ? `${basename(file, extname(file))}-longer-${stamp}.mp4` : `generated-${stamp}.mp4`;
+	await deliver(url, flag("output") ?? join("Footage", named));
 	process.exit(0);
 }
 
