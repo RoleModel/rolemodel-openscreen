@@ -8470,10 +8470,19 @@ async function fetchVoiceList() {
       const refused = url.searchParams.get("error_description") || url.searchParams.get("error");
       const page = (heading, detail) => {
         res.writeHead(refused || !code ? 400 : 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-        /* Plain markup on purpose: this page is shown for a second inside
-           whatever browser the person happens to use, and it must not depend on
-           Studio's stylesheet, fonts or client script having loaded. */
-        res.end(`<!doctype html><meta charset="utf-8"><title>${heading}</title><body style="font:16px/1.5 system-ui;margin:3rem auto;max-width:34rem;color:#1a1a1a"><h1 style="font-size:1.3rem">${heading}</h1><p>${detail}</p><p><a href="/#storyboard">Back to the Studio</a></p>`);
+        /*
+         * Plain markup on purpose, and its own ground.
+         *
+         * This is shown for a second in whatever browser the person happens to
+         * use, so it cannot depend on Studio's stylesheet, fonts or client
+         * script having loaded. That also means it cannot inherit a background:
+         * it declared dark text and left the ground to the browser, which in
+         * dark mode paints it dark — a page of black text on black, which is
+         * exactly as useful as a blank one. `color-scheme: light` stops the
+         * browser recolouring the form controls and links to match a dark UI
+         * that is no longer there.
+         */
+        res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${heading}</title><style>:root{color-scheme:light}html,body{background:#fff;color:#1a1a1a}body{font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;padding:2rem}main{max-width:34rem;text-align:center}h1{font-size:1.3rem;margin:0 0 .5rem}p{margin:.5rem 0;color:#444}a{color:#1264a3}</style><main><h1>${heading}</h1><p>${detail}</p><p><a href="/#storyboard">Back to the Studio</a></p></main>`);
       };
       if (refused) return page("Slack did not sign you in", `Slack said: ${refused}`);
       if (!code) return page("That sign-in did not come back with a code", "Start it again from Canvas.");
