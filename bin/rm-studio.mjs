@@ -7757,22 +7757,32 @@ async function fetchVoiceList() {
          * on the opening card was to hand-edit the scene HTML after the build.
          */
         const script = await assemblyScript(id, state.scriptName, null).catch(() => null);
-        const asked = script ? demoSettings(parseDemo(script.body)) : {};
+        const parsedScript = script ? parseDemo(script.body) : null;
+        const asked = parsedScript ? demoSettings(parsedScript) : {};
+        /*
+         * A script's FIRST /title is the opening card and its LAST is the closing
+         * one — "/title Thanks for watching" at the foot of a script is how every
+         * script here ends. demoSettings is last-wins, so read the steps directly
+         * for the two cards; the other directives keep last-wins.
+         */
+        const titleLines = (parsedScript?.steps ?? []).filter((step) => step.kind === "set" && step.key === "title").map((step) => String(step.value));
+        const subLines = (parsedScript?.steps ?? []).filter((step) => step.kind === "set" && step.key === "sub").map((step) => String(step.value));
         const opening = firstCutTitleScene({
           name: "Opening title",
           eyebrow: String(asked.eyebrow || "First cut"),
-          title: String(asked.title || title),
-          sub: String(asked.sub || "Selected from your recordings"),
+          title: String(titleLines[0] || title),
+          sub: String(subLines[0] || "Selected from your recordings"),
         });
         if (asked.reveal) {
           const image = basename(String(asked.reveal));
           opening.scene.body = `<rm-pixel-reveal at="0" for="${opening.durationMs}" image="${hf(image)}" flow="flow" flow-beats="auto"></rm-pixel-reveal>\n${opening.scene.body}`;
         }
+        const closingTitle = titleLines.length > 1 ? titleLines.at(-1) : null;
         const closing = firstCutTitleScene({
           name: "Closing screen",
-          eyebrow: "Review cut",
-          title: "Ready for feedback",
-          sub: title,
+          eyebrow: closingTitle ? String(asked.eyebrow || "") : "Review cut",
+          title: closingTitle ?? "Ready for feedback",
+          sub: closingTitle ? String(subLines.length > 1 ? subLines.at(-1) : "") : title,
         });
         const built = await writeHyperframesAssembly(id, {
           folder: "multi-clip-assembly",
