@@ -1049,8 +1049,11 @@ button.btn:disabled {
 }
 
 .activity {
+  position: fixed;
+  top: 12px;
+  right: 12px;
   flex: 0 1 36rem;
-  margin-inline-start: auto;
+  width: fit-content;
   min-inline-size: 0;
   padding: 0;
 }
@@ -2459,6 +2462,12 @@ button.usage-run:focus-visible {
   overflow: auto;
   resize: vertical;
   white-space: pre-wrap;
+}
+
+/* Not a primary action: it sits under the note it belongs to, at its own width,
+   rather than stretching the width of the editor like Build does. */
+.voice__reload {
+  align-self: start;
 }
 
 .voice__estimate,
@@ -5848,6 +5857,41 @@ textarea.form-control.board__brief {
   border-radius: var(--op-radius-small, 6px);
   background-position: center;
   background-size: cover;
+}
+
+/*
+ * The avatar pickers: a face and a voice, both sized to what they are.
+ *
+ * These sit in the main column, not the rail, and .refshelf's auto-fit tracks
+ * stretch to fill it — with one picture in the project that made a single tile
+ * as wide as the page, cropped to a letterbox strip through the middle of
+ * somebody's face. Fixed square tracks instead, laid out from the left, so one
+ * picture is one picture whether there are one or twenty.
+ */
+.refshelf--faces {
+  grid-template-columns: repeat(auto-fill, var(--shelf-art-size));
+  justify-content: start;
+}
+
+.refshelf--faces .refshelf__art {
+  inline-size: var(--shelf-art-size);
+}
+
+/*
+ * And the voice list stays a column of rows.
+ *
+ * A voice track has nothing to look at, so the card is a name, a length and a
+ * player — which wants one readable row, not a 312px card grid sized for
+ * posters.
+ */
+.voiceshelf {
+  grid-template-columns: minmax(0, 34rem);
+  gap: var(--op-space-2x-small);
+}
+
+.voiceshelf audio {
+  inline-size: 100%;
+  block-size: calc(var(--op-size-unit) * 8);
 }
 
 /*
