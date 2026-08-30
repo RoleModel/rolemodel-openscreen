@@ -979,6 +979,57 @@
          This window is running older Studio code — click to reload</button>
    </template>
 
+   <template data-row="control-row"><div class="row"></div></template>
+   <template data-row="control-path"><div class="path"></div></template>
+
+   <template data-panel="compose">
+      <p class="lede" data-region="main">The running order. Take a scene off the shelf, drop your footage between them, and the whole thing renders to one video the editor opens.</p>
+      <div data-el="form" class="form" data-region="main"></div>
+   </template>
+
+   <!-- The shelf of saved scenes; chips are added per scene. -->
+   <template data-row="compose-shelf">
+      <div class="full shelfstrip">
+         <span class="path">Scenes</span>
+         <span data-el="empty" class="hint" hidden>None yet — build one in Scenes and it appears here.</span>
+      </div>
+   </template>
+
+   <template data-row="compose-list">
+      <div class="full" style="display:flex;flex-direction:column;gap:var(--op-space-small)"></div>
+   </template>
+
+   <!-- One segment of the running order. -->
+   <template data-row="compose-segment">
+      <div class="card">
+         <div data-el="body" class="body">
+            <div class="row">
+               <div data-el="title" class="nm"></div>
+               <button data-el="up" class="btn ghost" type="button" title="Move earlier">↑</button>
+               <button data-el="down" class="btn ghost" type="button" title="Move later">↓</button>
+               <button data-el="kill" class="btn ghost del" type="button">Remove</button>
+            </div>
+            <div data-el="scenePath" class="path" hidden></div>
+            <span data-el="sceneHint" class="hint" hidden>Edit it in Scenes — this is a reference to that file.</span>
+         </div>
+      </div>
+   </template>
+
+   <template data-row="compose-elements">
+      <div style="display:flex;flex-direction:column;gap:var(--op-space-x-small);margin-top:var(--op-space-small)"></div>
+   </template>
+
+   <!-- One element on a scene segment: tag, at/for, then its catalogue fields
+        slotted before the remove button. -->
+   <template data-row="compose-element">
+      <div class="row">
+         <span data-el="tag" class="path" style="min-inline-size:9rem"></span>
+         <input data-el="at" class="form-control" type="number" step="100" title="starts at (ms)" style="max-inline-size:7rem" />
+         <input data-el="for" class="form-control" type="number" step="100" title="lasts (ms)" style="max-inline-size:7rem" />
+         <button data-el="remove" class="btn ghost del" type="button" title="Remove this element">×</button>
+      </div>
+   </template>
+
    <!-- Vendored, not a CDN: see brand/vendor/README.md. UMD, so it sets a
         WaveSurfer global and must load before studio.js uses it. -->
    <script src="/brand/vendor/wavesurfer.min.js"></script>
