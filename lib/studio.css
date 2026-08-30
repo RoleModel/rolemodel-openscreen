@@ -240,9 +240,20 @@ body.op-page {
   }
 }
 
+.sidebar {
+    &.sidebar--rail {
+      --_op-sidebar-rail-width: calc(var(--op-size-unit) * 16);
+      
+      .sidebar__brand.sidebar__brand--left {
+       margin-inline: var(--op-space-small);
+      }
+    }
+}
+
 .sidebar__brand.sidebar__brand--left {
   --_op-sidebar-brand-spacing: 0;
   --__op-sidebar-brand-width: calc(var(--op-space-large) * 2);
+  
   margin-block-end: var(--op-space-small);
   margin-inline: var(--op-space-large) auto;
   display: flex;
@@ -291,7 +302,6 @@ nav .root {
 
 nav .btn.btn--no-border {
   display: inline-flex;
-  width: 100%;
   text-align: left;
   background: none;
   border: 0;
@@ -5883,17 +5893,26 @@ textarea.form-control.board__brief {
 }
 
 .working__mark {
-  inline-size: 44px;
-  block-size: 44px;
-  fill: none;
-  stroke: var(--op-color-academy-primary-base);
-  stroke-width: 10;
-  stroke-linecap: round;
-  /* One long dash and a gap, so the stroke reads as a mark being drawn rather
-     than as a ring rotating in place. */
-  stroke-dasharray: 210 460;
-  animation: working-turn 1.4s linear infinite;
-  transform-origin: 50% 50%;
+  inline-size: 52px;
+  block-size: 52px;
+}
+
+.working__mark svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/*
+ * Only the triangle moves; the rounded square it sits in stays put.
+ *
+ * fill-box so it turns about its own centre rather than the middle of the
+ * viewBox, which would send it orbiting around the inside of the mark instead
+ * of spinning in place.
+ */
+.working__play {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: working-turn 1.2s linear infinite;
 }
 
 @keyframes working-turn {
