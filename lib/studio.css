@@ -6061,3 +6061,19 @@ textarea.form-control.board__brief {
 .sidebar--rail .root {
   display: none;
 }
+
+/* Filler words a first cut opens on, offered beside the clips. */
+.multi-assembly__fillers {
+  display: grid;
+  gap: var(--op-space-x-small);
+  margin-block: var(--op-space-small);
+}
+.multi-assembly__filler {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--op-space-small);
+}
+.multi-assembly__filler-text {
+  font-size: var(--op-font-small);
+}

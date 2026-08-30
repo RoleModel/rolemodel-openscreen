@@ -64,7 +64,7 @@ brew trust --tap rolemodel/tap
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and sixteen commands:
+That installs Node and seventeen commands:
 
 | command | does |
 |---|---|
@@ -80,6 +80,7 @@ That installs Node and sixteen commands:
 | `rm-insert` | drops a title card into a recording you already have |
 | `rm-share` | sends a finished video for review |
 | `rm-setup` | checks every piece of the install and repairs what it can |
+| `rm-reconcile` | recomputes a cut's derived timings from its clips; `--check` fails when they disagree |
 
 `pnpm run check` asserts that this table, `bin/`, `package.json` and the formula
 all name the same set. They drifted three times before it did: `rm-setup` was in

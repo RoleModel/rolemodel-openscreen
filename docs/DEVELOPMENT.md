@@ -69,7 +69,7 @@ pnpm run verify    # just the assertions
 ```
 
 It is deliberately not a unit-test suite. Most of what breaks here is a contract
-between two things — a formula that promises sixteen commands, a client that builds
+between two things — a formula that promises seventeen commands, a client that builds
 a path the server resolves differently, a cask whose checksums no longer match
 its release — and those are the assertions worth having. Several exist because
 something shipped broken:

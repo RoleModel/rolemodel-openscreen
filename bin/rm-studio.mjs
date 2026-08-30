@@ -103,6 +103,8 @@ import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 import { stageRenderAssets } from "../lib/render-assets.mjs";
 import { MODELS, DEFAULT_MODEL, modelById, clipProblem, avatarProblem, takesOf } from "../lib/fal.mjs";
+import { trimToSpeech, leadingFiller } from "../lib/speech-trim.mjs";
+import { clockFile, ensureClock } from "../lib/assembly-clock.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -669,22 +671,23 @@ function promoteLegacyCanvasTimelineComponents(html) {
     const sceneDurationMs = Math.max(100, (Number(openingAttribute(sceneAttrs, "data-duration")) || 0) * 1000);
     const trackIndex = Math.max(0, Math.round(Number(openingAttribute(sceneAttrs, "data-track-index")) || 2));
     const components = [];
-    const remainder = sceneBody.replace(/<(rm-title|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (component, tag, attrs) => {
+    const remainder = sceneBody.replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (component, tag, attrs) => {
       const localAt = Math.max(0, Number(openingAttribute(attrs, "at")) || 0);
       const authoredDuration = Number(openingAttribute(attrs, "for"));
       const durationMs = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
         ? authoredDuration
         : Math.max(100, sceneDurationMs - localAt)));
       const isTitle = tag.toLowerCase() === "rm-title";
+      const isPlate = tag.toLowerCase() === "rm-lower-third";
       const componentStartMs = baseStartMs + localAt;
-      const componentClass = isTitle ? "assembly-canvas-title" : "assembly-canvas-background";
+      const componentClass = isTitle ? "assembly-canvas-title" : isPlate ? "assembly-canvas-lower-third" : "assembly-canvas-background";
       let direct = offsetCanvasSceneTiming(component, baseStartMs);
       direct = setOpeningAttribute(direct, tag, "data-assembly-canvas-component", tag);
       direct = setOpeningAttribute(direct, tag, "data-start", hfSeconds(componentStartMs));
       direct = setOpeningAttribute(direct, tag, "data-duration", hfSeconds(durationMs));
-      direct = setOpeningAttribute(direct, tag, "data-track-index", String(isTitle ? trackIndex + 1 : trackIndex));
-      if (!isTitle && !openingAttribute(attrs, "assets")) direct = setOpeningAttribute(direct, tag, "assets", "assets/imagery");
-      if (!openingAttribute(attrs, "id")) direct = setOpeningAttribute(direct, tag, "id", `${isTitle ? "canvas-title" : "canvas-background"}-${Math.round(componentStartMs)}`);
+      direct = setOpeningAttribute(direct, tag, "data-track-index", String(isTitle || isPlate ? trackIndex + 1 : trackIndex));
+      if (!isTitle && !isPlate && !openingAttribute(attrs, "assets")) direct = setOpeningAttribute(direct, tag, "assets", "assets/imagery");
+      if (!openingAttribute(attrs, "id")) direct = setOpeningAttribute(direct, tag, "id", `${isTitle ? "canvas-title" : isPlate ? "canvas-lower-third" : "canvas-background"}-${Math.round(componentStartMs)}`);
       const existingClass = openingAttribute(attrs, "class");
       direct = setOpeningAttribute(
         direct,
@@ -703,7 +706,7 @@ function promoteLegacyCanvasTimelineComponents(html) {
     return `${preservedScene}${components.join("\n")}`;
   });
   if (!changed) return { html: promoted, changed: false };
-  const componentCss = `\n      rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }\n      rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }\n`;
+  const componentCss = `\n      rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }\n      [data-composition-id] { container-type: inline-size; }\n      rm-lower-third.assembly-canvas-lower-third { z-index:3; pointer-events:none; }\n      rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }\n`;
   return {
     html: /rm-title\.assembly-canvas-title/.test(promoted)
       ? promoted
@@ -1763,7 +1766,7 @@ const offsetCanvasSceneTiming = (body, startMs) =>
  */
 function splitCanvasTimelineComponents(body, startMs, sceneDurationMs, trackIndex = 2) {
   const components = [];
-  const sceneBody = String(body ?? "").replace(/<(rm-title|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (match, tag, attrs) => {
+  const sceneBody = String(body ?? "").replace(/<(rm-title|rm-lower-third|rm-shader|rm-pixel-reveal)\b([^>]*)>[\s\S]*?<\/\1>/gi, (match, tag, attrs) => {
     const localAt = Math.max(0, Number(attrs.match(TIMING_ATTR("at"))?.[2]) || 0);
     const authoredDuration = Number(attrs.match(TIMING_ATTR("for"))?.[2]);
     const duration = Math.max(100, Math.round(Number.isFinite(authoredDuration) && authoredDuration > 0
@@ -1771,13 +1774,18 @@ function splitCanvasTimelineComponents(body, startMs, sceneDurationMs, trackInde
       : Math.max(100, sceneDurationMs - localAt)));
     const shifted = offsetCanvasSceneTiming(match, startMs);
     const isTitle = tag.toLowerCase() === "rm-title";
+    /* A lower third is an overlay like a title, not a full-frame background:
+       it rides the title track and takes no imagery shelf. It used to stay in
+       the untimed scene body — no track of its own, its at/for never offset
+       onto the composition clock — so a scene that did its own titling lost it. */
+    const isPlate = tag.toLowerCase() === "rm-lower-third";
     const timelineId = attrs.match(/\bid=(["'])([^"']+)\1/i)?.[2]
-      ?? `${isTitle ? "canvas-title" : "canvas-background"}-${Math.round(startMs + localAt)}`;
-    const timelineTrack = isTitle ? trackIndex + 1 : trackIndex;
-    const timelineClass = isTitle ? "assembly-canvas-title" : "assembly-canvas-background";
+      ?? `${isTitle ? "canvas-title" : isPlate ? "canvas-lower-third" : "canvas-background"}-${Math.round(startMs + localAt)}`;
+    const timelineTrack = isTitle || isPlate ? trackIndex + 1 : trackIndex;
+    const timelineClass = isTitle ? "assembly-canvas-title" : isPlate ? "assembly-canvas-lower-third" : "assembly-canvas-background";
     let timelineComponent = shifted.replace(
       new RegExp(`<${tag}\\b`, "i"),
-      `<${tag} data-assembly-canvas-component="${tag}" data-start="${hfSeconds(startMs + localAt)}" data-duration="${hfSeconds(duration)}" data-track-index="${timelineTrack}"${isTitle ? "" : ' assets="assets/imagery"'}`,
+      `<${tag} data-assembly-canvas-component="${tag}" data-start="${hfSeconds(startMs + localAt)}" data-duration="${hfSeconds(duration)}" data-track-index="${timelineTrack}"${isTitle || isPlate ? "" : ' assets="assets/imagery"'}`,
     );
     if (!/\bid=(["'])[^"']+\1/i.test(timelineComponent)) {
       timelineComponent = timelineComponent.replace(new RegExp(`<${tag}\\b`, "i"), `<${tag} id="${hf(timelineId)}"`);
@@ -1819,39 +1827,9 @@ function canvasSceneDurationMs(body, fallback = 2600) {
  * same seekable composition clock in preview and export.
  */
 async function stageCanvasSceneClock(outDir, durationMs) {
-  const seconds = Math.max(1, Math.ceil(Number(durationMs) / 1000));
-  const file = `canvas-clock-${seconds}s.m4a`;
-  const target = join(outDir, "assets", file);
-  if (!(await stat(target).catch(() => null))) {
-    await mkdir(dirname(target), { recursive: true });
-    await new Promise((resolveClock, rejectClock) => {
-      /*
-       * jobs.childEnv(), because this spawn does not go through jobs.run().
-       *
-       * `jobs.addPath("/opt/homebrew/bin")` at the top of this file only reaches
-       * children the job runner starts, and this one is started directly — so it
-       * inherited a bare process.env. From a shell that is harmless; launched
-       * from Finder, where PATH is /usr/bin:/bin, ffmpeg is not on it and the
-       * Canvas assembly died with `spawn ffmpeg ENOENT`, naming a binary the
-       * person can plainly see installed.
-       */
-      const child = spawn("ffmpeg", [
-        "-y",
-        "-f", "lavfi",
-        "-i", "anullsrc=r=8000:cl=mono",
-        "-t", String(seconds),
-        "-c:a", "aac",
-        "-b:a", "8k",
-        "-movflags", "+faststart",
-        target,
-      ], { stdio: "ignore", env: jobs.childEnv() });
-      child.once("error", rejectClock);
-      child.once("close", (code) => code === 0
-        ? resolveClock()
-        : rejectClock(new Error("Studio could not create the Canvas timeline clock")));
-    });
-  }
-  return `assets/${file}`;
+  const src = clockFile(Number(durationMs) / 1000);
+  await ensureClock(outDir, { src, seconds: Math.ceil(Number(durationMs) / 1000) });
+  return src;
 }
 
 /* Every Claude selection becomes a complete first cut, rather than a bare row
@@ -1975,9 +1953,32 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
       ? `    <audio id="${id}-audio" src="${hf(clip.audioSource)}" data-start="${start}" data-duration="${span}" data-media-start="${hfSeconds(clip.audioStartMs ?? clip.mediaStartMs)}" data-track-index="${index + 1}"></audio>`
       : "";
     const hasCanvasScene = typeof clip.scene?.body === "string" && clip.scene.body.trim();
-    const lowerThird = clip.speaker && !hasCanvasScene
-      ? `    <aside class="clip assembly-lower-third" data-start="${hfSeconds(cursor + 400)}" data-duration="${hfSeconds(Math.min(4200, Math.max(1200, duration - 400)))}" data-track-index="${index + 2}"><span class="assembly-lower-third__name">${hf(clip.speaker)}</span>${clip.role ? `<span class="assembly-lower-third__role">${hf(clip.role)}</span>` : ""}</aside>`
+    /*
+     * A scene that does its own titling wins; one that does not still gets a
+     * plate. This used to suppress the lower third for ANY clip with a Canvas
+     * scene, so attaching a shader or a callout to a speaker silently cost them
+     * their name. `data-assembly-for` ties the plate to its clip so the
+     * reconcile pass can keep it on the clip when the clip moves.
+     */
+    const sceneHasPlate = hasCanvasScene && /<rm-lower-third\b/i.test(clip.scene.body);
+    const plateStartMs = cursor + 400;
+    const plateMs = Math.min(4200, Math.max(1200, duration - 400));
+    const lowerThird = clip.speaker && !sceneHasPlate
+      ? `    <aside id="${id}-plate" class="clip assembly-lower-third" data-assembly-for="${id}" data-start="${hfSeconds(plateStartMs)}" data-duration="${hfSeconds(plateMs)}" data-track-index="${index + 2}"><span class="assembly-lower-third__name">${hf(clip.speaker)}</span>${clip.role ? `<span class="assembly-lower-third__role">${hf(clip.role)}</span>` : ""}</aside>`
       : "";
+    /*
+     * A lower third enters and leaves; it does not cut.
+     *
+     * The same GSAP idiom as the dissolves, on the composition clock, so the
+     * renderer drives it and the reconcile pass can move it with its clip.
+     * A short slide from the left on the brand's enter curve, a quicker fade
+     * out — DESIGN.md "Motion". The plate's own element is the tween target,
+     * by the id the reconcile pass knows.
+     */
+    if (lowerThird) {
+      tweens.push(`      tl.fromTo('#${id}-plate', { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.400, ease: 'power3.out' }, ${hfSeconds(plateStartMs)});`);
+      tweens.push(`      tl.to('#${id}-plate', { opacity: 0, duration: 0.200, ease: 'none' }, ${hfSeconds(plateStartMs + plateMs - 200)});`);
+    }
     /*
      * preload="auto", despite the cost.
      *
@@ -2065,6 +2066,27 @@ function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock =
       lowerThird,
     ].filter(Boolean).join("\n");
   }).join("\n");
+  /*
+   * The background leads the cut.
+   *
+   * A promoted rm-pixel-reveal with flow-beats="auto" is handed the clip
+   * boundaries — the field shifts ~100ms before each one, so the eye is told a
+   * change is coming before the picture changes. The list is derived from the
+   * cut, so the reconcile pass could recompute it; today it is written once
+   * at export. See DESIGN.md "Motion".
+   */
+  const clipBoundaries = [];
+  {
+    let at = titleDuration;
+    for (const clip of clips) {
+      at += Math.max(100, Math.round(Number(clip.durationMs) || 0));
+      clipBoundaries.push(at);
+    }
+    clipBoundaries.pop();
+  }
+  for (let i = 0; i < canvasTimelineComponents.length; i += 1) {
+    canvasTimelineComponents[i] = canvasTimelineComponents[i].replace(/\sflow-beats=(["'])auto\1/i, ` flow-beats="${clipBoundaries.map((ms) => hfSeconds(ms)).join(",")}"`);
+  }
   const canvasOverlay = canvasSceneBodies.length
     ? `    <rm-scene id="canvas-scene-overlays" class="assembly-canvas-overlays" assets="assets/imagery">
 ${canvasSceneBodies.join("\n")}
@@ -2114,6 +2136,10 @@ ${canvasSceneBodies.join("\n")}
       .assembly-canvas-clock { display:block; position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
       .assembly-canvas-overlays { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; background: transparent; pointer-events: none; }
       rm-title.assembly-canvas-title { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; pointer-events:none; }
+      /* The plate positions itself in cqw, as it does inside an rm-scene; the
+         root is its container here. Above the footage, below a title. */
+      [data-composition-id] { container-type: inline-size; }
+      rm-lower-third.assembly-canvas-lower-third { z-index:3; pointer-events:none; }
       rm-shader.assembly-canvas-background, rm-pixel-reveal.assembly-canvas-background { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; pointer-events:none; }
       /*
        * The wash-through-black transition that used to live here is gone, along
@@ -2179,7 +2205,7 @@ ${tweens.join("\n")}
 `;
 }
 
-async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {}, showAssemblyTitle = true }) {
+async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {}, showAssemblyTitle = true, speechTrim = true }) {
   if (!clips.length) throw new Error("choose at least one clip for the HyperFrames assembly");
   const outDir = join(mediaDir(id), "Renders", folder);
   await mkdir(outDir, { recursive: true });
@@ -2207,16 +2233,11 @@ async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {
     };
   });
   if (normalized.some((clip) => (!clip.source && !clip.scene) || clip.source.includes(".."))) throw new Error("one of the assembly clips is outside this project");
-  const durationSec = normalized.reduce((total, clip) => total + clip.durationMs, 0) / 1000;
-  const hasCanvasScenes = normalized.some((clip) => clip.scene);
-  const canvasClock = hasCanvasScenes
-    ? await stageCanvasSceneClock(outDir, durationSec * 1000)
-    : null;
-  if (hasCanvasScenes) await stageCanvasSceneRuntime(outDir);
   /*
    * Measure each take once. Transitions need to know how much footage sits past
    * a clip's out point, and only the file can answer that — the board records
-   * where a clip was cut, never how much take was left over.
+   * where a clip was cut, never how much take was left over. Speech trimming
+   * needs the same number, to tell a whole-file default from a chosen out point.
    */
   const sourceDurations = {};
   for (const clip of normalized) {
@@ -2228,10 +2249,40 @@ async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {
     const seconds = probe.ok ? Number.parseFloat(String(probe.out).trim()) : Number.NaN;
     if (Number.isFinite(seconds) && seconds > 0) sourceDurations[clip.source] = Math.round(seconds * 1000);
   }
+  /*
+   * A clip never defaults to the whole file.
+   *
+   * Every silence in the CCC Days cut was a take spanning its file — 49.6s of
+   * Jamey sitting still after a transcript that said his last word was at
+   * 18.0s. Where a clip edge sits on the file's own boundary and the transcript
+   * knows better, tighten it to the speech plus a breath. An edge somebody
+   * placed inside the file is a decision and is left exactly where it is; see
+   * lib/speech-trim.mjs for both rules.
+   */
+  const trimmed = [];
+  if (speechTrim) {
+    for (const clip of normalized) {
+      if (!clip.source) continue;
+      const words = (await readPaperEdit(id, clip.source).catch(() => null))?.transcript?.words;
+      if (!Array.isArray(words) || !words.length) continue;
+      const tightened = trimToSpeech(clip, words, sourceDurations[clip.source] ?? 0);
+      if (!tightened.trimmed) continue;
+      clip.mediaStartMs = tightened.mediaStartMs;
+      clip.durationMs = tightened.durationMs;
+      clip.trimmedToSpeech = tightened.trimmed;
+      trimmed.push({ source: clip.source, ...tightened.trimmed });
+    }
+  }
+  const durationSec = normalized.reduce((total, clip) => total + clip.durationMs, 0) / 1000;
+  const hasCanvasScenes = normalized.some((clip) => clip.scene);
+  const canvasClock = hasCanvasScenes
+    ? await stageCanvasSceneClock(outDir, durationSec * 1000)
+    : null;
+  if (hasCanvasScenes) await stageCanvasSceneRuntime(outDir);
   await writeFile(join(outDir, "index.html"), hyperframesAssemblyHtml({ title, clips: normalized, wallpaper: staged.wallpaper, canvasClock, showAssemblyTitle, sourceDurations }), "utf8");
   await writeFile(join(outDir, "brief.md"), `# ${title}\n\nEditable source assembly created by Studio. Media remains linked from this project's media folder.\n`, "utf8");
-  await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, showAssemblyTitle, ...metadata }, null, 2)}\n`, "utf8");
-  return { folder, outDir, clips: normalized.length, durationSec };
+  await writeFile(join(outDir, "assembly.json"), `${JSON.stringify({ version: 1, title, clips: normalized, durationSec, wallpaper: staged.wallpaper, showAssemblyTitle, sourceDurations, trimmed, ...metadata }, null, 2)}\n`, "utf8");
+  return { folder, outDir, clips: normalized.length, durationSec, trimmed };
 }
 const multiPickKey = (pick) => Buffer.from(`${pick.source}:${pick.inSec}:${pick.outSec}`).toString("base64url").slice(-18);
 
@@ -3751,8 +3802,7 @@ const server = createServer(async (req, res) => {
         ? {
             label: `render template ${slug}`,
             project: id,
-            bin: "npx",
-            args: ["--yes", "hyperframes", "render", "--output", join(hyperframesExportDir(outDir), `${slug}.mp4`), "--quality", "draft"],
+            ...ownStep("rm-render-hyperframes", ["--output", join(hyperframesExportDir(outDir), `${slug}.mp4`)]),
             cwd: outDir,
             note: "run this after Claude has written index.html; the result is a draft MP4 with the selected audio",
           }
@@ -7699,12 +7749,25 @@ async function fetchVoiceList() {
         if (!state?.picks?.length) throw new Error("ask Claude to choose clips first");
         await Promise.all((state.sources ?? []).map((rel) => paperEditMedia(id, rel)));
         const title = state.title || "Review cut";
+        /*
+         * The script's own title lines win over the generic ones.
+         *
+         * `/title`, `/eyebrow`, `/sub` and `/reveal` sit in the script beside
+         * the words they belong to; before this the only way to set a subtitle
+         * on the opening card was to hand-edit the scene HTML after the build.
+         */
+        const script = await assemblyScript(id, state.scriptName, null).catch(() => null);
+        const asked = script ? demoSettings(parseDemo(script.body)) : {};
         const opening = firstCutTitleScene({
           name: "Opening title",
-          eyebrow: "First cut",
-          title,
-          sub: "Selected from your recordings",
+          eyebrow: String(asked.eyebrow || "First cut"),
+          title: String(asked.title || title),
+          sub: String(asked.sub || "Selected from your recordings"),
         });
+        if (asked.reveal) {
+          const image = basename(String(asked.reveal));
+          opening.scene.body = `<rm-pixel-reveal at="0" for="${opening.durationMs}" image="${hf(image)}" flow="flow" flow-beats="auto"></rm-pixel-reveal>\n${opening.scene.body}`;
+        }
         const closing = firstCutTitleScene({
           name: "Closing screen",
           eyebrow: "Review cut",
@@ -7729,8 +7792,43 @@ async function fetchVoiceList() {
           showAssemblyTitle: false,
           metadata: { title, picks: state.picks, gaps: state.gaps ?? [], parked: state.parked ?? [], scriptBeats: state.scriptBeats ?? [], sourceType: "claude-selects", transition: "cross-dissolve-on-scene-change", firstCut: { opening: opening.scene, closing: closing.scene } },
         });
-        await writeMultiAssembly(id, { ...state, hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), reviewApprovedAt: new Date().toISOString() });
-        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, selections: state.picks.length, durationSec: built.durationSec });
+        /*
+         * Offered, not applied.
+         *
+         * A pick that opens on "Okay," or "So" is detectable from the word
+         * timings; whether to lose it is an editorial call. Finding it is not,
+         * so each one is a suggestion beside the cut with the exact point to
+         * trim to — one click, through /api/multi-assembly/trim.
+         */
+        const fillers = [];
+        for (const pick of state.picks) {
+          const words = (await readPaperEdit(id, pick.source).catch(() => null))?.transcript?.words;
+          const filler = leadingFiller(words, Number(pick.inSec) || 0);
+          if (filler && filler.trimToSec < Number(pick.outSec)) fillers.push({ pickId: pick.id, source: pick.source, speaker: pick.speaker ?? null, ...filler });
+        }
+        await writeMultiAssembly(id, { ...state, fillers, hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), reviewApprovedAt: new Date().toISOString() });
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, selections: state.picks.length, durationSec: built.durationSec, trimmed: built.trimmed, fillers });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /* Move one pick's in point — the accepted form of a filler suggestion.
+       The cut is rebuilt from the picks, so the built project is cleared. */
+    if (p === "/api/multi-assembly/trim" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const state = await readMultiAssembly(id);
+        const pickId = String(body.pickId ?? "");
+        const pick = state?.picks?.find((item) => item.id === pickId);
+        if (!pick) throw new Error("that assembly clip is no longer available");
+        const inSec = Number(body.inSec);
+        if (!Number.isFinite(inSec) || inSec < 0 || inSec >= Number(pick.outSec) - 0.25) throw new Error("that in point leaves nothing of the clip");
+        const picks = state.picks.map((item) => (item.id === pickId ? { ...item, inSec: +inSec.toFixed(3) } : item));
+        const fillers = (state.fillers ?? []).filter((item) => item.pickId !== pickId);
+        await writeMultiAssembly(id, { ...state, picks, fillers, hyperframesProject: null, reviewApprovedAt: null });
+        return json(res, 200, { state: await readMultiAssembly(id) });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -7801,6 +7899,8 @@ async function fetchVoiceList() {
           folder: "source-recordings-stack",
           title: "Source recordings stack",
           clips,
+          // A stack IS the whole recordings, by definition. Do not trim them.
+          speechTrim: false,
           metadata: { sources: sources.map((source) => source.rel), sourceType: "full-recordings" },
         });
         await writeMultiAssembly(id, { ...prior, version: 1, sources: sources.map((source) => source.rel), hyperframesProject: built.folder, hyperframesBuiltAt: new Date().toISOString(), stackedAt: new Date().toISOString() });
@@ -7887,6 +7987,9 @@ async function fetchVoiceList() {
         const built = await writeHyperframesAssembly(id, {
           folder: "audio-alignment",
           title: "Visual narration alignment",
+          // Screen segments are timed to the narration; their own transcript
+          // is not the audio that plays over them.
+          speechTrim: false,
           clips: state.segments.map((segment) => ({
             source: sources.videoRel,
             mediaStartMs: Number(segment.screenInSec) * 1000,
@@ -8675,14 +8778,16 @@ async function fetchVoiceList() {
          * started the same way, through /api/run and the Console stream.
          */
         const renderOut = join(mediaDir(id), "Renders", built.folder);
+        /* Through rm-render-hyperframes, never `hyperframes render` directly:
+           it reconciles the derived timings first and checks that an MP4 was
+           actually written, because a failed render still exits 0. */
         const renderStep = {
           label: `render ${built.folder}`,
           project: id,
-          bin: "npx",
-          args: ["--yes", "hyperframes", "render", "--output", join(hyperframesExportDir(renderOut), `${built.folder}.mp4`), "--quality", "draft"],
+          ...ownStep("rm-render-hyperframes", ["--output", join(hyperframesExportDir(renderOut), `${built.folder}.mp4`)]),
           cwd: renderOut,
         };
-        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, seconds: built.durationSec, scenes: clips.filter((clip) => clip.scene).length, missingScenes, renderStep });
+        return json(res, 200, { hyperframesProject: built.folder, clips: built.clips, seconds: built.durationSec, scenes: clips.filter((clip) => clip.scene).length, missingScenes, trimmed: built.trimmed, renderStep });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
