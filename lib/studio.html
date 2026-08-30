@@ -16,6 +16,15 @@
 </head>
 
 <body class="op-page">
+   <!--
+      Where a finished action says so.
+
+      Outside .op-page__main on purpose: a note rendered into the footer beside
+      the buttons reflowed them every time it appeared, and a note rendered into
+      a panel scrolls away with the panel. This is fixed, it never takes layout
+      space, and it fades itself out.
+   -->
+   <output class="toast" id="toast" role="status" aria-live="polite" hidden></output>
    <div class="op-page__sidebar">
       <nav class="sidebar sidebar--drawer">
          <a class="sidebar__brand sidebar__brand--left" href="/">
@@ -29,6 +38,10 @@
             <button class="btn btn--no-border" data-group="make" data-v="workflow">Video</button>
             <button class="btn btn--no-border" data-group="make" data-v="voice">Voice</button>
             <button class="btn btn--no-border" data-group="make" data-v="hyperframes">Motion editor</button>
+            <!-- Scenes had a label and a glyph but no way in: the only route was
+                 a Canvas node's "Edit scene", so a project with no board nodes
+                 could not reach its own saved scenes at all. -->
+            <button class="btn btn--no-border" data-group="make" data-v="scenes">Scenes</button>
             <h2 class="navgroup">Toolkit</h2>
             <button class="btn btn--no-border" data-v="skills">Skills</button>
             <button class="btn btn--no-border" data-v="brand">Brand</button>
@@ -134,7 +147,7 @@
          A project is a folder with a manifest. Client is separate from project name
          — Ridgeline and Hershey are two clients, not one project.
       </p>
-      <div data-region="side">
+      <div data-region="main" class="form">
          <div class="form-group">
             <label class="form-label" for="new-name">Project</label>
             <input data-el="name" id="new-name" class="form-control" placeholder="Railing Case Study" />

@@ -1207,8 +1207,8 @@ function sPaintWash(ctx, w, h, st, pal) {
 /* The dot field. Grain comes from the cell's own hash, not from a running RNG,
    so a frame drawn on its own matches the same frame drawn in sequence. */
 function sDrawField(ctx, w, h, st, pal) {
-  const spacing = 5.15 / st.density
-  const radius = 1.02 * st.radius
+  const spacing = 8.15 / st.density
+  const radius = 1 * st.radius
   const bg = ctx.createLinearGradient(0, 0, w, h)
   bg.addColorStop(0, sRgba(sMix(pal.ground, pal.green, 0.07), 1))
   bg.addColorStop(0.52, sRgba(pal.ground, 1))
@@ -1218,7 +1218,16 @@ function sDrawField(ctx, w, h, st, pal) {
   sPaintWash(ctx, w, h, st, pal)
 
   const colors = [pal.green, pal.cyan, pal.paper, pal.amber, sMix(pal.green, pal.ground, 0.5)]
-  const dark = sMix(pal.ground, [0, 0, 0], 0.3)
+  /*
+   * The dim end of the ramp is the ground, not 30% toward black.
+   *
+   * A cell with little energy was painted darker than what it sits on, so the
+   * whole field carried a black speckle — worst in the middle, where centerDark
+   * takes energy away. On the sheet's 460px card those were specks; across a
+   * frame they are the texture you see. A dot may add light to the ground and
+   * may take colour from the field, but it never darkens what is behind it.
+   */
+  const dark = pal.ground
   const light = sMix(pal.paper, pal.ground, 0.06)
   const cx = w * st.centerX
   const cy = h * st.centerY
@@ -1242,7 +1251,11 @@ function sDrawField(ctx, w, h, st, pal) {
       const color = sMix(tonal, fieldColor, 0.34 + field.shape * 0.32 + st.wash * 0.22)
       const alpha = sClamp(0.16 + energy * 0.72 + st.blend * 0.12, 0.12, 0.98)
       const sizeBase = 0.36 + energy * 1.04 + field.shape * st.shapeScale + field.ribbon * st.ribbonScale
-      const size = radius * sClamp(sizeBase + (grain - 0.5) * 0.045, 0.3, 4.2)
+      // st.grain scales the dot against its cell. At 1 the sheet's dots sit in a
+      // field of exposed ground and the gaps between them read as dark specks;
+      // larger dots close that gap and the halftone becomes a texture rather
+      // than a grid of holes.
+      const size = radius * st.grain * sClamp(sizeBase + (grain - 0.5) * 0.045, 0.3, 4.2)
       ctx.fillStyle = sRgba(color, alpha)
       ctx.beginPath(); ctx.arc(x + (grain - 0.5) * 0.12, y, size, 0, Math.PI * 2); ctx.fill()
     }
@@ -1285,7 +1298,7 @@ function sMotion(mode, time, phase) {
   const cycle = (time % 5.2) / 5.2
   const breakCycle = (time % 4.8) / 4.8
   const m = {
-    swell: 0, blend: 0, hue: 0, sat: 1.12, fgBlur: 0, cutDrag: 0, cutBoost: 0, haze: 1,
+    swell: 0, blend: 0, hue: 0, sat: 1.12, fgBlur: 0, cutDrag: 0, cutBoost: 0, haze: 1, grain: 1,
     plateX: Math.sin(slow * Math.PI * 2) * 54,
     plateY: Math.cos(slow * Math.PI * 2 + 0.8) * 14,
     plateScale: 1.04, slow, cycle,
@@ -1381,6 +1394,7 @@ function sState(m, mode) {
     ribbonScale: 0.06 + m.swell * 0.18,
     blend: m.blend,
     haze: m.haze,
+    grain: m.grain,
     ribbon: m.slow * 0.82 + m.plateX / 900,
     massAX: -0.28 + ((m.slow * 0.46) % 1.56),
     massAY: 0.42 + Math.sin(m.slow * Math.PI * 0.9) * 0.16,
@@ -1455,7 +1469,7 @@ const FIELD = `
   .title { color:var(--paper-ink); font-size:var(--size, 6.6cqw); font-weight:700;
            line-height:.92; letter-spacing:-.03em;}
   .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
-          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:64ch; }
+          font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:94ch; }
   /* Oversized and centred: the plate travels during a cut, and a plate the size
      of the frame would show the ground along the edge it moves away from. */
   canvas { position:absolute; left:50%; top:50%; width:126%; height:126%;
@@ -1492,7 +1506,7 @@ const fieldStyle = (el) => {
  * other component, the way you would over footage.
  */
 class RMStudyField extends RMElement {
-  static fields = ['mode', 'phase', 'bloom', 'haze', 'eyebrow', 'title', 'body', 'size', 'x', 'y', 'align', 'ground', 'paper', 'green', 'cyan', 'amber', 'at', 'for']
+  static fields = ['mode', 'phase', 'bloom', 'haze', 'grain', 'eyebrow', 'title', 'body', 'size', 'x', 'y', 'align', 'ground', 'paper', 'green', 'cyan', 'amber', 'at', 'for']
 
   disconnectedCallback() { this._dispose?.(); this._dispose = null }
 
@@ -1537,6 +1551,8 @@ class RMStudyField extends RMElement {
       if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
       const haze = Number(this.attr('haze', ''))
       if (Number.isFinite(haze)) m.haze = sClamp(haze, 0, 1)
+      const grainSize = Number(this.attr('grain', ''))
+      if (Number.isFinite(grainSize)) m.grain = sClamp(grainSize, 0.5, 3)
       canvas.style.transform = `translate(calc(-50% + ${m.plateX}px), calc(-50% + ${m.plateY}px)) scale(${m.plateScale})`
       canvas.style.filter = `hue-rotate(${m.hue}deg) saturate(${m.sat}) blur(${m.fgBlur}px)`
       sDrawField(ctx, STUDY_W, STUDY_H, sState(m, mode), pal)

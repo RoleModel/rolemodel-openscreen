@@ -1721,6 +1721,10 @@ async function stageCanvasSceneRuntime(outDir) {
   const source = await readFile(join(TOOLKIT, "components", "rm-video.js"), "utf8");
   const runtime = source.replace('../brand/logos/standard-icon.svg', '../brand/standard-icon.svg');
   await writeFile(join(componentDir, "rm-video.js"), runtime, "utf8");
+  /* Its own directory, not one another stager happens to have made first. This
+     only ever ran after stageRenderAssets, so the missing mkdir was invisible
+     until something staged the runtime on its own and hit ENOENT on the copy. */
+  await mkdir(join(outDir, "assets", "brand"), { recursive: true });
   await copyFile(join(TOOLKIT, "brand", "logos", "standard-icon.svg"), join(outDir, "assets", "brand", "standard-icon.svg"));
   return "assets/canvas-components/rm-video.js";
 }
@@ -3823,6 +3827,60 @@ const server = createServer(async (req, res) => {
     /* A motion project is an editable composition folder, including any render
        outputs made inside it. Deleting it must never be able to reach sibling
        project media, and it must retire a live embedded Studio first. */
+    /*
+     * Put one authored element into a composition, without rebuilding it.
+     *
+     * "Build the cut in HyperFrames" regenerates index.html from the board, so
+     * it is the wrong tool for a composition somebody has since tuned by hand —
+     * it would discard the trims, the dissolves and anything else edited in the
+     * file. This appends a single element before </main> and touches nothing
+     * else, and keeps a copy of the file first so an insert can be undone.
+     */
+    if (p === "/api/hyperframes/insert" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(b.projectId ?? "");
+      const folder = basename(String(b.folder ?? ""));
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const renders = resolve(mediaDir(id), "Renders");
+      const root = resolve(renders, folder);
+      const indexPath = join(root, "index.html");
+      if (!folder || folder === "." || folder === ".." || !root.startsWith(`${renders}${sep}`)
+        || !(await stat(indexPath).catch(() => null))?.isFile()) {
+        return json(res, 404, { error: "that motion project is not in this project" });
+      }
+      const body = String(b.body ?? "").trim();
+      if (!body || !/^<[a-z][\w-]*[\s>]/i.test(body)) return json(res, 400, { error: "nothing to insert" });
+
+      const html = await readFile(indexPath, "utf8");
+      const close = html.lastIndexOf("</main>");
+      if (close === -1) return json(res, 400, { error: "that composition has no <main> to insert into" });
+
+      /* The Canvas components have to be present or the element renders as a
+         bare unknown tag. Staging is idempotent, so this is safe to repeat. */
+      await stageCanvasSceneRuntime(root);
+
+      /* A stable id, because Studio's timeline and canvas controls need one to
+         edit against — HyperFrames warns about any timed element without it. */
+      const tagName = (/^<([a-z][\w-]*)/i.exec(body) ?? [])[1] ?? "element";
+      let n = 1;
+      while (html.includes(`id="${tagName}-${n}"`)) n += 1;
+      const id2 = `${tagName}-${n}`;
+
+      const start = Math.max(0, Number(b.startMs) || 0);
+      const duration = Math.max(100, Number(b.durationMs) || 4000);
+      const timed = body
+        .replace(/\sdata-start="[^"]*"/g, "")
+        .replace(/\sdata-duration="[^"]*"/g, "")
+        .replace(/\sat="[^"]*"/g, "")
+        .replace(/\sfor="[^"]*"/g, "")
+        .replace(/^<([a-z][\w-]*)/i, `<$1 id="${id2}" class="clip" data-start="${hfSeconds(start)}" data-duration="${hfSeconds(duration)}" at="${Math.round(start)}" for="${Math.round(duration)}"`);
+
+      await writeFile(`${indexPath}.before-insert`, html, "utf8");
+      await writeFile(indexPath, `${html.slice(0, close)}    ${timed}\n  ${html.slice(close)}`, "utf8");
+      return json(res, 200, { ok: true, folder, id: id2, startMs: start, durationMs: duration });
+    }
+
     if (p === "/api/hyperframes/delete" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
