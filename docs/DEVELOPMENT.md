@@ -206,6 +206,21 @@ permanently invisible while the speaker's name, which has no tween, shows fine.
 Anything else that reads a composition has to follow the mounts too.
 `rm-retime-pip` writes each file it finds rather than `index.html` alone.
 
+And a fragment has to say it has no clock. Both the host and the file's root
+carry `data-no-timeline`, which is not cosmetic: anything carrying a composition
+id is a composition to the producer, and it polls `window.__timelines[id]` for
+**forty-five seconds** before giving up. Six transcripts is four and a half
+minutes added to every render, waiting for six timelines that were never going
+to appear. They carry the parent's `data-duration` for the same reason — these
+fragments are measured on the parent's clock, and it is the one number here that
+does not change when a clip is retimed.
+
+This surfaces in an odd place. The compiler copies each sub-composition into
+`renders/work-<uuid>/compiled/compositions/` and lints it **standalone**, so the
+errors name a build artifact rather than your source. Those work directories are
+created per compile and swept, so the report is a snapshot of one — fix the
+source, and every later compile is a copy of the fix.
+
 ### The editor writes the file too
 
 HyperFrames rewrites a composition when it saves: it pretty-prints, stamps every

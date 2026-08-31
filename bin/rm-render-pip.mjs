@@ -23,7 +23,7 @@
  * middle. ffmpeg keys that middle out. Borders, rounded corners and drop
  * shadows come through for free because they were never the video's pixels.
  *
- *   rm-render-pip <projectId> <folder> [--fps 30] [--from 0] [--to 12]
+ *   rm-render-pip <projectId> <folder> [--fps <composition's data-fps>] [--from 0] [--to 12]
  */
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -47,11 +47,25 @@ const die = (message) => {
 };
 
 const [projectId, folder = "canvas-pip-transcript"] = args.filter((a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true);
-if (!projectId) die("usage: rm-render-pip <projectId> [folder] [--fps 30] [--from 0] [--to 12]");
+if (!projectId) die("usage: rm-render-pip <projectId> [folder] [--fps N] [--from 0] [--to 12]");
 
-const FPS = Number(flag("fps", 30));
 const root = join(defaultRoot(), projectId, "media", "Renders", folder);
 if (!(await stat(join(root, "index.html")).catch(() => null))) die(`no composition at ${root}`);
+
+/*
+ * The composition's own frame rate, unless told otherwise.
+ *
+ * `<main data-fps>` is what the composition says it is, and it was written and
+ * then ignored: the renderer defaulted to 30 whatever the file declared, so a
+ * 60fps export produced a file that contradicted its own source and a
+ * composition authored at another rate was silently resampled. The flag stays,
+ * as an override for one render rather than a change to the piece — set
+ * data-fps if the piece itself should be 60.
+ */
+const declaredFps = Number(
+	(await readFile(join(root, "index.html"), "utf8")).match(/<main\b[^>]*\bdata-fps="([\d.]+)"/)?.[1],
+);
+const FPS = Number(flag("fps", Number.isFinite(declaredFps) && declaredFps > 0 ? declaredFps : 30));
 
 /*
  * The key colour is one the brand cannot produce and a camera will not: pure
