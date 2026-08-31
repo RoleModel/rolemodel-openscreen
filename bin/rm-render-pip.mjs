@@ -30,7 +30,7 @@ import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
-import { createReadStream } from "node:fs";
+import { createReadStream, unlinkSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { basename, dirname, extname, resolve as resolvePath } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
@@ -51,6 +51,32 @@ if (!projectId) die("usage: rm-render-pip <projectId> [folder] [--fps N] [--from
 
 const root = join(defaultRoot(), projectId, "media", "Renders", folder);
 if (!(await stat(join(root, "index.html")).catch(() => null))) die(`no composition at ${root}`);
+
+/*
+ * One render of a composition at a time.
+ *
+ * Two at once cost a finished cut (see the draft note below). They also fight
+ * over the same CPU and the same headless browser, so the pair takes longer
+ * than the two would have run back to back. `wx` is the whole mechanism: it
+ * creates the file or it fails, with no window in between.
+ *
+ * A stale lock — the machine went down mid-render — names its own age and how
+ * to clear it, rather than refusing forever with no way forward.
+ */
+const lockFile = join(root, ".render-lock");
+const held = await readFile(lockFile, "utf8").catch(() => null);
+if (held !== null) {
+	const since = await stat(lockFile).then((s) => s.mtimeMs).catch(() => Date.now());
+	const mins = Math.round((Date.now() - since) / 60_000);
+	die(`this composition is already being rendered (started ${mins} minute${mins === 1 ? "" : "s"} ago, pid ${held.trim()})\n`
+		+ `    two renders of one composition overwrite each other and the finished file is lost\n`
+		+ `    if nothing is running, remove ${lockFile}`);
+}
+await writeFile(lockFile, `${process.pid}\n`, { flag: "wx" }).catch(() => die("this composition is already being rendered"));
+const release = () => { try { unlinkSync(lockFile); } catch { /* already gone */ } };
+process.on("exit", release);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => { release(); process.exit(1); });
+
 
 /*
  * The composition's own frame rate, unless told otherwise.
@@ -701,8 +727,23 @@ if (partial) console.log(`  partial range — writing ${basename(out)}, not the 
  *
  * `.part` beside it, then a rename, which is atomic within a directory: either
  * the old render is there or the new one is, never neither.
+ *
+ * The draft carries this run's id, because the name used to be fixed. Two
+ * renders of one composition — the same cut started from Studio and from the
+ * command line, which is an easy thing to do and nothing prevented — both wrote
+ * `canvas-pip-transcript.mp4.part`. The first to finish renamed the file out
+ * from under the second, whose ffmpeg went on writing into the inode it still
+ * held and then failed looking for a draft that no longer existed:
+ *
+ *     Unable to re-open …mp4.part output file for shifting data
+ *     Error writing trailer: No such file or directory
+ *
+ * What was left was 32MB of video with no moov atom — a file of the right size
+ * that nothing can play, standing where a finished render had been ten seconds
+ * earlier. A unique name means two runs cannot touch each other's work; the
+ * lock below means they do not have to find that out the hard way.
  */
-const draft = `${out}.part`;
+const draft = `${out}.part-${process.pid.toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const composite = spawn("ffmpeg", [
 	"-v", "error",
 	"-ss", String(from), "-t", String(to - from), "-i", footage,
