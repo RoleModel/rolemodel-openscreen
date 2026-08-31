@@ -5238,12 +5238,16 @@ const server = createServer(async (req, res) => {
          * work, done by the thing that already holds a token. Only an id is ever
          * stored, so everything downstream still sees exactly one shape.
          */
+        let notInChannel = null;
         if (channel && !/^[CGD][A-Z0-9]{6,}$/i.test(channel)) {
           const { token } = await effectiveSlackSettings();
           const using = body.token ? String(body.token) : token;
           if (!using) return json(res, 400, { error: "add the bot token first — a channel name can only be looked up with one" });
           const found = await slack({ token: using }).findChannel(channel);
           channel = found.id;
+          /* Resolved, but not somewhere it can post: worth saying now rather than
+             at upload, where Slack calls it `channel_not_found`. */
+          if (found.member === false) notInChannel = found.name;
         }
         const file = await setSlackSettings({
           ...(body.token !== undefined ? { token: String(body.token) } : {}),
@@ -5298,6 +5302,9 @@ const server = createServer(async (req, res) => {
         try {
           const { token: saved } = await effectiveSlackSettings();
           if (saved) scopeProblem = (await slack({ token: saved }).scopes()).problem;
+          /* The specific channel beats the general warning: knowing the bot is in
+             nothing is useful, knowing it is not in THIS one is actionable. */
+          if (notInChannel) scopeProblem = `saved #${notInChannel}, but the bot is not in it — \`/invite @rmvideo\` there, or the upload will fail with \`channel_not_found\``;
         } catch {
           /* auth.test having failed is already reported by the post itself, and a
              save that succeeded should not turn red because a probe did not. */
