@@ -4426,6 +4426,49 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * Render a composition without opening the editor at all.
+     *
+     * The only way to get an MP4 out of a composition used to be HyperFrames'
+     * own renderer, which means starting its preview, compiling the project into
+     * a work directory, and screenshotting every frame of the whole page — so
+     * the footage is re-decoded and re-composited per frame to produce pixels
+     * ffmpeg already has on disk in the right form. It also recompiles, which is
+     * why merely checking a composition disturbs a render.
+     *
+     * rm-render-pip needs none of it: it serves the folder itself, asks the page
+     * once for its layout, and lets ffmpeg build the footage layer. Roughly
+     * twice as fast, and nothing about it touches the editor. A composition is
+     * something you should be able to render because it is finished, not because
+     * you happen to have a timeline editor open.
+     *
+     * A step rather than a started job, like every other long task here: the
+     * Console stream is where a render belongs.
+     */
+    if (p === "/api/hyperframes/render" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const folder = basename(String(body.folder ?? ""));
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      const renders = resolve(mediaDir(id), "Renders");
+      const root = resolve(renders, folder);
+      if (!folder || folder === "." || folder === ".." || !root.startsWith(`${renders}${sep}`) || !(await stat(join(root, "index.html")).catch(() => null))?.isFile()) {
+        return json(res, 404, { error: "that motion project is not in this project" });
+      }
+      /* No --fps: the composition's own data-fps decides, so the export cannot
+         disagree with the piece. */
+      return json(res, 200, {
+        folder,
+        renderStep: {
+          label: `render ${folder}`,
+          project: id,
+          ...ownStep("rm-render-pip", [id, folder]),
+          cwd: root,
+        },
+      });
+    }
+
+    /*
      * HyperFrames renders from its own iframe, so it does not flow through
      * Studio's normal job runner. The embedded workspace polls this tiny bridge:
      * it waits for a stable editor export, promotes it into project media, and
