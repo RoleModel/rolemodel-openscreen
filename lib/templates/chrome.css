@@ -418,16 +418,20 @@
 }
 
 /*
- * The card stops clipping while its menu is open.
+ * Nothing here has to stop clipping any more.
  *
- * `.card` is `overflow: hidden` so the thumbnail takes its rounded corners, which
- * also cut the menu off at the card's bottom edge — the last item, which is the
- * destructive one, was the half you could not see. z-index cannot escape a clip;
- * only not clipping can, and `:has()` scopes that to exactly the moment it matters.
+ * The card is `overflow: hidden` for its thumbnail's rounded corners, which used
+ * to cut the menu off at the card's bottom edge — the last item, the destructive
+ * one, was the half you could not see. That was answered by making the card stop
+ * clipping while the menu was open, which worked and left the harder half: a
+ * `.kebab` is positioned with a z-index, so it IS a stacking context, and the
+ * menu's own z-index only ordered it inside its own kebab. Between kebabs it was
+ * 500 against 500, broken by document order — so every card after the open one
+ * painted its trigger straight over the menu.
+ *
+ * The menu is in the top layer now, which is above every stacking context and
+ * outside every containing block, so neither the clip nor the tie can reach it.
  */
-.card:has(.kebab__menu:not([hidden])) {
-  overflow: visible;
-}
 
 .kebab {
   position: absolute;
@@ -457,10 +461,12 @@
 }
 
 .kebab__menu {
-  position: absolute;
-  z-index: 60;
-  inset-block-start: calc(100% + var(--op-space-2x-small));
-  inset-inline-end: 0;
+  /* Fixed and placed by place(), like .colormenu__panel: a popover centres
+     itself by default, and the inset and margin resets undo that. */
+  position: fixed;
+  z-index: 2147483000;
+  inset: auto;
+  margin: 0;
   min-inline-size: 20rem;
   padding: var(--op-space-2x-small);
   display: flex;
@@ -470,6 +476,18 @@
   border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
   border-radius: var(--op-radius-large);
   box-shadow: var(--op-shadow-large, 0 12px 32px rgb(0 0 0 / 0.5));
+}
+
+/*
+ * Closed means closed, and it has to be said.
+ *
+ * The UA hides a popover with `[popover]:not(:popover-open) { display: none }`,
+ * which lives in the UA origin — so the `display: flex` above beats it and every
+ * menu on the page sat open at once, unplaced. The colour panel carries the same
+ * rule for the same reason.
+ */
+.kebab__menu:not(:popover-open) {
+  display: none;
 }
 
 .kebab__item {
