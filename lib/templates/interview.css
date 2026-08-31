@@ -11,6 +11,22 @@
   background: color-mix(in oklch, var(--accent) 7%, var(--panel));
 }
 
+/*
+ * An empty plan is not an empty box.
+ *
+ * Both children hide themselves — the shot list until there are shots, the
+ * problems line until there are problems — but the section around them kept its
+ * border and its padding, so before a plan exists the page showed a framed
+ * rectangle with nothing in it.
+ *
+ * Asked of the section rather than set from JS: the children already decide
+ * when they are shown, and a third place that also decides is a third thing to
+ * keep in step. `:has` makes the container follow whatever they did.
+ */
+.interview__plan:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
 .interview__count,
 .interview__seconds {
   color: var(--muted);

@@ -20,7 +20,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
-import { stageRenderAssets } from "../lib/render-assets.mjs";
+import { stageRenderAssets, stagedRuntime } from "../lib/render-assets.mjs";
 import { ROOT as TOOLKIT } from "../lib/theme.mjs";
 
 const args = process.argv.slice(2);
@@ -35,9 +35,9 @@ const LIB = defaultRoot();
 const source = join(TOOLKIT, "components", "rm-video.js");
 const runtime = await readFile(source, "utf8");
 
-/* The one substitution the staged copy needs: it sits two directories deeper
-   than the repo's, so the mark it masks is reached by a different path. */
-const staged = runtime.replace("../brand/logos/standard-icon.svg", "../brand/standard-icon.svg");
+/* The same substitution the server stages with — shared, because two copies of
+   it meant a change to how marks resolve reached one stager and not the other. */
+const staged = stagedRuntime(runtime);
 
 const projects = all
 	? (await readdir(LIB, { withFileTypes: true })).filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name)

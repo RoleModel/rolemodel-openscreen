@@ -11,7 +11,7 @@
    intentionally just the next action, not a second large navigation card. */
 .workflow--next {
   gap: 0;
-  max-inline-size: 48rem;
+  max-inline-size: 78rem;
 }
 
 .workflow__timeline {
@@ -111,7 +111,12 @@
   box-shadow: 0 0 0 var(--op-border-width) var(--line) inset;
 }
 
+/* The stage's icon sits with its step number, so the row reads as one label
+   rather than a glyph floating above a line of text. */
 .workflow__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
   color: var(--muted);
   font-family: var(--m);
   font-size: var(--op-font-x-small);
@@ -135,8 +140,8 @@
 .workflow__status {
   border-block-start: 1px solid var(--line);
   color: var(--muted);
-  margin: 0;
   padding-block-start: var(--op-space-medium);
+  margin-block: var(--op-space-medium);
 }
 
 .workflow__action-note {

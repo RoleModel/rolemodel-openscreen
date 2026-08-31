@@ -10,9 +10,9 @@
 		{
 			"name": "academy-cursor",
 			"file": "academy-cursor.png",
-			"bytes": 304471,
+			"bytes": 268610,
 			"sha": "0d29717214db24a4",
-			"local": "3739607f5eca0372"
+			"local": "efb6e12caaf91592"
 		},
 		{
 			"name": "academy-keyboard",
@@ -38,9 +38,9 @@
 		{
 			"name": "academy-logo-clay",
 			"file": "academy-logo-clay.png",
-			"bytes": 304155,
+			"bytes": 221710,
 			"sha": "043891666edbbb05",
-			"local": "043891666edbbb05"
+			"local": "add94e1812774e41"
 		},
 		{
 			"name": "academy-plant",

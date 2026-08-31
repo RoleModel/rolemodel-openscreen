@@ -15,11 +15,30 @@
   The contract HyperFrames expects: a <template> wrapper, a data-composition-id
   that every selector is scoped to, and data-start / data-duration on the root.
   Sizes are against 1920x1080.
+
+  Two things here are for the linter rather than for the card, and both are
+  true rather than appeasement:
+
+    - `data-no-timeline`, because this card's motion is CSS in the file and it
+      registers nothing on window.__timelines. Without it the producer polls 45
+      seconds for a timeline that is never coming, on every render.
+    - a document wrapper, because a file holding a data-composition-id is
+      checked as a composition whatever it was meant to be. Copying still means
+      copying the <template> below; the wrapper only makes the file on its own
+      a document rather than a fragment browsers put in quirks mode.
 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RoleModel title card</title>
+</head>
+<body>
 <template id="rm-title-template">
   <div
     id="rm-title"
     data-composition-id="rm-title"
+    data-no-timeline
     data-start="0"
     data-duration="4"
     data-width="1920"
@@ -121,3 +140,5 @@ goes here</h1>
     </style>
   </div>
 </template>
+</body>
+</html>

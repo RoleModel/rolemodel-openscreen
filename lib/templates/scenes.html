@@ -108,6 +108,14 @@
          <span data-el="tag" class="nm"></span><span data-el="when" class="path"></span><span data-el="first" class="path" style="color:var(--fg)"></span>
       </summary>
       <div class="body">
+         <!-- What this part IS, changeable. A part was whichever component the
+              palette button made it, and getting it wrong meant deleting it and
+              starting again — losing its timing and every field it shared with
+              the one you actually wanted. -->
+         <label class="form-group">
+            <span class="form-label">Component</span>
+            <select data-el="swap" class="form-control form-control--small"></select>
+         </label>
          <div data-el="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--op-space-2x-small)"></div>
          <!-- After the fields: reordering and removing are things you do to a
               part you have already read. -->
@@ -124,7 +132,7 @@
 <template data-row="scene-image-field">
    <div class="form-group" style="grid-column:1 / -1">
       <label data-el="label" class="form-label"></label>
-      <div data-el="strip" style="display:flex;gap:var(--op-space-x-small);overflow-x:auto;padding-block-end:var(--op-space-2x-small);scrollbar-width:thin"></div>
+      <div data-el="strip" style="display:flex;gap:var(--op-space-x-small);overflow-x:auto;padding-block:var(--op-space-2x-small);scrollbar-width:thin"></div>
       <button data-el="upload" class="btn ghost" type="button" hidden>Upload an image</button>
       <input data-el="picker" type="file" accept="image/*" hidden />
    </div>

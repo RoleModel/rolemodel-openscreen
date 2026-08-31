@@ -77,11 +77,25 @@
   opacity: 0.7;
 }
 
+/*
+ * In the top layer, placed by hand.
+ *
+ * `position: fixed` escapes a scroll container but NOT an ancestor carrying a
+ * transform, filter or contain — any of those becomes the containing block and
+ * the panel is trapped and clipped again, which is what happened inside a card.
+ * z-index cannot help either: 40 is 40 within whatever stacking context the card
+ * made, and the card's siblings paint over it.
+ *
+ * A popover is in the top layer, which is above every stacking context on the
+ * page and outside every containing block, so neither can reach it. The inset
+ * and margin resets are because a popover centres itself by default and place()
+ * sets left/top.
+ */
 .colormenu__panel {
-  position: absolute;
-  z-index: 40;
-  inset-block-start: calc(100% + 4px);
-  inset-inline-start: 0;
+  position: fixed;
+  z-index: 2147483000;
+  inset: auto;
+  margin: 0;
   /*
    * One row per family, each row a ramp read dark to light.
    *
@@ -108,7 +122,9 @@
   box-shadow: var(--op-shadow-large, 0 8px 24px rgb(0 0 0 / 0.45));
 }
 
-.colormenu__panel[hidden] {
+/* A popover is display:none until it is shown, so nothing else is needed to
+   keep it closed. */
+.colormenu__panel:not(:popover-open) {
   display: none;
 }
 
@@ -505,4 +521,103 @@
 
 .pickbar .status {
   margin-inline-end: auto;
+}
+
+
+/* An icon is the glyph and nothing else: no box of its own, so it sits on the
+   text baseline in a button exactly as a bare <span> did. */
+rm-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/*
+ * Where you are in a run of steps.
+ *
+ * Shared by the workflow and the interview: both are a sequence you are
+ * somewhere inside, and two copies of this would drift.
+ *
+ * The card shows one step, which is the right thing to be looking at and the
+ * wrong thing for judging how far along you are — "Step 3 of 7" is a fact you
+ * have to hold in your head rather than something you can see. The rail is the
+ * run, with the line between marks carrying the progress.
+ */
+.stepper {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0 0 var(--op-space-medium);
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+  overflow-x: auto;
+  background-color: var(--panel);
+  border-radius: var(--op-radius-medium);
+  box-shadow: 0 0 0 var(--op-border-width) var(--line) inset;
+  padding: var(--op-space-medium);
+}
+
+.stepper__tick {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  min-inline-size: 4.5rem;
+  color: var(--muted);
+  font-size: var(--op-font-x-small);
+  text-align: center;
+}
+
+/* The joining line is drawn by the mark, not by a separate element: a rule
+   between two list items is one more thing to keep in step with them. */
+.stepper__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 1.75rem;
+}
+
+.stepper__mark::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  block-size: 1px;
+  background: var(--line);
+}
+
+/* The run starts and ends at a mark, not at the edge of the panel. */
+.stepper__tick:first-child .stepper__mark::before {
+  inset-inline-start: 50%;
+}
+
+.stepper__tick:last-child .stepper__mark::before {
+  inset-inline-end: 50%;
+}
+
+.stepper__tick rm-icon {
+  position: relative;
+  padding: 0 var(--op-space-3x-small);
+  background: var(--panel);
+}
+
+.stepper__tick[data-state='done'] {
+  color: var(--fg);
+}
+
+.stepper__tick[data-state='done'] rm-icon {
+  color: var(--accent);
+}
+
+/* The step you are on: the only one that reads at full weight, because it is
+   the only one the card is about. */
+.stepper__tick[data-state='now'] {
+  color: var(--fg);
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.stepper__tick[data-state='now'] rm-icon {
+  color: var(--accent);
 }

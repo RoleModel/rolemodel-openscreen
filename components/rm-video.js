@@ -68,11 +68,21 @@ export const RM = {
   },
   /** Every component on the page, with its window. Useful for building a timeline. */
   beats() {
-    return [...document.querySelectorAll('[at]')].map((e) => ({
+    /* data-start/data-duration first, for the reason RMElement.sync gives: they
+       are the pair the HyperFrames timeline edits, and when the two disagree the
+       timeline is what a person actually changed. duration() is built on this,
+       so a stale `for` here becomes a render minutes longer than the video. */
+    const ms = (e, dataName, attr) => {
+      const raw = e.dataset[dataName]
+      const seconds = raw == null || raw === '' ? Number.NaN : Number(raw)
+      if (Number.isFinite(seconds)) return seconds * 1000
+      return e.hasAttribute(attr) ? Number(e.getAttribute(attr)) : null
+    }
+    return [...document.querySelectorAll('[at], [data-start]')].map((e) => ({
       el: e,
       tag: e.tagName.toLowerCase(),
-      at: Number(e.getAttribute('at') || 0),
-      for: e.hasAttribute('for') ? Number(e.getAttribute('for')) : null,
+      at: ms(e, 'start', 'at') ?? 0,
+      for: ms(e, 'duration', 'for'),
     }))
   },
   /** Total runtime implied by the scene, so the render length isn't guesswork. */
@@ -215,9 +225,37 @@ class RMElement extends HTMLElement {
     }
   }
 
+  /*
+   * One clock, not two.
+   *
+   * A timed element carries its window twice: `at`/`for` in milliseconds, which
+   * this reads, and `data-start`/`data-duration` in seconds, which the runtime
+   * keys visibility off and which the HyperFrames timeline is what actually
+   * edits. Nothing kept them in step, so dragging a clip's length moved the
+   * window it is VISIBLE for and left the window it ANIMATES over where it was
+   * — the change appeared to do nothing, which is exactly what it looks like
+   * when a length control is broken.
+   *
+   * data-* wins where it exists, because that is the pair a person edits. A
+   * scene previewed on its own has only at/for, and those still stand.
+   */
+  /** Milliseconds from a seconds-valued data-* attribute, or null. */
+  _timed(name) {
+    const raw = this.dataset[name]
+    if (raw == null || raw === '') return null
+    const seconds = Number(raw)
+    return Number.isFinite(seconds) ? seconds * 1000 : null
+  }
+
+  /** Where this element starts, in milliseconds. Read this, never `at` alone. */
+  startMs() {
+    return this._timed('start') ?? Number(this.getAttribute('at') || 0)
+  }
+
   sync() {
-    this.style.setProperty('--at', `${Number(this.getAttribute('at') || 0)}ms`)
-    if (this.hasAttribute('for')) this.style.setProperty('--hold', `${Number(this.getAttribute('for'))}ms`)
+    this.style.setProperty('--at', `${this.startMs()}ms`)
+    const hold = this._timed('duration') ?? (this.hasAttribute('for') ? Number(this.getAttribute('for')) : null)
+    if (hold != null) this.style.setProperty('--hold', `${hold}ms`)
   }
 
   attr(name, fallback = '') {
@@ -544,7 +582,21 @@ define('rm-image', RMImage)
  * cannot use wall-clock time: the same 2400ms frame must always be the same, so
  * this one draws only when RM.seek() changes the scene time or the canvas resizes.
  */
-const SHADER_ICON = new URL('../brand/logos/standard-icon.svg', import.meta.url).href
+/*
+ * Where the marks are, and which one a component asked for.
+ *
+ * One base rather than one URL per mark: staging rewrites this single string
+ * when it copies the runtime into a composition — the marks land flat in
+ * assets/brand/ rather than under a logos/ folder — and a URL built any other
+ * way would survive that rewrite pointing at nothing.
+ *
+ * `mark` used to be on/off and always drew the standard icon, so there was no
+ * way to put the RoleModel R on a card. It now takes a mark's name; on still
+ * means the default, off still means none.
+ */
+const LOGO_BASE = '../brand/logos/'
+const markUrl = (name) => new URL(`${LOGO_BASE}${name}.svg`, import.meta.url).href
+const SHADER_ICON = markUrl('standard-icon')
 const SHADER_VERTEX = 'attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}'
 const SHADER_FRAGMENT = [
   'precision highp float;uniform vec2 r;uniform float d;uniform float t;uniform float density;uniform float gamma;uniform float black;uniform float white;uniform float imageAspect;uniform sampler2D imageTex;uniform vec3 paper;uniform vec3 ink;varying vec2 v;',
@@ -600,15 +652,20 @@ class RMShader extends RMElement {
     const title = this.esc(this.attr('title'))
     const subtitle = this.attr('subtitle')
     const showOverlay = this.attr('overlay', 'on') === 'on'
-    const showMark = showOverlay && this.attr('mark', 'off') === 'on'
+    /* on → the default mark, off → none, anything else → that mark by name.
+       A name that is not staged draws nothing rather than a broken image,
+       because the mark is a CSS mask. */
+    const markName = this.attr('mark', 'off')
+    const showMark = showOverlay && markName !== 'off' && markName !== ''
+    const markSrc = markName === 'on' ? SHADER_ICON : markUrl(markName)
     const rawImage = this.attr('image')
     const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
     const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
     const hasImage = Boolean(imageSource)
     const lockup = showOverlay
-      ? `<div class="lockup">${showMark ? '<i class="mark" aria-hidden="true"></i>' : ''}${title ? `<h2>${title}</h2>` : ''}${subtitle ? `<p>${this.esc(subtitle)}</p>` : ''}</div>`
+      ? `<div class="lockup">${showMark ? '<i class="mark anim" aria-hidden="true"></i>' : ''}${title ? `<h2 class="anim">${title}</h2>` : ''}${subtitle ? `<p class="anim">${this.esc(subtitle)}</p>` : ''}</div>`
       : ''
-    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${background};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:${text};text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:${shaderInk};mask:url(${SHADER_ICON}) center/contain no-repeat;-webkit-mask:url(${SHADER_ICON}) center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:${dots};}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:${dots};font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
+    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${background};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:${text};text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:${shaderInk};mask:url(${markSrc}) center/contain no-repeat;-webkit-mask:url(${markSrc}) center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:${dots};}/* The mark, the title and the line under it arrive in reading order, a beat apart — the same rhythm as rm-title and the shared lockup. This one has its own type rather than the shared constant, so it needs its own leads; without them the whole card faded in as a block and the words simply appeared. */.lockup .mark{--lead:0ms;}.lockup h2{--lead:120ms;}.lockup p{--lead:240ms;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:${dots};font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
       hasImage ? `<canvas aria-hidden="true"></canvas>${lockup}` : '<div class="empty"><span>Choose or upload an image to make a halftone</span></div>'
     }</div>`
 
@@ -713,8 +770,8 @@ define('rm-shader', RMShader)
  * requirement.
  */
 const PIXEL_REVEAL_FRAGMENT = [
-  'precision highp float;uniform vec2 r;uniform float t;uniform float imageAspect;uniform sampler2D imageTex;uniform float pixelDensity;uniform float pixelGap;uniform float pixelRoundness;uniform float halftoneFrequency;uniform float colorFringing;uniform float flowIntensity;uniform float showDuotone;uniform vec3 paper;uniform vec3 cyanInk;uniform vec3 magentaInk;uniform vec3 yellowInk;uniform vec3 blackInk;uniform vec3 colorA;uniform vec3 colorB;varying vec2 v;',
-  'vec2 coverUV(vec2 uv){float canvasAspect=r.x/r.y;vec2 s=canvasAspect>imageAspect?vec2(1.,imageAspect/canvasAspect):vec2(canvasAspect/imageAspect,1.);return(uv-.5)*s+.5;}',
+  'precision highp float;uniform vec2 r;uniform float t;uniform float imageAspect;uniform float imageScale;uniform vec2 imageOffset;uniform sampler2D imageTex;uniform float pixelDensity;uniform float pixelGap;uniform float pixelRoundness;uniform float halftoneFrequency;uniform float colorFringing;uniform float flowIntensity;uniform float showDuotone;uniform vec3 paper;uniform vec3 cyanInk;uniform vec3 magentaInk;uniform vec3 yellowInk;uniform vec3 blackInk;uniform vec3 colorA;uniform vec3 colorB;varying vec2 v;',
+  'vec2 coverUV(vec2 uv){float canvasAspect=r.x/r.y;vec2 s=canvasAspect>imageAspect?vec2(1.,imageAspect/canvasAspect):vec2(canvasAspect/imageAspect,1.);return(uv-.5)*s/max(.05,imageScale)+.5+imageOffset;}',
   'float roundedCell(vec2 p,float gap,float roundness){vec2 halfSize=vec2(.5-gap*.5);vec2 q=abs(p-.5)-halfSize;float radius=min(min(halfSize.x,halfSize.y),roundness*.5);float distance=length(max(q,0.))-radius;return 1.-smoothstep(0.,.035,distance);}',
   'vec3 printColour(vec3 photo,float luma){vec3 printed=paper;printed=mix(printed,cyanInk,(1.-photo.r)*.72);printed=mix(printed,magentaInk,(1.-photo.g)*.62);printed=mix(printed,yellowInk,(1.-photo.b)*.46);printed=mix(printed,blackInk,(1.-luma)*.54);return printed;}',
   'void main(){float size=max(3.,pixelDensity);vec2 pixel=gl_FragCoord.xy;vec2 cell=floor(pixel/size);vec2 local=fract(pixel/size);vec2 centre=(cell+.5)*size/r;float motion=t*.001;vec2 flow=vec2(sin(motion+centre.y*8.),cos(motion*.8+centre.x*7.))*flowIntensity*.009;float fringe=colorFringing/max(r.x,r.y);vec2 offset=vec2(fringe,fringe*.45);float red=texture2D(imageTex,coverUV(centre+flow+offset)).r;float green=texture2D(imageTex,coverUV(centre+flow)).g;float blue=texture2D(imageTex,coverUV(centre+flow-offset)).b;vec3 photo=vec3(red,green,blue);float luma=dot(photo,vec3(.299,.587,.114));vec3 colour=printColour(photo,luma);vec3 duo=mix(colorB,colorA,luma);colour=mix(colour,duo,showDuotone);float screen=(sin((cell.x+cell.y)*halftoneFrequency*.35)*.5+.5)*(1.-luma)*.2;colour=mix(colour,blackInk,screen);float shape=roundedCell(local,pixelGap,pixelRoundness);gl_FragColor=vec4(mix(paper,colour,shape),1.);}',
@@ -723,6 +780,9 @@ const PIXEL_REVEAL_FRAGMENT = [
 class RMPixelReveal extends RMElement {
   static fields = [
     'image',
+    'image-scale',
+    'image-x',
+    'image-y',
     'pixel-density',
     'pixel-gap',
     'pixel-roundness',
@@ -829,6 +889,21 @@ class RMPixelReveal extends RMElement {
     gl.uniform1f(uniform('colorFringing'), colorFringing)
     gl.uniform1f(uniform('flowIntensity'), flowIntensity)
     gl.uniform1f(uniform('showDuotone'), showDuotone ? 1 : 0)
+    /*
+     * How much of the picture the frame shows, and where.
+     *
+     * coverUV filled the frame and nothing else, so a photograph arrived at
+     * whatever crop its own proportions gave it — usually far too close, with no
+     * way to pull back. Scale is that crop: 1 is cover, below it shows more of
+     * the picture, above it moves in. Offset then slides the visible window,
+     * which only means anything once there is something outside it.
+     */
+    gl.uniform1f(uniform('imageScale'), shaderClamp(Number(this.attr('image-scale', 1)), 0.1, 6))
+    gl.uniform2f(
+      uniform('imageOffset'),
+      shaderClamp(Number(this.attr('image-x', 0)), -1, 1),
+      shaderClamp(Number(this.attr('image-y', 0)), -1, 1),
+    )
     gl.uniform3fv(uniform('paper'), shaderVector(this.shadowRoot, paper, dark ? [0.14, 0.14, 0.14] : [1, 1, 1]))
     gl.uniform3fv(uniform('cyanInk'), shaderVector(this.shadowRoot, cyanInk, [0.23, 0.44, 0.7]))
     gl.uniform3fv(uniform('magentaInk'), shaderVector(this.shadowRoot, magentaInk, [0.48, 0.37, 0.65]))
@@ -917,6 +992,23 @@ const LOCKUP = `
            line-height:.92; letter-spacing:-.03em;}
   .body { color:color-mix(in srgb, var(--paper-ink) 82%, transparent);
           font-size:calc(var(--size, 6.6cqw) * 0.26); line-height:1.4; max-width:94ch; }
+
+  /*
+   * The lines arrive in reading order, a beat apart.
+   *
+   * rm-title has staggered its four lines since it was written; every component
+   * built on this lockup — the field, the shader — faded its whole card in as
+   * one block and the type simply appeared. Same motion, same curve, same
+   * rhythm as rm-title: one thing staggered rather than two components
+   * disagreeing about how type arrives.
+   *
+   * The card still fades as a whole, because the ground it sits on is animated
+   * by the wrapper. These leads sit on top of that, which is what makes an
+   * eyebrow land before its title rather than with it.
+   */
+  .lockup .eyebrow { --lead: 0ms; }
+  .lockup .title   { --lead: 120ms; }
+  .lockup .body    { --lead: 240ms; }
 `
 
 /*
@@ -1067,7 +1159,7 @@ class RMHaze extends RMElement {
      * backgrounds cut together cannot carry two typographic scales.
      */
     const copy = this.attr('eyebrow') || this.attr('title') || this.attr('body')
-      ? `<div class="lockup">${this.attr('eyebrow') ? `<div class="eyebrow">${this.esc(this.attr('eyebrow'))}</div>` : ''}${this.attr('title') ? `<div class="title">${this.esc(this.attr('title'))}</div>` : ''}${this.attr('body') ? `<div class="body">${this.esc(this.attr('body'))}</div>` : ''}</div>`
+      ? `<div class="lockup">${this.attr('eyebrow') ? `<div class="eyebrow anim">${this.esc(this.attr('eyebrow'))}</div>` : ''}${this.attr('title') ? `<div class="title anim">${this.esc(this.attr('title'))}</div>` : ''}${this.attr('body') ? `<div class="body anim">${this.esc(this.attr('body'))}</div>` : ''}</div>`
       : ''
     this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{--paper-ink: var(--op-color-neutral-minus-max, #fff8e9);position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${shadowColour};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}${LOCKUP}</style><div class="asset anim" style="${fieldStyle(this)}"><canvas aria-hidden="true"></canvas>${copy}</div>`
 
@@ -1798,9 +1890,9 @@ class RMStudyField extends RMElement {
       <div class="field anim" style="${fieldStyle(this)}">
         <canvas aria-hidden="true"></canvas>
         ${this.attr('eyebrow') || this.attr('title') || this.attr('body') ? `<div class="lockup">
-          ${this.attr('eyebrow') ? `<div class="eyebrow">${this.esc(this.attr('eyebrow'))}</div>` : ''}
-          ${this.attr('title') ? `<div class="title">${this.esc(this.attr('title'))}</div>` : ''}
-          ${this.attr('body') ? `<div class="body">${this.esc(this.attr('body'))}</div>` : ''}
+          ${this.attr('eyebrow') ? `<div class="eyebrow anim">${this.esc(this.attr('eyebrow'))}</div>` : ''}
+          ${this.attr('title') ? `<div class="title anim">${this.esc(this.attr('title'))}</div>` : ''}
+          ${this.attr('body') ? `<div class="body anim">${this.esc(this.attr('body'))}</div>` : ''}
         </div>` : ''}
       </div>`
 
@@ -1826,7 +1918,7 @@ class RMStudyField extends RMElement {
         amber: sColor(css.getPropertyValue('--amber'), 'rgb(241, 182, 74)'),
       }
       // The clip's own time, so a field reads the same wherever it is mounted.
-      const time = Math.max(0, RM.t - (Number(this.attr('at', 0)) || 0)) / 1000
+      const time = Math.max(0, RM.t - this.startMs()) / 1000
       const m = sMotion(mode, time, Number.isFinite(phase) ? phase : 1.4)
       if (Number.isFinite(bloom)) m.blend = Math.max(m.blend, bloom)
       const haze = Number(this.attr('haze', ''))
@@ -1847,3 +1939,127 @@ define('rm-study-field', RMStudyField)
 
 
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
+
+/* ── rm-pip ──────────────────────────────────────────────────────────────── */
+
+/**
+ * A speaker in a circle, over whatever is behind them.
+ *
+ * The pip existed only as markup a generator wrote into each composition — a
+ * bare <video class="clip pip"> plus a .pip rule generated alongside it. That is
+ * why the framing, the placement, the wallpaper and every hand edit had to be
+ * read back out of the file and carried across a rebuild: there was no component
+ * holding any of it, so the file was the only place it lived.
+ *
+ * Two constraints shape this, and both are why the video is NOT in a shadow root:
+ *
+ *   HyperFrames drives media from the light DOM. It seeks and plays every
+ *   `[data-assembly-media]` on the page; a <video> inside a shadow root is
+ *   invisible to it and would simply never play.
+ *
+ *   A timed <video> inside a timed <div> is what the linter rejects — the frame
+ *   extractor reads the video's own start while visibility uses the wrapper's,
+ *   and the two disagree. So the host carries no data-start of its own: it
+ *   states the window in plain props and puts it on the video, which is the one
+ *   timed element. The host is a positioned box and nothing more.
+ */
+/*
+ * The crop, as arithmetic on four numbers.
+ *
+ * focus moves it across the frame; zoom is how much of the recording the circle
+ * shows; focus-y moves that view up and down and does nothing at zoom 1, because
+ * a square cut from 16:9 has no vertical slack until zoom makes some.
+ * object-view-box crops into the recording's own box without a wrapper or a
+ * transform, and at zoom 1 resolves to inset(0%) — identical to what a pip drew
+ * before it existed.
+ *
+ * ::slotted, because the video has to stay in the light DOM: HyperFrames seeks
+ * and plays every [data-assembly-media] on the page and cannot see inside a
+ * shadow root. So the component keeps the element where the runtime can reach it
+ * and styles it from in here, which is also the only reason this needs a slot.
+ */
+const PIP_CSS = `
+  :host {
+    position: absolute;
+    inset: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    container-type: inline-size;
+    pointer-events: none;
+  }
+  ::slotted(video) {
+    position: absolute;
+    inset-inline-end: var(--pip-right, -8cqw);
+    inset-block-end: var(--pip-bottom, -4cqw);
+    inline-size: var(--pip-size, 46cqw);
+    block-size: calc(var(--pip-size, 46cqw) / var(--pip-aspect, 1));
+    border-radius: var(--pip-radius, 50%);
+    object-fit: cover;
+    object-position: var(--pip-focus, 50%) 50%;
+    --pip-vis: calc(100 / var(--pip-zoom, 1));
+    --pip-t: clamp(0, var(--pip-y, 50) - var(--pip-vis) / 2, 100 - var(--pip-vis));
+    --pip-l: calc((100 - var(--pip-vis)) / 2);
+    object-view-box: inset(calc(var(--pip-t) * 1%) calc(var(--pip-l) * 1%)
+                           calc((100 - var(--pip-t) - var(--pip-vis)) * 1%) calc(var(--pip-l) * 1%));
+    border: .3cqw solid color-mix(in srgb, var(--color-light) 22%, transparent);
+    box-shadow: 0 2cqw 6cqw rgba(0, 0, 0, .5);
+  }
+`
+
+class RMPip extends RMElement {
+  static fields = ['src', 'focus', 'zoom', 'focus-y', 'size', 'aspect', 'right', 'bottom', 'radius', 'start', 'ms', 'at', 'for']
+
+  render() {
+    /* The slot is the whole shadow tree. Rewriting it every render is safe:
+       slot assignment is recomputed and the light-DOM video is untouched. */
+    this.shadowRoot.innerHTML = `<style>${PIP_CSS}</style><slot></slot>`
+
+    for (const [name, value, unit] of [
+      ['--pip-size', this.attr('size', ''), 'cqw'],
+      ['--pip-aspect', this.attr('aspect', ''), ''],
+      ['--pip-right', this.attr('right', ''), 'cqw'],
+      ['--pip-bottom', this.attr('bottom', ''), 'cqw'],
+      ['--pip-radius', this.attr('radius', ''), '%'],
+      ['--pip-focus', this.attr('focus', ''), '%'],
+      ['--pip-zoom', this.attr('zoom', ''), ''],
+      ['--pip-y', this.attr('focus-y', ''), ''],
+    ]) {
+      if (String(value).trim()) this.style.setProperty(name, `${value}${unit}`)
+      else this.style.removeProperty(name)
+    }
+
+    /*
+     * The window, stated once and put on the video.
+     *
+     * The host carries no data-start of its own: a timed <video> inside a timed
+     * element is what the linter rejects, because the frame extractor reads the
+     * video's own start while visibility uses the wrapper's and the two
+     * disagree. Milliseconds here like every other component; the data-* pair is
+     * seconds, and this is the only place that converts.
+     */
+    const startMs = Number(this.attr('start', this.attr('at', 0))) || 0
+    const forMs = Number(this.attr('for', 0)) || 0
+    const mediaMs = Number(this.attr('ms', 0)) || 0
+    const sec = (ms) => (Math.max(0, Math.round(ms)) / 1000).toFixed(3)
+
+    /* Reused rather than replaced: a new <video> every render restarts the
+       download and drops whatever HyperFrames had already seeked it to. */
+    let video = this.querySelector(':scope > video')
+    if (!video) {
+      video = document.createElement('video')
+      this.append(video)
+    }
+    const src = this.attr('src', '')
+    if (src && video.getAttribute('src') !== src) video.setAttribute('src', src)
+    video.className = 'clip pip'
+    video.toggleAttribute('data-assembly-media', true)
+    video.toggleAttribute('playsinline', true)
+    video.setAttribute('preload', 'auto')
+    video.dataset.start = sec(startMs)
+    if (forMs > 0) video.dataset.duration = sec(forMs)
+    video.dataset.mediaStart = sec(mediaMs)
+    video.dataset.hasAudio = 'true'
+  }
+}
+define('rm-pip', RMPip)

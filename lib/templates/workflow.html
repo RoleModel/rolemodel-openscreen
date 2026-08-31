@@ -1,6 +1,10 @@
 <!-- Workflow: the guided video pipeline landing. -->
 <template data-panel="workflow">
    <p data-el="lede" class="lede" data-region="main"></p>
+   <!-- Every step at once, above the one you are on. The card says what to do
+        next; this says where that sits in the whole run, which the card cannot
+        because it only ever shows one step. -->
+   <ol data-el="rail" class="stepper" data-region="main"></ol>
    <section class="workflow workflow--next" data-region="main">
       <section data-el="panel" class="workflow__panel"></section>
    </section>
@@ -9,15 +13,24 @@
 <!-- The hub's one card, cloned on every draw: the next useful move. -->
 <template data-row="workflow-step">
    <div>
-      <div data-el="eyebrow" class="workflow__eyebrow"></div>
+      <div class="workflow__eyebrow"><rm-icon data-el="icon" name="bulb"></rm-icon><span data-el="eyebrow"></span></div>
       <h2 data-el="title" class="workflow__title"></h2>
       <p data-el="body" class="workflow__body"></p>
       <p class="workflow__status"><strong data-el="state"></strong><span data-el="detail"></span></p>
+      <!-- The label is its own element so the icon survives a redraw: the
+           proceed button's text is rewritten on every draw, and setting
+           textContent on the button itself would take the icon with it. -->
       <div class="row">
-         <button data-el="proceed" class="btn btn--primary" type="button"></button>
-         <button data-el="editor" class="btn ghost" type="button" hidden>Open visual timeline</button>
+         <button data-el="proceed" class="btn btn--primary" type="button">
+            <rm-icon data-el="proceedIcon" name="arrow-right-02"></rm-icon><span data-el="proceedLabel"></span>
+         </button>
+         <button data-el="editor" class="btn ghost" type="button" hidden>
+            <rm-icon name="flow-connection"></rm-icon>Open visual timeline
+         </button>
          <button data-el="restart" class="btn ghost" type="button"
-            title="Archive this video’s working plan and begin again with the same media">Start over</button>
+            title="Archive this video’s working plan and begin again with the same media">
+            <rm-icon name="arrow-turn-backward"></rm-icon>Start over
+         </button>
       </div>
       <p data-el="progress" class="workflow__action-note"></p>
    </div>

@@ -7,6 +7,11 @@
    <p data-el="skillHint" class="hint" data-region="main"></p>
    <div class="form interview" data-region="main">
       <section class="interview__question full">
+         <!-- The same stepper the workflow uses. Against the ceiling rather than
+              a target: an interview ends the moment the plan is ready, which can
+              be before the budget runs out, so this shows the most it will ever
+              ask and not how many it intends to. -->
+         <ol data-el="progress" class="stepper" hidden></ol>
          <div data-el="questionCount" class="interview__count" hidden></div>
          <div data-el="questionTitle" class="paper-edit__title" hidden></div>
          <p data-el="questionHint" class="hint" hidden></p>
@@ -17,8 +22,9 @@
             placeholder="Write what you know. A rough answer is enough to move the plan forward."></textarea>
       </div>
       <div class="row">
-         <button data-el="submit" class="btn btn--primary" type="button" hidden>Submit answer</button>
-         <button data-el="loadReply" class="btn" type="button" hidden>Load Claude’s reply</button>
+         <button data-el="submit" class="btn btn--primary" type="button" hidden><rm-icon name="navigation-03"></rm-icon>Submit answer</button>
+         <button data-el="loadReply" class="btn" type="button" hidden><rm-svg name="claude"></rm-svg>
+         Load Claude’s reply</button>
          <button data-el="continueScript" class="btn btn--primary" type="button" hidden>Continue to script</button>
          <button data-el="openCanvas" class="btn ghost" type="button" hidden>Open canvas</button>
          <button data-el="startOver" class="btn ghost" type="button" hidden>Start over</button>

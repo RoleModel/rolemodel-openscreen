@@ -13,13 +13,28 @@
 }
 
 /* Sits above the frame rather than floating over it: the frame is HyperFrames'
-   own surface, and this is Studio's control over when it reloads. */
+   own surface, and this row is Studio's control over what goes into it. */
+.hyperframes-workspace__cut {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  padding-inline: var(--op-space-medium);
+  padding-block-start: var(--op-space-2x-small);
+}
+
+/* What the round trip last did, beside the buttons that do it. Pushed to the
+   end so the two controls stay together at the start of the row. */
+.hyperframes-workspace__state {
+  flex: 1 1 auto;
+  color: var(--op-color-neutral-minus-three);
+  font-size: var(--op-font-x-small);
+}
+
 .hyperframes-workspace__watch {
   display: flex;
   align-items: center;
   gap: var(--op-space-2x-small);
-  padding-inline: var(--op-space-medium);
-  padding-block-start: var(--op-space-2x-small);
   color: var(--op-color-neutral-minus-three);
   font-size: var(--op-font-x-small);
   cursor: pointer;
@@ -32,4 +47,133 @@
   border: 0;
   border-radius: 0;
   background: var(--op-color-neutral-plus-two);
+}
+
+/* Framing: one circle per speaker, drawn with the composition's own pip rules.
+   Looking at the shape it will appear in is the only way to tell whether a face
+   is centred, so this is a preview rather than a set of numbers. */
+.framing__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--op-space-2x-large);
+  margin-block: var(--op-space-medium);
+}
+
+.framing__shot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+}
+
+/* Square, so the circle inside it is a circle at any column width. */
+.framing__stage {
+  position: relative;
+  inline-size: 100%;
+  aspect-ratio: 1;
+}
+
+/* The same three properties the composition uses, so what is dragged here is
+   literally what gets written. --pip-y does nothing at zoom 1 and cannot: a
+   square cut from 16:9 has no vertical slack until zoom makes some.
+
+   A still, not the recording. Six <video> elements is six open connections
+   against a per-origin limit of six, and the page starves. object-view-box and
+   object-position work the same on either. */
+.framing__pip {
+  --pip-focus: 50%;
+  --pip-zoom: 1;
+  --pip-y: 50;
+  --pip-vis: calc(100 / var(--pip-zoom));
+  --pip-t: clamp(0, var(--pip-y) - var(--pip-vis) / 2, 100 - var(--pip-vis));
+  --pip-l: calc((100 - var(--pip-vis)) / 2);
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: var(--pip-focus) 50%;
+  object-view-box: inset(calc(var(--pip-t) * 1%) calc(var(--pip-l) * 1%)
+                         calc((100 - var(--pip-t) - var(--pip-vis)) * 1%) calc(var(--pip-l) * 1%));
+  border: 2px solid color-mix(in srgb, var(--op-color-neutral-plus-six) 30%, transparent);
+  background: var(--op-color-neutral-plus-two);
+  cursor: grab;
+  touch-action: none;
+}
+
+.framing__pip:active {
+  cursor: grabbing;
+}
+
+.framing__who {
+  font-size: var(--op-font-small);
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.framing__zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  inline-size: 100%;
+  font-size: var(--op-font-x-small);
+}
+
+.framing__value {
+  min-inline-size: 2.5rem;
+  color: var(--op-color-neutral-minus-three);
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* Where the pip sits. One stage for the whole composition, at the frame's own
+   shape, so dragging the circle here is dragging it in the video. */
+.framing__place {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-medium);
+  align-items: flex-start;
+  margin-block: var(--op-space-medium);
+}
+
+.framing__stage-frame {
+  position: relative;
+  inline-size: min(28rem, 100%);
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+  border: var(--op-border-width) solid var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-medium);
+  background: var(--op-color-neutral-plus-two);
+  overflow: hidden;
+}
+
+/* The same cqw units the composition uses, against a container of the frame's
+   shape — so 46cqw here is the 46cqw that gets written. */
+.framing__puck {
+  position: absolute;
+  inline-size: var(--pip-size);
+  block-size: calc(var(--pip-size) / var(--pip-aspect));
+  inset-inline-end: var(--pip-right);
+  inset-block-end: var(--pip-bottom);
+  border-radius: var(--pip-radius);
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  border: 2px solid var(--accent);
+  cursor: grab;
+  touch-action: none;
+}
+
+.framing__puck:active {
+  cursor: grabbing;
+}
+
+.framing__dials {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--op-space-x-small);
+}
+
+@media (width <= 600px) {
+  .framing__dials {
+    grid-template-columns: 1fr;
+  }
 }

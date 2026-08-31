@@ -25,7 +25,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, cp, link, lstat, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, watch as watchFile } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
@@ -101,11 +101,12 @@ import { loadRecipes, saveRecipes } from "../lib/make-wallpapers.mjs";
 import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../lib/wallpaper.mjs";
 import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
-import { stageRenderAssets } from "../lib/render-assets.mjs";
+import { stageRenderAssets, stagedRuntime } from "../lib/render-assets.mjs";
 import { MODELS, DEFAULT_MODEL, modelById, clipProblem, avatarProblem, takesOf } from "../lib/fal.mjs";
 import { trimToSpeech, leadingFiller } from "../lib/speech-trim.mjs";
 import { clockFile, ensureClock } from "../lib/assembly-clock.mjs";
 import { transcriptFromCaptions } from "../lib/captions.mjs";
+import { adoptCut, emitCut, findDocument, planAdopt, readFraming, writeFraming } from "../lib/adopt.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 jobs.setTrustedRoot(TOOLKIT);
@@ -214,6 +215,10 @@ const projectTransfers = new Map();
 const projectDir = (id) => join(LIB, id);
 const mediaDir = (id) => join(projectDir(id), "media");
 const sceneFootagePath = (id, name) => join(projectDir(id), "scenes", `${name}.footage.json`);
+/* The ground a scene was designed on. A sidecar for the same reason the footage
+   is one: the body is markup somebody may hand-edit, and the wallpaper is not
+   part of the markup — it is what the markup was composed against. */
+const sceneGroundPath = (id, name) => join(projectDir(id), "scenes", `${name}.ground.json`);
 const sceneRevisionDir = (id, name) => join(projectDir(id), "scenes", ".history", name);
 
 /* A graph shot is only a visual position for a board slot; it has no life of
@@ -290,6 +295,32 @@ async function normalizeSceneFootage(id, raw) {
     outSec: +outSec.toFixed(3),
     ...(takeId ? { takeId } : {}),
   };
+}
+
+/*
+ * The wallpaper and brand a scene was designed on.
+ *
+ * The preview always sent these; saving never did. So a scene composed against
+ * a dark dot grid reopened on the default wallpaper and previewed in the gallery
+ * on the default too — the choice was live for as long as the tab stayed open
+ * and then gone, with nothing to say it had been dropped.
+ *
+ * undefined means "this request did not touch the ground", the same contract the
+ * footage sidecar uses, so saving from a surface that has no wallpaper picker
+ * cannot wipe one set somewhere that does.
+ */
+async function writeSceneGround(id, name, ground) {
+  if (ground === undefined) return;
+  const file = sceneGroundPath(id, name);
+  const wallpaper = String(ground?.wallpaper ?? "").trim();
+  const brand = String(ground?.brand ?? "").trim();
+  if (!wallpaper && !brand) return rm(file, { force: true });
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify({ ...(wallpaper ? { wallpaper } : {}), ...(brand ? { brand } : {}) }, null, 2)}\n`, "utf8");
+}
+
+async function readSceneGround(id, name) {
+  return JSON.parse(await readFile(sceneGroundPath(id, name), "utf8").catch(() => "null")) ?? null;
 }
 
 async function writeSceneFootage(id, name, footage) {
@@ -546,6 +577,72 @@ const hyperframesExportSignature = (entry) => `${entry.bytes}:${entry.mtime}`;
  * files somebody actually edits by hand. Media is excluded deliberately: a
  * render writing into this folder must not read as an edit.
  */
+/*
+ * A composition whose cut is being edited in OpenScreen.
+ *
+ * Sending the cut over starts one of these. From then on, saving in OpenScreen
+ * rebuilds the composition here — which is the whole point: an edit made in the
+ * better editor should be in the composition by the time you look at it, not
+ * waiting behind a button somebody has to know to press.
+ *
+ * Keyed by folder, one per composition, and replaced rather than stacked: asking
+ * twice for the same composition must not adopt twice per save.
+ */
+const cutWatches = new Map();
+
+function watchCutDocument(id, folder, docPath) {
+  const key = `${id}/${folder}`;
+  cutWatches.get(key)?.watcher.close();
+
+  let timer = null;
+  let running = false;
+  const adopt = async () => {
+    /* Overlapping runs would have two builds writing one index.html. */
+    if (running) return;
+    running = true;
+    try {
+      const out = await adoptCut({ projectId: id, folder, root: LIB });
+      const entry = cutWatches.get(key);
+      if (entry) entry.last = { at: new Date().toISOString(), clips: out.clips.length, was: out.was, seconds: out.seconds };
+    } catch (error) {
+      /* A save mid-edit can be any shape at all. The next save is the retry, and
+         the panel reports the standing reason when somebody adopts by hand. */
+      const entry = cutWatches.get(key);
+      if (entry) entry.last = { at: new Date().toISOString(), error: String(error.message ?? error) };
+    }
+    running = false;
+  };
+
+  let watcher;
+  try {
+    // Debounced: an editor writing a document produces several events, and
+    // rebuilding mid-write reads half a file.
+    watcher = watchFile(docPath, () => {
+      clearTimeout(timer);
+      timer = setTimeout(adopt, 300);
+    });
+  } catch {
+    /* An unwatchable path is not worth failing the handover over; the panel's
+       own poll still offers the edit when somebody comes back to it. */
+    return null;
+  }
+  const entry = { watcher, docPath, last: null };
+  cutWatches.set(key, entry);
+  return entry;
+}
+
+/** Stop watching a composition's cut — it was deleted, or the server is going. */
+function stopCutWatch(id, folder) {
+  const key = `${id}/${folder}`;
+  cutWatches.get(key)?.watcher.close();
+  cutWatches.delete(key);
+}
+
+function stopAllCutWatches() {
+  for (const entry of cutWatches.values()) entry.watcher.close();
+  cutWatches.clear();
+}
+
 async function hyperframesSourceSignature(root) {
   const componentDir = join(root, "assets", "canvas-components");
   const components = (await readdir(componentDir).catch(() => []))
@@ -1688,7 +1785,7 @@ async function stageCanvasSceneRuntime(outDir) {
   const componentDir = join(outDir, "assets", "canvas-components");
   await mkdir(componentDir, { recursive: true });
   const source = await readFile(join(TOOLKIT, "components", "rm-video.js"), "utf8");
-  const runtime = source.replace('../brand/logos/standard-icon.svg', '../brand/standard-icon.svg');
+  const runtime = stagedRuntime(source);
   await writeFile(join(componentDir, "rm-video.js"), runtime, "utf8");
   /* Its own directory, not one another stager happens to have made first. This
      only ever ran after stageRenderAssets, so the missing mkdir was invisible
@@ -1720,15 +1817,46 @@ async function stageCanvasSceneRuntime(outDir) {
  * stretched number.
  */
 const compositionEndMs = (html) => {
-  let end = 0;
-  for (const [tag] of String(html).matchAll(/<[a-z][\w-]*\b[^>]*\bdata-start="[^"]*"[^>]*>/gi)) {
-    if (/\bdata-composition-id=/i.test(tag)) continue;
+  const tags = [...String(html).matchAll(/<[a-z][\w-]*\b[^>]*\bdata-start="[^"]*"[^>]*>/gi)]
+    .map(([tag]) => tag)
+    .filter((tag) => !/\bdata-composition-id=/i.test(tag));
+  const windowOf = (tag) => {
     const start = Number(/\bdata-start="([\d.]+)"/.exec(tag)?.[1]);
     const span = Number(/\bdata-duration="([\d.]+)"/.exec(tag)?.[1]) || 0;
-    if (Number.isFinite(start)) end = Math.max(end, (start + span) * 1000);
+    return Number.isFinite(start) ? { start: start * 1000, end: (start + span) * 1000 } : null;
+  };
+
+  /*
+   * The footage is the video; an overlay is something on it.
+   *
+   * Taking the furthest child cascades. Insert one overlay at the end, and the
+   * next "end" is after THAT — so four inserts walked a composition out to 838
+   * seconds for 102 seconds of footage, and because HyperFrames sizes the
+   * timeline from the furthest child, the whole video appeared to be that long.
+   * Changing the overlay's length then changed the video's length, which is not
+   * a thing an overlay should be able to do.
+   *
+   * So "the end" is the end of the footage, and only overlays that begin while
+   * there is still footage can extend it. An overlay starting after the last
+   * frame is not part of this video and cannot vote on how long it is.
+   */
+  const mediaEnd = tags
+    .filter((tag) => /\bdata-assembly-(media|clock)\b/i.test(tag))
+    .reduce((n, tag) => Math.max(n, windowOf(tag)?.end ?? 0), 0);
+
+  let end = 0;
+  for (const tag of tags) {
+    const at = windowOf(tag);
+    if (!at) continue;
+    if (mediaEnd > 0 && at.start >= mediaEnd) continue;
+    end = Math.max(end, at.end);
   }
-  return Math.round(end);
+  return Math.round(Math.max(end, mediaEnd));
 };
+
+/* The components that ARE the frame rather than something on it. Inserted at
+   the top of <main> so DOM order puts them behind the type. */
+const BACKGROUND_TAGS = new Set(["rm-haze", "rm-shader", "rm-pixel-reveal", "rm-study-field"]);
 
 const TIMING_ATTR = (name, flags = "") => new RegExp(`(?<=[\\s<])${name}=(["'])(-?\\d+(?:\\.\\d+)?)\\1`, flags);
 
@@ -1904,8 +2032,17 @@ async function isolateStandaloneTitleCard(outDir) {
   const templates = join(outDir, "templates");
   await mkdir(templates, { recursive: true });
   const archived = join(templates, "rm-title-template.html");
-  if (await stat(archived).catch(() => null)) await rm(titlePath, { force: true });
-  else await rename(titlePath, archived);
+  /*
+   * Always replace the archive, never keep the older one.
+   *
+   * The first version skipped when an archive already existed, which meant the
+   * staged copy was taken once and then never again — so a fix to the starter
+   * in templates/ reached new compositions and no existing one. That is the same
+   * copy-once-and-drift that resync exists to end, and it is why a lint error
+   * fixed at the source stayed on disk here.
+   */
+  await rm(archived, { force: true });
+  await rename(titlePath, archived);
   return true;
 }
 
@@ -4136,6 +4273,124 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * Send a composition's cut to OpenScreen, and take the edit back.
+     *
+     * OpenScreen is the better editor — trimming, reordering, dropping a clip —
+     * and until now an edit made there was retyped by hand into the composition.
+     * These two endpoints are that round trip, and they are endpoints rather
+     * than a command because somebody editing video should never have to open a
+     * terminal to get their own edit back.
+     *
+     * `to-openscreen` writes the document and opens it. `from-openscreen` merges
+     * an edited one back and rebuilds, which changes the composition's source
+     * signature — so the workspace's existing poll reloads the frame by itself.
+     */
+    if ((p === "/api/hyperframes/to-openscreen" || p === "/api/hyperframes/from-openscreen") && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const folder = basename(String(body.folder ?? ""));
+      const renders = resolve(mediaDir(id), "Renders");
+      const dir = resolve(renders, folder);
+      if (!folder || !dir.startsWith(`${renders}${sep}`)) return json(res, 400, { error: "that composition is not in this project" });
+      try {
+        if (p === "/api/hyperframes/to-openscreen") {
+          const out = await emitCut({ projectId: id, folder, root: LIB });
+          /* Watch from here on, so a save in OpenScreen reaches the composition
+             whether or not anybody comes back and presses anything. */
+          watchCutDocument(id, folder, out.document);
+          return json(res, 200, { ...out, ...(body.hosted ? { opened: false, via: "host" } : await openInOpenScreen(out.document)) });
+        }
+        const out = await adoptCut({ projectId: id, folder, root: LIB });
+        return json(res, 200, { ...out, source: await hyperframesSourceSignature(dir) });
+      } catch (error) {
+        return json(res, 400, { error: String(error.message ?? error) });
+      }
+    }
+
+    /*
+     * Framing: where each speaker's circle sits in their own recording.
+     *
+     * Three numbers per clip — across, zoom, up-and-down — and they were only
+     * ever settable by editing a style attribute, which means knowing that
+     * `focus` is object-position and that a vertical only exists once zoom has
+     * made vertical slack. Nobody should have to know that to centre a face.
+     */
+    if (p === "/api/hyperframes/framing" && (req.method === "GET" || req.method === "POST")) {
+      const body = req.method === "POST" ? JSON.parse(await text(req)) : {};
+      const id = String(req.method === "POST" ? (body.projectId ?? "") : (url.searchParams.get("project") ?? ""));
+      const folder = basename(String(req.method === "POST" ? (body.folder ?? "") : (url.searchParams.get("folder") ?? "")));
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const renders = resolve(mediaDir(id), "Renders");
+      const dir = resolve(renders, folder);
+      if (!folder || !dir.startsWith(`${renders}${sep}`)) return json(res, 400, { error: "that composition is not in this project" });
+      try {
+        if (req.method === "GET") return json(res, 200, await readFraming({ projectId: id, folder, root: LIB }));
+        const out = await writeFraming({ projectId: id, folder, root: LIB, framing: body.framing ?? [], pip: body.pip ?? null });
+        return json(res, 200, { ...out, source: await hyperframesSourceSignature(dir) });
+      } catch (error) {
+        return json(res, 400, { error: String(error.message ?? error) });
+      }
+    }
+
+    /*
+     * One still from a clip, for the framing tool to crop.
+     *
+     * A still rather than the recording itself, and that is not an optimisation.
+     * Six <video> elements is six open connections against a per-origin limit of
+     * six, which starves the page: nothing else loads, including the poll that
+     * would have told anybody why. The same trap took out the sign-in buttons and
+     * every thumbnail earlier. A still also renders footage the browser cannot
+     * decode at all — this composition holds an HEVC take.
+     *
+     * Not cached. One frame is about fifty milliseconds of ffmpeg, and a cache
+     * would need somewhere to live, a name that changes when the clip does, and
+     * a way to be wrong.
+     */
+    if (p === "/api/hyperframes/framing/frame" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const rel = String(url.searchParams.get("src") ?? "");
+      const media = resolve(mediaDir(id));
+      const file = resolve(media, rel);
+      if (!file.startsWith(`${media}${sep}`) || !(await stat(file).catch(() => null))?.isFile()) {
+        return json(res, 404, { error: "that footage is not in this project" });
+      }
+      const at = Math.max(0, Number(url.searchParams.get("at")) || 0);
+      const jpeg = await captureBinary("ffmpeg", [
+        "-v", "error", "-ss", at.toFixed(2), "-i", file, "-frames:v", "1",
+        "-vf", "scale=640:-2", "-q:v", "5", "-f", "image2", "-c:v", "mjpeg", "-",
+      ]);
+      if (!jpeg.length) return json(res, 502, { error: "could not read a frame from that clip" });
+      res.writeHead(200, { "content-type": "image/jpeg", "content-length": jpeg.length, "cache-control": "no-store" });
+      return res.end(jpeg);
+    }
+
+    /* What an edited document would do to this composition, without doing it —
+       so the panel can offer "6 clips → 5" rather than a bare button. */
+    if (p === "/api/hyperframes/pending" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const folder = basename(String(url.searchParams.get("folder") ?? ""));
+      const renders = resolve(mediaDir(id), "Renders");
+      if (!folder || !resolve(renders, folder).startsWith(`${renders}${sep}`)) return json(res, 200, { pending: false });
+      try {
+        const plan = await planAdopt({ projectId: id, folder, root: LIB });
+        const same =
+          plan.was === plan.clips.length &&
+          plan.clips.every((clip, i) => {
+            const before = plan.recipe.clips[i];
+            return before && before.src === clip.src && Math.abs(before.ms - clip.ms) < 0.002 && Math.abs(before.dur - clip.dur) < 0.002;
+          });
+        return json(res, 200, { pending: !same, was: plan.was, now: plan.clips.length, document: basename(plan.docPath) });
+      } catch {
+        /* No document, a raw capture, a cut of other footage: all mean there is
+           nothing waiting. The reason belongs on the button that tries it, not
+           on a poll that runs every few seconds. */
+        return json(res, 200, { pending: false });
+      }
+    }
+
+    /*
      * HyperFrames renders from its own iframe, so it does not flow through
      * Studio's normal job runner. The embedded workspace polls this tiny bridge:
      * it waits for a stable editor export, promotes it into project media, and
@@ -4160,7 +4415,14 @@ const server = createServer(async (req, res) => {
         hyperframesStudios.set(root, studio);
       }
       const synced = await syncHyperframesExports(id, root, studio);
-      return json(res, 200, { ...synced, source: await hyperframesSourceSignature(root) });
+      /* The workspace already polls this. Reporting the cut watch here means the
+         panel can say "adopted 5 clips a moment ago" without a second poll. */
+      const cut = cutWatches.get(`${id}/${folder}`);
+      return json(res, 200, {
+        ...synced,
+        source: await hyperframesSourceSignature(root),
+        cut: cut ? { watching: true, last: cut.last } : { watching: false, last: null },
+      });
     }
 
     /* A motion project is an editable composition folder, including any render
@@ -4222,6 +4484,10 @@ const server = createServer(async (req, res) => {
 
       const taken = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
       const ids = [];
+      /* The end of the footage, which is the end of the video. See
+         compositionEndMs: an overlay cannot vote on how long the video is. */
+      const footageEnd = compositionEndMs(html);
+      const clamped = [];
       const timed = pieces.map((piece) => {
         const tagName = (/^<([a-z][\w-]*)/i.exec(piece) ?? [])[1] ?? "element";
         /* A stable id, because Studio's timeline and canvas controls need one
@@ -4236,7 +4502,27 @@ const server = createServer(async (req, res) => {
 
         const localAt = Math.max(0, Number(piece.match(TIMING_ATTR("at"))?.[2]) || 0);
         const authored = Number(piece.match(TIMING_ATTR("for"))?.[2]);
-        const localFor = Number.isFinite(authored) && authored > 0 ? authored : duration;
+        const asked = Number.isFinite(authored) && authored > 0 ? authored : duration;
+        /*
+         * Nothing outlives the video it is inserted into.
+         *
+         * A scene carries the length it was designed at, and a designer stage is
+         * not a composition — one saved at 244 seconds went into a 102-second cut
+         * and took the timeline with it, because HyperFrames sizes itself from
+         * the furthest child. So the part appeared to span the whole video and
+         * then some, and every length changed after that moved the video's own.
+         *
+         * Clamped rather than refused: the part is still the one that was asked
+         * for, it just stops at the last frame. A composition with no footage to
+         * measure against keeps whatever it was given.
+         */
+        const at = start + localAt;
+        /* Only a part that begins DURING the footage is clamped. One placed at
+           the end is a closing card, and a closing card is meant to outlast the
+           last frame — trimming that to nothing is the opposite of the fix. */
+        const room = footageEnd > 0 && at < footageEnd ? footageEnd - at : Number.POSITIVE_INFINITY;
+        const localFor = Math.min(asked, room);
+        if (localFor < asked) clamped.push({ tag: (/^<([a-z][\w-]*)/i.exec(piece) ?? [])[1] ?? "element", asked, to: localFor });
         return piece
           .replace(/\sdata-start="[^"]*"/g, "")
           .replace(/\sdata-duration="[^"]*"/g, "")
@@ -4245,9 +4531,27 @@ const server = createServer(async (req, res) => {
           .replace(/^<([a-z][\w-]*)/i, `<$1 id="${pieceId}" class="clip" data-start="${hfSeconds(start + localAt)}" data-duration="${hfSeconds(localFor)}" at="${Math.round(start + localAt)}" for="${Math.round(localFor)}"`);
       });
 
+      /*
+       * A background goes at the TOP of <main>, not the bottom.
+       *
+       * These components are the full frame — rm-haze, rm-shader,
+       * rm-pixel-reveal all draw inset:0 over the whole composition. Appended
+       * last, DOM order paints them over the transcript, the lower thirds and
+       * the speaker, so inserting one blanked everything under it. A background
+       * that covers the thing it is behind is not a background.
+       *
+       * Only when EVERY piece is one: a saved scene that pairs a ground with a
+       * title has to keep its own internal order, and hoisting the whole scene
+       * would put its title behind its own background.
+       */
+      const openTag = /<main\b[^>]*>/i.exec(html);
+      const allBackground = pieces.length > 0
+        && pieces.every((piece) => BACKGROUND_TAGS.has(((/^<([a-z][\w-]*)/i.exec(piece) ?? [])[1] ?? "").toLowerCase()));
+      const cut = allBackground && openTag ? openTag.index + openTag[0].length : close;
+
       await writeFile(`${indexPath}.before-insert`, html, "utf8");
-      await writeFile(indexPath, `${html.slice(0, close)}    ${timed.join("\n    ")}\n  ${html.slice(close)}`, "utf8");
-      return json(res, 200, { ok: true, folder, id: ids[0], ids, count: ids.length, startMs: start, durationMs: duration });
+      await writeFile(indexPath, `${html.slice(0, cut)}\n    ${timed.join("\n    ")}\n${html.slice(cut)}`, "utf8");
+      return json(res, 200, { ok: true, folder, id: ids[0], ids, count: ids.length, startMs: start, durationMs: duration, clamped });
     }
 
     if (p === "/api/hyperframes/delete" && req.method === "POST") {
@@ -4264,6 +4568,9 @@ const server = createServer(async (req, res) => {
       const studio = hyperframesStudios.get(target);
       if (studio?.child) studio.child.kill();
       hyperframesStudios.delete(target);
+      /* A watch left on a deleted composition would rebuild it back into
+         existence the next time anything touched the document. */
+      stopCutWatch(id, folder);
       await rm(target, { recursive: true, force: false });
       await reindex(id).catch(() => {});
       return json(res, 200, { deleted: folder });
@@ -7291,6 +7598,11 @@ async function fetchVoiceList() {
       const footage = footageSource
         ? {
             src: footageSource,
+            /* Same rule as the source: it has to be one of this Studio's own
+               routes. A poster is what a card paints while the take itself is
+               deferred, and rebuilding this object without it is why the
+               gallery's footage scenes stayed empty. */
+            ...(typeof b.footage?.poster === "string" && b.footage.poster.startsWith("/api/") ? { poster: b.footage.poster } : {}),
             inSec: Math.max(0, Number(b.footage.inSec) || 0),
             outSec: Math.max(0, Number(b.footage.outSec) || 0),
           }
@@ -7443,7 +7755,15 @@ async function fetchVoiceList() {
       const saved = await writeSceneBody(b.projectId, nm, b.body);
       const footage = b.footage === undefined ? undefined : await normalizeSceneFootage(b.projectId, b.footage);
       await writeSceneFootage(b.projectId, nm, footage);
-      return json(res, 200, { ok: true, name: nm, file: saved.file, revision: saved.revision, footage: footage ?? await readSceneFootage(b.projectId, nm) });
+      await writeSceneGround(b.projectId, nm, b.wallpaper === undefined && b.brand === undefined ? undefined : { wallpaper: b.wallpaper, brand: b.brand });
+      return json(res, 200, {
+        ok: true,
+        name: nm,
+        file: saved.file,
+        revision: saved.revision,
+        footage: footage ?? await readSceneFootage(b.projectId, nm),
+        ground: await readSceneGround(b.projectId, nm),
+      });
     }
 
     /* The earlier body is a deliberate, durable undo point. Restoring one also
@@ -8990,6 +9310,9 @@ async function fetchVoiceList() {
         file: join(dir, f),
         body: await readFile(join(dir, f), "utf8"),
         footage: await sceneFootageForProject(id, name),
+        /* So a gallery card and a reopened scene draw on the ground it was
+           designed against rather than on the default. */
+        ground: await readSceneGround(id, name),
       };
       }),
       );
@@ -9853,6 +10176,7 @@ for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(sig, () => {
     jobs.stopAll();
     stopAllPreviews();
+    stopAllCutWatches();
     process.exit(0);
   });
 }
