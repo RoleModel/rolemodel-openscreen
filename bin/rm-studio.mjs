@@ -5279,7 +5279,30 @@ const server = createServer(async (req, res) => {
         } catch (err) {
           shareProblem = `kept on this machine only — the team copy failed: ${err.message}`;
         }
-        return json(res, 200, { ok: true, stored: file, channel, sharedWith, shareProblem });
+        /*
+         * What the token can actually do, said when it is saved.
+         *
+         * A token with `files:write` and `chat:write` and no read scope
+         * authenticates perfectly and then fails the upload with
+         * `channel_not_found` — Slack reports a conversation the token cannot
+         * read as one that does not exist. The message points at the channel and
+         * the problem is the token, which is an hour spent checking channel ids.
+         * Slack only returns the granted scopes in a header, so nothing that
+         * reads the body ever noticed.
+         *
+         * A warning rather than a refusal: the scopes are the app's to change in
+         * Slack, not something Studio can fix, and a token that is wrong today is
+         * still worth storing while somebody goes and fixes it.
+         */
+        let scopeProblem = null;
+        try {
+          const { token: saved } = await effectiveSlackSettings();
+          if (saved) scopeProblem = (await slack({ token: saved }).scopes()).problem;
+        } catch {
+          /* auth.test having failed is already reported by the post itself, and a
+             save that succeeded should not turn red because a probe did not. */
+        }
+        return json(res, 200, { ok: true, stored: file, channel, sharedWith, shareProblem, scopeProblem });
       } catch (err) {
         // slackSettingProblem() validates; a mistyped token is the user's to see.
         return json(res, 400, { error: err.message });

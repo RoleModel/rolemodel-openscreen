@@ -513,6 +513,18 @@
 
 /* Red on the ink, not a red slab. The destructive item should be findable without
    being the loudest thing on the card, which is what the full-size button was. */
+/*
+ * A row carrying an error is the one row allowed to be tall.
+ *
+ * Every other item is a short label and `nowrap` keeps the menu tidy. An error
+ * is a sentence, and clipped to one line it loses the half that says what to do.
+ */
+.kebab__item--failed {
+  white-space: normal;
+  align-items: start;
+  color: var(--op-color-alerts-danger-base);
+}
+
 .kebab__item--danger {
   color: var(--op-color-alerts-danger-base);
 }
