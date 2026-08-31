@@ -353,15 +353,34 @@ for (const [index, clip] of plan.clips.entries()) {
 	   the window it is seen through. Same lengths the timeline uses, so playback
 	   in the editor and the render agree; the first speaker arrives more slowly
 	   because it is following the opening card, not another speaker. */
-	const into = Math.min(index === 0 ? PIP_FIRST_FADE : PIP_FADE, clip.dur / 3);
-	const away = Math.min(PIP_FADE, clip.dur / 3);
+	/*
+	 * A pip dips; a full-frame clip cuts.
+	 *
+	 * A pip is a small circle over a wallpaper, and fading it out and the next one
+	 * in reads as a dissolve THROUGH the wallpaper — there is a ground to dissolve
+	 * against, and no handle is needed for it. A full-frame clip has no ground: the
+	 * same fade is a dip to black at every boundary, which is a fade-out and a
+	 * fade-in rather than a transition, and reads as the video stumbling.
+	 *
+	 * So a clip that fills the frame gets an honest cut, which is what the assembly
+	 * builder says to do when a dissolve cannot be filled. A real cross-dissolve
+	 * needs the outgoing take's frames beyond its out point, blended under the
+	 * incoming picture — that is the dissolve-tail the builder emits, and it needs
+	 * this renderer to composite overlapping segments rather than concatenate them.
+	 * Until it can, a cut is the truthful thing to show.
+	 */
+	const fullFrame = clip.w >= 1900 && clip.h >= 1060;
+	const first = index === 0;
+	const last = index === plan.clips.length - 1;
+	const into = fullFrame && !first ? 0 : Math.min(first ? PIP_FIRST_FADE : PIP_FADE, clip.dur / 3);
+	const away = fullFrame && !last ? 0 : Math.min(PIP_FADE, clip.dur / 3);
 	const filter = [
 		...inset,
 		`scale=${clip.w}:${clip.h}:force_original_aspect_ratio=increase`,
 		`crop=${clip.w}:${clip.h}:(iw-ow)*${(clip.focus / 100).toFixed(4)}:(ih-oh)/2`,
 		`fps=${FPS}`,
-		`fade=t=in:st=0:d=${into.toFixed(3)}`,
-		`fade=t=out:st=${(clip.dur - away).toFixed(3)}:d=${away.toFixed(3)}`,
+		...(into > 0 ? [`fade=t=in:st=0:d=${into.toFixed(3)}`] : []),
+		...(away > 0 ? [`fade=t=out:st=${(clip.dur - away).toFixed(3)}:d=${away.toFixed(3)}`] : []),
 		/*
 		 * Hold the last frame rather than come up short.
 		 *
