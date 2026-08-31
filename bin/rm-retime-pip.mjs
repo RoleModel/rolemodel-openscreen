@@ -20,7 +20,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
 import { durationOf } from "../lib/narration.mjs";
-import { PHRASE_FADE, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
+import { PHRASE_FADE, PIP_FADE, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
 
 const [projectId, folder = "canvas-pip-transcript"] = process.argv.slice(2);
 if (!projectId) {
@@ -97,7 +97,7 @@ for (const [a, b] of clips.slice(0, -1).map((c, i) => [c, clips[i + 1]])) {
 	}
 }
 
-const { lines, phrases, wordCues, outs, words } = await sayTrack({ projectDir, clips });
+const { lines, phrases, wordCues, outs, pips, words } = await sayTrack({ projectDir, clips });
 
 /*
  * Out with the old words, in with the new — and nothing else.
@@ -206,6 +206,20 @@ const loops = `      function offset(clip) {
         if (base === null) return;
         var at = '#' + o[0];
         tl.to(at, { opacity: 0, duration: 0.4, ease: 'none' }, base + o[2]).set(at, { opacity: 0 }, base + o[3]);
+      });
+
+      PIPS.forEach(function (p) {
+        var el = document.getElementById('pip-' + p[0]);
+        var base = offset(p[0]);
+        if (!el || base === null) return;
+        var span = Number(el.dataset.duration) || 0;
+        var into = p[1];
+        var at = '#pip-' + p[0];
+        var leaves = Math.max(base + into, base + span - PIP_OUT);
+        tl.set(at, { opacity: 0 }, 0)
+          .to(at, { opacity: 1, duration: into, ease: 'power2.out' }, base)
+          .to(at, { opacity: 0, duration: PIP_OUT, ease: 'power2.in' }, leaves)
+          .set(at, { opacity: 0 }, base + span);
       });`;
 
 out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(\n\s*window\.__timelines)/, (_all, head, body, tail) => {
@@ -215,6 +229,8 @@ out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(
 		table("PHRASE", phrases),
 		table("WORD", wordCues),
 		table("OUT", outs),
+		table("PIPS", pips),
+		`      var PIP_OUT = ${PIP_FADE};`,
 		loops,
 	];
 	return head + [...kept, ...rebuilt].join("\n") + tail;
