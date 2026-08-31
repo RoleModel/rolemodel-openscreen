@@ -24,8 +24,10 @@
  *
  *   rm-mux --video demo.mp4 --audio narration.wav --srt narration.srt -o final.mp4
  */
-import { stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { copyFile, mkdtemp, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { capture, durationOf } from "../lib/narration.mjs";
 
 process.stdout.on("error", (e) => {
@@ -97,6 +99,27 @@ if (holdFor > 2) {
 	console.log(`  A shorter script, or a demo with more in it, beats a longer hold.`);
 }
 
+/*
+ * Whether this ffmpeg can draw subtitles at all — one call, cached, because the
+ * answer cannot change mid-run and the failure it prevents is otherwise read as
+ * a quoting problem.
+ */
+let subtitlesFilter = null;
+const hasSubtitlesFilter = async () => {
+	if (subtitlesFilter === null) {
+		subtitlesFilter = await new Promise((done) => {
+			const child = spawn("ffmpeg", ["-hide_banner", "-filters"], { stdio: ["ignore", "pipe", "ignore"] });
+			let out = "";
+			child.stdout.on("data", (d) => (out += d));
+			child.on("close", () => done(/^\s*\S+\s+subtitles\s/m.test(out)));
+			child.on("error", () => done(false));
+		});
+	}
+	return subtitlesFilter;
+};
+/** Set when the captions could not be burned, so they ride along as a track. */
+let softSubs = null;
+
 // Build one filter chain. Order matters: stretch and pad the picture first, then
 // burn subtitles onto the final timeline — burning before the stretch would
 // stretch the subtitles along with the picture and desync them from the words.
@@ -104,13 +127,37 @@ const vf = [];
 if (stretch !== 1) vf.push(`setpts=${stretch.toFixed(6)}*PTS`);
 if (holdFor > 0.02) vf.push(`tpad=stop_mode=clone:stop_duration=${holdFor.toFixed(3)}`);
 if (typeof srt === "string") {
-	// The filter parser treats : and ' as syntax; a Windows-ish or spaced path
-	// has to survive that.
-	const safe = srt.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-	vf.push(
-		`subtitles='${safe}':force_style='FontName=Inter,FontSize=18,PrimaryColour=&H00FFFFFF,` +
-			`OutlineColour=&H99000000,BorderStyle=3,Outline=2,Shadow=0,MarginV=42'`,
-	);
+	/*
+	 * Burning captions needs an ffmpeg built with libass, and plenty are not.
+	 *
+	 * Homebrew's ffmpeg 9 ships without it. What that looks like from here is
+	 * three different errors depending on how the argument is shaped — `No option
+	 * name near /Users/…`, an unparseable filterchain, and finally `No such
+	 * filter: subtitles` — none of which mention libass, and the first two point
+	 * straight at the path and waste your time on quoting. So the filter is
+	 * checked for before it is used, and its absence is reported as the missing
+	 * build option it is.
+	 *
+	 * The two shaping fixes stay, because both are real independent of libass.
+	 * The file is copied to a temp path this code names, so a library under
+	 * `~/RoleModel Library` — a space, in the default path — never reaches a
+	 * filtergraph that would split on it. And `filename=` is spelled out: ffmpeg
+	 * lets a filter's first option go by position, but not once a later one is
+	 * given by name, and this always names `force_style`.
+	 */
+	const plain = join(await mkdtemp(join(tmpdir(), "rm-mux-")), "subs.srt");
+	await copyFile(srt, plain);
+	const style = [
+		"FontName=Inter", "FontSize=18", "PrimaryColour=&H00FFFFFF", "OutlineColour=&H99000000",
+		"BorderStyle=3", "Outline=2", "Shadow=0", "MarginV=42",
+	].join("\\,");
+	if (await hasSubtitlesFilter()) vf.push(`subtitles=filename=${plain}:force_style=${style}`);
+	else {
+		softSubs = srt;
+		console.log("\n  This ffmpeg has no `subtitles` filter, so the captions are not burned in.");
+		console.log("  They are attached as a track instead — most players need them switched on.");
+		console.log("  To burn them, install an ffmpeg built with libass.");
+	}
 }
 vf.push("format=yuv420p");
 
@@ -134,9 +181,13 @@ const args = [
 	"-ignore_editlist", "1",
 	"-i", video,
 	"-i", audio,
+	/* Only when they could not be burned — see the note above. A third input,
+	   so it is a track in the file rather than pixels in the picture. */
+	...(softSubs ? ["-i", softSubs] : []),
 	"-filter_complex", `[0:v]${vf.join(",")}[v];[1:a]${af}[a]`,
 	"-map", "[v]",
 	"-map", "[a]",
+	...(softSubs ? ["-map", "2:s", "-c:s", "mov_text"] : []),
 	"-t", target.toFixed(3),
 	"-c:v", "libx264", "-crf", "20", "-preset", "medium",
 	"-c:a", "aac", "-b:a", "160k",
@@ -152,4 +203,5 @@ if (!r.ok) {
 }
 
 const finalLen = await durationOf(out);
-console.log(`  ${finalLen.toFixed(2)}s  ·  narration + burned subtitles\n`);
+/* Say which of the two happened, rather than always claiming the better one. */
+console.log(`  ${finalLen.toFixed(2)}s  ·  narration + ${typeof srt === "string" ? (softSubs ? "subtitles as a track" : "burned subtitles") : "no subtitles"}\n`);
