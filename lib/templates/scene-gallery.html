@@ -12,7 +12,7 @@
 
 <!-- One scene card. The frame is drawn at 1920×1080 and scaled, never reflowed. -->
 <template data-row="scene-card">
-   <div class="card" style="cursor:pointer">
+   <div class="card card--media" style="cursor:pointer">
       <div class="thumbwrap">
          <!-- 16:9, because the thing inside is. .thumb is a fixed height for
               cards showing a cropped still; a scene preview is a whole 1920x1080
@@ -23,7 +23,7 @@
                style="inline-size:1920px;block-size:1080px;border:0;transform-origin:top left;pointer-events:none;position:absolute;inset-block-start:0;inset-inline-start:0"></iframe>
          </div>
       </div>
-      <div class="body">
+      <div class="card__body">
          <div data-el="name" class="nm"></div>
          <div data-el="path" class="path"></div>
       </div>

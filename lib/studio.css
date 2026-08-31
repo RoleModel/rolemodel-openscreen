@@ -931,21 +931,44 @@ button.btn:disabled {
   block-size: calc(var(--op-space-scale-unit) * 24);
 }
 
-.card .body {
-  position: absolute;
-  inset: auto 0 0 0;
+/*
+ * In flow by default; over the picture only on a card that has one.
+ *
+ * This was `position: absolute; inset: auto 0 0 0` for every card, which is
+ * right for a card whose thumbnail gives it its height and wrong for every other
+ * one: with the body out of flow there was nothing left to measure, so a card
+ * without a thumbnail collapsed to its own border and read as missing. Most
+ * cards in the app have no thumbnail, so the default was backwards.
+ *
+ * Named for the Optics element rather than a bare `.body`, so the card is the
+ * one Optics describes and a body is recognisably part of it.
+ */
+.card__body {
   padding: var(--op-space-small);
-  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 80%, transparent 20%));
   display: flex;
   flex-direction: column;
   gap: var(--op-space-2x-small);
+}
+
+/*
+ * A media card is one whose picture is the card.
+ *
+ * The body sits over the bottom of the thumbnail, on a scrim so the type stays
+ * legible against whatever the frame happens to show — which is also why the
+ * gradient is here and not on the base body: there is nothing to be legible
+ * against when the body IS the card.
+ */
+.card--media .card__body {
+  position: absolute;
+  inset: auto 0 0 0;
+  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 80%, transparent 20%));
   z-index: 50;
 }
 
-.card .body .row {
+.card__body .row {
   margin: 0;
 }
-.card .body .path {
+.card__body .path {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -960,7 +983,9 @@ button.btn:disabled {
   z-index: 50;
 }
 
-details.card .body {
+/* A details-based card opens in flow, so its body is never the overlay — the
+   base rule already places it, and this only adds the scrim it reveals. */
+details.card .card__body {
   position: relative;
   padding: var(--op-space-small);
   background: linear-gradient(to top, var(--panel) 10%, transparent 50%);

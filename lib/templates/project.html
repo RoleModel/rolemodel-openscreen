@@ -35,11 +35,11 @@
 
 <!-- A script, as a card on the project shelf. -->
 <template data-row="script-shelf-card">
-   <div class="card">
+   <div class="card card--media">
       <div class="thumbwrap">
          <div data-el="thumb" class="thumb" style="display:grid;place-items:center;background:var(--sunk)"></div>
       </div>
-      <div class="body">
+      <div class="card__body">
          <div data-el="name" class="nm"></div>
          <div data-el="meta" class="path"></div>
       </div>
@@ -48,13 +48,13 @@
 
 <!-- One file on the project shelf: pickable, playable in place, one menu. -->
 <template data-row="file-card">
-   <div class="card" style="cursor:pointer">
+   <div class="card card--media" style="cursor:pointer">
       <input data-el="pick" class="card__pick" type="checkbox" title="Use this in a video" />
       <div class="thumbwrap">
          <div data-el="thumb" class="thumb"></div>
          <button data-el="play" class="thumbwrap__play" type="button" hidden></button>
       </div>
-      <div class="body">
+      <div class="card__body">
          <div data-el="name" class="nm"></div>
          <div data-el="path" class="path"></div>
          <div data-el="meta" class="meta"></div>
