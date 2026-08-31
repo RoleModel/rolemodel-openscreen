@@ -352,6 +352,22 @@ const run = (bin, argv, opts = {}) =>
  * gap before the first clip is real black with real silence, so the segments
  * concatenate into a continuous track rather than needing a timeline.
  */
+/*
+ * Every clip's footage, checked before the first frame is drawn.
+ *
+ * Sources were only ever opened by ffmpeg, at the end — so a composition
+ * pointing at a file that does not exist spent three minutes screenshotting
+ * the browser layer and then died on `No such file or directory`, naming a
+ * path the person had to go and reconcile by hand. The check costs a stat per
+ * clip and turns that into a sentence before anything is spent.
+ */
+const missing = [];
+for (const clip of plan.clips) {
+	if (!(await stat(join(root, clip.src)).catch(() => null))) missing.push(clip.src);
+}
+if (missing.length) {
+	die(`this composition points at footage that is not in the project:\n    ${[...new Set(missing)].join("\n    ")}`);
+}
 console.log(`  ${plan.clips.length} clips · ${frames} frames at ${FPS}fps`);
 const segments = [];
 const short = [];
@@ -361,8 +377,62 @@ const frame = 1 / FPS;
 /* Sub-frame remainders, carried rather than dropped, so a run of near-zero gaps
    cannot add up to a visible drift. */
 let carried = 0;
+/*
+ * How far a clip runs into the one after it.
+ *
+ * Two clips that overlap on the timeline are asking for a cross-dissolve: the
+ * outgoing take's frames past its out point, blended under the incoming
+ * picture. That is what the assembly builder emits as a dissolve-tail, and
+ * until now this renderer could not honour it — it laid segments end to end,
+ * so the overlap was silently spent as a cut and the cut ran long.
+ *
+ * An overlap shorter than a frame is a rounding artefact, not an intent, and
+ * neither clip can be dissolved past its own length.
+ */
+const overlapAfter = (a, b) => {
+	if (!a || !b) return 0;
+	const raw = a.start + a.dur - b.start;
+	return raw >= frame ? Math.min(raw, a.dur, b.dur) : 0;
+};
 const silence = (seconds, out) =>
 	run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `color=c=black:s=1920x1080:r=${FPS}:d=${seconds}`, "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(seconds), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-y", out]);
+
+/*
+ * Fold a run of overlapping segments into one.
+ *
+ * xfade wants an offset into the accumulated picture rather than a pair of
+ * lengths, so the run is folded left to right and the running length carried:
+ * each blend costs its own overlap, and the next offset is measured against
+ * what is there so far. Audio crosses with the same curve on both sides, so
+ * the two voices sum to roughly constant loudness through the blend instead
+ * of dipping in the middle the way a pair of linear ramps does.
+ *
+ * The result re-encodes, which the rest of the segments do not — concat copies
+ * them. That is the price of blending at all, and it is paid once per join
+ * rather than once per clip.
+ */
+let chain = [];
+const dissolve = async (run_, index) => {
+	if (run_.length === 1) return run_[0].file;
+	let current = run_[0].file;
+	let length = await mediaSeconds(current);
+	for (const [step, next] of run_.slice(1).entries()) {
+		const over = run_[step].over;
+		const out = join(work, `dissolve-${index}-${step}.mp4`);
+		await run("ffmpeg", [
+			"-v", "error", "-i", current, "-i", next.file,
+			"-filter_complex",
+			`[0:v][1:v]xfade=transition=fade:duration=${over.toFixed(3)}:offset=${Math.max(0, length - over).toFixed(3)},fps=${FPS}[v];`
+				+ `[0:a][1:a]acrossfade=d=${over.toFixed(3)}:c1=tri:c2=tri[a]`,
+			"-map", "[v]", "-map", "[a]",
+			"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+			"-c:a", "aac", "-ar", "48000", "-ac", "2", "-y", out,
+		]);
+		length += (await mediaSeconds(next.file)) - over;
+		current = out;
+	}
+	return current;
+};
 
 for (const [index, clip] of plan.clips.entries()) {
 	/*
@@ -381,7 +451,11 @@ for (const [index, clip] of plan.clips.entries()) {
 	 * than being quietly lost.
 	 */
 	const wanted = clip.start - cursor - carried;
-	if (wanted >= frame) {
+	/* A clip that overlaps the one before it has no gap to fill — it is going to
+	   be dissolved into that segment, not laid after it. */
+	if (overlapAfter(plan.clips[index - 1], clip) > 0) {
+		carried = 0;
+	} else if (wanted >= frame) {
 		const gap = join(work, `gap-${index}.mp4`);
 		/* Whole frames, so the segment is exactly as long as it will play. */
 		const span = Math.round(wanted / frame) * frame;
@@ -434,8 +508,12 @@ for (const [index, clip] of plan.clips.entries()) {
 	const fullFrame = clip.w >= 1900 && clip.h >= 1060;
 	const first = index === 0;
 	const last = index === plan.clips.length - 1;
-	const into = fullFrame && !first ? 0 : Math.min(first ? PIP_FIRST_FADE : PIP_FADE, clip.dur / 3);
-	const away = fullFrame && !last ? 0 : Math.min(PIP_FADE, clip.dur / 3);
+	/* A join that dissolves must not also dip: the fade-out and the fade-in would
+	   run underneath the blend and darken straight through the middle of it. */
+	const dissolveIn = overlapAfter(plan.clips[index - 1], clip) > 0;
+	const dissolveOut = overlapAfter(clip, plan.clips[index + 1]) > 0;
+	const into = dissolveIn || (fullFrame && !first) ? 0 : Math.min(first ? PIP_FIRST_FADE : PIP_FADE, clip.dur / 3);
+	const away = dissolveOut || (fullFrame && !last) ? 0 : Math.min(PIP_FADE, clip.dur / 3);
 	const filter = [
 		...inset,
 		`scale=${clip.w}:${clip.h}:force_original_aspect_ratio=increase`,
@@ -498,7 +576,11 @@ for (const [index, clip] of plan.clips.entries()) {
 			"-c:a", "aac", "-ar", "48000", "-ac", "2", "-y", out,
 		]);
 	});
-	segments.push(out);
+	chain.push({ file: out, over: overlapAfter(clip, plan.clips[index + 1]) });
+	if (!chain.at(-1).over) {
+		segments.push(await dissolve(chain, index));
+		chain = [];
+	}
 	cursor = clip.start + clip.dur;
 }
 if (plan.duration - cursor > 0.02) {
