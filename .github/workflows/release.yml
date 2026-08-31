@@ -10,6 +10,24 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # And by hand, against a tag, because the push trigger cannot be relied on.
+  #
+  # push.yml tags as github-actions[bot] with the default GITHUB_TOKEN, and
+  # GitHub deliberately does not start workflows from a GITHUB_TOKEN push — so
+  # this never fired for a bot-cut tag. Sixty-two tags between v0.1.4 and v0.1.66
+  # produced no release and no DMGs, and nothing said so: the tap kept installing
+  # the last build that happened to be cut by a person.
+  #
+  # The real fix is a PAT with `contents: write` on that push step, which needs a
+  # secret nobody can add from here. Until then this makes it recoverable without
+  # deleting and re-cutting a tag, which is the one thing update-cask treats as a
+  # reason to fail a build.
+  workflow_dispatch:
+    inputs:
+      why:
+        description: "Why this is being run by hand"
+        required: false
+        default: "the bot-cut tag did not start this workflow"
 
 permissions:
   contents: write
