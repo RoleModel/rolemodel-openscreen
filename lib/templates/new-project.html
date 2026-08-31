@@ -21,9 +21,11 @@
          <label class="form-label" for="new-store">Storage</label>
          <select data-el="store" id="new-store" class="form-control"></select>
       </div>
-      <div class="form-group">
+      <!-- Infrastructure vocabulary has no place on a local project's first form;
+           the field appears when a remote makes it mean something. -->
+      <div data-el="bucketGroup" class="form-group" hidden>
          <label class="form-label" for="new-bucket">Bucket</label>
-         <input data-el="bucket" id="new-bucket" class="form-control" placeholder="rm-video (remote only)" />
+         <input data-el="bucket" id="new-bucket" class="form-control" placeholder="rm-video" />
       </div>
    </div>
    <div data-region="footer">
