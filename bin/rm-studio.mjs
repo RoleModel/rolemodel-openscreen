@@ -4452,6 +4452,24 @@ const server = createServer(async (req, res) => {
       }
       const body = String(b.body ?? "").trim();
       if (!body || !/^<[a-z][\w-]*[\s>]/i.test(body)) return json(res, 400, { error: "nothing to insert" });
+      /*
+       * A picture is a file on the shelf, never bytes in the markup.
+       *
+       * A data URL resolves everywhere, which is why it kept being reached for,
+       * and it buries megabytes of base64 in a composition somebody has to read
+       * and diff — one file here reached 8.87MB of which 8.79MB was four
+       * references to two images, on single lines two million characters long.
+       *
+       * Refusing at the door rather than unpacking silently: the picture has a
+       * name on the shelf already, and inserting one that does not is a scene
+       * that was saved wrong. Say so while there is still something to fix.
+       */
+      const inlined = body.match(/data:image\/([a-z]+);base64,/);
+      if (inlined) {
+        return json(res, 400, {
+          error: `That ${inlined[1]} is embedded in the markup rather than referenced. Re-pick the picture so it uploads to the shelf, then insert again.`,
+        });
+      }
 
       const html = await readFile(indexPath, "utf8");
       const close = html.lastIndexOf("</main>");
