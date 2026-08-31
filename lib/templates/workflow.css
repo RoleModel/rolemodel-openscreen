@@ -147,7 +147,20 @@
 .workflow__action-note {
   color: var(--muted);
   margin: 0;
-  min-block-size: 1.5em;
+}
+
+/*
+ * No note, no line.
+ *
+ * This used to hold a line of height open whether or not there was anything to
+ * say, so the step card carried a blank row under its buttons on every screen
+ * that had no progress to report. The reservation was there to stop the card
+ * changing height when a note arrives — but a gap that is always there costs
+ * more than a shift that happens once, and on camera it reads as a missing
+ * element rather than as room held for one.
+ */
+.workflow__action-note:empty {
+  display: none;
 }
 
 @media (max-width: 780px) {

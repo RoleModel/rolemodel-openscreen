@@ -297,7 +297,9 @@ nav .root {
   font-size: var(--op-font-2x-small);
   color: var(--muted);
   padding: 0 var(--op-space-large) var(--op-space-medium);
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 nav .btn.btn--no-border {
@@ -2179,6 +2181,25 @@ textarea.fills.form-control {
 .form > .full:empty,
 .form > .form-group:empty {
   display: none;
+}
+
+/*
+ * The same, for slots the form does not own, and for rows that are empty
+ * without being childless.
+ *
+ * Two gaps got through the rule above. A `.full` that is not a direct child of
+ * `.form` was never matched, and a row whose children all happen to be empty is
+ * not `:empty` itself — a template that appends a button and a hint renders
+ * twenty-four pixels of nothing when neither has text. `:has` closes both.
+ *
+ * `!important`, for the same reason `[hidden]` needs it a few rules down: these
+ * rows carry their layout as an inline `style="display:flex"`, and an inline
+ * declaration beats any stylesheet selector however specific. Without it the
+ * rule matches, loses, and the gap stays — which is exactly what it did.
+ */
+.full:empty,
+.full:not(:has(> *:not(:empty))) {
+  display: none !important;
 }
 
 /* A field whose value is a name rather than a number: two cells of the part
