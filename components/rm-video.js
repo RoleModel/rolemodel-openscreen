@@ -494,10 +494,28 @@ class RMLowerThird extends RMElement {
         :host { display:block; position:absolute; bottom:8cqw; ${side === 'right' ? 'right:6cqw' : 'left:6cqw'};
                 --rise:0px; --dur:var(--duration-base, 400ms); }
         .card { display:flex; align-items:stretch; gap:1cqw;
-                background:color-mix(in srgb, var(--surface) 88%, transparent);
+                /*
+                 * Translucent by default, and overridable — because a renderer
+                 * that punches its holes with a colour key cannot see through it.
+                 *
+                 * The split renderer strips each <video> and fills its box with a
+                 * key colour, so in a full-frame assembly the whole frame behind
+                 * this plate is key magenta. At 88% the plate blends with it and
+                 * comes out purple, and ffmpeg keys only pure magenta, so the
+                 * blend survives into the render. Set --card-fill to an opaque
+                 * colour where that matters; the blur stays either way.
+                 */
+                background:var(--card-fill, color-mix(in srgb, var(--surface) 88%, transparent));
                 border:1px solid var(--line); border-radius:.7cqw;
                 padding:.9cqw 1.4cqw .9cqw 1.1cqw; backdrop-filter:blur(8px);
-                box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.4); }
+                /*
+                 * No drop shadow. The plate has a border and an opaque-enough
+                 * fill; a shadow under it only muddied the footage, and a
+                 * translucent black is also the one thing the split renderer
+                 * cannot composite — over its key colour it comes out purple.
+                 * --card-shadow puts one back where a scene wants it.
+                 */
+                box-shadow:var(--card-shadow, none); }
         .bar { width:.24cqw; border-radius:.2cqw; background:var(--brand-text); flex:0 0 auto; }
         .n { font-size:1.95cqw; font-weight:700; letter-spacing:-.02em; color:var(--fg); line-height:1.2;  }
         .s { font-family:var(--mono); font-size:1.45cqw; color:var(--muted); margin-top:.18cqw; }
