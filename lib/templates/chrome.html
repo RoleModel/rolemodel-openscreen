@@ -67,6 +67,17 @@
 
 <template data-row="crumb-slash"><span class="crumb-sep" aria-hidden="true">/</span></template>
 
+<!-- An icon, by name.
+
+     The set is vendored whole, so there is nothing to register: <rm-icon
+     name="file-01"> is the whole API. It exists because the alternative was
+     writing `hgi-stroke hgi-file-01` by hand at every call site — three tokens,
+     two of them the same every time, and a typo in either draws nothing at all
+     rather than failing.
+
+     A custom element rather than a helper function, so an icon can be declared
+     in a template where the rest of the markup lives instead of prepended from
+     JS after the fact. -->
 <template data-row="icon-glyph"><span class="hgi-stroke" aria-hidden="true"></span></template>
 
 <template data-row="kebab">
@@ -141,7 +152,11 @@
       <button data-el="trigger" class="colormenu__trigger" type="button" aria-haspopup="true" aria-expanded="false">
          <span data-el="chip" class="colormenu__chip"></span><span data-el="label" class="colormenu__label"></span><span class="colormenu__caret">▾</span>
       </button>
-      <div data-el="panel" class="colormenu__panel" role="listbox" hidden></div>
+      <!-- popover, so the panel renders in the top layer: above every stacking
+           context, and outside any ancestor that would clip or contain it.
+           "manual" because dismissal is handled here — Escape and a click
+           outside — and light dismiss would fight the pointerdown handler. -->
+      <div data-el="panel" class="colormenu__panel" role="listbox" popover="manual"></div>
    </div>
 </template>
 
@@ -173,4 +188,17 @@
          </div>
       </div>
    </dialog>
+</template>
+
+<!-- One step of a stepper: the whole run, with the step you are on marked.
+     Shared, because the workflow and the interview are the same shape of thing —
+     a sequence you are somewhere inside — and two copies would drift.
+
+     Originally one step on the workflow rail. The state is an attribute rather than three classes,
+     so a step is in exactly one of them and the CSS says which. -->
+<template data-row="stepper-tick">
+   <li class="stepper__tick">
+      <span class="stepper__mark"><rm-icon data-el="icon" name="circle"></rm-icon></span>
+      <span data-el="label" class="stepper__label"></span>
+   </li>
 </template>

@@ -6,15 +6,18 @@
       titles and composition.
    </p>
    <p data-el="status" class="hint" data-region="main"></p>
-   <div data-el="empty" class="note" data-region="main" hidden>
-      <p>When you make a video from a script, Claude now creates an editable HyperFrames project first. Its source and every later render stay together in this project.</p>
+   <div data-el="empty" class="card card--padded" data-region="main" hidden>
+      <p>When you make a video from a script, Claude now creates an editable HyperFrames project first. Its source and every later render stay together in this project.</p> 
+      <div class="card__footer">
       <button data-el="makeOne" class="btn" type="button">Make a HyperFrames video</button>
+      </div>
    </div>
    <div data-el="grid" class="grid" data-region="main" hidden></div>
 </template>
 
 <template data-row="hyperframes-card">
    <div class="card">
+      <p data-el="status" class="hint" hidden></p>
       <div class="thumbwrap">
          <div data-el="art" class="thumb"></div>
       </div>
@@ -23,32 +26,119 @@
          <div data-el="path" class="path"></div>
          <div data-el="meta" class="meta"></div>
          <div class="row">
-            <button data-el="open" class="btn" type="button">Open in HyperFrames</button>
-            <button data-el="remove" class="btn ghost btn--small del" type="button">Delete</button>
+            <button data-el="open" class="btn" type="button"><rm-icon name="arrow-up-right-01"></rm-icon>Open</button>
+            <button data-el="remove" class="btn ghost btn--icon del" type="button" aria-label="Delete"><rm-icon name="delete-01"></rm-icon></button>
          </div>
-         <p data-el="status" class="hint" hidden></p>
       </div>
    </div>
 </template>
 
-<!-- The embedded editor. Watch row above the frame; a handoff note is
-     prepended when one is pending. -->
+<!-- The embedded editor. The cut row sits above the frame; a handoff note is
+     prepended when one is pending.
+
+     The cut row is the round trip to OpenScreen: OpenScreen is the better place
+     to trim, reorder and drop clips, and this composition holds everything it
+     has never heard of — the framing, the speaker names, the words on screen.
+     Sending the cut over and taking the edit back used to be done by hand. -->
 <template data-row="hyperframes-workspace">
    <section class="hyperframes-workspace">
-      <label class="hyperframes-workspace__watch">
-         <input data-el="watch" class="form-control form-control--small" type="checkbox" />
-         <span class="form-label">Reload when the composition changes on disk</span>
-      </label>
+      <!-- What just happened, and nothing else. Every control sits in the page
+           header with the rest of them; a second bar of buttons above the editor
+           was two places to look for the same thing. -->
+      <div class="hyperframes-workspace__cut">
+         <span data-el="cutState" class="hyperframes-workspace__state"></span>
+         <label class="hyperframes-workspace__watch">
+            <input data-el="watch" class="form-control form-control--small" type="checkbox" />
+            <span class="form-label">Reload when the composition changes on disk</span>
+         </label>
+      </div>
       <iframe data-el="frame" class="hyperframes-workspace__frame" src="about:blank" allow="autoplay; fullscreen" allowfullscreen></iframe>
    </section>
 </template>
 
-<!-- HyperFrames' small navigation set, beside the other page-level controls. -->
+<!-- Every control for this composition, in the page header with the rest of
+     them. The labels say what the button does to THIS video rather than naming
+     the machinery: "the cut" is a word for the clip list that means nothing to
+     somebody looking at a video, and a button nobody dares press is a button
+     that is not there. -->
 <template data-row="hyperframes-header-actions">
    <div class="btn-group">
-      <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">Project media</button>
-      <button data-el="all" class="btn ghost btn--small" type="button">All compositions</button>
-      <button data-el="revise" class="btn btn--primary btn--small" type="button" hidden>Redo with Claude</button>
-      <button data-el="reload" class="btn ghost btn--small" type="button">Reload</button>
+      <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">
+         <rm-icon name="playlist-01"></rm-icon>
+         Media
+      </button>
+      <button data-el="all" class="btn ghost btn--small" type="button">Compositions</button>
+      <button data-el="framing" class="btn ghost btn--small" type="button"
+         title="Move and zoom each speaker inside their circle">
+         <rm-icon name="podcast"></rm-icon>
+         Speaker
+      </button>
+      <button data-el="fromEditor" class="btn ghost btn--primary btn--small" type="button" hidden
+         title="An edit is waiting in OpenScreen that this composition has not taken">
+         <rm-icon name="video-02"></rm-icon>
+         Use OS Edit
+      </button>
+      <button data-el="toEditor" class="btn ghost btn--small" type="button"
+         title="Opens this video's clips in OpenScreen, where you can trim and reorder them. Saving there updates this composition; nothing else in it changes.">
+         <rm-icon name="change-screen-mode"></rm-icon>
+         Trim Clips
+      </button>
+   </div>
+</template>
+
+<!-- Framing: where each speaker's circle sits in their own recording.
+
+     A live preview per speaker using the composition's own pip rules, because
+     the only reliable way to know whether a face is centred is to look at it in
+     the shape it will actually appear in. Drag the circle to move the crop;
+     zoom until the speaker matches the others. -->
+<template data-row="hyperframes-framing">
+   <section class="framing">
+      <p class="lede">Drag a face to move it inside its circle. Zoom until everyone matches.</p>
+      <p data-el="adopted" class="hint" hidden></p>
+
+      <!-- Where the pip SITS, as opposed to what is inside it. One set of
+           numbers for the whole composition, so it is one stage rather than one
+           per speaker: drag the circle to move it, the slider sizes it. -->
+      <div class="framing__place">
+         <div data-el="stage" class="framing__stage-frame">
+            <div data-el="puck" class="framing__puck"></div>
+         </div>
+         <div class="framing__dials">
+            <label class="framing__zoom">
+               <span class="form-label">Size</span>
+               <input data-el="size" class="form-control form-control--small" type="range" min="10" max="80" step="0.5" />
+               <span data-el="sizeText" class="framing__value"></span>
+            </label>
+            <label class="framing__zoom">
+               <span class="form-label">Roundness</span>
+               <input data-el="radius" class="form-control form-control--small" type="range" min="0" max="50" step="1" />
+               <span data-el="radiusText" class="framing__value"></span>
+            </label>
+            <p class="hint">Drag the circle to move it. It can hang off the edge — that is what a negative offset is.</p>
+         </div>
+      </div>
+
+      <div data-el="grid" class="card card--padded framing__grid"></div>
+      <div class="card__footer row">
+         <button data-el="save" class="btn btn--primary" type="button">Save framing and rebuild</button>
+         <button data-el="cancel" class="btn" type="button">Back to the editor</button>
+         <span data-el="status" class="form-hint hint"></span>
+      </div>
+   </section>
+</template>
+
+<template data-row="framing-shot">
+   <div class="framing__shot">
+      <div class="framing__stage">
+         <img data-el="pip" class="framing__pip" alt="" />
+      </div>
+      <div data-el="who" class="framing__who"></div>
+      <label class="framing__zoom">
+         <span class="form-label">Zoom</span>
+         <input data-el="zoom" class="form-control form-control--small" type="range" min="1" max="3" step="0.05" />
+         <span data-el="zoomText" class="framing__value"></span>
+      </label>
+      <button data-el="reset" class="btn btn--small" type="button">Reset</button>
    </div>
 </template>

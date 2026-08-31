@@ -477,7 +477,7 @@ nav button[data-v][aria-current='true'] .navicon {
 
 /* A button whose whole label is a glyph still needs a square hit area. */
 .btn.ghost:has(> .hgi-stroke:only-child) {
-  padding-inline: var(--op-space-x-small);
+  padding-inline: var(--op-space-small);
 }
 
 .btn.btn--hint {
@@ -673,7 +673,7 @@ button.btn {
   color: var(--on-accent);
   border: 0;
   border-radius: var(--op-radius-large);
-  padding: var(--op-space-x-small) var(--op-space-medium);
+  padding: 0 var(--op-space-medium);
   font: inherit;
   font-size: var(--op-font-small);
   font-weight: var(--op-font-weight-semi-bold);
@@ -926,13 +926,32 @@ button.btn:disabled {
   position: absolute;
   inset: auto 0 0 0;
   padding: var(--op-space-small);
-  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 20%, transparent 100%));
+  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 80%, transparent 20%));
   display: flex;
   flex-direction: column;
   gap: var(--op-space-2x-small);
 }
 
+.card .body .row {
+  margin: 0;
+}
+.card .body .path {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.card .hint {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 75%;
+  left: auto;
+  z-index: 50;
+}
+
 details.card .body {
+  position: relative;
   padding: var(--op-space-small);
   background: linear-gradient(to top, var(--panel) 10%, transparent 50%);
   display: flex;

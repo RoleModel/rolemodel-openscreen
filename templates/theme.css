@@ -8,6 +8,39 @@
  * Referenced by every composition rather than inlined, for the reason the fonts
  * are vendored: one place to change, and a diff that shows what changed.
  */
+
+/*
+ * Optics itself, first, because the components need it and the six tokens below
+ * are not it.
+ *
+ * The line above used to claim "the values are Optics', so a render and the app
+ * it is a video of are the same colours rather than two guesses at them." That
+ * was true of --color-primary and five siblings, and of nothing else. Every
+ * component in rm-video.js is written against --op-color-* with a hex fallback,
+ * and a composition loaded only this file — so in HyperFrames every one of them
+ * fell back to the hex, while the same component in Studio resolved the real
+ * token. Two guesses at the colours is exactly what it was.
+ *
+ * An @import rather than a link, because it has to reach compositions that
+ * already exist: every one of them loads theme.css and no generated index.html
+ * has to be touched to gain this.
+ */
+@import "assets/optics.css";
+
+/*
+ * A composition is dark, and it has to say so.
+ *
+ * Optics states its palette in light-dark() pairs, which resolve against
+ * color-scheme rather than against what the page looks like. Studio sets
+ * `color-scheme: dark`; a composition set nothing, so the pairs resolved LIGHT
+ * — --op-color-neutral-plus-max came back at 100% lightness instead of 8%, and a
+ * component asking for its darkest ground got white. Staging Optics without this
+ * line would have made the difference worse rather than fixed it.
+ */
+:root {
+  color-scheme: dark;
+}
+
 :root {
   /* Palette. --primary is the brand green; --accent is deliberately the same
      family, because RoleModel's accent is a lighter green rather than a

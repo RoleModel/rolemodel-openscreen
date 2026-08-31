@@ -14,7 +14,11 @@
 <template data-row="scene-card">
    <div class="card" style="cursor:pointer">
       <div class="thumbwrap">
-         <div data-el="shot" class="thumb" style="display:block;position:relative;overflow:hidden;background:var(--sunk)">
+         <!-- 16:9, because the thing inside is. .thumb is a fixed height for
+              cards showing a cropped still; a scene preview is a whole 1920x1080
+              frame scaled to the card's width, so a fixed height either crops it
+              or leaves a band under it. -->
+         <div data-el="shot" class="thumb scene-card__shot" style="display:block;position:relative;overflow:hidden;background:var(--sunk)">
             <iframe data-el="frame" loading="lazy" scrolling="no" hidden
                style="inline-size:1920px;block-size:1080px;border:0;transform-origin:top left;pointer-events:none;position:absolute;inset-block-start:0;inset-inline-start:0"></iframe>
          </div>
@@ -37,6 +41,10 @@
       </select>
       <button data-el="insert" class="btn" type="button" disabled>Insert into composition</button>
       <button data-el="copy" class="btn ghost" type="button">Copy tag</button>
+      <!-- The ground a designed component is saved against. The designers draw a
+           full-frame component and had no wallpaper at all, so a scene saved
+           from one came back on the default — there was nothing to save. -->
+      <select data-el="wallpaper" class="form-control" title="Wallpaper"></select>
       <input data-el="name" class="form-control" placeholder="scene name" />
       <button data-el="save" class="btn" type="button">Save as scene</button>
    </div>

@@ -376,12 +376,12 @@
   {
     "name": "docks-board",
     "label": "Dock Designer · tinted board",
-    "base": "#141d27",
+    "base": "#000000",
     "gradient": {
-      "angle": 152,
+      "angle": 170,
       "stops": [
         {
-          "color": "#233140",
+          "color": "#0b3228",
           "at": 0
         },
         {
@@ -392,11 +392,11 @@
     },
     "tint": {
       "color": "#33d1a9",
-      "alpha": 0.18,
-      "angle": 168
+      "alpha": 0,
+      "angle": 0
     },
     "texture": {
-      "type": "dots",
+      "type": "grid",
       "color": "#f2f2f2",
       "opacity": 0.055,
       "size": 16,
@@ -514,8 +514,8 @@
       "weight": 1.4
     },
     "border": {
-      "width": 0,
-      "color": "#00c278",
+      "width": 15,
+      "color": "#064eac",
       "inset": 0,
       "radius": 0,
       "sides": "bottom"

@@ -1,0 +1,13 @@
+
+/*
+ * A scene preview is a whole frame, so its tile is the frame's shape.
+ *
+ * .thumb is a fixed height, which is right for a card showing a cropped still
+ * and wrong here: the preview is a 1920x1080 iframe scaled to the card's width,
+ * so a fixed height leaves a band of dead ground under it at some widths and
+ * crops the bottom of the scene at others.
+ */
+.scene-card__shot {
+  aspect-ratio: 16 / 9;
+  block-size: auto;
+}

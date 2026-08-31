@@ -19,8 +19,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
+import { readComposition } from "../lib/adopt.mjs";
 import { durationOf } from "../lib/narration.mjs";
-import { sayTrack } from "../lib/make-pip.mjs";
+import { PHRASE_FADE, PIP_FADE, TIMELINE_LOOPS, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
 
 const [projectId, folder = "canvas-pip-transcript"] = process.argv.slice(2);
 if (!projectId) {
@@ -36,28 +37,14 @@ if (html === null) {
 }
 
 /*
- * The clips, as the file has them now.
+ * The clips, as the file has them now — read by the one reader there is.
  *
- * Attribute order is whatever last wrote the tag — the builder writes one
- * order, the HyperFrames editor another — so each attribute is read on its own
- * rather than matched as a sequence.
+ * This used to hold its own copy of the pip-tag pattern and its own attribute
+ * reader, byte-similar to adopt.mjs's. Two readers of one contract is the
+ * copy-and-drift this codebase argues against everywhere else: change how a pip
+ * is written and a retime would keep reading it the old way, quietly.
  */
-const attr = (tag, name) => {
-	const m = new RegExp(`\\b${name}="([^"]*)"`).exec(tag);
-	return m ? m[1] : null;
-};
-const clips = [];
-for (const [tag] of html.matchAll(/<video\b[^>]*\bclass="[^"]*\bpip\b[^"]*"[^>]*>/g)) {
-	const src = attr(tag, "src");
-	if (!src) continue;
-	clips.push({
-		id: attr(tag, "id"),
-		src: src.replace(/^source\//, ""),
-		start: Number(attr(tag, "data-start")) || 0,
-		dur: Number(attr(tag, "data-duration")) || 0,
-		ms: Number(attr(tag, "data-media-start")) || 0,
-	});
-}
+const clips = readComposition(html);
 if (!clips.length) {
 	console.error("rm-retime-pip: that composition has no pip clips to read");
 	process.exit(1);
@@ -72,7 +59,20 @@ if (!clips.length) {
  * class=` finds nothing, and finding nothing here means writing six empty
  * names over six correct ones. Hence the refusal below rather than a default.
  */
-const names = [...html.matchAll(/class="say__who"[^>]*>([^<]*)</g)].map((m) => m[1].trim());
+/* The names may be in mounted files rather than in index.html, so read across
+   everything this composition is made of. */
+const dir = join(projectDir, "media", "Renders", folder);
+const mountedSrcs = [...html.matchAll(/data-composition-src="([^"]+)"/g)].map((m) => m[1]);
+const mountedText = [];
+for (const src of mountedSrcs) {
+	const text = await readFile(join(dir, src), "utf8").catch(() => null);
+	if (text === null) {
+		console.error(`rm-retime-pip: this composition mounts ${src}, which is not there — not touching it`);
+		process.exit(1);
+	}
+	mountedText.push({ src, text });
+}
+const names = [...`${html}${mountedText.map((m) => m.text).join("")}`.matchAll(/class="say__who"[^>]*>([^<]*)</g)].map((m) => m[1].trim());
 if (names.length !== clips.length) {
 	console.error(`rm-retime-pip: found ${names.length} speaker names for ${clips.length} clips — not touching it`);
 	process.exit(1);
@@ -97,7 +97,7 @@ for (const [a, b] of clips.slice(0, -1).map((c, i) => [c, clips[i + 1]])) {
 	}
 }
 
-const { lines, tweens, words } = await sayTrack({ projectDir, clips });
+const { lines, phrases, wordCues, outs, pips, words } = await sayTrack({ projectDir, clips });
 
 /*
  * Out with the old words, in with the new — and nothing else.
@@ -131,29 +131,105 @@ const blockAt = (text, from) => {
 	return null;
 };
 
-const spans = [];
-for (const m of out.matchAll(/\bid="say-\d+"/g)) {
-	const span = blockAt(out, m.index);
-	if (span) spans.push(span);
+/*
+ * The say blocks may not be in this file.
+ *
+ * A composition can keep each speaker's transcript in its own file under
+ * compositions/ and mount it with data-composition-src. The words are then in
+ * those files, so a retime has to follow the mounts and write each one — this
+ * used to look in index.html only, find no blocks at all, and refuse.
+ */
+const documents = [
+	{ path: file, name: "index.html", text: out, owned: false },
+	...mountedText.map((m) => ({ path: join(dir, m.src), name: m.src, text: m.text, owned: true })),
+];
+
+/* Which document holds which say block, in clip order. */
+const found = [];
+for (const doc of documents) {
+	/* `\bid="` also matches inside data-composition-id="say-1" — the hyphen is a
+	   word boundary — so a mount host and a sub-composition root both counted as
+	   word blocks and the totals never lined up. Anchor on whitespace instead. */
+	for (const m of doc.text.matchAll(/(?:^|\s)id="say-(\d+)"/g)) {
+		const span = blockAt(doc.text, m.index);
+		if (span) found.push({ doc, index: Number(m[1]) - 1, span });
+	}
 }
-if (spans.length !== clips.length) {
-	console.error(`rm-retime-pip: found ${spans.length} word blocks for ${clips.length} clips — not touching it`);
+if (found.length !== clips.length) {
+	console.error(`rm-retime-pip: found ${found.length} word blocks for ${clips.length} clips — not touching it`);
 	process.exit(1);
 }
-/* Back to front, so replacing one does not move the next. */
-for (let i = spans.length - 1; i >= 0; i -= 1) {
-	const [open, close] = spans[i];
-	out = out.slice(0, open) + lines[i].trimStart() + out.slice(close);
-}
 
-const mine = /^\s*tl\.(set|to)\('#(?:g\d+-\d+|w\d+|say-\d+-in)'.*$/;
+/* Back to front within each document, so replacing one does not move the next. */
+for (const doc of documents) {
+	const mine = found.filter((f) => f.doc === doc).sort((a, b) => b.span[0] - a.span[0]);
+	for (const { index, span } of mine) {
+		const [open, close] = span;
+		doc.text = doc.text.slice(0, open) + lines[index].trimStart() + doc.text.slice(close);
+	}
+}
+out = documents[0].text;
+
+/*
+ * The timing tables, rewritten; everything else in the block left alone.
+ *
+ * The builder now emits three tables and a loop rather than six hundred tl.to()
+ * lines, so a retime is three assignments — which is the point of the table. A
+ * composition built before that still carries the lines, and those are matched
+ * and dropped the way they always were, so one retime brings an old file onto
+ * the new shape without rebuilding it.
+ */
+const table = (name, rows) => `      var ${name} = ${JSON.stringify(rows)};`;
+
+/*
+ * Ours, by the id it touches.
+ *
+ * A phrase, a word and a say block are this command's to rewrite. Anything else
+ * in the block belongs to something the editor added — an image it positioned
+ * has tweens of its own in there — and losing those is the same class of damage
+ * a retime exists to avoid.
+ */
+const mine = /^\s*tl\.(set|to)\('#(?:g\d+-\d+|w\d+|say-\d+-in)'/;
+
+/*
+ * Everything that is not a tl. call is scaffolding this command owns: the
+ * constants, the tables, the loops, the offset helper. Keeping a line because it
+ * failed to match one shape of loop body is how a previous run's `var at = ...`
+ * survived into the next file and threw a ReferenceError before the timeline was
+ * ever registered.
+ *
+ * So the rule is positive and narrow: a real tween names its target as a string
+ * literal. A line that tweens `at` is a loop body — scaffolding — however much
+ * it looks like a tween. Keep the literals that are not ours, drop everything
+ * else, and write the scaffolding fresh.
+ */
+const foreign = (line) => /^\s*tl\.(set|to)\('#/.test(line) && !mine.test(line);
+
+/* One source with the generator, so a retime can only ever produce what a
+   fresh build would. This used to be a second copy of the same loops, and the
+   copies drifted: a shape fixed in the generator was still broken here. */
+const loops = TIMELINE_LOOPS;
+
 out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(\n\s*window\.__timelines)/, (_all, head, body, tail) => {
-	const kept = body.split("\n").filter((line) => line.trim() && !mine.test(line));
-	return head + [...kept, ...tweens].join("\n") + tail;
+	const kept = body.split("\n").filter(foreign);
+	const rebuilt = [
+		`      var FADE = ${PHRASE_FADE}, FILL = ${WORD_FILL}, DIM = ${WORD_DIM};`,
+		table("PHRASE", phrases),
+		table("WORD", wordCues),
+		table("OUT", outs),
+		table("PIPS", pips),
+		`      var PIP_OUT = ${PIP_FADE};`,
+		loops,
+	];
+	return head + [...kept, ...rebuilt].join("\n") + tail;
 });
 
 await writeFile(`${file}.before-retime`, html, "utf8");
 await writeFile(file, out, "utf8");
+/* The transcripts, wherever they live. */
+for (const doc of documents.filter((d) => d.owned)) {
+	await writeFile(doc.path, doc.text, "utf8");
+}
 console.log("");
 console.log(`  ${words} words re-timed against the clips as they are now`);
 console.log(`  previous file kept as ${folder}/index.html.before-retime`);
