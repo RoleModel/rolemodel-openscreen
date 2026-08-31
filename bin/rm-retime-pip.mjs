@@ -20,7 +20,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
 import { durationOf } from "../lib/narration.mjs";
-import { sayTrack } from "../lib/make-pip.mjs";
+import { PHRASE_FADE, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
 
 const [projectId, folder = "canvas-pip-transcript"] = process.argv.slice(2);
 if (!projectId) {
@@ -97,7 +97,7 @@ for (const [a, b] of clips.slice(0, -1).map((c, i) => [c, clips[i + 1]])) {
 	}
 }
 
-const { lines, tweens, words } = await sayTrack({ projectDir, clips });
+const { lines, phrases, wordCues, outs, words } = await sayTrack({ projectDir, clips });
 
 /*
  * Out with the old words, in with the new — and nothing else.
@@ -146,10 +146,78 @@ for (let i = spans.length - 1; i >= 0; i -= 1) {
 	out = out.slice(0, open) + lines[i].trimStart() + out.slice(close);
 }
 
-const mine = /^\s*tl\.(set|to)\('#(?:g\d+-\d+|w\d+|say-\d+-in)'.*$/;
+/*
+ * The timing tables, rewritten; everything else in the block left alone.
+ *
+ * The builder now emits three tables and a loop rather than six hundred tl.to()
+ * lines, so a retime is three assignments — which is the point of the table. A
+ * composition built before that still carries the lines, and those are matched
+ * and dropped the way they always were, so one retime brings an old file onto
+ * the new shape without rebuilding it.
+ */
+const table = (name, rows) => `      var ${name} = ${JSON.stringify(rows)};`;
+
+/*
+ * Ours, by the id it touches.
+ *
+ * A phrase, a word and a say block are this command's to rewrite. Anything else
+ * in the block belongs to something the editor added — an image it positioned
+ * has tweens of its own in there — and losing those is the same class of damage
+ * a retime exists to avoid.
+ */
+const mine = /^\s*tl\.(set|to)\('#(?:g\d+-\d+|w\d+|say-\d+-in)'/;
+
+/*
+ * Everything that is not a tl. call is scaffolding this command owns: the
+ * constants, the tables, the loops, the offset helper. Keeping a line because it
+ * failed to match one shape of loop body is how a previous run's `var at = ...`
+ * survived into the next file and threw a ReferenceError before the timeline was
+ * ever registered.
+ *
+ * So the rule is positive and narrow: a real tween names its target as a string
+ * literal. A line that tweens `at` is a loop body — scaffolding — however much
+ * it looks like a tween. Keep the literals that are not ours, drop everything
+ * else, and write the scaffolding fresh.
+ */
+const foreign = (line) => /^\s*tl\.(set|to)\('#/.test(line) && !mine.test(line);
+
+const loops = `      function offset(clip) {
+        var el = document.getElementById('pip-' + clip);
+        return el ? Number(el.dataset.start) || 0 : null;
+      }
+
+      PHRASE.forEach(function (p) {
+        var base = offset(p[1]);
+        if (base === null) return;
+        var at = '#' + p[0];
+        tl.set(at, { opacity: 0 }, 0)
+          .to(at, { opacity: 1, duration: FADE, ease: 'power1.out' }, base + p[2])
+          .to(at, { opacity: 0, duration: FADE, ease: 'power1.in' }, base + p[3])
+          .set(at, { opacity: 0 }, base + p[4]);
+      });
+      WORD.forEach(function (w) {
+        var base = offset(w[1]);
+        if (base === null) return;
+        var at = '#' + w[0];
+        tl.set(at, { opacity: DIM }, 0).to(at, { opacity: 1, duration: FILL, ease: 'power1.out' }, base + w[2]);
+      });
+      OUT.forEach(function (o) {
+        var base = offset(o[1]);
+        if (base === null) return;
+        var at = '#' + o[0];
+        tl.to(at, { opacity: 0, duration: 0.4, ease: 'none' }, base + o[2]).set(at, { opacity: 0 }, base + o[3]);
+      });`;
+
 out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(\n\s*window\.__timelines)/, (_all, head, body, tail) => {
-	const kept = body.split("\n").filter((line) => line.trim() && !mine.test(line));
-	return head + [...kept, ...tweens].join("\n") + tail;
+	const kept = body.split("\n").filter(foreign);
+	const rebuilt = [
+		`      var FADE = ${PHRASE_FADE}, FILL = ${WORD_FILL}, DIM = ${WORD_DIM};`,
+		table("PHRASE", phrases),
+		table("WORD", wordCues),
+		table("OUT", outs),
+		loops,
+	];
+	return head + [...kept, ...rebuilt].join("\n") + tail;
 });
 
 await writeFile(`${file}.before-retime`, html, "utf8");
