@@ -239,7 +239,21 @@ const plan = await page.evaluate((key) => {
 	 * dissolving, not the window it is seen through.
 	 */
 	const hold = document.createElement("style");
-	hold.textContent = ".pip, video[data-start] { opacity: 1 !important; }";
+	hold.textContent = ".pip, video[data-start] { opacity: 1 !important; }"
+		/*
+		 * And no transition wash, for exactly the same reason.
+		 *
+		 * `.assembly-transition` is a full-frame plate whose opacity animates up
+		 * and back down across a cut — a dissolve done in the browser. Over a
+		 * keyed hole that is a partially transparent colour on top of the key
+		 * colour, which blends to purple and survives the key, so every cut
+		 * arrived in the render as a magenta flash.
+		 *
+		 * It is also redundant here: each footage segment is faded in and out
+		 * below, which is the same dissolve done where the picture actually is.
+		 * So the browser holds still and ffmpeg does the transition.
+		 */
+		+ " .assembly-transition { display: none !important; }";
 	document.head.append(hold);
 	/*
 	 * Where this composition would rather be represented.
