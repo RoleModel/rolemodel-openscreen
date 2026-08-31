@@ -1,7 +1,7 @@
 <!-- Paper edit: choosing passages from a transcript. -->
 <template data-panel="paper-edit">
    <p class="lede" data-region="main">Claude finds the usable passages first. Review the visual picks, keep the ones that tell the story, then build the editable assembly.</p>
-   <button data-el="useMulti" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main">Assemble multiple clips instead</button>
+   <button data-el="useMulti" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main"><rm-icon name="layers-01"></rm-icon>Assemble multiple clips instead</button>
    <div data-el="workspace" class="paper-edit" data-region="main">
       <section data-el="transcript" class="paper-edit__transcript">
          <details data-el="controls" class="paper-edit__controls" open>
@@ -50,7 +50,7 @@
          <p data-el="text" class="paper-edit__pick-text"></p>
          <p data-el="why" class="paper-edit__pick-why" hidden></p>
       </div>
-      <button data-el="toggle" type="button"></button>
+      <button data-el="toggle" type="button"><rm-icon name="tick-02"></rm-icon></button>
    </article>
 </template>
 

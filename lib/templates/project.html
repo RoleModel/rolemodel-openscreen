@@ -6,8 +6,8 @@
    </div>
    <div class="row margin-y-md" style="justify-content:space-between;flex-wrap:wrap;gap:var(--op-space-small)" data-region="main">
       <div class="btn-group">
-         <button data-el="addRecentCapture" class="btn ghost btn--pill" type="button">Add recording</button>
-         <button data-el="reindex" class="btn ghost btn--pill" type="button">Re-index</button>
+         <button data-el="addRecentCapture" class="btn ghost btn--pill" type="button"><rm-icon name="add-01"></rm-icon>Add recording</button>
+         <button data-el="reindex" class="btn ghost btn--pill" type="button"><rm-icon name="refresh"></rm-icon>Re-index</button>
       </div>
       <div data-el="filters" class="btn-group" style="margin-inline-start:auto"></div>
    </div>
@@ -15,8 +15,8 @@
       <summary>Choose a recent OpenScreen recording</summary>
       <div class="project-capture-import__controls">
          <select data-el="captureSelect" aria-label="Recent OpenScreen recordings" disabled></select>
-         <button data-el="addCapture" class="btn secondary btn--small" type="button" disabled>Add to project</button>
-         <button data-el="refreshCaptures" class="btn ghost btn--small" type="button">Refresh</button>
+         <button data-el="addCapture" class="btn secondary btn--small" type="button" disabled><rm-icon name="add-01"></rm-icon>Add to project</button>
+         <button data-el="refreshCaptures" class="btn ghost btn--small" type="button"><rm-icon name="refresh"></rm-icon>Refresh</button>
       </div>
       <p data-el="captureHint" class="hint project-capture-import__status" hidden></p>
    </details>
@@ -75,7 +75,7 @@
          </label>
          <p data-el="status" class="hint" hidden></p>
          <div class="move-asset__actions">
-            <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
+            <button data-el="cancel" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Cancel</button>
             <button data-el="confirm" class="btn" type="button"></button>
          </div>
       </form>
@@ -90,8 +90,8 @@
          <div data-el="fields" style="display:contents"></div>
          <p data-el="status" class="hint" hidden></p>
          <div class="move-asset__actions">
-            <button data-el="cancel" class="btn ghost" type="button">Cancel</button>
-            <button data-el="add" class="btn btn--primary" type="button"></button>
+            <button data-el="cancel" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Cancel</button>
+            <button data-el="add" class="btn btn--primary" type="button"><rm-icon name="add-01"></rm-icon></button>
          </div>
       </form>
    </dialog>

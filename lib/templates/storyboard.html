@@ -22,7 +22,7 @@
       </div>
       <div class="canvas-script__controls">
          <select data-el="pick" class="form-control"></select>
-         <button data-el="build" class="btn btn--small" type="button"></button>
+         <button data-el="build" class="btn btn--small" type="button"><rm-icon name="ai-magic"></rm-icon></button>
       </div>
       <p data-el="status" class="canvas-script__status"></p>
    </div>
@@ -32,7 +32,7 @@
    <div class="board__empty">
       <div class="board__empty-head">No shots yet</div>
       <p class="board__empty-body">A shot is a hole in the video — "open on the problem", "the price appears", "the logo". The brief lists them, and each one becomes a column here that you fill with takes.</p>
-      <button data-el="add" class="btn btn--primary" type="button">Create slots from script</button>
+      <button data-el="add" class="btn btn--primary" type="button"><rm-icon name="add-01"></rm-icon>Create slots from script</button>
    </div>
 </template>
 
@@ -48,10 +48,10 @@
          </div>
       </div>
       <div class="board__node-actions">
-         <button data-el="choose" class="board__node-select" type="button" title="Select this scene and show its inspector"></button>
-         <button data-el="edit" class="board__node-edit" type="button">Edit scene</button>
-         <button data-el="reviewFootage" class="board__node-edit" type="button">Review footage</button>
-         <button data-el="remove" class="board__node-remove" type="button">Delete</button>
+         <button data-el="choose" class="board__node-select" type="button" title="Select this scene and show its inspector"><rm-icon name="tick-02"></rm-icon></button>
+         <button data-el="edit" class="board__node-edit" type="button"><rm-icon name="pencil-edit-02"></rm-icon>Edit scene</button>
+         <button data-el="reviewFootage" class="board__node-edit" type="button"><rm-icon name="film-01"></rm-icon>Review footage</button>
+         <button data-el="remove" class="board__node-remove" type="button"><rm-icon name="delete-02"></rm-icon>Delete</button>
       </div>
       <div data-el="scenePreview" class="board__scene-preview" hidden>
          <iframe data-el="sceneFrame" class="board__scene-frame" tabindex="-1" aria-hidden="true"></iframe>
@@ -83,7 +83,7 @@
          <span data-el="votes" class="board__votes"></span>
       </div>
       <div class="board__take-acts">
-         <button data-el="pick" class="btn btn--small" type="button"></button>
+         <button data-el="pick" class="btn btn--small" type="button"><rm-icon name="tick-02"></rm-icon></button>
       </div>
    </div>
 </template>
@@ -99,7 +99,7 @@
       <div data-el="row" class="board__add-row" hidden>
          <input data-el="from" class="board__add-num" type="number" min="0" step="0.5" placeholder="from" />
          <input data-el="to" class="board__add-num" type="number" min="0" step="0.5" placeholder="to" />
-         <button data-el="add" class="btn btn--small" type="button">Add take</button>
+         <button data-el="add" class="btn btn--small" type="button"><rm-icon name="add-01"></rm-icon>Add take</button>
       </div>
       <div data-el="said" class="form-hint" hidden></div>
    </div>
@@ -114,10 +114,10 @@
 <!-- The zoom cluster: out, the label, in, fit. -->
 <template data-row="board-zoom">
    <div class="board__zoom">
-      <button data-el="out" class="btn btn--small" type="button">−</button>
+      <button data-el="out" class="btn btn--small" type="button" aria-label="Zoom out"><rm-icon name="zoom-out-area"></rm-icon></button>
       <span data-el="label" class="board__zoom-label">100%</span>
-      <button data-el="inn" class="btn btn--small" type="button">+</button>
-      <button data-el="fit" class="btn btn--small" type="button">Fit</button>
+      <button data-el="inn" class="btn btn--small" type="button" aria-label="Zoom in"><rm-icon name="zoom-in-area"></rm-icon></button>
+      <button data-el="fit" class="btn btn--small" type="button"><rm-icon name="maximize-01"></rm-icon>Fit</button>
    </div>
 </template>
 

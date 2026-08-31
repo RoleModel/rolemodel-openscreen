@@ -4,7 +4,7 @@
    <div data-el="form" class="form" data-region="main"></div>
    <div data-el="rail" class="form" data-region="side"></div>
    <div data-region="footer">
-      <button data-el="go" class="btn" type="button">Set up the capture</button>
+      <button data-el="go" class="btn" type="button" title="Builds the numbered plan below from these settings — nothing records until you press Run on a step."><rm-icon name="sliders-horizontal"></rm-icon>Set up the capture</button>
    </div>
 </template>
 
@@ -33,8 +33,8 @@
       <label class="form-label">Saved project script</label>
       <div class="row">
          <select data-el="pick" class="form-control form-control--small"></select>
-         <button data-el="insert" class="btn ghost btn--small" type="button">Insert saved script</button>
-         <button data-el="refresh" class="btn ghost btn--small" type="button">Refresh</button>
+         <button data-el="insert" class="btn ghost btn--small" type="button"><rm-icon name="text-align-left"></rm-icon>Insert saved script</button>
+         <button data-el="refresh" class="btn ghost btn--small" type="button"><rm-icon name="refresh"></rm-icon>Refresh</button>
       </div>
       <div data-el="hint" class="hint"></div>
    </div>
@@ -42,7 +42,7 @@
 
 <template data-row="record-open">
    <div class="runrow">
-      <button data-el="open" class="btn ghost" type="button">Open in OpenScreen</button>
+      <button data-el="open" class="btn ghost" type="button"><rm-icon name="link-square-01"></rm-icon>Open in OpenScreen</button>
       <code data-el="path"></code>
       <div data-el="note" class="path" style="flex-basis:100%"></div>
    </div>

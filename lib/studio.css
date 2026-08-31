@@ -2283,8 +2283,10 @@ textarea.fills.form-control {
 /* A failure is worth the accent; a success is not. Same token the inline
    hints use, so the two do not disagree about what wrong looks like. */
 .toast--bad {
+  /* The border and a tint carry the severity; the words stay in the ink that is
+     readable on this ground. Red-on-red at x-small across two lines was not. */
   border-color: var(--danger-fg);
-  color: var(--danger-fg);
+  background: color-mix(in oklch, var(--danger-fg) 12%, var(--op-color-neutral-plus-two));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -22,10 +22,10 @@
       <div data-el="body" class="body">
          <div class="row">
             <div data-el="title" class="nm"></div>
-            <button data-el="up" class="btn ghost" type="button" title="Move earlier">↑</button>
-            <button data-el="down" class="btn ghost" type="button" title="Move later">↓</button>
-            <button data-el="dup" class="btn ghost" type="button" title="Another span from the same recording">Again</button>
-            <button data-el="kill" class="btn ghost del" type="button">Remove</button>
+            <button data-el="up" class="btn ghost" type="button" title="Move earlier" aria-label="Move up"><rm-icon name="arrow-up-02"></rm-icon></button>
+            <button data-el="down" class="btn ghost" type="button" title="Move later" aria-label="Move down"><rm-icon name="arrow-down-02"></rm-icon></button>
+            <button data-el="dup" class="btn ghost" type="button" title="Another span from the same recording"><rm-icon name="copy-01"></rm-icon>Again</button>
+            <button data-el="kill" class="btn ghost del" type="button"><rm-icon name="delete-02"></rm-icon>Remove</button>
          </div>
          <details data-el="trim">
             <summary style="cursor:pointer;color:var(--op-color-neutral-minus-four);font-size:var(--op-font-x-small)">Rough in and out (optional)</summary>
@@ -42,10 +42,10 @@
             </div>
             <div class="row"><span data-el="label" class="path"></span><span data-el="at" class="hint"></span></div>
             <div class="row">
-               <button data-el="play" class="btn ghost" type="button">Play the trim</button>
-               <button data-el="setIn" class="btn ghost" type="button" title="Trim the start to the frame on screen">In here</button>
-               <button data-el="setOut" class="btn ghost" type="button" title="Trim the end to the frame on screen">Out here</button>
-               <button data-el="whole" class="btn ghost" type="button">Whole file</button>
+               <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play the trim</button>
+               <button data-el="setIn" class="btn ghost" type="button" title="Trim the start to the frame on screen"><rm-icon name="previous"></rm-icon>In here</button>
+               <button data-el="setOut" class="btn ghost" type="button" title="Trim the end to the frame on screen"><rm-icon name="next"></rm-icon>Out here</button>
+               <button data-el="whole" class="btn ghost" type="button"><rm-icon name="maximize-01"></rm-icon>Whole file</button>
             </div>
          </details>
       </div>
@@ -60,7 +60,7 @@
       <input data-el="sub" class="form-control form-control--small" placeholder="subtitle" style="max-inline-size:9rem" />
       <input data-el="atSec" class="form-control form-control--small" type="number" step="0.5" min="0" title="appears at (seconds into the cut)" style="max-inline-size:5.5rem" />
       <input data-el="forSec" class="form-control form-control--small" type="number" step="0.5" min="0" title="stays for (seconds)" style="max-inline-size:5.5rem" />
-      <button data-el="remove" class="btn ghost del" type="button" title="Remove this title">×</button>
+      <button data-el="remove" class="btn ghost del" type="button" title="Remove this title" aria-label="Remove"><rm-icon name="cancel-01"></rm-icon></button>
    </div>
 </template>
 

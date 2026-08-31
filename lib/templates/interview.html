@@ -22,18 +22,19 @@
             placeholder="Write what you know. A rough answer is enough to move the plan forward."></textarea>
       </div>
       <div class="row">
-         <button data-el="submit" class="btn btn--primary" type="button" hidden><rm-icon name="navigation-03"></rm-icon>Submit answer</button>
-         <button data-el="loadReply" class="btn" type="button" hidden><rm-svg name="claude"></rm-svg>
-         Load Claude’s reply</button>
-         <button data-el="continueScript" class="btn btn--primary" type="button" hidden>Continue to script</button>
-         <button data-el="openCanvas" class="btn ghost" type="button" hidden>Open canvas</button>
-         <button data-el="startOver" class="btn ghost" type="button" hidden>Start over</button>
+         <button data-el="submit" class="btn btn--primary" type="button" hidden><rm-icon name="sent"></rm-icon>Submit answer</button>
+         <button data-el="loadReply" class="btn" type="button" hidden><rm-svg name="claude"></rm-svg>Load Claude’s reply</button>
+         <button data-el="continueScript" class="btn btn--primary" type="button" hidden><rm-icon name="arrow-right-02"></rm-icon>Continue to script</button>
+         <button data-el="openCanvas" class="btn ghost" type="button" hidden><rm-icon name="dashboard-square-01"></rm-icon>Open canvas</button>
+         <button data-el="startOver" class="btn ghost" type="button" hidden><rm-icon name="arrow-turn-backward"></rm-icon>Start over</button>
       </div>
-      <section class="interview__plan full">
+      <section data-el="planBox" class="interview__plan full" hidden>
          <ol data-el="shots" class="interview__shots" hidden></ol>
          <p data-el="problems" class="hint" hidden></p>
       </section>
-      <div data-el="status" class="form-hint full"></div>
+      <!-- A vestigial sink: says() sends everything to the toast. Kept for the
+           handle, hidden so it never reads as an unlabeled empty field. -->
+      <div data-el="status" class="form-hint full" hidden></div>
    </div>
 </template>
 
