@@ -146,6 +146,12 @@ These are all environment, and all of them cost someone an hour already.
 | A fetch reports "could not reach the Studio" and the server is fine | `.then(r => r.json())` on a reply that is not JSON. The throw is unhandled and the catch beside it blames the connection. Use `responseJson`, which reads the body first. |
 | The machine is slow for hours with nothing running | Orphaned `hyperframes preview` servers. They are reparented to init and can spin at ~100% CPU indefinitely; a wedged one needs `kill -9`. |
 | `hyperframes render --format webm` fills the project with PNGs | WebM renders with alpha, so frames extract as RGBA PNG into the render folder — gigabytes of them. Transcode the finished MP4 with ffmpeg instead. |
+| A regex on `id="…"` matches attributes that are not `id` | `\bid="` also matches inside `data-hf-id="…"` and `data-composition-id="…"`: the hyphen before `id` is a word boundary. Cost an hour twice — once emitting twelve pips from six, once counting eighteen word blocks from six. Anchor on `(?:^\|\s)id="`. |
+| A pip renders as a black shape instead of a circle | `pad=W:H:x:y` cannot place an input that does not fit inside the canvas and does not say so — it silently centres it. The pip hangs off the right edge on purpose, so its box runs past 1920. Use `overlay`, which clips at the edge. |
+| A magenta flash for one frame at each speaker change | The split renderer punches its holes with a colour key, and a key cannot express a half-transparent hole. Mid-dissolve the captured hole is the key colour at partial strength — `R=148 G=1 B=156` — which is nowhere near `0xFF00FF` by RGB distance. Widening the tolerance cannot fix it; the dissolve belongs on the footage. |
+| Every speaker's name printed over every other | A cue-less element — a speaker's name is simply on while its clip is on — left visible by anything that does not step clip visibility per frame. State the envelope in the timeline instead of trusting the runtime. |
+| The composition looks right when scrubbed and wrong at its first frame | A paused GSAP timeline sitting at 0 has applied nothing, and `seek(0)` is not a change, so nothing renders. Anything that asks for exactly the first frame — a thumbnail — sees the document as authored, every clip at once. Seek a hair past zero once after building. |
+| A finished render becomes a two-second clip | `rm-render-pip --from/--to` used to write the same path as the full cut, so checking one transition replaced the deliverable. It writes `<folder>-preview.mp4` now. |
 
 ### One clock, three copies of it
 
@@ -166,6 +172,65 @@ evidence of something you can see.
 `data-assembly-clock-derived` is emitted alongside the clock as the "derived
 versus deliberate" signal a reconcile pass needs. The pass itself is not written
 yet; until it is, **rebuild the cut rather than repairing a composition by hand.**
+
+### Sub-compositions, and the two places they are resolved
+
+A composition may keep its scenes in separate files under `compositions/` and
+mount them with `data-composition-src`, which is how a generated cut stays small
+enough to read and diff. The shape is stricter than it looks, and every rule
+below was learned from `hyperframes check` rejecting the file:
+
+- the **host** needs `data-composition-id` *and* a stable `id` of its own
+- the **file** must be a whole composition — its own root element carrying
+  `data-composition-id` and `data-width`/`data-height` — not the fragment it
+  feels like
+- that root is scaffolding for the file, not a box in the picture. The editor
+  mounts the root's `innerHTML`, discarding it. Keep it and you leave a real
+  1920x1080 block per scene in the flow, which stacks: the content is present,
+  laid out, and below the bottom of the frame.
+
+Get any of it wrong and Studio mounts nothing, which reads as the content
+vanishing rather than as a structural error.
+
+The resolution happens in **two** places and only one of them is HyperFrames.
+Nothing inside a composition folder can inline a sub-composition — that lives in
+the editor's compiler — so a composition opened straight off disk sees empty
+mount points and renders without whatever was split out, silently, because an
+empty div measures fine. `rm-render-pip` therefore splices the files together
+**server-side, before the page is served**. That timing is the whole point: the
+timeline is built by an inline script at the end of the body, and GSAP resolves a
+selector when the tween is made. Mount after load and every word and phrase
+tween points at an element that did not exist yet — the transcript is
+permanently invisible while the speaker's name, which has no tween, shows fine.
+
+Anything else that reads a composition has to follow the mounts too.
+`rm-retime-pip` writes each file it finds rather than `index.html` alone.
+
+### The editor writes the file too
+
+HyperFrames rewrites a composition when it saves: it pretty-prints, stamps every
+element with a `data-hf-id`, reorders attributes, and puts a word block onto one
+line per word — six transcript blocks emitted as six lines came back as several
+hundred. So a line-count lint can fire on a file the generator never produced,
+and any pattern anchored to how the builder writes a tag will miss.
+
+It also changes clip windows. A pip that was `19.100` came back `18.900` mid
+session. `rm-retime-pip` prints the clip table with any gap or overlap it finds
+for exactly this reason — read it, and treat a reported gap as a question rather
+than noise, because a deliberate trim looks identical to an accidental one.
+
+### A composition names its own thumbnail
+
+Poster frames for plain recordings are chosen by scoring candidates at fractions
+of the duration, which is right for a screen capture — the question there is
+whether a frame sits inside an auto-zoom — and wrong for a composition, whose
+opening card is already the answer. Scoring picked the halfway mark of a
+six-speaker cut: a picture of whoever happened to be talking at sixty seconds.
+
+`rm-render-pip` writes the time into a `<file>.mp4.poster` sidecar, because
+whatever makes the thumbnail never sees the composition, and the promotion into
+project media carries it along. `data-poster` on the composition root overrides
+it. No sidecar means no opinion, which is every other video in the library.
 
 ---
 

@@ -17,6 +17,7 @@
 
 <template data-row="hyperframes-card">
    <div class="card">
+      <p data-el="status" class="hint" hidden></p>
       <div class="thumbwrap">
          <div data-el="art" class="thumb"></div>
       </div>
@@ -28,7 +29,6 @@
             <button data-el="open" class="btn" type="button"><rm-icon name="arrow-up-right-01"></rm-icon>Open</button>
             <button data-el="remove" class="btn ghost btn--icon del" type="button" aria-label="Delete"><rm-icon name="delete-01"></rm-icon></button>
          </div>
-         <p data-el="status" class="hint" hidden></p>
       </div>
    </div>
 </template>
@@ -63,15 +63,26 @@
      that is not there. -->
 <template data-row="hyperframes-header-actions">
    <div class="btn-group">
-      <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">Project media</button>
-      <button data-el="all" class="btn ghost btn--small" type="button">All compositions</button>
-      <button data-el="framing" class="btn ghost btn--small" type="button"
-         title="Move and zoom each speaker inside their circle">Frame the speakers</button>
-      <button data-el="toEditor" class="btn ghost btn--small" type="button"
-         title="Opens this video's clips in OpenScreen, where you can trim and reorder them. Saving there updates this composition; nothing else in it changes.">Trim clips in OpenScreen</button>
-      <button data-el="fromEditor" class="btn btn--primary btn--small" type="button" hidden
-         title="An edit is waiting in OpenScreen that this composition has not taken">Use the OpenScreen edit</button>
-      <button data-el="revise" class="btn btn--primary btn--small" type="button" hidden>Redo with Claude</button>
+      <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--pill btn--small" type="button">
+         <rm-icon name="playlist-01"></rm-icon>
+         Media
+      </button>
+      <button data-el="all" class="btn ghost btn--pill btn--small" type="button">Compositions</button>
+      <button data-el="framing" class="btn ghost btn--pill btn--small" type="button"
+         title="Move and zoom each speaker inside their circle">
+         <rm-icon name="podcast"></rm-icon>
+         Speaker
+      </button>
+      <button data-el="fromEditor" class="btn ghost btn--pill btn--primary btn--small" type="button" hidden
+         title="An edit is waiting in OpenScreen that this composition has not taken">
+         <rm-icon name="video-02"></rm-icon>
+         Use OS Edit
+      </button>
+      <button data-el="toEditor" class="btn ghost btn--pill btn--small" type="button"
+         title="Opens this video's clips in OpenScreen, where you can trim and reorder them. Saving there updates this composition; nothing else in it changes.">
+         <rm-icon name="change-screen-mode"></rm-icon>
+         Trim Clips
+      </button>
    </div>
 </template>
 
@@ -110,8 +121,8 @@
 
       <div data-el="grid" class="card card--padded framing__grid"></div>
       <div class="card__footer row">
-         <button data-el="save" class="btn btn--primary" type="button">Save framing and rebuild</button>
-         <button data-el="cancel" class="btn ghost" type="button">Back to the editor</button>
+         <button data-el="save" class="btn btn--pill btn--primary" type="button">Save framing and rebuild</button>
+         <button data-el="cancel" class="btn btn--pill" type="button">Back to the editor</button>
          <span data-el="status" class="form-hint hint"></span>
       </div>
    </section>
@@ -128,6 +139,6 @@
          <input data-el="zoom" class="form-control form-control--small" type="range" min="1" max="3" step="0.05" />
          <span data-el="zoomText" class="framing__value"></span>
       </label>
-      <button data-el="reset" class="btn ghost btn--small" type="button">Reset</button>
+      <button data-el="reset" class="btn btn--pill btn--small" type="button">Reset</button>
    </div>
 </template>

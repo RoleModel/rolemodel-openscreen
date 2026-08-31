@@ -19,8 +19,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultRoot } from "../lib/library.mjs";
+import { readComposition } from "../lib/adopt.mjs";
 import { durationOf } from "../lib/narration.mjs";
-import { PHRASE_FADE, PIP_FADE, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
+import { PHRASE_FADE, PIP_FADE, TIMELINE_LOOPS, WORD_DIM, WORD_FILL, sayTrack } from "../lib/make-pip.mjs";
 
 const [projectId, folder = "canvas-pip-transcript"] = process.argv.slice(2);
 if (!projectId) {
@@ -36,28 +37,14 @@ if (html === null) {
 }
 
 /*
- * The clips, as the file has them now.
+ * The clips, as the file has them now — read by the one reader there is.
  *
- * Attribute order is whatever last wrote the tag — the builder writes one
- * order, the HyperFrames editor another — so each attribute is read on its own
- * rather than matched as a sequence.
+ * This used to hold its own copy of the pip-tag pattern and its own attribute
+ * reader, byte-similar to adopt.mjs's. Two readers of one contract is the
+ * copy-and-drift this codebase argues against everywhere else: change how a pip
+ * is written and a retime would keep reading it the old way, quietly.
  */
-const attr = (tag, name) => {
-	const m = new RegExp(`\\b${name}="([^"]*)"`).exec(tag);
-	return m ? m[1] : null;
-};
-const clips = [];
-for (const [tag] of html.matchAll(/<video\b[^>]*\bclass="[^"]*\bpip\b[^"]*"[^>]*>/g)) {
-	const src = attr(tag, "src");
-	if (!src) continue;
-	clips.push({
-		id: attr(tag, "id"),
-		src: src.replace(/^source\//, ""),
-		start: Number(attr(tag, "data-start")) || 0,
-		dur: Number(attr(tag, "data-duration")) || 0,
-		ms: Number(attr(tag, "data-media-start")) || 0,
-	});
-}
+const clips = readComposition(html);
 if (!clips.length) {
 	console.error("rm-retime-pip: that composition has no pip clips to read");
 	process.exit(1);
@@ -72,7 +59,20 @@ if (!clips.length) {
  * class=` finds nothing, and finding nothing here means writing six empty
  * names over six correct ones. Hence the refusal below rather than a default.
  */
-const names = [...html.matchAll(/class="say__who"[^>]*>([^<]*)</g)].map((m) => m[1].trim());
+/* The names may be in mounted files rather than in index.html, so read across
+   everything this composition is made of. */
+const dir = join(projectDir, "media", "Renders", folder);
+const mountedSrcs = [...html.matchAll(/data-composition-src="([^"]+)"/g)].map((m) => m[1]);
+const mountedText = [];
+for (const src of mountedSrcs) {
+	const text = await readFile(join(dir, src), "utf8").catch(() => null);
+	if (text === null) {
+		console.error(`rm-retime-pip: this composition mounts ${src}, which is not there — not touching it`);
+		process.exit(1);
+	}
+	mountedText.push({ src, text });
+}
+const names = [...`${html}${mountedText.map((m) => m.text).join("")}`.matchAll(/class="say__who"[^>]*>([^<]*)</g)].map((m) => m[1].trim());
 if (names.length !== clips.length) {
 	console.error(`rm-retime-pip: found ${names.length} speaker names for ${clips.length} clips — not touching it`);
 	process.exit(1);
@@ -131,20 +131,44 @@ const blockAt = (text, from) => {
 	return null;
 };
 
-const spans = [];
-for (const m of out.matchAll(/\bid="say-\d+"/g)) {
-	const span = blockAt(out, m.index);
-	if (span) spans.push(span);
+/*
+ * The say blocks may not be in this file.
+ *
+ * A composition can keep each speaker's transcript in its own file under
+ * compositions/ and mount it with data-composition-src. The words are then in
+ * those files, so a retime has to follow the mounts and write each one — this
+ * used to look in index.html only, find no blocks at all, and refuse.
+ */
+const documents = [
+	{ path: file, name: "index.html", text: out, owned: false },
+	...mountedText.map((m) => ({ path: join(dir, m.src), name: m.src, text: m.text, owned: true })),
+];
+
+/* Which document holds which say block, in clip order. */
+const found = [];
+for (const doc of documents) {
+	/* `\bid="` also matches inside data-composition-id="say-1" — the hyphen is a
+	   word boundary — so a mount host and a sub-composition root both counted as
+	   word blocks and the totals never lined up. Anchor on whitespace instead. */
+	for (const m of doc.text.matchAll(/(?:^|\s)id="say-(\d+)"/g)) {
+		const span = blockAt(doc.text, m.index);
+		if (span) found.push({ doc, index: Number(m[1]) - 1, span });
+	}
 }
-if (spans.length !== clips.length) {
-	console.error(`rm-retime-pip: found ${spans.length} word blocks for ${clips.length} clips — not touching it`);
+if (found.length !== clips.length) {
+	console.error(`rm-retime-pip: found ${found.length} word blocks for ${clips.length} clips — not touching it`);
 	process.exit(1);
 }
-/* Back to front, so replacing one does not move the next. */
-for (let i = spans.length - 1; i >= 0; i -= 1) {
-	const [open, close] = spans[i];
-	out = out.slice(0, open) + lines[i].trimStart() + out.slice(close);
+
+/* Back to front within each document, so replacing one does not move the next. */
+for (const doc of documents) {
+	const mine = found.filter((f) => f.doc === doc).sort((a, b) => b.span[0] - a.span[0]);
+	for (const { index, span } of mine) {
+		const [open, close] = span;
+		doc.text = doc.text.slice(0, open) + lines[index].trimStart() + doc.text.slice(close);
+	}
 }
+out = documents[0].text;
 
 /*
  * The timing tables, rewritten; everything else in the block left alone.
@@ -181,46 +205,10 @@ const mine = /^\s*tl\.(set|to)\('#(?:g\d+-\d+|w\d+|say-\d+-in)'/;
  */
 const foreign = (line) => /^\s*tl\.(set|to)\('#/.test(line) && !mine.test(line);
 
-const loops = `      function offset(clip) {
-        var el = document.getElementById('pip-' + clip);
-        return el ? Number(el.dataset.start) || 0 : null;
-      }
-
-      PHRASE.forEach(function (p) {
-        var base = offset(p[1]);
-        if (base === null) return;
-        var at = '#' + p[0];
-        tl.set(at, { opacity: 0 }, 0)
-          .to(at, { opacity: 1, duration: FADE, ease: 'power1.out' }, base + p[2])
-          .to(at, { opacity: 0, duration: FADE, ease: 'power1.in' }, base + p[3])
-          .set(at, { opacity: 0 }, base + p[4]);
-      });
-      WORD.forEach(function (w) {
-        var base = offset(w[1]);
-        if (base === null) return;
-        var at = '#' + w[0];
-        tl.set(at, { opacity: DIM }, 0).to(at, { opacity: 1, duration: FILL, ease: 'power1.out' }, base + w[2]);
-      });
-      OUT.forEach(function (o) {
-        var base = offset(o[1]);
-        if (base === null) return;
-        var at = '#' + o[0];
-        tl.to(at, { opacity: 0, duration: 0.4, ease: 'none' }, base + o[2]).set(at, { opacity: 0 }, base + o[3]);
-      });
-
-      PIPS.forEach(function (p) {
-        var el = document.getElementById('pip-' + p[0]);
-        var base = offset(p[0]);
-        if (!el || base === null) return;
-        var span = Number(el.dataset.duration) || 0;
-        var into = p[1];
-        var at = '#pip-' + p[0];
-        var leaves = Math.max(base + into, base + span - PIP_OUT);
-        tl.set(at, { opacity: 0 }, 0)
-          .to(at, { opacity: 1, duration: into, ease: 'power2.out' }, base)
-          .to(at, { opacity: 0, duration: PIP_OUT, ease: 'power2.in' }, leaves)
-          .set(at, { opacity: 0 }, base + span);
-      });`;
+/* One source with the generator, so a retime can only ever produce what a
+   fresh build would. This used to be a second copy of the same loops, and the
+   copies drifted: a shape fixed in the generator was still broken here. */
+const loops = TIMELINE_LOOPS;
 
 out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(\n\s*window\.__timelines)/, (_all, head, body, tail) => {
 	const kept = body.split("\n").filter(foreign);
@@ -238,6 +226,10 @@ out = out.replace(/(var tl = gsap\.timeline\(\{ paused: true \}\);\n)([\s\S]*?)(
 
 await writeFile(`${file}.before-retime`, html, "utf8");
 await writeFile(file, out, "utf8");
+/* The transcripts, wherever they live. */
+for (const doc of documents.filter((d) => d.owned)) {
+	await writeFile(doc.path, doc.text, "utf8");
+}
 console.log("");
 console.log(`  ${words} words re-timed against the clips as they are now`);
 console.log(`  previous file kept as ${folder}/index.html.before-retime`);

@@ -670,6 +670,10 @@ async function promoteHyperframesExport(id, root, entry) {
   } catch {
     await copyFile(entry.file, target);
   }
+  /* The poster time travels with the video, or the promoted copy falls back to
+     scoring frames and thumbnails a different moment than the render did. */
+  await rm(`${target}.poster`, { force: true }).catch(() => {});
+  await copyFile(`${entry.file}.poster`, `${target}.poster`).catch(() => {});
   return {
     name: basename(target),
     rel: relative(mediaDir(id), target).split(sep).join("/"),
@@ -875,9 +879,9 @@ async function repairLegacyHyperframesAssembly(id, dir) {
  * which looks like Studio lost the composition. Confirm the local server is
  * answering before handing its URL to the browser instead.
  */
-const waitForHyperframesStudio = async (studio) => {
+const waitForHyperframesStudio = async (studio, { deadlineMs = 12_000 } = {}) => {
   const url = `http://localhost:${studio.port}/`;
-  const deadline = Date.now() + 12_000;
+  const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
     if (studio.state === "failed" || studio.state === "stopped") {
       throw new Error(studio.error || "HyperFrames Studio stopped before it could open.");
@@ -889,8 +893,29 @@ const waitForHyperframesStudio = async (studio) => {
     }
     await new Promise((resolve) => setTimeout(resolve, 160));
   }
-  throw new Error("HyperFrames Studio took too long to start. Try opening the assembly again.");
+  /* The timeout itself says nothing useful. HyperFrames has usually already
+     explained itself on stderr — a port clash, a bad composition, a missing
+     package — so hand that line back instead of a shrug. */
+  const said = (studio.output ?? []).filter(Boolean).slice(-3).join(" · ");
+  throw new Error(said
+    ? `HyperFrames Studio did not finish starting. It last said: ${said}`
+    : "HyperFrames Studio took too long to start. Opening it again starts a fresh preview.");
 };
+
+/*
+ * Retire a preview so the next open starts clean.
+ *
+ * The export bookkeeping outlives the process on purpose: a render that
+ * finished in the old preview is still a real file, and forgetting it would
+ * promote it to project media a second time.
+ */
+function retireHyperframesStudio(root) {
+  const studio = hyperframesStudios.get(root);
+  if (!studio) return;
+  if (studio.child?.pid) signalPreviewGroup(studio.child.pid);
+  else if (studio.child) studio.child.kill();
+  hyperframesStudios.set(root, { exportFiles: studio.exportFiles ?? new Map(), exports: studio.exports ?? [] });
+}
 
 async function openHyperframesStudio(id, folder, { retry = true } = {}) {
   const renders = resolve(mediaDir(id), "Renders");
@@ -913,8 +938,23 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
   // completed export is promoted to the project-level Renders folder below.
   await prepareHyperframesExportDir(root);
   let studio = hyperframesStudios.get(root);
+  /* A live child is not the same as a live server. The preview can lose its
+     port to the OS, or wedge before listening, while its process stays up —
+     and in that state waiting on it can only ever time out. Reuse a preview
+     only once it answers; otherwise retire it and start a fresh one. */
+  if (studio?.child && studio.port) {
+    const answering = await fetch(`http://localhost:${studio.port}/`, { signal: AbortSignal.timeout(1200) })
+      .then((response) => response.ok)
+      .catch(() => false);
+    if (!answering) {
+      retireHyperframesStudio(root);
+      studio = hyperframesStudios.get(root);
+    }
+  }
+  let spawned = false;
   if (!studio?.child) {
     const port = await freeLocalPort();
+    spawned = true;
     // Studio is already the visible app. HyperFrames otherwise opens this same
     // editor in the system browser as a second window.
     /*
@@ -926,7 +966,10 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
      * the server HyperFrames just created. A foreground preview is the server we
      * supervise, stays on the allocated port, and dies only when Studio closes it.
      */
-    const child = spawn("npx", ["--yes", "hyperframes", "preview", "--no-open", "--foreground", "--port", String(port)], {
+    /* `--prefer-offline` keeps a warm cache from waiting on the npm registry.
+       Studio opens this editor constantly; a network round trip per open is
+       most of the delay people read as "it just refuses to start". */
+    const child = spawn("npx", ["--yes", "--prefer-offline", "hyperframes", "preview", "--no-open", "--foreground", "--port", String(port)], {
       cwd: root,
       env: jobs.childEnv(),
       stdio: ["ignore", "pipe", "pipe"],
@@ -935,7 +978,16 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
       // a request to let it run on.
       detached: true,
     });
-    studio = { child, port, state: "starting", error: null, output: [] };
+    studio = {
+      child,
+      port,
+      state: "starting",
+      error: null,
+      output: [],
+      // Carried across a restart: see retireHyperframesStudio.
+      exportFiles: studio?.exportFiles ?? new Map(),
+      exports: studio?.exports ?? [],
+    };
     hyperframesStudios.set(root, studio);
     if (child.pid) {
       void rememberPreviewPid(child.pid);
@@ -946,7 +998,11 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
       if (!line) return;
       studio.output.push(line);
       if (studio.output.length > 12) studio.output.shift();
-      if (/listening|localhost|studio/i.test(line)) studio.state = "ready";
+      /* Only a listening server is ready, and a log line can never talk a
+         failed preview back into being ready. The old test matched the word
+         "studio" anywhere, so HyperFrames' own error banner counted as a
+         successful boot and Studio handed the iframe a dead port. */
+      if (studio.state === "starting" && /listening on|http:\/\/localhost:\d+/i.test(line)) studio.state = "ready";
     };
     child.stdout?.on("data", note);
     child.stderr?.on("data", note);
@@ -965,15 +1021,18 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
   }
 
   try {
-    await waitForHyperframesStudio(studio);
+    /* A cold `npx` may still be resolving the package, so a first start gets
+       real room. A preview being reused has already answered once above and
+       should reply immediately. */
+    await waitForHyperframesStudio(studio, { deadlineMs: spawned ? 45_000 : 5_000 });
   } catch (error) {
-    /* A preview server can be reclaimed by the OS while Studio's iframe still
-       has its old URL. One clean replacement is cheap and makes Reload mean
-       "recover the editor" rather than "reload the stopped error page". */
-    if (retry && (studio.state === "stopped" || studio.state === "failed")) {
-      hyperframesStudios.delete(root);
-      return openHyperframesStudio(id, folder, { retry: false });
-    }
+    /* Never leave a preview that failed to start in the map.
+       This is what made a single bad start permanent: a preview that hung while
+       still "starting" stayed cached with a live child, so every later open
+       skipped the spawn, waited on the same silent port, and timed out. Only
+       quitting Studio cleared it. Retire it here and one more open recovers. */
+    retireHyperframesStudio(root);
+    if (retry) return openHyperframesStudio(id, folder, { retry: false });
     throw error;
   }
 
@@ -2958,6 +3017,27 @@ async function thumbnail(projectId, rel) {
   if (isStill) {
     const { ok } = await capture("ffmpeg", ["-y", "-i", src, "-vf", "scale=640:-2", "-q:v", "6", dest]);
     return ok ? dest : null;
+  }
+
+  /*
+   * A composition gets to say where its own thumbnail is.
+   *
+   * The scoring below is picking a frame for a screen recording, where the
+   * question is whether a frame sits inside an auto-zoom. A composition has
+   * already answered: its opening card is the title, and that is what belongs on
+   * a card in a list. Scoring instead thumbnailed a six-speaker cut at its
+   * halfway mark, which is a picture of whoever was talking at sixty seconds.
+   *
+   * The renderer leaves the time in a sidecar because whatever makes the
+   * thumbnail never sees the composition. No sidecar means no opinion, which is
+   * every other video in the library.
+   */
+  const authored = await readFile(`${src}.poster`, "utf8").then((t) => Number.parseFloat(t.trim())).catch(() => Number.NaN);
+  if (Number.isFinite(authored) && authored >= 0) {
+    const { ok } = await capture("ffmpeg", [
+      "-y", "-ss", authored.toFixed(2), "-i", src, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "6", dest,
+    ]);
+    if (ok) return dest;
   }
 
   // Pick the moment, rather than guessing it.
