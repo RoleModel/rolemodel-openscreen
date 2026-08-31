@@ -5239,6 +5239,30 @@ const server = createServer(async (req, res) => {
          * stored, so everything downstream still sees exactly one shape.
          */
         let notInChannel = null;
+        /*
+         * An id that looks right is not an id that exists.
+         *
+         * The shape check below only says it is C/G/D and long enough, so a
+         * mis-copied id stored happily and came back hours later as
+         * `channel_not_found` on the upload — which reads as a problem with the
+         * file. Asked here, it is "that is not a conversation in this workspace",
+         * at the moment it can still be pasted again.
+         */
+        if (channel && /^[CGD][A-Z0-9]{6,}$/i.test(channel)) {
+          const { token: probeToken } = await effectiveSlackSettings();
+          const using = body.token ? String(body.token) : probeToken;
+          if (using) {
+            const seen = await slack({ token: using }).conversation(channel).catch(() => null);
+            if (seen?.found === false) {
+              const who = await slack({ token: using }).whoami().catch(() => null);
+              return json(res, 400, {
+                error: `${channel} is not a conversation in ${who?.team ?? "that workspace"}.`
+                  + " Use Copy link on the channel in Slack and take the id off the end, or paste its name and Studio will look it up.",
+              });
+            }
+            if (seen?.found && seen.member === false) notInChannel = seen.name ?? channel;
+          }
+        }
         if (channel && !/^[CGD][A-Z0-9]{6,}$/i.test(channel)) {
           const { token } = await effectiveSlackSettings();
           const using = body.token ? String(body.token) : token;
