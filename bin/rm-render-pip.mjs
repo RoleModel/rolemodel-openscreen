@@ -307,7 +307,18 @@ const plan = await page.evaluate((key) => {
 					if (!orphans.some((o) => o.id === id)) orphans.push({ id, table: table[1] });
 					continue;
 				}
-				const owner = document.getElementById(`pip-${clip}`);
+				/*
+				 * The say block bounds a cue, not the pip.
+				 *
+				 * Both are keyed by the same clip number and both start together, so
+				 * the pip looked like the right thing to measure against. It is not:
+				 * splitting a take in two — to cut a line out of the middle of it —
+				 * leaves the first pip holding only the first half while the words go
+				 * on across both. Measured against the pip, every caption after the
+				 * split reads as firing past the end of its clip, and the warning
+				 * fires hardest on exactly the composition that was just repaired.
+				 */
+				const owner = document.getElementById(`say-${clip}`) ?? document.getElementById(`pip-${clip}`);
 				const span = owner ? Number(owner.dataset.duration) || 0 : 0;
 				if (span && Number(at) > span && !late.some((l) => l.id === id)) late.push({ id, at: Number(at), span, clip });
 			}
