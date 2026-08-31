@@ -1,11 +1,11 @@
 <!-- Multi-clip assembly: picking passages across clips. -->
 <template data-panel="multi-assembly">
    <p class="lede" data-region="main">Choose up to eight project recordings. Studio transcribes and samples their screens in the background, then Claude returns a reviewable set of timestamped selects — never invented footage.</p>
-   <button data-el="switchMode" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main">Use one recording instead</button>
+   <button data-el="switchMode" class="btn ghost btn--small margin-bottom-md" type="button" data-region="main"><rm-icon name="film-01"></rm-icon>Use one recording instead</button>
    <p data-el="noVideos" class="empty" data-region="main" hidden>Add recordings to this project first.</p>
    <div data-el="sourceHeader" class="multi-assembly__source-header" data-region="main" hidden>
       <div class="paper-edit__title">Source recordings · choose up to 8</div>
-      <button data-el="updateSources" class="btn ghost btn--small" type="button" hidden>Update selected recordings</button>
+      <button data-el="updateSources" class="btn ghost btn--small" type="button" hidden><rm-icon name="refresh"></rm-icon>Update selected recordings</button>
    </div>
    <p data-el="prepareHint" class="form-hint" data-region="main" hidden>Preparing a recording transcribes it and samples its screen, once, in the background — tick the ones to use and press “Update selected recordings”.</p>
    <div data-el="sourceList" class="multi-assembly__sources" data-region="main" hidden></div>
@@ -40,7 +40,7 @@
          <select data-el="screen"></select>
          <select data-el="audio"></select>
          <select data-el="script"></select>
-         <button data-el="build" class="btn ghost btn--small" type="button">Build visual alignment</button>
+         <button data-el="build" class="btn ghost btn--small" type="button"><rm-icon name="ai-magic"></rm-icon>Build visual alignment</button>
       </div>
    </details>
 </template>
@@ -52,7 +52,7 @@
       <p data-el="copy" class="hint"></p>
       <ul data-el="gaps" class="multi-assembly__script-gaps" hidden></ul>
       <div data-el="actions" class="row">
-         <button data-el="retry" class="btn btn--primary btn--small" type="button">Make a new Claude pass</button>
+         <button data-el="retry" class="btn btn--primary btn--small" type="button"><rm-icon name="ai-magic"></rm-icon>Make a new Claude pass</button>
       </div>
    </section>
 </template>
@@ -64,8 +64,8 @@
       <p data-el="next" class="hint"></p>
       <div data-el="beats" class="multi-assembly__script-status" hidden></div>
       <div data-el="actions" class="row">
-         <button data-el="revise" class="btn ghost btn--small" type="button">Revise from comments</button>
-         <button data-el="newPass" class="btn ghost btn--small" type="button">Make a new pass</button>
+         <button data-el="revise" class="btn ghost btn--small" type="button"><rm-icon name="comment-01"></rm-icon>Revise from comments</button>
+         <button data-el="newPass" class="btn ghost btn--small" type="button"><rm-icon name="repeat"></rm-icon>Make a new pass</button>
       </div>
    </section>
 </template>
@@ -85,8 +85,8 @@
             <p data-el="selectedLabel" class="multi-assembly__selected-label"></p>
             <p data-el="selectedText" class="multi-assembly__selected-text"></p>
             <p data-el="selectedReason" class="multi-assembly__selected-reason"></p>
-            <button data-el="playSelection" class="btn ghost btn--small" type="button">Play Claude’s selection</button>
-            <button data-el="removeSelection" class="btn ghost btn--small" type="button">Remove from assembly</button>
+            <button data-el="playSelection" class="btn ghost btn--small" type="button"><rm-icon name="play"></rm-icon>Play Claude’s selection</button>
+            <button data-el="removeSelection" class="btn ghost btn--small" type="button"><rm-icon name="delete-02"></rm-icon>Remove from assembly</button>
             <textarea data-el="comment" class="multi-assembly__comment" rows="2" placeholder="Comment for the next edit…"></textarea>
          </div>
          <div class="multi-assembly__transcript">
@@ -120,7 +120,7 @@
 <template data-row="assembly-filler">
    <div class="multi-assembly__filler">
       <span data-el="text" class="multi-assembly__filler-text"></span>
-      <button data-el="trim" class="btn btn--small" type="button"></button>
+      <button data-el="trim" class="btn btn--small" type="button"><rm-icon name="scissor-01"></rm-icon></button>
    </div>
 </template>
 
