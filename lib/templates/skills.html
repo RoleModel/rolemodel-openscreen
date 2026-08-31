@@ -10,9 +10,9 @@
       edit its instructions here, and every signed-in teammate gets the same skill.
    </p>
    <div class="row" data-region="main">
-      <button data-el="install" class="btn btn--primary" type="button">Install skill .zip</button>
+      <button data-el="install" class="btn btn--primary" type="button"><rm-icon name="file-add"></rm-icon>Install skill .zip</button>
       <input data-el="picker" type="file" accept=".zip,application/zip" hidden />
-      <button data-el="refresh" class="btn ghost" type="button">Refresh</button>
+      <button data-el="refresh" class="btn ghost" type="button"><rm-icon name="refresh"></rm-icon>Refresh</button>
       <span data-el="status" class="hint">Checking the shared skill directory…</span>
    </div>
    <div class="client" data-region="main">Studio skills</div>
@@ -24,8 +24,8 @@
       </div>
       <textarea data-el="editorField" class="form-control" rows="22" spellcheck="false"></textarea>
       <div class="row">
-         <button data-el="save" class="btn btn--primary" type="button">Save shared skill</button>
-         <button data-el="close" class="btn ghost" type="button">Close</button>
+         <button data-el="save" class="btn btn--primary" type="button"><rm-icon name="floppy-disk"></rm-icon>Save shared skill</button>
+         <button data-el="close" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Close</button>
       </div>
    </section>
    <div class="client" data-region="main">Standard shared skills</div>
@@ -43,8 +43,8 @@
          <div data-el="source" class="path"></div>
          <span data-el="kind" class="kind"></span>
          <div class="row">
-            <button data-el="edit" class="btn ghost" type="button">Edit</button>
-            <button data-el="publish" class="btn ghost" type="button" hidden>Publish to team</button>
+            <button data-el="edit" class="btn ghost" type="button"><rm-icon name="pencil-edit-02"></rm-icon>Edit</button>
+            <button data-el="publish" class="btn ghost" type="button" hidden><rm-icon name="share-08"></rm-icon>Publish to team</button>
          </div>
       </div>
    </article>

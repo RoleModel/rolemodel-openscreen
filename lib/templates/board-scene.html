@@ -4,23 +4,23 @@
    <section class="board-scene" data-region="main">
       <h2 data-el="heading" class="board-scene__title">Scene</h2>
       <div data-el="form" class="form board-scene__form">
-         <button data-el="save" class="btn btn--primary" type="button">Save scene</button>
+         <button data-el="save" class="btn btn--primary" type="button"><rm-icon name="floppy-disk"></rm-icon>Save scene</button>
       </div>
       <div data-el="media" class="board-scene__media">
          <h3>Video for this scene</h3>
       </div>
       <p data-el="status" class="form-hint"></p>
       <div class="row">
-         <button data-el="visualEditor" class="btn ghost" type="button">Open visual scene editor</button>
-         <button data-el="backButton" class="btn ghost" type="button">Back to canvas</button>
+         <button data-el="visualEditor" class="btn ghost" type="button"><rm-icon name="pencil-edit-02"></rm-icon>Open visual scene editor</button>
+         <button data-el="backButton" class="btn ghost" type="button"><rm-icon name="arrow-left-02"></rm-icon>Back to canvas</button>
       </div>
    </section>
    <!-- Started on the page by mountPanel, then moved under the media block once
         its footage field exists — the order the JS composes them in. -->
    <div data-el="mediaActions" class="row" data-region="main">
-      <button data-el="transcribe" class="btn" type="button">Transcribe and review</button>
-      <button data-el="addTake" class="btn ghost" type="button">Add as scene take</button>
-      <button data-el="upload" class="btn ghost" type="button">Add a video</button>
+      <button data-el="transcribe" class="btn" type="button"><rm-icon name="text-align-left"></rm-icon>Transcribe and review</button>
+      <button data-el="addTake" class="btn ghost" type="button"><rm-icon name="add-01"></rm-icon>Add as scene take</button>
+      <button data-el="upload" class="btn ghost" type="button"><rm-icon name="upload-01"></rm-icon>Add a video</button>
       <input data-el="picker" type="file" accept="video/*" hidden>
    </div>
    <section data-el="review" class="board-scene__review" data-region="main" hidden></section>
@@ -32,10 +32,10 @@
    <video data-el="player" class="board-scene__player" controls playsinline preload="metadata"></video>
    <div data-el="head" class="board-scene__review-head">
       <div data-el="stats"></div>
-      <button data-el="use" class="btn btn--primary" type="button"></button>
+      <button data-el="use" class="btn btn--primary" type="button"><rm-icon name="tick-02"></rm-icon></button>
    </div>
    <div data-el="lines" class="paper-edit__lines board-scene__lines"></div>
-   <button data-el="clear" class="btn ghost btn--small" type="button">Clear passage</button>
+   <button data-el="clear" class="btn ghost btn--small" type="button"><rm-icon name="cancel-01"></rm-icon>Clear passage</button>
 </template>
 
 <template data-row="board-scene-line">

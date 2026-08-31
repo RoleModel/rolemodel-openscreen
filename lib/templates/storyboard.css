@@ -746,3 +746,9 @@ textarea.form-control.board__brief {
   inline-size: auto;
   flex: 0 0 auto;
 }
+
+/* The node buttons are grid cells, not .btn, so they carry no flex gap — give
+   the mark its breathing room without changing their layout. */
+.board__node-actions button > .hgi-stroke {
+  margin-inline-end: var(--op-space-3x-small);
+}

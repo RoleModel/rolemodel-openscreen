@@ -22,9 +22,9 @@
       <div data-el="body" class="body">
          <div class="row">
             <div data-el="title" class="nm"></div>
-            <button data-el="up" class="btn ghost" type="button" title="Move earlier">↑</button>
-            <button data-el="down" class="btn ghost" type="button" title="Move later">↓</button>
-            <button data-el="kill" class="btn ghost del" type="button">Remove</button>
+            <button data-el="up" class="btn ghost" type="button" title="Move earlier" aria-label="Move up"><rm-icon name="arrow-up-02"></rm-icon></button>
+            <button data-el="down" class="btn ghost" type="button" title="Move later" aria-label="Move down"><rm-icon name="arrow-down-02"></rm-icon></button>
+            <button data-el="kill" class="btn ghost del" type="button"><rm-icon name="delete-02"></rm-icon>Remove</button>
          </div>
          <div data-el="scenePath" class="path" hidden></div>
          <span data-el="sceneHint" class="hint" hidden>Edit it in Scenes — this is a reference to that file.</span>
@@ -43,6 +43,6 @@
       <span data-el="tag" class="path" style="min-inline-size:9rem"></span>
       <input data-el="at" class="form-control" type="number" step="100" title="starts at (ms)" style="max-inline-size:7rem" />
       <input data-el="for" class="form-control" type="number" step="100" title="lasts (ms)" style="max-inline-size:7rem" />
-      <button data-el="remove" class="btn ghost del" type="button" title="Remove this element">×</button>
+      <button data-el="remove" class="btn ghost del" type="button" title="Remove this element" aria-label="Remove"><rm-icon name="cancel-01"></rm-icon></button>
    </div>
 </template>

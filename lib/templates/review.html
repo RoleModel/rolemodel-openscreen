@@ -1,6 +1,10 @@
 <!-- Review: sharing cuts through OpenFrame. -->
 <template data-panel="review">
+   <p class="lede" data-region="main">Cuts you share land here for the team to watch and leave timestamped notes. Send a render out, check its feedback, and pull it back when it has served its purpose.</p>
    <div data-el="status" class="hint" data-region="main"></div>
+   <!-- Painted before the fetch answers: the status line goes to the toast, and a
+        page that is blank while OpenFrame thinks reads as a page that is broken. -->
+   <p data-el="wait" class="hint" data-region="main" hidden>Asking OpenFrame what is out for review…</p>
    <div data-el="body" data-region="main"></div>
 </template>
 
@@ -11,8 +15,8 @@
 <template data-row="review-link">
    <div class="runrow">
       <code data-el="url"></code>
-      <button data-el="copy" class="btn ghost" type="button">Copy link</button>
-      <button data-el="open" class="btn ghost" type="button">Open</button>
+      <button data-el="copy" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy link</button>
+      <button data-el="open" class="btn ghost" type="button"><rm-icon name="link-square-01"></rm-icon>Open</button>
    </div>
 </template>
 

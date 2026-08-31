@@ -13,7 +13,7 @@
    <p data-el="dropHint" class="form-hint hint" data-region="main"></p>
    <div data-el="panel" class="panel2" data-region="side"></div>
    <div data-region="footer">
-      <button data-el="runBtn" class="btn" type="button">Restyle the clip</button>
+      <button data-el="runBtn" class="btn" type="button"><rm-icon name="ai-magic"></rm-icon>Restyle the clip</button>
    </div>
 </template>
 
@@ -27,7 +27,7 @@
          <div data-el="nm" class="nm"></div>
          <div data-el="path" class="path"></div>
          <div data-el="listen" class="wave wave--row">
-            <button data-el="play" class="btn ghost btn--small wave__play" type="button"></button>
+            <button data-el="play" class="btn ghost btn--small wave__play" type="button"><rm-icon name="play"></rm-icon></button>
             <div data-el="canvas" class="wave__canvas"></div>
             <audio data-el="fallback" controls preload="none" hidden></audio>
          </div>
@@ -36,7 +36,7 @@
 </template>
 
 <template data-row="restyle-add-voice">
-   <button data-el="add" class="btn ghost btn--small" type="button">Add a voice…</button>
+   <button data-el="add" class="btn ghost btn--small" type="button"><rm-icon name="add-01"></rm-icon>Add a voice…</button>
    <input data-el="picker" type="file" accept="audio/*" multiple hidden>
 </template>
 
@@ -47,8 +47,8 @@
          <div data-el="nm" class="nm"></div>
          <div data-el="path" class="path"></div>
          <div class="row">
-            <button data-el="trim" class="btn ghost btn--small" type="button">Trim…</button>
-            <button data-el="replace" class="btn ghost btn--small" type="button">Replace…</button>
+            <button data-el="trim" class="btn ghost btn--small" type="button"><rm-icon name="scissor-01"></rm-icon>Trim…</button>
+            <button data-el="replace" class="btn ghost btn--small" type="button"><rm-icon name="repeat"></rm-icon>Replace…</button>
             <input data-el="picker" type="file" accept="video/*" hidden>
          </div>
       </div>
@@ -69,7 +69,7 @@
          <input data-el="outRange" type="range" min="0" max="1000" value="1000" class="form-control">
          <p data-el="readout" class="form-hint hint"></p>
          <button data-el="play" class="btn ghost btn--small" type="button">Play the range</button>
-         <button data-el="use" class="btn" type="button">Use this range</button>
+         <button data-el="use" class="btn" type="button"><rm-icon name="tick-02"></rm-icon>Use this range</button>
       </div>
    </dialog>
 </template>

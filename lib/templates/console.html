@@ -8,19 +8,19 @@
       <div data-el="list" class="joblist"></div>
       <div data-el="status" class="hint"></div>
       <div class="runrow">
-         <button data-el="stop" class="btn ghost" type="button" hidden>Stop</button>
-          <button data-el="rerun" class="btn ghost" type="button" hidden>Run again</button>
+         <button data-el="stop" class="btn ghost" type="button" hidden><rm-icon name="stop"></rm-icon>Stop</button>
+          <button data-el="rerun" class="btn ghost" type="button" hidden><rm-icon name="repeat"></rm-icon>Run again</button>
       </div>
       <div data-el="log" class="log"></div>
       <div data-el="ranIn" class="path" hidden></div>
       <div data-el="nothing" class="hint" hidden>Nothing was written there.</div>
       <div data-el="fileBox" class="log__files" hidden><div data-el="fileCount" class="crumb"></div></div>
-      <div data-el="cmd" class="cmd" hidden><input data-el="cmdInput" placeholder="openscreen info --json" /><button data-el="cmdRun" class="btn" type="button">Run</button></div>
+      <div data-el="cmd" class="cmd" hidden><input data-el="cmdInput" placeholder="openscreen info --json" /><button data-el="cmdRun" class="btn" type="button"><rm-icon name="play"></rm-icon>Run</button></div>
    </div>
    <!-- After the list rather than above it: a destructive control at the top
         is one you reach before reading what it would remove. -->
    <div data-region="footer">
-      <button data-el="clear" class="btn ghost" type="button" title="Forget every job that has finished, and its saved output. Running jobs stay.">Clear finished</button>
+      <button data-el="clear" class="btn ghost" type="button" title="Forget every job that has finished, and its saved output. Running jobs stay."><rm-icon name="delete-02"></rm-icon>Clear finished</button>
    </div>
 </template>
 
