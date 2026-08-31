@@ -823,7 +823,6 @@ function promoteLegacyCanvasTimelineComponents(html) {
 async function repairLegacyHyperframesAssembly(id, dir) {
   const assemblyPath = join(dir, "assembly.json");
   const indexPath = join(dir, "index.html");
-  const isolatedTitleCard = await isolateStandaloneTitleCard(dir);
   const [assembly, html] = await Promise.all([
     readFile(assemblyPath, "utf8").then(JSON.parse).catch(() => null),
     readFile(indexPath, "utf8").catch(() => ""),
@@ -848,7 +847,7 @@ async function repairLegacyHyperframesAssembly(id, dir) {
       await writeFile(indexPath, upgradedHtml, "utf8");
       return true;
     }
-    return isolatedTitleCard;
+    return false;
   }
 
   const manifest = await readManifest(projectDir(id));
@@ -1999,52 +1998,7 @@ const defaultDissolveDuration = (current, next) => isAssemblySceneBoundary(curre
   ? DEFAULT_DISSOLVE_MS
   : 0;
 
-/* `stageRenderAssets` deliberately provides a standalone title-card starter for
-   a person or an agent to pick up. An assembly already has its one root
-   composition in index.html, though. Leaving that starter as title.html makes
-   HyperFrames discover a second root and can play the same source audio twice. */
-async function removeStandaloneTitleCard(outDir) {
-  await rm(join(outDir, "title.html"), { force: true }).catch(() => {});
-}
 
-/*
- * Early Make runs staged a reusable title-card template next to the real
- * composition. HyperFrames discovers every root-level HTML file with a
- * `data-composition-id`, so that otherwise harmless helper made a project look
- * like it had two entry points. Preserve the template for a person to reuse,
- * but move it outside the composition discovery path before opening Studio.
- *
- * Only touch the exact starter we generated. A person's independently-authored
- * `title.html` remains a separate project rather than being silently moved.
- */
-async function isolateStandaloneTitleCard(outDir) {
-  const titlePath = join(outDir, "title.html");
-  const indexPath = join(outDir, "index.html");
-  const [title, index] = await Promise.all([
-    readFile(titlePath, "utf8").catch(() => ""),
-    readFile(indexPath, "utf8").catch(() => ""),
-  ]);
-  const isStagedStarter = /<template\b[^>]*\bid=["']rm-title-template["']/i.test(title)
-    && /\bdata-composition-id=["']rm-title["']/i.test(title);
-  const isMountedByIndex = /(?:data-composition-src|src)=["'][^"']*title\.html["']/i.test(index);
-  if (!isStagedStarter || isMountedByIndex) return false;
-
-  const templates = join(outDir, "templates");
-  await mkdir(templates, { recursive: true });
-  const archived = join(templates, "rm-title-template.html");
-  /*
-   * Always replace the archive, never keep the older one.
-   *
-   * The first version skipped when an archive already existed, which meant the
-   * staged copy was taken once and then never again — so a fix to the starter
-   * in templates/ reached new compositions and no existing one. That is the same
-   * copy-once-and-drift that resync exists to end, and it is why a lint error
-   * fixed at the source stayed on disk here.
-   */
-  await rm(archived, { force: true });
-  await rename(titlePath, archived);
-  return true;
-}
 
 function hyperframesAssemblyHtml({ title, clips, wallpaper = null, canvasClock = null, showAssemblyTitle = true, width = 1920, height = 1080, fps = 30, sourceDurations = {} }) {
   const titleDuration = showAssemblyTitle && title ? 1800 : 0;
@@ -2335,7 +2289,6 @@ async function writeHyperframesAssembly(id, { folder, title, clips, metadata = {
     wallpaper: manifest.wallpaper ?? null,
     quiet: true,
   });
-  await removeStandaloneTitleCard(outDir);
   const normalized = clips.map((clip) => {
     const scene = typeof clip.scene?.body === "string" && clip.scene.body.trim()
       ? { name: String(clip.scene.name ?? "Canvas scene"), body: String(clip.scene.body) }
@@ -3702,9 +3655,11 @@ const server = createServer(async (req, res) => {
       if (titleCard) {
         const eyebrow = String(pick("eyebrow", body.eyebrow) || "").trim();
         wants.push(
-          `Open with the title card in title.html, which is already staged and already uses the ` +
-            `brand mark, the vendored faces and theme.css. Change only the words: the title reads ` +
-            `"${titleCard}"${eyebrow ? `, and the eyebrow above it reads "${eyebrow}"` : `, and remove the eyebrow`}.`,
+          /* rm-title, not a staged file. The component is in the palette, takes
+             the brand mark and the vendored faces from theme.css like every
+             other one, and needs nothing copied into the folder first. */
+          `Open with an <rm-title>, which already uses the brand mark, the vendored faces and ` +
+            `theme.css. The title reads "${titleCard}"${eyebrow ? `, and the eyebrow above it reads "${eyebrow}"` : `, and there is no eyebrow`}.`,
         );
       } else {
         wants.push("No title card — open on the content and do not invent a title, heading, or standalone text scene.");
