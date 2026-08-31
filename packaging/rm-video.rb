@@ -28,7 +28,7 @@ class RmVideo < Formula
   # neither, so `install.sh` — whose last step hands off to it — died at the
   # finish line on a clean machine, and `rm-share` was in the bin map but not
   # here, so brew shipped six of eight commands while the docs promised seven.
-  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-insert rm-align-audio rm-render-alignment rm-render-hyperframes rm-render-pip rm-retime-pip rm-reconcile rm-visual-beats rm-fal].freeze
+  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-insert rm-align-audio rm-render-alignment rm-render-hyperframes rm-render-pip rm-resync rm-retime-pip rm-reconcile rm-visual-beats rm-fal].freeze
 
   def install
     system "pnpm", "install", "--prod", "--frozen-lockfile"

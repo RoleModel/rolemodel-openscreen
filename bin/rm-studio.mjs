@@ -1665,6 +1665,25 @@ async function linkHyperframesProjectMedia(id, outDir) {
  * brand folder; its staged neighbour is `assets/brand`, hence the one relative
  * URL adjustment below.
  */
+/*
+ * Bring a composition's staged copies back in line with the codebase.
+ *
+ * A composition carries its own copy of the components, the theme, the fonts
+ * and the brand marks, because a render has to work with no network and a
+ * folder has to survive being zipped and sent. The cost of that is drift: the
+ * copy is taken when the composition is built and never again, so a cut made a
+ * week ago keeps a week-old rm-video.js. That is not a stale detail — it is why
+ * the lower thirds in canvas-rough-cut are wrong: its runtime predates the fix.
+ *
+ * Copying is still right; taking the copy once is what was wrong. This is
+ * idempotent, so it can run every time a composition is opened, and the folder
+ * stays self-contained afterwards.
+ */
+async function resyncComposition(dir, { brand = "rolemodel", wallpaper = null } = {}) {
+  await stageRenderAssets(dir, { brand, wallpaper, quiet: true });
+  await stageCanvasSceneRuntime(dir);
+}
+
 async function stageCanvasSceneRuntime(outDir) {
   const componentDir = join(outDir, "assets", "canvas-components");
   await mkdir(componentDir, { recursive: true });
@@ -4103,6 +4122,13 @@ const server = createServer(async (req, res) => {
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
       try {
+        /* Refreshed on the way in, so what opens in the editor is what the
+           codebase says today rather than what it said when this was built. */
+        const folder = basename(String(body.folder ?? ""));
+        const dir = resolve(mediaDir(id), "Renders", folder);
+        if (folder && dir.startsWith(`${resolve(mediaDir(id), "Renders")}${sep}`)) {
+          await resyncComposition(dir, { brand: manifest.brand ?? "rolemodel", wallpaper: manifest.wallpaper ?? null }).catch(() => {});
+        }
         return json(res, 200, await openHyperframesStudio(id, body.folder));
       } catch (error) {
         return json(res, 400, { error: String(error.message ?? error) });
