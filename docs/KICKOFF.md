@@ -64,7 +64,7 @@ brew trust --tap rolemodel/tap
 brew install rolemodel/tap/rm-video
 ```
 
-That installs Node and eighteen commands:
+That installs Node and nineteen commands:
 
 | command | does |
 |---|---|

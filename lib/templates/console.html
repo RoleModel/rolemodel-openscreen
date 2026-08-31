@@ -6,19 +6,16 @@
    <p data-el="lede" class="lede" data-region="main">Everything the Studio runs, as it runs. Output is live — you don't have to go find a terminal to see whether the export worked.</p>
    <div class="con" data-region="main">
       <div data-el="list" class="joblist"></div>
-         <div data-el="status" class="hint"></div>
-         <div class="runrow"><button data-el="stop" class="btn ghost" type="button" hidden>Stop</button><!-- Run again sits beside Stop because they are the same question at
-              different moments: one ends a job, the other starts it over. It
-              shows for a job that stopped without finishing — interrupted, or
-              exited non-zero. --><button data-el="rerun" class="btn ghost" type="button" hidden>Run again</button></div>
-         <div data-el="log" class="log"></div>
-            <!-- What the job produced. The directory is always shown, even
-                 when empty, because "nothing was written" is itself the
-                 answer sometimes. -->
-            <div data-el="ranIn" class="path" hidden></div>
-            <div data-el="nothing" class="hint" hidden>Nothing was written there.</div>
-            <div data-el="fileBox" class="joblist" hidden><div data-el="fileCount" class="crumb"></div></div>
-         <div data-el="cmd" class="cmd" hidden><input data-el="cmdInput" placeholder="openscreen info --json" /><button data-el="cmdRun" class="btn" type="button">Run</button></div>
+      <div data-el="status" class="hint"></div>
+      <div class="runrow">
+         <button data-el="stop" class="btn ghost" type="button" hidden>Stop</button>
+          <button data-el="rerun" class="btn ghost" type="button" hidden>Run again</button>
+      </div>
+      <div data-el="log" class="log"></div>
+      <div data-el="ranIn" class="path" hidden></div>
+      <div data-el="nothing" class="hint" hidden>Nothing was written there.</div>
+      <div data-el="fileBox" class="log__files" hidden><div data-el="fileCount" class="crumb"></div></div>
+      <div data-el="cmd" class="cmd" hidden><input data-el="cmdInput" placeholder="openscreen info --json" /><button data-el="cmdRun" class="btn" type="button">Run</button></div>
    </div>
    <!-- After the list rather than above it: a destructive control at the top
         is one you reach before reading what it would remove. -->
