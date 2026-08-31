@@ -433,7 +433,7 @@
   position: absolute;
   inset-block-start: var(--op-space-x-small);
   inset-inline-end: var(--op-space-x-small);
-  z-index: 5;
+  z-index: 500;
 }
 
 .kebab__trigger {
