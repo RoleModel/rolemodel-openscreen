@@ -269,6 +269,29 @@ class RMElement extends HTMLElement {
   }
 }
 
+/*
+ * Where a bare picture name resolves from.
+ *
+ * Three contexts, and only two were handled. A scene preview puts the base on
+ * <rm-scene>, and a component can carry its own — but a COMPOSITION has neither,
+ * so `assets/imagery` was resolving against nothing and every uploaded picture
+ * came out blank. That is the one place the answer is always the same: staging
+ * copies added pictures to assets/imagery/ beside the composition, so that is
+ * the fallback rather than the empty string.
+ *
+ * A name with a slash or a scheme is already a path and is left alone.
+ */
+const STAGED_IMAGERY = 'assets/imagery'
+
+const assetBase = (el) =>
+  el.getAttribute('assets') || el.closest('rm-scene')?.getAttribute('assets') || STAGED_IMAGERY
+
+const assetUrl = (el, name) => {
+  const raw = String(name ?? '').trim()
+  if (!raw) return ''
+  return raw.includes('/') || /^[a-z]+:/i.test(raw) ? raw : `${assetBase(el)}/${raw}`
+}
+
 const define = (name, cls) => {
   if (!customElements.get(name)) customElements.define(name, cls)
 }
@@ -557,8 +580,7 @@ class RMImage extends RMElement {
     const w = Number(this.attr('w', 30))
     const raw = this.attr('src')
     // A name resolves against the stage's base; a path is the author's business.
-    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
-    const src = !raw || raw.includes('/') || /^[a-z]+:/i.test(raw) ? raw : `${base}/${raw}`
+    const src = assetUrl(this, raw)
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
@@ -659,8 +681,7 @@ class RMShader extends RMElement {
     const showMark = showOverlay && markName !== 'off' && markName !== ''
     const markSrc = markName === 'on' ? SHADER_ICON : markUrl(markName)
     const rawImage = this.attr('image')
-    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
-    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
+    const imageSource = assetUrl(this, rawImage)
     const hasImage = Boolean(imageSource)
     const lockup = showOverlay
       ? `<div class="lockup">${showMark ? '<i class="mark anim" aria-hidden="true"></i>' : ''}${title ? `<h2 class="anim">${title}</h2>` : ''}${subtitle ? `<p class="anim">${this.esc(subtitle)}</p>` : ''}</div>`
@@ -851,8 +872,7 @@ class RMPixelReveal extends RMElement {
     const colorB = shaderColour(this.attr('color-b'), background)
     const showDuotone = this.attr('show-duotone', 'off') === 'on'
     const rawImage = this.attr('image')
-    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
-    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
+    const imageSource = assetUrl(this, rawImage)
     const hasImage = Boolean(imageSource)
     const stroke = `${borderRadius ? '.12cqw solid ' : '0 solid '}${border}`
     this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${paper};border:${stroke};border-radius:${borderRadius}cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
@@ -1146,8 +1166,7 @@ class RMHaze extends RMElement {
      */
     const imageBlend = shaderClamp(Number(this.attr('image-blend', 0.75)), 0, 1)
     const rawImage = this.attr('image')
-    const base = this.getAttribute('assets') || this.closest('rm-scene')?.getAttribute('assets') || ''
-    const imageSource = rawImage ? (rawImage.includes('/') || /^[a-z]+:/i.test(rawImage) ? rawImage : `${base}/${rawImage}`) : ''
+    const imageSource = assetUrl(this, rawImage)
 
     const shadowColour = shaderColour(this.attr('gradient-shadow'), 'var(--op-color-neutral-plus-max, #242424)')
     const highlightColour = shaderColour(this.attr('gradient-highlight'), 'var(--brand, var(--op-color-academy-primary-base, #00b871))')
