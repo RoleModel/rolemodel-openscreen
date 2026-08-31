@@ -27,7 +27,9 @@
          <ol data-el="shots" class="interview__shots" hidden></ol>
          <p data-el="problems" class="hint" hidden></p>
       </section>
-      <div data-el="status" class="form-hint full"></div>
+      <!-- A vestigial sink: says() sends everything to the toast. Kept for the
+           handle, hidden so it never reads as an unlabeled empty field. -->
+      <div data-el="status" class="form-hint full" hidden></div>
    </div>
 </template>
 
