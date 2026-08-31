@@ -477,7 +477,7 @@ nav button[data-v][aria-current='true'] .navicon {
 
 /* A button whose whole label is a glyph still needs a square hit area. */
 .btn.ghost:has(> .hgi-stroke:only-child) {
-  padding-inline: var(--op-space-x-small);
+  padding-inline: var(--op-space-small);
 }
 
 .btn.btn--hint {
@@ -926,13 +926,20 @@ button.btn:disabled {
   position: absolute;
   inset: auto 0 0 0;
   padding: var(--op-space-small);
-  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 20%, transparent 100%));
+  background: linear-gradient(to top, var(--panel) 10%, color-mix(in srgb, var(--panel) 0%, transparent 20%));
   display: flex;
   flex-direction: column;
   gap: var(--op-space-2x-small);
 }
 
+.card .body .hint {
+  position: absolute;
+  inset:  var(--op-space-2x-small) var(--op-space-2x-small) auto auto;
+
+}
+
 details.card .body {
+  position: relative;
   padding: var(--op-space-small);
   background: linear-gradient(to top, var(--panel) 10%, transparent 50%);
   display: flex;
