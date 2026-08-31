@@ -939,6 +939,7 @@ button.btn:disabled {
   display: flex;
   flex-direction: column;
   gap: var(--op-space-2x-small);
+  z-index: 50;
 }
 
 .card .body .row {
