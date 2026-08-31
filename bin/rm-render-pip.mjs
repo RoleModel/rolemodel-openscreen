@@ -281,9 +281,55 @@ const plan = await page.evaluate((key) => {
 		const opening = cards.find((c) => c.start <= 0.05);
 		if (opening) poster = opening.start + opening.dur / 2;
 	}
-	return { duration: Number(root.dataset.duration) || 0, clips, poster };
+	/*
+	 * Cues that no longer point at anything, and cues past the end of their clip.
+	 *
+	 * A caption is held in four places that have to agree: the words, the phrase
+	 * envelope that fades a line up and down, the block's own exit, and the pip
+	 * envelope. Cutting a line out of a take means editing all four, and nothing
+	 * checked that they still matched. Taking the words but leaving the envelope
+	 * left the caption blank for three seconds over the join and then flashed the
+	 * next line in half a second before its clip ended — a real defect in the
+	 * picture, found by watching the render rather than by anything saying so.
+	 *
+	 * Neither of these stops a render: the cut is still watchable and the person
+	 * asking for it should get it. They are said out loud, next to the clips that
+	 * over-run their footage, because both are the same kind of mistake — the
+	 * composition asking for something that is not there.
+	 */
+	const orphans = [];
+	const late = [];
+	for (const script of document.querySelectorAll("script")) {
+		for (const table of script.textContent.matchAll(/\b(PHRASE|WORD|OUT)\s*=\s*(\[[\s\S]*?\]);/g)) {
+			for (const row of table[2].matchAll(/\["([^"]+)",\s*"?([\w-]+)"?,\s*([\d.]+)/g)) {
+				const [, id, clip, at] = row;
+				if (!document.getElementById(id)) {
+					if (!orphans.some((o) => o.id === id)) orphans.push({ id, table: table[1] });
+					continue;
+				}
+				const owner = document.getElementById(`pip-${clip}`);
+				const span = owner ? Number(owner.dataset.duration) || 0 : 0;
+				if (span && Number(at) > span && !late.some((l) => l.id === id)) late.push({ id, at: Number(at), span, clip });
+			}
+		}
+	}
+	return { duration: Number(root.dataset.duration) || 0, clips, poster, orphans, late };
 }, KEY);
 if (!plan.clips.length) die("that composition has no timed video to render");
+if (plan.orphans.length) {
+	console.log("");
+	console.log(`  ${plan.orphans.length} cue${plan.orphans.length === 1 ? "" : "s"} point at something this composition no longer has:`);
+	for (const o of plan.orphans.slice(0, 8)) console.log(`    ${o.table} ${o.id}`);
+	console.log("  a line was taken out and its timing left behind — the caption goes blank where it was");
+	console.log("");
+}
+if (plan.late.length) {
+	console.log("");
+	console.log(`  ${plan.late.length} cue${plan.late.length === 1 ? "" : "s"} fire after their clip has ended:`);
+	for (const l of plan.late.slice(0, 8)) console.log(`    ${l.id} at ${l.at.toFixed(3)}s of a ${l.span.toFixed(3)}s clip`);
+	console.log("  they will flash or never appear — retime them against the clip they belong to");
+	console.log("");
+}
 /*
  * And no component may fade, when the footage fills the frame.
  *
