@@ -7946,6 +7946,12 @@ async function fetchVoiceList() {
         turn.answer = answer;
         state.pendingReply = true;
         await writeInterview(id, state);
+        /* Every turn's reply lands at the same path. Left in place, "Load
+         * Claude's reply" clicked before the new one is written folds the
+         * PREVIOUS turn's reply back in — a duplicated question in the state,
+         * and the real reply orphaned on disk. Clear it; ENOENT already reads
+         * as "Claude has not saved the next question yet". */
+        await rm(interviewReplyPath(id), { force: true });
         const seconds = Number(body.seconds) || null;
         const prompt = `${buildTurnPrompt({ turns: state.turns, seconds, project: manifest.name })}${await globalSkillDirection()}\n\nUse the relevant shared skills to shape the interview's next question and the resulting video plan. Do not mention the skills to the person answering.\n\nWrite only that JSON to ${interviewReplyPath(id)}.`;
         await writeFile(join(interviewDir(id), "prompt.txt"), `${prompt}\n`, "utf8");
@@ -7975,6 +7981,10 @@ async function fetchVoiceList() {
         const next = readTurn(parseTurn(raw));
         if (next.kind === "ambiguous") throw new Error(next.problem);
         if (next.kind === "ask") {
+          // The same question twice is a stale reply file, never a real turn.
+          if (state.turns.at(-1)?.question === next.question) {
+            throw new Error("Claude has not saved the next question yet. Keep this page open while it finishes, then try Load Claude’s reply again.");
+          }
           state.turns.push({ question: next.question, answer: "" });
           state.plan = null;
         } else {
