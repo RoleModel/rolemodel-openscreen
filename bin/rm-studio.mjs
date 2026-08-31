@@ -94,6 +94,8 @@ import {
 	setSidebarRail,
 	sidebarRail,
 	setSlackSettings,
+	reviewNotices,
+	setReviewNotices,
 	slackSettings,
 	falSettings,
 } from "../lib/settings.mjs";
@@ -3322,6 +3324,143 @@ function pipeUntilClosed(stream, res) {
   return stream.pipe(res);
 }
 
+/*
+ * Every video OpenFrame can show us, with the active version's comment count.
+ *
+ * One function because two callers need it: the Review page draws it, and the
+ * notice poller diffs it. Written twice it would be the copy-and-drift this
+ * codebase argues against everywhere else — and the drift would be silent, a
+ * poller watching a slightly different set of videos than the page lists.
+ *
+ * The count is free: OpenFrame's videos endpoint already returns the active
+ * version with `_count: { comments }`, so noticing a new comment costs one call
+ * per project and no more than drawing the page did.
+ */
+async function reviewSnapshot(api) {
+
+	const ws = await api.call("/api/workspaces");
+	const list = Array.isArray(ws) ? ws : (ws?.workspaces ?? []);
+	// Videos per project, so the panel can show what has already been sent
+	// rather than only offering to send more.
+	const projects = [];
+	for (const w of list.slice(0, 3)) {
+	  const page = await api.call(`/api/projects?workspaceId=${encodeURIComponent(w.id)}`);
+	  for (const proj of page?.projects ?? []) {
+	    const videos = await api.call(`/api/projects/${proj.id}/videos`).catch(() => null);
+	    projects.push({
+	      id: proj.id,
+	      name: proj.name,
+	      workspace: w.name,
+	      /*
+	       * No link composed here.
+	       *
+	       * This used to carry `watch: `${api.base}/watch/${v.id}``, which is a
+	       * URL with no share token in it — OpenFrame answers 403 and the page
+	       * says "Video not found or access denied". Only ?shareToken= gets a
+	       * viewer in, and the token is not in this listing.
+	       *
+	       * Reading it per video would be a GET each, on a listing that already
+	       * costs one call per project, to fill in a button most sessions never
+	       * press. So the ids go out and /api/review/link resolves one on click.
+	       */
+	      /*
+	       * What the listing already told us, kept.
+	       *
+	       * This used to map every video down to id and title, which is why the
+	       * Review page read as a list of names that "just sit there" — nothing
+	       * on it could tell you a client had been in. OpenFrame's videos
+	       * endpoint already returns the active version with
+	       * `_count: { comments }`, its number, its duration and a thumbnail, in
+	       * the same call. It cost nothing to ask for and was thrown away.
+	       */
+	      videos: (videos?.videos ?? videos ?? []).map((v) => {
+	        const version = (v.versions ?? [])[0] ?? null;
+	        return {
+	          id: v.id,
+	          title: v.title,
+	          projectId: proj.id,
+	          versionId: version?.id ?? null,
+	          version: version?.versionNumber ?? null,
+	          versions: v._count?.versions ?? null,
+	          comments: version?._count?.comments ?? 0,
+	          duration: version?.duration ?? null,
+	          thumbnail: version?.thumbnailUrl ?? null,
+	        };
+	      }),
+	    });
+	  }
+	}
+	return projects;
+}
+
+/*
+ * Noticing that a client has been in, without being asked.
+ *
+ * Until now the only way to learn that a comment had arrived was to open Review
+ * and press a button per video — which means you find out when you already
+ * suspected, and never when you did not. The counts come back with the listing
+ * anyway, so the whole feature is remembering the last number and comparing.
+ *
+ * Server-side, not in the page: the window is shut most of the day, and a notice
+ * that only exists while somebody is looking at the page is worth nothing. The
+ * last count we saw is written to disk for the same reason.
+ *
+ * The first poll after a fresh install adopts whatever is there as the mark to
+ * measure from, rather than announcing every comment ever left as new — a
+ * hundred notices on first launch would teach you to ignore them.
+ */
+const NOTICE_POLL_MS = 2 * 60 * 1000;
+let noticePollRunning = false;
+
+async function pollReviewComments() {
+  if (noticePollRunning) return;
+  noticePollRunning = true;
+  try {
+    const { url: base, token } = await openFrameSettings();
+    if (!base || !token) return;
+    const projects = await reviewSnapshot(openFrame({ base, token }));
+    const { seen, notices } = await reviewNotices();
+    const first = Object.keys(seen).length === 0;
+    const next = {};
+    const fresh = [];
+    for (const proj of projects) {
+      for (const v of proj.videos ?? []) {
+        if (!v.versionId) continue;
+        const count = Number(v.comments) || 0;
+        next[v.versionId] = count;
+        const before = seen[v.versionId];
+        /* A version we have never seen is not news on the first look — only a
+           count that GREW while we were watching is. */
+        if (first || before === undefined || count <= before) continue;
+        fresh.push({
+          id: `${v.versionId}:${count}`,
+          versionId: v.versionId,
+          videoId: v.id,
+          projectId: v.projectId,
+          project: proj.name,
+          title: v.title,
+          from: before,
+          to: count,
+          at: new Date().toISOString(),
+          seen: false,
+        });
+      }
+    }
+    if (fresh.length || JSON.stringify(next) !== JSON.stringify(seen)) {
+      /* Same id never twice: a poll that runs while the page is open must not
+         stack a second notice for a count it already reported. */
+      const have = new Set(notices.map((n) => n.id));
+      await setReviewNotices({ seen: next, notices: [...notices, ...fresh.filter((n) => !have.has(n.id))] });
+    }
+    for (const n of fresh) console.log(`  review: ${n.to - n.from} new comment(s) on ${n.title} (${n.project})`);
+  } catch {
+    /* OpenFrame being unreachable is not worth a line every two minutes; the
+       Review page says so plainly when somebody actually looks. */
+  } finally {
+    noticePollRunning = false;
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = decodeURIComponent(url.pathname);
@@ -5141,59 +5280,8 @@ const server = createServer(async (req, res) => {
       }
       try {
         const api = openFrame({ base, token });
-        const ws = await api.call("/api/workspaces");
-        const list = Array.isArray(ws) ? ws : (ws?.workspaces ?? []);
-        // Videos per project, so the panel can show what has already been sent
-        // rather than only offering to send more.
-        const projects = [];
-        for (const w of list.slice(0, 3)) {
-          const page = await api.call(`/api/projects?workspaceId=${encodeURIComponent(w.id)}`);
-          for (const proj of page?.projects ?? []) {
-            const videos = await api.call(`/api/projects/${proj.id}/videos`).catch(() => null);
-            projects.push({
-              id: proj.id,
-              name: proj.name,
-              workspace: w.name,
-              /*
-               * No link composed here.
-               *
-               * This used to carry `watch: `${api.base}/watch/${v.id}``, which is a
-               * URL with no share token in it — OpenFrame answers 403 and the page
-               * says "Video not found or access denied". Only ?shareToken= gets a
-               * viewer in, and the token is not in this listing.
-               *
-               * Reading it per video would be a GET each, on a listing that already
-               * costs one call per project, to fill in a button most sessions never
-               * press. So the ids go out and /api/review/link resolves one on click.
-               */
-              /*
-               * What the listing already told us, kept.
-               *
-               * This used to map every video down to id and title, which is why the
-               * Review page read as a list of names that "just sit there" — nothing
-               * on it could tell you a client had been in. OpenFrame's videos
-               * endpoint already returns the active version with
-               * `_count: { comments }`, its number, its duration and a thumbnail, in
-               * the same call. It cost nothing to ask for and was thrown away.
-               */
-              videos: (videos?.videos ?? videos ?? []).map((v) => {
-                const version = (v.versions ?? [])[0] ?? null;
-                return {
-                  id: v.id,
-                  title: v.title,
-                  projectId: proj.id,
-                  versionId: version?.id ?? null,
-                  version: version?.versionNumber ?? null,
-                  versions: v._count?.versions ?? null,
-                  comments: version?._count?.comments ?? 0,
-                  duration: version?.duration ?? null,
-                  thumbnail: version?.thumbnailUrl ?? null,
-                };
-              }),
-            });
-          }
-        }
-        return json(res, 200, { configured: true, base: api.base, source, workspaces: list.length, projects });
+        const projects = await reviewSnapshot(api);
+        return json(res, 200, { configured: true, base: api.base, source, workspaces: null, projects });
       } catch (err) {
         return json(res, 200, { configured: true, base, error: err.message });
       }
@@ -5495,6 +5583,30 @@ const server = createServer(async (req, res) => {
       } catch (err) {
         return json(res, 502, { error: err.message });
       }
+    }
+
+    /*
+     * What has come in since you last looked.
+     *
+     * The page asks on a timer and on every navigation; marking them seen is a
+     * separate call so that reading the list does not clear it — closing the
+     * window mid-glance would otherwise lose the only copy.
+     */
+    if (p === "/api/notifications" && req.method === "GET") {
+      const { notices } = await reviewNotices();
+      const unseen = notices.filter((n) => !n.seen);
+      return json(res, 200, { unseen: unseen.length, notices: unseen.slice(-20).reverse() });
+    }
+
+    if (p === "/api/notifications/seen" && req.method === "POST") {
+      const body = await text(req).then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
+      const only = Array.isArray(body.ids) ? new Set(body.ids.map(String)) : null;
+      const { seen, notices } = await reviewNotices();
+      await setReviewNotices({
+        seen,
+        notices: notices.map((n) => (only && !only.has(n.id) ? n : { ...n, seen: true })),
+      });
+      return json(res, 200, { ok: true });
     }
 
     if (p === "/api/review/status") {
@@ -10323,6 +10435,15 @@ server.listen(PORT, async () => {
   // because a preview holding a gigabyte is worth knowing about.
   const reaped = await reapOrphanedPreviews().catch(() => ({ reaped: 0 }));
   if (reaped.reaped) console.log(`  reclaimed         ${reaped.reaped} orphaned preview server${reaped.reaped === 1 ? "" : "s"}`);
+  /*
+   * Start watching for review comments.
+   *
+   * Once now, to take the first reading before anybody looks, then on a timer.
+   * `unref` so an idle poll never holds the process open — Studio should exit
+   * when it is told to, not two minutes later.
+   */
+  void pollReviewComments();
+  setInterval(() => void pollReviewComments(), NOTICE_POLL_MS).unref();
   if (SHELL) console.log("  shell             free-text commands ENABLED (--shell)");
   if (WATCH) console.log("  watch             reloading on changes to lib, presets, and brand\n");
   else console.log("");

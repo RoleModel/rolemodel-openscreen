@@ -404,6 +404,35 @@
 }
 
 /* What tells two similarly named projects apart at a glance. */
+/*
+ * A dot on the stage trigger when review comments are waiting.
+ *
+ * The count itself lives on the Review row inside the menu, which is only true
+ * once the menu is open — and the whole point of a notice is to be seen when you
+ * were not looking for it. A dot on the closed trigger is the smallest thing
+ * that says "there is something in here".
+ */
+.projmenu__trigger--new {
+  position: relative;
+}
+
+.projmenu__trigger--new::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0.15em;
+  inset-inline-end: 0.15em;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border-radius: 50%;
+  background: var(--op-color-academy-primary-base);
+}
+
+.projmenu__note--new {
+  color: var(--op-color-academy-primary-base);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
 .projmenu__note {
   flex: 0 0 auto;
   color: var(--muted);
