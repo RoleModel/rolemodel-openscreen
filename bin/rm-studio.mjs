@@ -5239,6 +5239,7 @@ const server = createServer(async (req, res) => {
          * stored, so everything downstream still sees exactly one shape.
          */
         let notInChannel = null;
+        let notFound = null;
         /*
          * An id that looks right is not an id that exists.
          *
@@ -5253,12 +5254,22 @@ const server = createServer(async (req, res) => {
           const using = body.token ? String(body.token) : probeToken;
           if (using) {
             const seen = await slack({ token: using }).conversation(channel).catch(() => null);
+            /*
+             * `channel_not_found` is not proof the channel is not there.
+             *
+             * Slack will not confirm that a PRIVATE conversation exists to a
+             * token that cannot see it, so a private channel the app has not been
+             * invited to answers exactly as a mistyped id does. Refusing the save
+             * on that basis rejects correct ids — which is what a first cut of
+             * this check did, on an id whose channel was plainly real.
+             *
+             * So it warns and stores. The two causes have one fix between them:
+             * invite the app, and if the id was wrong it will still be wrong
+             * afterwards, with the name lookup now available to correct it.
+             */
             if (seen?.found === false) {
               const who = await slack({ token: using }).whoami().catch(() => null);
-              return json(res, 400, {
-                error: `${channel} is not a conversation in ${who?.team ?? "that workspace"}.`
-                  + " Use Copy link on the channel in Slack and take the id off the end, or paste its name and Studio will look it up.",
-              });
+              notFound = { id: channel, team: who?.team ?? "that workspace" };
             }
             if (seen?.found && seen.member === false) notInChannel = seen.name ?? channel;
           }
@@ -5329,6 +5340,10 @@ const server = createServer(async (req, res) => {
           /* The specific channel beats the general warning: knowing the bot is in
              nothing is useful, knowing it is not in THIS one is actionable. */
           if (notInChannel) scopeProblem = `saved #${notInChannel}, but the bot is not in it — \`/invite @rmvideo\` there, or the upload will fail with \`channel_not_found\``;
+          else if (notFound) {
+            scopeProblem = `${notFound.id} is either not a conversation in ${notFound.team}, or a private one this app has not been invited to`
+              + " — Slack answers the same way for both. Invite the app in that channel; if it still fails, the id is wrong.";
+          }
         } catch {
           /* auth.test having failed is already reported by the post itself, and a
              save that succeeded should not turn red because a probe did not. */
