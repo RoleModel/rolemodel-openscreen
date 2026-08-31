@@ -33,8 +33,11 @@
   --op-color-primary-h: 147;
   --op-color-primary-s: 50%;
   --op-color-primary-l: 56%;
-  --bg: var(--op-color-neutral-plus-max);
-  --panel: var(--op-color-neutral-plus-eight);
+  --op-color-neutral-h: 0;
+  --op-color-neutral-s: 0%;
+  --op-color-neutral-l: 0%;
+  --bg: oklch(20% 0 0);
+  --panel: var(--op-color-neutral-plus-max);
   --panel2: var(--op-color-neutral-plus-six);
   --line: var(--op-color-neutral-plus-four);
   --sunk: var(--op-color-neutral-plus-max);
