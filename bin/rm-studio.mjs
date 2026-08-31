@@ -676,6 +676,10 @@ async function promoteHyperframesExport(id, root, entry) {
      scoring frames and thumbnails a different moment than the render did. */
   await rm(`${target}.poster`, { force: true }).catch(() => {});
   await copyFile(`${entry.file}.poster`, `${target}.poster`).catch(() => {});
+  /* And which OpenFrame video this render already is, so a re-send from the
+     promoted copy still lands on the same review rather than starting one. */
+  await rm(`${target}.openframe`, { force: true }).catch(() => {});
+  await copyFile(`${entry.file}.openframe`, `${target}.openframe`).catch(() => {});
   return {
     name: basename(target),
     rel: relative(mediaDir(id), target).split(sep).join("/"),
