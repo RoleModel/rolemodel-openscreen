@@ -42,10 +42,10 @@
      Sending the cut over and taking the edit back used to be done by hand. -->
 <template data-row="hyperframes-workspace">
    <section class="hyperframes-workspace">
+      <!-- What just happened, and nothing else. Every control sits in the page
+           header with the rest of them; a second bar of buttons above the editor
+           was two places to look for the same thing. -->
       <div class="hyperframes-workspace__cut">
-         <button data-el="toEditor" class="btn ghost btn--small" type="button">Edit the cut in OpenScreen</button>
-         <button data-el="fromEditor" class="btn btn--primary btn--small" type="button" hidden>Bring the edit back</button>
-         <button data-el="framing" class="btn ghost btn--small" type="button">Framing</button>
          <span data-el="cutState" class="hyperframes-workspace__state"></span>
          <label class="hyperframes-workspace__watch">
             <input data-el="watch" class="form-control form-control--small" type="checkbox" />
@@ -56,13 +56,22 @@
    </section>
 </template>
 
-<!-- HyperFrames' small navigation set, beside the other page-level controls. -->
+<!-- Every control for this composition, in the page header with the rest of
+     them. The labels say what the button does to THIS video rather than naming
+     the machinery: "the cut" is a word for the clip list that means nothing to
+     somebody looking at a video, and a button nobody dares press is a button
+     that is not there. -->
 <template data-row="hyperframes-header-actions">
    <div class="btn-group">
       <button data-el="projectMedia" id="hyperframes-project-media" class="btn ghost btn--small" type="button">Project media</button>
       <button data-el="all" class="btn ghost btn--small" type="button">All compositions</button>
+      <button data-el="framing" class="btn ghost btn--small" type="button"
+         title="Move and zoom each speaker inside their circle">Frame the speakers</button>
+      <button data-el="toEditor" class="btn ghost btn--small" type="button"
+         title="Opens this video's clips in OpenScreen, where you can trim and reorder them. Saving there updates this composition; nothing else in it changes.">Trim clips in OpenScreen</button>
+      <button data-el="fromEditor" class="btn btn--primary btn--small" type="button" hidden
+         title="An edit is waiting in OpenScreen that this composition has not taken">Use the OpenScreen edit</button>
       <button data-el="revise" class="btn btn--primary btn--small" type="button" hidden>Redo with Claude</button>
-      <button data-el="reload" class="btn ghost btn--small" type="button">Reload</button>
    </div>
 </template>
 
