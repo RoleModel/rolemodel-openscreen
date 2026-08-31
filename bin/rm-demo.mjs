@@ -1009,9 +1009,30 @@ async function runCommand() {
 	const headless = flag("headless") === true;
 	const want = typeof flag("browser") === "string" ? String(flag("browser")) : "chrome";
 	if (!(want in BROWSER_CHANNELS)) die(`--browser must be one of ${Object.keys(BROWSER_CHANNELS).join(", ")}`);
+	/*
+	 * Captured at the pixel density the render will be shown at.
+	 *
+	 * Everything here used to record at 1×: a 1440-wide viewport produced a
+	 * 1440-wide screencast, and a 1080p timeline then scaled it up by a third.
+	 * Upscaling video is the one thing that cannot be recovered later — type goes
+	 * soft, hairlines go grey, and it reads as a screenshot of a demo rather than
+	 * a demo. A retina display was showing the operator something sharper than
+	 * the file ever contained.
+	 *
+	 * So the page is rendered at `--scale` times the viewport and the screencast
+	 * is recorded at those real pixels. The viewport stays the number the layout
+	 * is designed around — the app still lays out as 1440 wide — while the frames
+	 * come out at 2880, which downsamples into 1080p with detail to spare.
+	 *
+	 * 2 by default, because that is what the machines this runs on have and the
+	 * cost is disk. `--scale 1` is there for a slow box or a long capture.
+	 */
+	const scale = Number(flag("scale", 2)) || 2;
+	if (!(scale >= 1 && scale <= 3)) die("--scale must be between 1 and 3");
 	const contextOptions = {
 		viewport: { width, height },
-		recordVideo: { dir, size: { width, height } },
+		deviceScaleFactor: scale,
+		recordVideo: { dir, size: { width: Math.round(width * scale), height: Math.round(height * scale) } },
 		baseURL: typeof flag("url") === "string" ? String(flag("url")) : undefined,
 	};
 
@@ -1127,6 +1148,7 @@ switch (cmd) {
 				"Options for run and capture",
 				"  --url <base>      base URL for relative gotos",
 				"  --width <px>      viewport width (default 1440)",
+				"  --scale <n>       device pixel ratio, 1-3 (default 2 — record retina)",
 				"  --height <px>     viewport height (default 900)",
 				"  --headless        run without a visible window (worse cursor overlay)",
 				"  --browser <name>  chrome (default) | chromium | edge",
