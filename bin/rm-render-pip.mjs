@@ -26,7 +26,7 @@
  *   rm-render-pip <projectId> <folder> [--fps <composition's data-fps>] [--from 0] [--to 12]
  */
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -456,6 +456,19 @@ if (Math.abs(footageSeconds - plan.duration) > 0.5) {
 const partial = from > 0 || to < plan.duration - 0.01;
 const out = join(root, partial ? `${folder}-preview.mp4` : `${folder}.mp4`);
 if (partial) console.log(`  partial range — writing ${basename(out)}, not the full cut`);
+/*
+ * Rendered beside the real file, and moved into place only once it is whole.
+ *
+ * ffmpeg opens its output immediately and `-movflags +faststart` keeps the whole
+ * thing in a temp file until the last frame, so pointing it straight at the
+ * deliverable deleted the previous render at second zero and put nothing back
+ * for the next quarter of an hour. A render that failed, was interrupted, or was
+ * simply still going left no video at all — and the last good one was gone.
+ *
+ * `.part` beside it, then a rename, which is atomic within a directory: either
+ * the old render is there or the new one is, never neither.
+ */
+const draft = `${out}.part`;
 const composite = spawn("ffmpeg", [
 	"-v", "error",
 	"-ss", String(from), "-t", String(to - from), "-i", footage,
@@ -468,7 +481,11 @@ const composite = spawn("ffmpeg", [
 	   rate it manages on its own. At crf 18 the difference on screen is nothing. */
 	"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
 	"-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-	"-y", out,
+	/* Stated, not inferred: ffmpeg reads the container off the file extension and
+	   a draft named `.mp4.part` has none, so it exited before the first frame and
+	   the capture loop wrote into a closed pipe. */
+	"-f", "mp4",
+	"-y", draft,
 ], { stdio: ["pipe", "ignore", "pipe"] });
 let ffmpegSaid = "";
 composite.stderr.on("data", (d) => (ffmpegSaid += d));
@@ -511,12 +528,50 @@ for (let i = 0; i < frames; i += 1) {
 	 * as a still. That needs a rounded-corner mask for the footage, which the
 	 * page can also be asked for — once, not per frame.
 	 */
-	const shot = await page.screenshot({ type: "png" });
-	if (!composite.stdin.write(shot)) await new Promise((r) => composite.stdin.once("drain", r));
+	/*
+	 * One stalled frame must not cost the whole render.
+	 *
+	 * The default 30s is Playwright's, and it is arbitrary for a page carrying
+	 * WebGL shaders: a screenshot waits on the compositor, and after thousands of
+	 * seeks with swiftshader that can take a while. When it did time out the loop
+	 * threw a bare TimeoutError, several minutes in, naming neither the frame nor
+	 * the moment — so there was nothing to act on and nothing to resume from.
+	 *
+	 * A longer budget, one retry after letting the page settle, and a failure
+	 * that says where it happened.
+	 */
+	let shot = null;
+	for (let attempt = 0; attempt < 2 && shot === null; attempt += 1) {
+		shot = await page.screenshot({ type: "png", timeout: 90_000 }).catch(async (error) => {
+			if (attempt) {
+				die(`the page stopped producing frames at ${(ms / 1000).toFixed(2)}s (frame ${i + 1} of ${frames},`
+					+ ` ${((Date.now() - began) / 1000).toFixed(0)}s in): ${error.message.split("\n")[0]}`);
+			}
+			console.log(`  frame ${i + 1} at ${(ms / 1000).toFixed(2)}s did not come back — settling and trying once more`);
+			await page.waitForTimeout(1000);
+			return null;
+		});
+	}
+	/*
+	 * And a stalled ffmpeg must not hang forever either. Awaiting `drain` with
+	 * nothing to wake it is an indefinite hang with no output at all, which is
+	 * worse than any error.
+	 */
+	if (!composite.stdin.write(shot)) {
+		await Promise.race([
+			new Promise((r) => composite.stdin.once("drain", r)),
+			new Promise((r) => setTimeout(r, 60_000)),
+		]);
+	}
 	if (i % (FPS * 10) === 0 && i) console.log(`  ${(i / frames * 100).toFixed(0)}% · ${((Date.now() - began) / i).toFixed(0)} ms/frame`);
 }
 composite.stdin.end();
-await new Promise((done, fail) => composite.on("close", (code) => (code === 0 ? done() : fail(new Error(ffmpegSaid.split("\n").slice(-6).join("\n"))))));
+await new Promise((done, fail) => composite.on("close", (code) => (code === 0 ? done() : fail(new Error(ffmpegSaid.split("\n").slice(-6).join("\n"))))))
+	.catch(async (error) => {
+		await rm(draft, { force: true }).catch(() => {});
+		die(`the render failed and the previous ${basename(out)} was left alone: ${error.message}`);
+	});
+await rename(draft, out);
 
 const spent = (Date.now() - began) / 1000;
 await browser.close();

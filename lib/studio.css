@@ -752,7 +752,16 @@ button.btn:disabled {
        * Empty means gone: a panel that fills neither should not leave a rail and a
        * bar of furniture behind.
        */
-.op-page__sidebar--right:not(:has(*)),
+/*
+ * Matched on specificity, not just written later.
+ *
+ * `:not(:has(*))` contributes nothing — `:has()` takes the specificity of its
+ * argument and `*` is zero — so this was (0,1,0) against the (0,2,0) rule above
+ * that gives the right sidebar its `display: flex` and its background. It lost,
+ * and every view that fills neither region rendered an empty bar of furniture
+ * down the side. Naming both classes makes it (0,2,0) and later, so it wins.
+ */
+.op-page__sidebar.op-page__sidebar--right:not(:has(*)),
 .op-page__main-footer:not(:has(*)) {
   display: none;
 }

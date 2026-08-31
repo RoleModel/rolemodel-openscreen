@@ -824,6 +824,30 @@ function promoteLegacyCanvasTimelineComponents(html) {
  * only that format as it is opened; never rewrite a composition a person has
  * already edited in HyperFrames.
  */
+/**
+ * Give an older composition the container its components measure against.
+ *
+ * The set sizes and places itself in cqw — a lower third is `bottom:8cqw;
+ * left:6cqw` — so with no container declared, cqw falls back to the viewport.
+ * In a 1920-wide render that is coincidentally the same number, which is why
+ * this looked correct in an export and wrong in the editor, where the
+ * composition is scaled into a smaller frame and every component sized itself
+ * to the window instead of to the picture.
+ *
+ * The generator emits this rule now. Compositions made before it do not have it,
+ * and adding one CSS rule in place is the whole repair — deliberately not
+ * routed through the rebuild below, which would take somebody's hand edits with
+ * it.
+ */
+function ensureCompositionContainer(html) {
+	if (/\[data-composition-id\][^{]*\{[^}]*container-type/s.test(html)) return { html, changed: false };
+	if (!/\[data-composition-id\]\s*\{/.test(html)) return { html, changed: false };
+	return {
+		html: html.replace(/(\[data-composition-id\]\s*\{)/, "$1\n      container-type: inline-size;"),
+		changed: true,
+	};
+}
+
 async function repairLegacyHyperframesAssembly(id, dir) {
   const assemblyPath = join(dir, "assembly.json");
   const indexPath = join(dir, "index.html");
@@ -832,7 +856,9 @@ async function repairLegacyHyperframesAssembly(id, dir) {
     readFile(indexPath, "utf8").catch(() => ""),
   ]);
   const timelineComponents = promoteLegacyCanvasTimelineComponents(html);
-  const upgradedHtml = timelineComponents.html;
+  const container = ensureCompositionContainer(timelineComponents.html);
+  const upgradedHtml = container.html;
+  const inPlace = timelineComponents.changed || container.changed;
   const needsWallpaper = !upgradedHtml.includes("--assembly-wallpaper");
   // Timeline track order is audio/timing metadata, not CSS paint order. Older
   // generated cuts had lower-third elements but no z-index, leaving every one
@@ -846,7 +872,7 @@ async function repairLegacyHyperframesAssembly(id, dir) {
     && assembly.clips.some((clip) => !clip.audioSource)
     && !upgradedHtml.includes('data-has-audio="true"');
   if (!Array.isArray(assembly?.clips) || (!needsWallpaper && !needsLowerThirdLayer && !needsNativeAudioLink)) {
-    if (timelineComponents.changed) {
+    if (inPlace) {
       await stageCanvasSceneRuntime(dir);
       await writeFile(indexPath, upgradedHtml, "utf8");
       return true;
