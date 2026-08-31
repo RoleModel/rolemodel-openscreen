@@ -276,6 +276,16 @@ const to = Math.min(Number(flag("to", plan.duration)), plan.duration);
 const frames = Math.max(1, Math.round((to - from) * FPS));
 
 const work = await mkdtemp(join(tmpdir(), "rm-pip-"));
+/** How much media a file actually has. 0 when it cannot be read. */
+const mediaSeconds = (file) =>
+	new Promise((done) => {
+		const child = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file], { stdio: ["ignore", "pipe", "ignore"] });
+		let out = "";
+		child.stdout.on("data", (d) => (out += d));
+		child.on("error", () => done(0));
+		child.on("close", () => done(Number.parseFloat(out.trim()) || 0));
+	});
+
 const run = (bin, argv, opts = {}) =>
 	new Promise((done, fail) => {
 		const child = spawn(bin, argv, { stdio: ["ignore", "ignore", "pipe"], ...opts });
@@ -294,6 +304,7 @@ const run = (bin, argv, opts = {}) =>
  */
 console.log(`  ${plan.clips.length} clips · ${frames} frames at ${FPS}fps`);
 const segments = [];
+const short = [];
 let cursor = 0;
 const silence = (seconds, out) =>
 	run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `color=c=black:s=1920x1080:r=${FPS}:d=${seconds}`, "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(seconds), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-y", out]);
@@ -306,6 +317,10 @@ for (const [index, clip] of plan.clips.entries()) {
 	}
 	const out = join(work, `seg-${index}.mp4`);
 	const source = join(root, clip.src);
+	const have = (await mediaSeconds(source)) - clip.mediaStart;
+	if (have > 0 && clip.dur - have > 0.05) {
+		short.push(`${clip.src.split("/").pop()} wants ${clip.dur.toFixed(2)}s from ${clip.mediaStart.toFixed(2)}s and has ${have.toFixed(2)}s`);
+	}
 	/*
 	 * The view box first, in the source's own pixels.
 	 *
@@ -333,6 +348,21 @@ for (const [index, clip] of plan.clips.entries()) {
 		`fps=${FPS}`,
 		`fade=t=in:st=0:d=${into.toFixed(3)}`,
 		`fade=t=out:st=${(clip.dur - away).toFixed(3)}:d=${away.toFixed(3)}`,
+		/*
+		 * Hold the last frame rather than come up short.
+		 *
+		 * `-t` asks for a length; a file that runs out just gives back less, with
+		 * no error. Every segment after a short one then slid earlier in the
+		 * concat, so the wrong speaker appeared under the right speaker's lower
+		 * third — a rough cut whose clip wanted 67.6s of an 18.4s file rendered
+		 * 49 seconds out of step and looked, frame by frame, like a normal video.
+		 *
+		 * So each segment is padded to exactly what it was asked for. That does
+		 * not repair the composition, and it is not meant to: it makes the
+		 * failure visible as a freeze on the clip that over-runs instead of
+		 * silently corrupting everything downstream. The warning below names it.
+		 */
+		`tpad=stop_mode=clone:stop_duration=${clip.dur.toFixed(3)}`,
 	].join(",");
 	/*
 	 * Placed with overlay, not pad.
@@ -345,23 +375,32 @@ for (const [index, clip] of plan.clips.entries()) {
 	 * every speaker's circle rendered black. overlay clips at the edges, which
 	 * is what a box hanging off the frame needs.
 	 */
-	const place = `color=c=black:s=1920x1080:r=${FPS}[bg];[0:v]${filter}[fg];[bg][fg]overlay=${clip.x}:${clip.y}:shortest=1[v]`;
+	const place = `color=c=black:s=1920x1080:r=${FPS}[bg];[0:v]${filter}[fg];[bg][fg]overlay=${clip.x}:${clip.y}[v];[0:a]apad[a]`;
+	/*
+	 * Exactly as long as the composition asked for — never `-shortest`.
+	 *
+	 * `-shortest` ends the segment at whichever stream runs out first, which is
+	 * the audio, so it cut the padding straight back off and handed concat a
+	 * short segment anyway. `-t` on the output is the only thing that states a
+	 * length rather than inferring one; the video holds its last frame and the
+	 * audio pads with silence to reach it.
+	 */
 	await run("ffmpeg", [
 		"-v", "error", "-ss", String(clip.mediaStart), "-t", String(clip.dur), "-i", source,
 		"-filter_complex", place,
-		"-map", "[v]", ...(clip.hasAudio ? ["-map", "0:a?"] : []),
+		"-map", "[v]", "-map", "[a]", "-t", String(clip.dur),
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
-		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-shortest", "-y", out,
+		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-y", out,
 	]).catch(async () => {
 		// A clip with no audio track still has to carry silence, or concat drops
 		// the stream for everything after it.
 		await run("ffmpeg", [
 			"-v", "error", "-ss", String(clip.mediaStart), "-t", String(clip.dur), "-i", source,
 			"-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-			"-filter_complex", place,
+			"-filter_complex", place.replace(";[0:a]apad[a]", ""),
 			"-map", "[v]", "-map", "1:a", "-t", String(clip.dur),
 			"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
-			"-c:a", "aac", "-y", out,
+			"-c:a", "aac", "-ar", "48000", "-ac", "2", "-y", out,
 		]);
 	});
 	segments.push(out);
@@ -372,10 +411,31 @@ if (plan.duration - cursor > 0.02) {
 	await silence(plan.duration - cursor, tail);
 	segments.push(tail);
 }
+if (short.length) {
+	console.log("");
+	console.log(`  ${short.length} clip${short.length === 1 ? "" : "s"} over-run the footage and hold their last frame:`);
+	for (const line of short) console.log(`    ${line}`);
+	console.log("  the composition is asking for footage that is not there — retrim those clips");
+	console.log("");
+}
 const list = join(work, "segments.txt");
 await writeFile(list, segments.map((s) => `file '${s.replaceAll("'", "'\\''")}'`).join("\n"), "utf8");
 const footage = join(work, "footage.mp4");
 await run("ffmpeg", ["-v", "error", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy", "-y", footage]);
+/*
+ * The footage layer has to be as long as the composition it is being composited
+ * under, or the two are describing different videos.
+ *
+ * This is the check that was missing. A segment that came up short slid every
+ * later one earlier in the concat, so a lower third named one speaker over
+ * another's face — and every individual frame looked perfectly normal, which is
+ * how it survived being watched.
+ */
+const footageSeconds = await mediaSeconds(footage);
+if (Math.abs(footageSeconds - plan.duration) > 0.5) {
+	die(`the footage layer came out ${footageSeconds.toFixed(2)}s for a ${plan.duration.toFixed(2)}s composition`
+		+ ` — clips would be composited against the wrong times, so nothing was written`);
+}
 
 /*
  * The overlay, straight into ffmpeg's stdin.
