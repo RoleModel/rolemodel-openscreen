@@ -356,14 +356,40 @@ console.log(`  ${plan.clips.length} clips · ${frames} frames at ${FPS}fps`);
 const segments = [];
 const short = [];
 let cursor = 0;
+/** One frame at this render's rate — the shortest thing that can be shown. */
+const frame = 1 / FPS;
+/* Sub-frame remainders, carried rather than dropped, so a run of near-zero gaps
+   cannot add up to a visible drift. */
+let carried = 0;
 const silence = (seconds, out) =>
 	run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `color=c=black:s=1920x1080:r=${FPS}:d=${seconds}`, "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(seconds), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-y", out]);
 
 for (const [index, clip] of plan.clips.entries()) {
-	if (clip.start - cursor > 0.02) {
+	/*
+	 * A gap shorter than a frame is not a gap.
+	 *
+	 * The threshold was a hardcoded 20ms from before this renderer had a variable
+	 * frame rate. A clip boundary left a gap of exactly 0.020s — which in floating
+	 * point is 0.020000000000000018, so it squeaked past — and produced a segment
+	 * three tenths of a frame long. concat with `-c copy` cannot carry a
+	 * degenerate segment: the timestamps after it go wrong, and two whole clips
+	 * disappeared while the one before them held its last frame over their slots.
+	 * Every individual segment measured correct, which is what made it hard to see.
+	 *
+	 * So the threshold is a frame, not a constant. A gap that cannot be shown is
+	 * dropped, and the sub-frame remainder is carried into the next one rather
+	 * than being quietly lost.
+	 */
+	const wanted = clip.start - cursor - carried;
+	if (wanted >= frame) {
 		const gap = join(work, `gap-${index}.mp4`);
-		await silence(clip.start - cursor, gap);
+		/* Whole frames, so the segment is exactly as long as it will play. */
+		const span = Math.round(wanted / frame) * frame;
+		carried = span - wanted;
+		await silence(span, gap);
 		segments.push(gap);
+	} else if (wanted > 0) {
+		carried = -wanted;
 	}
 	const out = join(work, `seg-${index}.mp4`);
 	const source = join(root, clip.src);
