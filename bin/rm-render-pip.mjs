@@ -284,6 +284,42 @@ const plan = await page.evaluate((key) => {
 	return { duration: Number(root.dataset.duration) || 0, clips, poster };
 }, KEY);
 if (!plan.clips.length) die("that composition has no timed video to render");
+/*
+ * And no component may fade, when the footage fills the frame.
+ *
+ * This is the third face of one bug. A component's entry and exit animate
+ * `opacity: calc(var(--rm-in-o) * var(--rm-out-o))`, so at both ends of every
+ * appearance the whole card is translucent — over a keyed hole that is a
+ * partially transparent plate on the key colour, which blends to purple and
+ * survives the key. Fixing the fill and then the shadow left the animation
+ * still doing it, which is a magenta flash as each lower third arrives and
+ * leaves.
+ *
+ * Only when the footage is full-frame. In a pip composition the cards fade
+ * over the wallpaper, with the keyed holes elsewhere in the picture, and that
+ * dissolve is the composition working as intended.
+ *
+ * Injected into each shadow root because that is the only way in: the rule
+ * has to beat a keyframe on `.anim`, and an inherited custom property set
+ * from the page loses to a declaration on the element itself. The slide is
+ * left alone — it is the opacity that cannot be composited, not the movement.
+ */
+const fullFrameFootage = plan.clips.some((c) => c.w >= 1900 && c.h >= 1060);
+if (fullFrameFootage) {
+	const pinned = await page.evaluate(() => {
+		let n = 0;
+		for (const el of document.querySelectorAll("*")) {
+			if (!el.shadowRoot || !el.tagName.toLowerCase().startsWith("rm-")) continue;
+			const style = document.createElement("style");
+			style.textContent = ".anim { animation-name: none !important; opacity: 1 !important; }";
+			el.shadowRoot.append(style);
+			n += 1;
+		}
+		return n;
+	});
+	if (pinned) console.log(`  ${pinned} component${pinned === 1 ? "" : "s"} held opaque — a fade cannot be keyed`);
+}
+
 
 const from = Number(flag("from", 0));
 const to = Math.min(Number(flag("to", plan.duration)), plan.duration);
