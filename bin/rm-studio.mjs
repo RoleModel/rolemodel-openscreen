@@ -4956,6 +4956,45 @@ const server = createServer(async (req, res) => {
        *
        * In the head, as a module, exactly as a cut carries it.
        */
+      /*
+       * And a clock, if nothing on the page is driving one.
+       *
+       * A generated cut sets `--t` and calls RM.seek from timeupdate/seeked on
+       * its video elements — that is what makes a Canvas component animate. A
+       * composition with no media never fires those, so RM stays at zero and an
+       * inserted component mounts with its `at` window shut and draws nothing:
+       * present, correctly sized, fully opaque, painting nothing.
+       *
+       * Driven from the registered timeline instead, which every composition has
+       * because the renderer will not run one without it. onUpdate rather than a
+       * ticker, because a render seeks that timeline once per frame rather than
+       * playing it, and a seek fires onUpdate.
+       *
+       * Added only when RM.seek appears nowhere: a cut already drives it, and two
+       * clocks fighting over `--t` would be worse than none.
+       */
+      if (!/RM\??\.seek\(/.test(written)) {
+        const rootId = /<main\b[^>]*\bdata-composition-id="([^"]*)"/i.exec(written)?.[1];
+        if (rootId) {
+          const clock = [
+            "<script>",
+            "  /* The composition clock, for a composition with no media to carry one.",
+            "     Added by Studio when a scene was inserted; see /api/hyperframes/insert. */",
+            "  (function () {",
+            "    var tl = (window.__timelines || {})[" + JSON.stringify(rootId) + "];",
+            "    if (!tl) return;",
+            "    tl.eventCallback('onUpdate', function () {",
+            "      var ms = tl.time() * 1000;",
+            "      document.documentElement.style.setProperty('--t', ms + 'ms');",
+            "      if (window.RM && window.RM.seek) window.RM.seek(ms);",
+            "    });",
+            "  })();",
+            "<\/script>",
+          ].join("\n");
+          written = written.replace(/<\/body>/i, `${clock}\n</body>`);
+        }
+      }
+
       if (!/canvas-components\/rm-video\.js/.test(written)) {
         const head = /<\/head>/i.exec(written);
         const tag = '<script type="module" src="assets/canvas-components/rm-video.js"></script>';
