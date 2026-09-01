@@ -1958,9 +1958,28 @@ async function stageCanvasSceneRuntime(outDir) {
  * stretched number.
  */
 const compositionEndMs = (html) => {
-  const tags = [...String(html).matchAll(/<[a-z][\w-]*\b[^>]*\bdata-start="[^"]*"[^>]*>/gi)]
-    .map(([tag]) => tag)
-    .filter((tag) => !/\bdata-composition-id=/i.test(tag));
+  const all = [...String(html).matchAll(/<[a-z][\w-]*\b[^>]*\bdata-start="[^"]*"[^>]*>/gi)].map(([tag]) => tag);
+  let tags = all.filter((tag) => !/\bdata-composition-id=/i.test(tag));
+  /*
+   * A composition can be nothing but sub-compositions.
+   *
+   * Skipping everything with a `data-composition-id` is right for a cut, where
+   * those are overlays and the footage decides the length. It is wrong for a
+   * motion piece assembled from mounted beats, where the beats ARE the content:
+   * the filter removed all of it and the answer came back 0.
+   *
+   * What that looked like — "at the end" meant zero, so the first insert landed
+   * on top of the opening beat; the next end was that part's end rather than the
+   * composition's, and three inserts walked a thirty-second piece out to four
+   * hundred seconds. Nothing clamped either, because the same zero is the room
+   * the clamp measures against.
+   *
+   * So when there is no plain clip to measure, the mounted beats are the
+   * measure. The first in document order is the root — it contains the rest, and
+   * its duration is the stretched number this function exists to distrust — so
+   * it is dropped and the furthest child wins, the same rule as the primary path.
+   */
+  if (!tags.length) tags = all.filter((tag) => /\bdata-composition-id=/i.test(tag)).slice(1);
   const windowOf = (tag) => {
     const start = Number(/\bdata-start="([\d.]+)"/.exec(tag)?.[1]);
     const span = Number(/\bdata-duration="([\d.]+)"/.exec(tag)?.[1]) || 0;
