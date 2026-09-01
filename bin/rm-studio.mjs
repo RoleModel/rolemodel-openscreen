@@ -3637,6 +3637,63 @@ const server = createServer(async (req, res) => {
      */
     if (p === "/api/delete" && req.method === "POST") {
       const body = JSON.parse(await text(req));
+
+      /*
+       * Many at once, when many were chosen.
+       *
+       * A project fills up with stills faster than anything else in it — every
+       * composition thumbnail, every poster, every probe — and removing them one
+       * confirmation at a time is not a feature, it is a reason to leave them
+       * there until the project is unusable.
+       *
+       * Same endpoint rather than a second one, because every check below is a
+       * check this needs too: inside the library, not the library itself, not a
+       * project root by accident. A separate batch route would have to grow its
+       * own copy of all of it, and the copy is what would fall behind.
+       *
+       * One reindex at the end instead of one per file — reindexing a project
+       * after each of two hundred deletes is most of the wall clock. Failures
+       * are collected rather than thrown: with a long list, stopping at the
+       * first problem leaves the caller with no idea what did and did not go.
+       */
+      if (Array.isArray(body.rels)) {
+        const trash = join(LIB, ".trash");
+        await mkdir(trash, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const moved = [];
+        const failed = [];
+        for (const rel of body.rels) {
+          const one = requestedPath({ projectId: body.projectId, rel });
+          if (one !== LIB && (one === LIB || one.startsWith(LIB + sep))) {
+            const info = await stat(one).catch(() => null);
+            if (!info) {
+              failed.push({ rel, error: "no such file" });
+              continue;
+            }
+            /* The stamp is shared by the batch, so a name collision inside one
+               run is still possible — the index makes each destination unique
+               without inventing a second timestamp format to read later. */
+            const dest = join(trash, `${stamp}-${moved.length + failed.length}-${basename(one)}`);
+            try {
+              await rename(one, dest);
+              moved.push(rel);
+            } catch (err) {
+              failed.push({ rel, error: err.code ?? err.message });
+            }
+          } else {
+            failed.push({ rel, error: `outside ${LIB}` });
+          }
+        }
+        if (body.projectId && moved.length) await reindex(body.projectId, { force: true }).catch(() => {});
+        return json(res, 200, {
+          ok: failed.length === 0,
+          count: moved.length,
+          moved,
+          failed,
+          note: `Moved ${moved.length} item${moved.length === 1 ? "" : "s"} to ${trash}. Nothing is gone — drag them back if that was wrong.`,
+        });
+      }
+
       const target = requestedPath(body);
       const inside = target === LIB || target.startsWith(LIB + sep);
       if (!inside) return json(res, 403, { error: `outside ${LIB}` });
