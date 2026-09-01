@@ -1,0 +1,38 @@
+<!-- The cut editor: a picture, and the timeline that decides what is in it. -->
+<template data-panel="timeline">
+   <p data-el="lede" class="lede" data-region="main">The cut, as a timeline. Drag a clip to move it, drag its edge to trim, drag the ruler to scrub. Two clips that overlap are a dissolve.</p>
+
+   <div data-el="empty" class="empty" data-region="main" hidden></div>
+
+   <div data-el="stage" class="tl" data-region="main" hidden>
+      <!-- The picture. A proxy, not the original: 720p at 5 Mbps seeks in a frame
+           where a 30 Mbps camera file takes most of a second, and the whole reason
+           this feels like an editor is that the picture keeps up with the hand. -->
+      <div class="tl__screen">
+         <video data-el="video" class="tl__video" preload="auto" playsinline muted></video>
+         <div data-el="gap" class="tl__gap" hidden>no clip here</div>
+      </div>
+
+      <div class="tl__bar">
+         <button data-el="play" class="btn" type="button"><rm-icon name="play"></rm-icon>Play</button>
+         <span data-el="clock" class="tl__clock">0:00.00</span>
+         <span data-el="under" class="hint"></span>
+         <span class="tl__spacer"></span>
+         <span data-el="stat" class="hint"></span>
+         <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
+      </div>
+
+      <canvas data-el="canvas" class="tl__canvas"></canvas>
+   </div>
+</template>
+
+<!-- One composition, offered for editing. A row rather than markup built in
+     studio.js: the rule is that the templates hold the markup, and a chooser is
+     no more exempt than a card is. -->
+<template data-row="timeline-choice">
+   <div class="row margin-y-sm">
+      <span data-el="name"></span>
+      <span data-el="note" class="hint"></span>
+      <button data-el="go" class="btn" type="button"></button>
+   </div>
+</template>
