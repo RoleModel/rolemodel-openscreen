@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><title>timeline</title>
+<style>
+  :root { color-scheme: dark }
+  html,body { margin:0; background:#0b0f14; }
+  #wrap { padding:16px; }
+  canvas { display:block; width:100%; }
+</style></head><body>
+<div id="wrap"><canvas id="tl"></canvas></div>
+<script type="module">
+import { paintTimeline, paletteFrom, defaultView, framesInView, heightFor } from '/lib/timeline-canvas.js';
+const cut = await (await fetch('/cut.json')).json();
+const canvas = document.getElementById('tl');
+const palette = paletteFrom(document.body);
+const view = defaultView();
+
+/* Peaks up front — one small JSON per source. */
+const peaks = new Map();
+for (const key of Object.keys(cut.sources)) {
+  peaks.set(key, await (await fetch(`/cache/peaks/${key}.json`)).json());
+}
+/* Every source carries its filmstrip interval, so the renderer can place frames. */
+for (const key of Object.keys(cut.sources)) {
+  const info = await (await fetch(`/cache/strip/${key}/index.json`)).json();
+  Object.assign(cut.sources[key], info);
+}
+/* An audio lane, so there is a waveform to look at. */
+cut.tracks.push({ id: 'a1', kind: 'audio', clips: cut.tracks[0].clips.map(c => ({ ...c, id: c.id + '-a' })) });
+
+/* Only the frames this view can see. */
+const images = new Map();
+const t0 = performance.now();
+const want = framesInView(cut, view, canvas.clientWidth);
+await Promise.all(want.map(({ source, index }) => new Promise((done) => {
+  const key = `${source}:${index}`;
+  if (images.has(key)) return done();
+  const img = new Image();
+  img.onload = img.onerror = () => done();
+  img.src = `/cache/strip/${source}/${String(index + 1).padStart(5, '0')}.jpg`;
+  images.set(key, img);
+})));
+const loaded = performance.now() - t0;
+
+const paint = () => paintTimeline(canvas, { cut, palette, view, images, peaks, playhead: 31.2, selection: 'hf-tgxy' });
+paint();
+const t1 = performance.now();
+for (let i = 0; i < 60; i += 1) paint();
+const perPaint = (performance.now() - t1) / 60;
+
+window.__stats = { frames: want.length, loadedMs: Math.round(loaded), perPaintMs: Number(perPaint.toFixed(2)), height: heightFor(cut), clips: cut.tracks.flatMap(t => t.clips).length };
+document.title = 'ready';
+</script></body></html>
