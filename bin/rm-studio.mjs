@@ -4941,9 +4941,58 @@ const server = createServer(async (req, res) => {
         && pieces.every((piece) => BACKGROUND_TAGS.has(((/^<([a-z][\w-]*)/i.exec(piece) ?? [])[1] ?? "").toLowerCase()));
       const cut = allBackground && openTag ? openTag.index + openTag[0].length : close;
 
+      let written = `${html.slice(0, cut)}\n    ${timed.join("\n    ")}\n${html.slice(cut)}`;
+
+      /*
+       * Staged is not loaded.
+       *
+       * stageCanvasSceneRuntime copies rm-video.js into the composition's assets
+       * so the component has something to be. Nothing was adding the tag that
+       * loads it. A generated cut already carries one, so this never showed up
+       * there — but a hand-authored composition has no reason to, and inserting
+       * into one produced a custom element with no definition behind it. An
+       * unknown element renders nothing at all, which is the third distinct way
+       * this feature could appear to silently do nothing.
+       *
+       * In the head, as a module, exactly as a cut carries it.
+       */
+      if (!/canvas-components\/rm-video\.js/.test(written)) {
+        const head = /<\/head>/i.exec(written);
+        const tag = '<script type="module" src="assets/canvas-components/rm-video.js"></script>';
+        written = head
+          ? `${written.slice(0, head.index)}  ${tag}\n${written.slice(head.index)}`
+          : written.replace(/<body[^>]*>/i, (open) => `${open}\n${tag}`);
+      }
+
+      /*
+       * The composition grows to hold what was put in it.
+       *
+       * `<main data-duration>` is what says how long the piece is, and nothing
+       * updated it. Insert at the end of a thirty-second composition and the
+       * part lands at thirty seconds — correct, and outside the composition, so
+       * it never renders and never shows in the editor. From the outside that is
+       * indistinguishable from the insert not happening, which is how it was
+       * reported, twice.
+       *
+       * The new end is measured the same way "the end" was: compositionEndMs of
+       * the file as it now stands. Only ever longer — a part finishing before the
+       * current end changes nothing, and shrinking here would truncate whatever
+       * else is out there. This is an insert, not a retime.
+       */
+      const grownEnd = compositionEndMs(written);
+      const rootTag = /<main\b[^>]*\bdata-composition-id="[^"]*"[^>]*>/i.exec(written);
+      const declaredMs = Number(/\bdata-duration="([\d.]+)"/.exec(rootTag?.[0] ?? "")?.[1] ?? 0) * 1000;
+      let grewToMs = null;
+      if (rootTag && grownEnd > declaredMs) {
+        grewToMs = grownEnd;
+        written = written.replace(rootTag[0], rootTag[0].replace(/\bdata-duration="[\d.]+"/, `data-duration="${hfSeconds(grownEnd)}"`));
+      }
+
       await writeFile(`${indexPath}.before-insert`, html, "utf8");
-      await writeFile(indexPath, `${html.slice(0, cut)}\n    ${timed.join("\n    ")}\n${html.slice(cut)}`, "utf8");
-      return json(res, 200, { ok: true, folder, id: ids[0], ids, count: ids.length, startMs: start, durationMs: duration, clamped });
+      await writeFile(indexPath, written, "utf8");
+      /* grewToMs so the toast can say the piece got longer — a composition
+         quietly changing length is otherwise found out at render time. */
+      return json(res, 200, { ok: true, folder, id: ids[0], ids, count: ids.length, startMs: start, durationMs: duration, clamped, grewToMs });
     }
 
     if (p === "/api/hyperframes/delete" && req.method === "POST") {
