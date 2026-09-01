@@ -911,6 +911,47 @@ async function repairLegacyHyperframesAssembly(id, dir) {
  * which looks like Studio lost the composition. Confirm the local server is
  * answering before handing its URL to the browser instead.
  */
+/*
+ * Make sure the package is on disk before anything waits on a server from it.
+ *
+ * `npx hyperframes` is unpinned, so it resolves to whatever is newest. The day
+ * upstream publishes a release the cache is a version behind, every open goes to
+ * the registry to install first — and the preview does not begin listening until
+ * that finishes. Studio's readiness deadline expires in the meantime, the child
+ * is reaped, and what comes back is `HyperFrames Studio stopped (1)`, which
+ * names neither npm nor a version and sends you looking at the composition.
+ *
+ * `--prefer-offline` does not cover this. It prefers the cache when the cache
+ * can satisfy the request, and a request for `latest` after a release cannot be.
+ *
+ * So the install is done first, on purpose, once per Studio process. A warm
+ * cache makes `--no-install --version` return immediately and nothing else
+ * happens. A cold one pays for the download here, where it is a wait that can be
+ * described, instead of inside a timeout that reads as a crash.
+ */
+let hyperframesInstalled = null;
+function ensureHyperframes() {
+  if (!hyperframesInstalled) {
+    hyperframesInstalled = capture("npx", ["--no-install", "hyperframes", "--version"])
+      .then(async (cached) => {
+        if (cached.ok) return { installed: false, version: String(cached.out ?? "").trim() };
+        console.log("  hyperframes is not in the npx cache — installing it before opening the editor");
+        const got = await capture("npx", ["--yes", "hyperframes", "--version"]);
+        if (!got.ok) throw new Error("could not install hyperframes from npm — check the network, then try again");
+        const version = String(got.out ?? "").trim();
+        console.log(`  hyperframes ${version} installed`);
+        return { installed: true, version };
+      })
+      /* A failed install must not be remembered as the answer: the network comes
+         back, and the next open should try again rather than inherit today's. */
+      .catch((error) => {
+        hyperframesInstalled = null;
+        throw error;
+      });
+  }
+  return hyperframesInstalled;
+}
+
 const waitForHyperframesStudio = async (studio, { deadlineMs = 12_000 } = {}) => {
   const url = `http://localhost:${studio.port}/`;
   const deadline = Date.now() + deadlineMs;
@@ -985,6 +1026,9 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
   }
   let spawned = false;
   if (!studio?.child) {
+    /* Before a port is even allocated: an install that takes a minute must not
+       run down the readiness deadline of a server that has not started yet. */
+    await ensureHyperframes();
     const port = await freeLocalPort();
     spawned = true;
     // Studio is already the visible app. HyperFrames otherwise opens this same
@@ -1046,7 +1090,14 @@ async function openHyperframesStudio(id, folder, { retry = true } = {}) {
     child.on("close", (code) => {
       if (studio.state !== "failed") {
         studio.state = "stopped";
-        studio.error = code === 0 ? "HyperFrames Studio stopped." : `HyperFrames Studio stopped (${code ?? "unknown"}).`;
+        /* The exit code on its own has never been enough to act on — every
+           cause looks like `(1)`. The last thing it said usually names the
+           real one, and it is already being kept. */
+        const said = (studio.output ?? []).slice(-3).join(" · ").slice(0, 300);
+        studio.error =
+          code === 0
+            ? "HyperFrames Studio stopped."
+            : `HyperFrames Studio stopped (${code ?? "unknown"})${said ? `: ${said}` : " and said nothing"}`;
       }
       studio.child = null;
     });
