@@ -1,0 +1,71 @@
+/*
+ * The cut editor.
+ *
+ * Two things stacked: a picture and a timeline. The picture is fixed to a 16:9
+ * box so the frame never resizes while you scrub — a preview that reflows as the
+ * source changes aspect is a preview you cannot judge a cut against.
+ */
+.tl {
+  display: grid;
+  gap: var(--op-space-small);
+  min-block-size: 0;
+}
+
+.tl__screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-block-size: 52vh;
+  margin-inline: auto;
+  background: var(--op-color-neutral-plus-max);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  overflow: hidden;
+}
+
+.tl__video {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+  display: block;
+  background: var(--op-color-neutral-plus-max);
+}
+
+/* Between clips there is no picture, and a frozen last frame would be a lie
+   about what the render will do. Say it instead. */
+.tl__gap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--m);
+  font-size: var(--op-font-small);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--op-color-neutral-plus-max);
+}
+
+.tl__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-small);
+}
+
+.tl__spacer { margin-inline-start: auto; }
+
+/* Tabular figures, so a running clock does not shuffle its own digits. */
+.tl__clock {
+  font-family: var(--m);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--op-font-medium);
+  color: var(--op-color-neutral-minus-max);
+}
+
+/* `touch-action: none` so a drag on a trackpad edits rather than scrolls the
+   page — without it every clip move fights the scroller. */
+.tl__canvas {
+  inline-size: 100%;
+  display: block;
+  touch-action: none;
+  border-radius: var(--op-radius-medium);
+}

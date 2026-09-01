@@ -27,6 +27,11 @@
          <div data-el="meta" class="meta"></div>
          <div class="row">
             <button data-el="open" class="btn" type="button"><rm-icon name="arrow-up-right-01"></rm-icon>Open</button>
+            <!-- The way into the cut editor. On the composition itself, because that
+                 is what you are looking at when you want to edit it — the rail entry
+                 alone means knowing a Timeline view exists and guessing which
+                 composition it will land on. -->
+            <button data-el="edit" class="btn ghost" type="button" hidden><rm-icon name="scissor-01"></rm-icon>Edit timeline</button>
             <button data-el="render" class="btn ghost" type="button"
                title="Render straight to MP4 without opening the editor. Uses the composition's own frame rate.">
                <rm-icon name="video-replay"></rm-icon>Render

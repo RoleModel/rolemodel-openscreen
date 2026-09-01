@@ -71,6 +71,8 @@ import {
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
+import { readCut, writeCut } from "../lib/cut.mjs";
+import { seedCut } from "../lib/cut-seed.mjs";
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -494,6 +496,31 @@ async function freeLocalPort() {
   });
 }
 
+/*
+ * The one cut in a project, if it has one.
+ *
+ * A project can hold several composition folders and at most one of them has a
+ * cut.json today — the editor is not a multi-timeline app yet, and pretending
+ * otherwise would mean a picker before there is anything to pick between. The
+ * first one found is the answer, and when a second appears this is where the
+ * choice goes.
+ */
+async function findCut(id, folder = null) {
+  const renders = join(mediaDir(id), "Renders");
+  if (folder) {
+    const dir = join(renders, basename(String(folder)));
+    const cut = await readCut(dir).catch(() => null);
+    return cut ? { folder: basename(String(folder)), dir, cut } : null;
+  }
+  for (const entry of await readdir(renders, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(renders, entry.name);
+    const cut = await readCut(dir).catch(() => null);
+    if (cut) return { folder: entry.name, dir, cut };
+  }
+  return null;
+}
+
 async function hyperframesProjects(id) {
   const renders = join(mediaDir(id), "Renders");
   const entries = await readdir(renders, { withFileTypes: true }).catch(() => []);
@@ -516,9 +543,14 @@ async function hyperframesProjects(id) {
               : null;
           }),
       );
+      /* Whether the editor can open this one. A stat, so the card can offer the
+         right verb — Edit, or Make editable — instead of one button that fails
+         half the time. */
+      const hasCut = Boolean(await stat(join(dir, "cut.json")).catch(() => null));
       return {
         folder: entry.name,
         title,
+        hasCut,
         updatedAt: info.mtime.toISOString(),
         renders: videoRenders.filter(Boolean).sort((a, b) => b.mtime.localeCompare(a.mtime)),
       };
@@ -4577,6 +4609,89 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    /*
+     * The cut editor's three reads and one write.
+     *
+     * Everything the timeline draws is a file that was made once at import — a
+     * proxy, a filmstrip frame, an array of peaks — so these are static reads
+     * with a project boundary on them and nothing else. Deliberately not one
+     * "give me the editor's state" endpoint: the browser asks for the handful of
+     * frames it can see and no more, and a bundle would defeat that.
+     */
+    if (p === "/api/edit/seed" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const folder = basename(String(body.folder ?? ""));
+      const renders = resolve(mediaDir(id), "Renders");
+      const dir = resolve(renders, folder);
+      if (!folder || !dir.startsWith(`${renders}${sep}`)) return json(res, 404, { error: "that composition is not in this project" });
+      /* Caching a take is a few seconds of ffmpeg each, so this can run for half
+         a minute on a first seed. Held open rather than backgrounded: the button
+         that called it is the only thing waiting, and a job for it would be a
+         progress bar nobody reads. */
+      try {
+        const made = await seedCut({ dir, mediaRoot: mediaDir(id) });
+        return json(res, 200, { ok: true, folder, clips: made.clips, skipped: made.skipped });
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+    }
+
+    if (p === "/api/edit/cut" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, url.searchParams.get("folder"));
+      if (!found) return json(res, 404, { error: "this composition has no cut yet" });
+      return json(res, 200, { folder: found.folder, cut: found.cut });
+    }
+
+    if (p === "/api/edit/cut" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, body.folder);
+      if (!found) return json(res, 404, { error: "no cut to save over" });
+      /* writeCut refuses a cut with problems rather than writing one and
+         repairing it later, so a bad edit fails here with a sentence. */
+      try {
+        await writeCut(found.dir, body.cut);
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, folder: found.folder });
+    }
+
+    if (p.startsWith("/api/edit/cache/") && req.method === "GET") {
+      const rest = p.slice("/api/edit/cache/".length).split("/");
+      const id = decodeURIComponent(rest.shift() ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return void res.writeHead(404).end();
+      const root = join(mediaDir(id), ".edit-cache");
+      const file = resolve(root, rest.join("/"));
+      /* Resolved back inside the cache before anything is opened: the path comes
+         from a URL, and a URL can say `..` as easily as it can say `proxy`. */
+      if (!file.startsWith(root + sep)) return void res.writeHead(403).end();
+      const info = await stat(file).catch(() => null);
+      if (!info?.isFile()) return void res.writeHead(404).end();
+      const type = extname(file) === ".mp4" ? "video/mp4" : extname(file) === ".json" ? "application/json" : "image/jpeg";
+      /* Ranges, because a <video> asks for them and a proxy that cannot be
+         range-requested is a proxy the browser will not seek. */
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+      if (range && type === "video/mp4") {
+        const start = Number(range[1] || 0);
+        const end = range[2] ? Number(range[2]) : info.size - 1;
+        res.writeHead(206, {
+          "content-type": type,
+          "content-length": end - start + 1,
+          "content-range": `bytes ${start}-${end}/${info.size}`,
+          "accept-ranges": "bytes",
+        });
+        return void createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes", "cache-control": "max-age=31536000, immutable" });
+      return void createReadStream(file).pipe(res);
+    }
+
     if (p === "/api/hyperframes" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
@@ -8044,8 +8159,13 @@ async function fetchVoiceList() {
       return res.end(src + (await templateStyles()));
     }
 
-    if (p === "/studio.js" || p === "/live-reload.js") {
-      const src = await readFile(join(TOOLKIT, "lib", p.slice(1)), "utf8").catch(() => null);
+      /* The editor imports these at runtime rather than riding inside studio.js,
+         because they are pure modules with no DOM assumptions — which is what let
+         them be built and measured against a fixture before there was a panel to
+         put them in. Same no-store rule: never older than the code loading them. */
+      if (p === "/studio.js" || p === "/live-reload.js" || p === "/lib/timeline-canvas.js" || p === "/lib/timeline-input.js") {
+        const name = p.startsWith("/lib/") ? p.slice("/lib/".length) : p.slice(1);
+        const src = await readFile(join(TOOLKIT, "lib", name), "utf8").catch(() => null);
       if (src == null) {
         res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         return res.end(`lib${p} is missing\n`);
