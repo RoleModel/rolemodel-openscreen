@@ -34,15 +34,20 @@
       <audio data-el="bed" preload="auto"></audio>
       <div class="tl__bar-container">
       <div class="tl__bar">
-         <button data-el="play" class="btn" type="button"><rm-icon name="play"></rm-icon>Play</button>
+         <button data-el="play" class="btn btn--icon" type="button" aria-label="Play" title="Play"><rm-icon data-el="playIcon" name="play"></rm-icon></button>
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
          <span class="tl__spacer"></span>
-         <div class="tl__add form-group form-group-inline form-group--no-padding">
-            <span class="form-label">Audio</span>
-            <select data-el="pick" class="input form-control tl__pick"></select>
-         </div>
-         <button data-el="add" class="btn ghost" type="button" disabled>Add at playhead</button>
+         <!-- Hidden outright when the project has no sound to offer. A disabled
+              button beside an empty menu is a promise the project cannot keep;
+              better not to raise the subject. -->
+         <span data-el="audio" class="tl__audio" hidden>
+            <div class="tl__add form-group form-group-inline form-group--no-padding">
+               <span class="form-label">Audio</span>
+               <select data-el="pick" class="input form-control tl__pick"></select>
+            </div>
+            <button data-el="add" class="btn ghost" type="button">Add at playhead</button>
+         </span>
          <span data-el="stat" class="hint"></span>
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>

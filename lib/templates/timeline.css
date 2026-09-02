@@ -139,3 +139,9 @@
 .tl__pick {
    max-width: 14rem;
 }
+
+.tl__audio {
+   display: inline-flex;
+   gap: var(--op-space-x-small);
+   align-items: center;
+}
