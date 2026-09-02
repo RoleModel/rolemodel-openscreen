@@ -69,3 +69,25 @@
   touch-action: none;
   border-radius: var(--op-radius-medium);
 }
+
+/* The scene layer sits exactly over the picture and is never clickable — it is
+   something to look at, not something to edit through. */
+.tl__scene {
+   position: absolute;
+   inset: 0;
+   width: 100%;
+   height: 100%;
+   border: 0;
+   pointer-events: none;
+   background: transparent;
+}
+
+.tl__add {
+   display: inline-flex;
+   gap: var(--op-space-x-small);
+   align-items: center;
+}
+
+.tl__pick {
+   max-width: 14rem;
+}

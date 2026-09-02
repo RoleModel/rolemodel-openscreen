@@ -14,14 +14,30 @@
               can only answer half of that. Autoplay rules are satisfied because
               playback only ever starts from a click. -->
          <video data-el="video" class="tl__video" preload="auto" playsinline></video>
+         <!-- The graphics, over the footage.
+              A scene is markup and it animates; the only thing that renders it
+              correctly is the thing that renders it for real, so the composition
+              itself is mounted here and seeked from the same playhead. Its own
+              footage is hidden once loaded, because the proxy underneath is
+              already playing that and playing it faster. -->
+         <iframe data-el="scene" class="tl__scene" title="Scene" tabindex="-1" hidden></iframe>
          <div data-el="gap" class="tl__gap" hidden>no clip here</div>
       </div>
+
+      <!-- Music, or a voice track: sound that belongs to the cut rather than to
+           any one clip, so it plays from its own element on the same clock. -->
+      <audio data-el="bed" preload="auto"></audio>
 
       <div class="tl__bar">
          <button data-el="play" class="btn" type="button"><rm-icon name="play"></rm-icon>Play</button>
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
          <span class="tl__spacer"></span>
+         <label class="tl__add">
+            <span class="hint">Audio</span>
+            <select data-el="pick" class="input tl__pick"></select>
+         </label>
+         <button data-el="add" class="btn ghost" type="button" disabled>Add at playhead</button>
          <span data-el="stat" class="hint"></span>
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>

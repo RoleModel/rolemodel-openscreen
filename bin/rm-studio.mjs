@@ -73,6 +73,7 @@ import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
 import { readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
+import { cacheSource } from "../lib/edit-cache.mjs";
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -4618,6 +4619,48 @@ const server = createServer(async (req, res) => {
      * "give me the editor's state" endpoint: the browser asks for the handful of
      * frames it can see and no more, and a bundle would defeat that.
      */
+    /*
+     * Add a piece of audio to a cut.
+     *
+     * Caching happens here rather than in the browser because it is ffmpeg, and
+     * the peaks the timeline draws from have to exist before the clip does — a
+     * clip pointing at a source with no peaks is a silent grey bar.
+     */
+    if (p === "/api/edit/audio" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, body.folder);
+      if (!found) return json(res, 404, { error: "no cut to add to" });
+      const media = mediaDir(id);
+      const file = resolve(media, String(body.rel ?? ""));
+      if (!file.startsWith(`${media}${sep}`)) return json(res, 403, { error: "that file is not in this project" });
+      if (!(await stat(file).catch(() => null))) return json(res, 404, { error: "no such audio in this project" });
+
+      const cached = await cacheSource(file, join(media, ".edit-cache"));
+      const cut = found.cut;
+      cut.sources[cached.key] = { file: String(body.rel), seconds: cached.seconds, frames: cached.frames, interval: 0.5, count: cached.frames };
+      let track = cut.tracks.find((t) => t.kind === "audio");
+      if (!track) {
+        track = { id: "a1", kind: "audio", clips: [] };
+        cut.tracks.push(track);
+      }
+      const at = Math.max(0, Number(body.at) || 0);
+      track.clips.push({
+        id: `audio-${track.clips.length + 1}`,
+        source: cached.key,
+        in: 0,
+        out: Number(cached.seconds.toFixed(3)),
+        at: Number(at.toFixed(3)),
+      });
+      try {
+        await writeCut(found.dir, cut);
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, seconds: cached.seconds });
+    }
+
     if (p === "/api/edit/seed" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.project ?? "");
@@ -4689,6 +4732,44 @@ const server = createServer(async (req, res) => {
         return void createReadStream(file, { start, end }).pipe(res);
       }
       res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes", "cache-control": "max-age=31536000, immutable" });
+      return void createReadStream(file).pipe(res);
+    }
+
+    /*
+     * The composition itself, served flat so an iframe can mount it.
+     *
+     * A scene is animated markup. Nothing short of a browser renders it right, so
+     * the editor mounts the real composition and seeks it rather than trying to
+     * reproduce its look — a second renderer is a second thing to be wrong. The
+     * folder is served whole because every reference inside it is relative.
+     */
+    if (p.startsWith("/api/edit/scene/") && req.method === "GET") {
+      const rest = p.slice("/api/edit/scene/".length).split("/");
+      const id = decodeURIComponent(rest.shift() ?? "");
+      const folder = decodeURIComponent(rest.shift() ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return void res.writeHead(404).end();
+      const root = join(mediaDir(id), "Renders", basename(folder));
+      const file = resolve(root, rest.map(decodeURIComponent).join("/") || "index.html");
+      if (!file.startsWith(root + sep)) return void res.writeHead(403).end();
+      const info = await stat(file).catch(() => null);
+      if (!info?.isFile()) return void res.writeHead(404).end();
+      const ext = extname(file);
+      const type = ext === ".html" ? "text/html" : ext === ".css" ? "text/css"
+        : ext === ".js" || ext === ".mjs" ? "text/javascript"
+        : ext === ".json" ? "application/json" : (MIME[ext] ?? "application/octet-stream");
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+      if (range && type.startsWith("video/")) {
+        const start = Number(range[1] || 0);
+        const end = range[2] ? Number(range[2]) : info.size - 1;
+        res.writeHead(206, {
+          "content-type": type,
+          "content-length": end - start + 1,
+          "content-range": `bytes ${start}-${end}/${info.size}`,
+          "accept-ranges": "bytes",
+        });
+        return void createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes" });
       return void createReadStream(file).pipe(res);
     }
 
