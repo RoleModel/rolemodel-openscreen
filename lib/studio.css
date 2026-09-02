@@ -699,6 +699,9 @@ select.form-control:not([multiple], [type='radio'], [type='checkbox']) {
 .form .form-group {
   padding-block: var(--op-space-2x-small);
 }
+.form-group.form-group--no-padding {
+  padding-block: 0;
+}
 
 /* A delete is quiet until it is armed. Danger is text, never a filled
          alarm block — same rule the rest of the interface follows. */

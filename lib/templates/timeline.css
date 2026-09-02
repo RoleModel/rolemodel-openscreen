@@ -5,20 +5,49 @@
  * box so the frame never resizes while you scrub — a preview that reflows as the
  * source changes aspect is a preview you cannot judge a cut against.
  */
+/*
+ * The panel fills its pane and the timeline is docked to the bottom of it.
+ *
+ * Two rows: the picture takes whatever is left, the transport and the timeline
+ * take what they need. Sizing the picture instead — 52vh, or a percentage width
+ * against a 16:9 box — decides the frame's height without knowing how tall the
+ * window is, and on a tall window it pushed the timeline off the bottom edge.
+ * The timeline is the thing being used; it is never the thing that gets pushed.
+ */
 .tl {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: var(--op-space-small);
+  block-size: 100%;
   min-block-size: 0;
 }
 
+/* Black room. It takes the whole row and holds the frame in the middle of it,
+   which is what a viewer looks like everywhere else. */
 .tl__screen {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  max-block-size: 52vh;
-  margin-inline: auto;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  block-size: 100%;
+  min-block-size: 0;
   background: var(--op-color-neutral-plus-max);
   border: 1px solid var(--line);
   border-radius: var(--op-radius-medium);
+  overflow: hidden;
+}
+
+/*
+ * Letterboxed against whichever way round the room happens to be.
+ *
+ * `aspect-ratio` with a max on each axis is not enough: the axis that is not
+ * clamped keeps its size, so the frame comes out stretched rather than smaller
+ * — a 16:9 rule that produced a 1.25:1 picture. Asking the container how big it
+ * is in both directions and taking the smaller fit is the whole of it.
+ */
+.tl__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  inline-size: min(100cqw, calc(100cqh * 16 / 9));
   overflow: hidden;
 }
 
@@ -49,6 +78,13 @@
   display: flex;
   align-items: center;
   gap: var(--op-space-small);
+  background-color: var(--panel);
+  border-block: 1px solid var(--line);
+  padding: var(--op-space-small);
+}
+
+.tl__bar .hint {
+  inline-size: calc(var(--op-space-scale-unit) * 10);
 }
 
 .tl__spacer { margin-inline-start: auto; }
@@ -70,16 +106,28 @@
   border-radius: var(--op-radius-medium);
 }
 
+/* The second row. It was pinned to the page with `position: absolute`, which
+   took it out of flow — so the picture above it no longer knew it was there and
+   grew straight underneath it. In flow it simply cannot be overlapped. */
+.tl__bar-container {
+  display: grid;
+  grid-template-rows: auto auto;
+  min-inline-size: 0;
+}
+
 /* The scene layer sits exactly over the picture and is never clickable — it is
    something to look at, not something to edit through. */
+/* Rendered at the composition's own size and scaled down onto the frame, so
+   the overlay and the picture underneath agree at every window size. */
 .tl__scene {
    position: absolute;
-   inset: 0;
-   width: 100%;
-   height: 100%;
+   inset-block-start: 0;
+   inset-inline-start: 0;
    border: 0;
    pointer-events: none;
    background: transparent;
+   transform-origin: 0 0;
+   transform: scale(var(--tl-scale, 1));
 }
 
 .tl__add {

@@ -1,6 +1,6 @@
 <!-- The cut editor: a picture, and the timeline that decides what is in it. -->
 <template data-panel="timeline">
-   <p data-el="lede" class="lede" data-region="main">The cut, as a timeline. Drag a clip to move it, drag its edge to trim, drag the ruler to scrub. Two clips that overlap are a dissolve.</p>
+  
 
    <div data-el="empty" class="empty" data-region="main" hidden></div>
 
@@ -9,6 +9,10 @@
            where a 30 Mbps camera file takes most of a second, and the whole reason
            this feels like an editor is that the picture keeps up with the hand. -->
       <div class="tl__screen">
+         <!-- The frame. The stage around it is just black room; this is the box
+              that is actually 16:9, and everything that has to line up with the
+              picture — the scene layer above all — lines up with this. -->
+         <div class="tl__frame">
          <!-- Not muted. A cut is judged on its sound as much as its picture — where a
               sentence ends, whether a join lands on a breath — and a silent preview
               can only answer half of that. Autoplay rules are satisfied because
@@ -22,27 +26,28 @@
               already playing that and playing it faster. -->
          <iframe data-el="scene" class="tl__scene" title="Scene" tabindex="-1" hidden></iframe>
          <div data-el="gap" class="tl__gap" hidden>no clip here</div>
+         </div>
       </div>
 
       <!-- Music, or a voice track: sound that belongs to the cut rather than to
            any one clip, so it plays from its own element on the same clock. -->
       <audio data-el="bed" preload="auto"></audio>
-
+      <div class="tl__bar-container">
       <div class="tl__bar">
          <button data-el="play" class="btn" type="button"><rm-icon name="play"></rm-icon>Play</button>
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
          <span class="tl__spacer"></span>
-         <label class="tl__add">
-            <span class="hint">Audio</span>
-            <select data-el="pick" class="input tl__pick"></select>
-         </label>
+         <div class="tl__add form-group form-group-inline form-group--no-padding">
+            <span class="form-label">Audio</span>
+            <select data-el="pick" class="input form-control tl__pick"></select>
+         </div>
          <button data-el="add" class="btn ghost" type="button" disabled>Add at playhead</button>
          <span data-el="stat" class="hint"></span>
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>
-
       <canvas data-el="canvas" class="tl__canvas"></canvas>
+      </div>
    </div>
 </template>
 

@@ -4705,7 +4705,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, folder: found.folder });
     }
 
-    if (p.startsWith("/api/edit/cache/") && req.method === "GET") {
+    if (p.startsWith("/api/edit/cache/") && (req.method === "GET" || req.method === "HEAD")) {
       const rest = p.slice("/api/edit/cache/".length).split("/");
       const id = decodeURIComponent(rest.shift() ?? "");
       if (!(await readManifest(projectDir(id)).catch(() => null))) return void res.writeHead(404).end();
@@ -4732,6 +4732,8 @@ const server = createServer(async (req, res) => {
         return void createReadStream(file, { start, end }).pipe(res);
       }
       res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes", "cache-control": "max-age=31536000, immutable" });
+      /* A HEAD is a question about the file, not a request for it. */
+      if (req.method === "HEAD") return void res.end();
       return void createReadStream(file).pipe(res);
     }
 
@@ -4743,7 +4745,7 @@ const server = createServer(async (req, res) => {
      * reproduce its look — a second renderer is a second thing to be wrong. The
      * folder is served whole because every reference inside it is relative.
      */
-    if (p.startsWith("/api/edit/scene/") && req.method === "GET") {
+    if (p.startsWith("/api/edit/scene/") && (req.method === "GET" || req.method === "HEAD")) {
       const rest = p.slice("/api/edit/scene/".length).split("/");
       const id = decodeURIComponent(rest.shift() ?? "");
       const folder = decodeURIComponent(rest.shift() ?? "");
@@ -4770,6 +4772,8 @@ const server = createServer(async (req, res) => {
         return void createReadStream(file, { start, end }).pipe(res);
       }
       res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes" });
+      /* A HEAD is a question about the file, not a request for it. */
+      if (req.method === "HEAD") return void res.end();
       return void createReadStream(file).pipe(res);
     }
 
