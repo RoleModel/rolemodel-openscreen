@@ -9,7 +9,11 @@
            where a 30 Mbps camera file takes most of a second, and the whole reason
            this feels like an editor is that the picture keeps up with the hand. -->
       <div class="tl__screen">
-         <video data-el="video" class="tl__video" preload="auto" playsinline muted></video>
+         <!-- Not muted. A cut is judged on its sound as much as its picture — where a
+              sentence ends, whether a join lands on a breath — and a silent preview
+              can only answer half of that. Autoplay rules are satisfied because
+              playback only ever starts from a click. -->
+         <video data-el="video" class="tl__video" preload="auto" playsinline></video>
          <div data-el="gap" class="tl__gap" hidden>no clip here</div>
       </div>
 
