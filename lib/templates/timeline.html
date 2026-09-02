@@ -8,6 +8,19 @@
       <!-- The picture. A proxy, not the original: 720p at 5 Mbps seeks in a frame
            where a 30 Mbps camera file takes most of a second, and the whole reason
            this feels like an editor is that the picture keeps up with the hand. -->
+      <div class="tl__viewer">
+      <!-- The scene shelf: saved scenes from any project, offered beside the
+           picture so inserting one is done while looking at the cut. Opened and
+           closed by the Scenes button in the transport; its width animates from
+           zero, so the picture contracts rather than jumping. -->
+      <aside data-el="shelf" class="tl__shelf" aria-label="Saved scenes">
+         <div class="tl__shelf-head form-group form-group-inline form-group--no-padding">
+            <span class="form-label">Scenes from</span>
+            <select data-el="shelfProject" class="input form-control"></select>
+         </div>
+         <div data-el="shelfList" class="tl__shelf-list"></div>
+         <div data-el="shelfEmpty" class="hint" hidden>No scenes saved in this project yet.</div>
+      </aside>
       <div class="tl__screen">
          <!-- The frame. The stage around it is just black room; this is the box
               that is actually 16:9, and everything that has to line up with the
@@ -28,6 +41,7 @@
          <div data-el="gap" class="tl__gap" hidden>no clip here</div>
          </div>
       </div>
+      </div>
 
       <!-- Music, or a voice track: sound that belongs to the cut rather than to
            any one clip, so it plays from its own element on the same clock. -->
@@ -38,6 +52,7 @@
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
          <span class="tl__spacer"></span>
+         <button data-el="shelfToggle" class="btn ghost" type="button" aria-expanded="false">Scenes</button>
          <!-- Hidden outright when the project has no sound to offer. A disabled
               button beside an empty menu is a promise the project cannot keep;
               better not to raise the subject. -->
@@ -52,6 +67,21 @@
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>
       <canvas data-el="canvas" class="tl__canvas"></canvas>
+      </div>
+   </div>
+</template>
+
+<!-- One saved scene, offered on the shelf. The frame renders the scene at its
+     own size and is scaled onto the card, same as the gallery does — a scene
+     reflowed to card width is a layout nobody will ever export. -->
+<template data-row="timeline-scene">
+   <div class="tl__shelf-card">
+      <div data-el="shot" class="tl__shelf-shot">
+         <iframe data-el="frame" class="tl__shelf-frame" title="Scene" tabindex="-1" hidden></iframe>
+      </div>
+      <div class="tl__shelf-meta">
+         <span data-el="name" class="tl__shelf-name"></span>
+         <button data-el="insert" class="btn ghost" type="button">Insert</button>
       </div>
    </div>
 </template>

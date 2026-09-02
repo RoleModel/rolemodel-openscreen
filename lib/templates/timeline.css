@@ -145,3 +145,101 @@
    gap: var(--op-space-x-small);
    align-items: center;
 }
+
+/* The first row: the shelf beside the screen. The screen takes what the shelf
+   leaves, which is everything while the shelf is closed. The row owns its
+   height the way the screen used to, so the shelf scrolls instead of growing
+   the page — twelve cards must never push the timeline off the bottom. */
+.tl__viewer {
+   /* Size containment, same as the screen: without it the shelf's cards size
+      the row, the row sizes the panel, and the timeline is pushed off the
+      bottom — the exact fate the screen's own containment prevents. */
+   container-type: size;
+   display: flex;
+   gap: var(--op-space-small);
+   block-size: 100%;
+   min-block-size: 0;
+}
+
+.tl__viewer .tl__screen {
+   flex: 1;
+   min-inline-size: 0;
+}
+
+/*
+ * The drawer. Closed is zero width, not `display: none`, so opening is a
+ * contraction of the picture rather than a jump — the width is the animation.
+ * `interpolate-size` is not needed because both ends are lengths.
+ */
+.tl__shelf {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   inline-size: 0;
+   min-block-size: 0;
+   opacity: 0;
+   overflow: hidden;
+   transition: inline-size 0.2s ease, opacity 0.2s ease;
+}
+
+.tl__shelf--open {
+   inline-size: calc(var(--op-space-scale-unit) * 40);
+   opacity: 1;
+}
+
+.tl__shelf-head {
+   flex: none;
+}
+
+/* The cards scroll; the picker stays. */
+.tl__shelf-list {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   overflow-y: auto;
+   min-block-size: 0;
+}
+
+.tl__shelf-card {
+   flex: none;
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   overflow: hidden;
+   background: var(--panel);
+}
+
+/* The same trick the frame uses: the scene renders at its own 1920 and is
+   scaled onto the card, so the card shows the real layout smaller. */
+.tl__shelf-shot {
+   position: relative;
+   aspect-ratio: 16 / 9;
+   overflow: hidden;
+   background: var(--op-color-neutral-plus-max);
+}
+
+.tl__shelf-frame {
+   position: absolute;
+   inset-block-start: 0;
+   inset-inline-start: 0;
+   inline-size: 1920px;
+   block-size: 1080px;
+   border: 0;
+   pointer-events: none;
+   transform-origin: 0 0;
+}
+
+.tl__shelf-meta {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-x-small);
+}
+
+.tl__shelf-name {
+   font-size: var(--op-font-small);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
