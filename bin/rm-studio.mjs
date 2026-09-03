@@ -71,6 +71,9 @@ import {
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
+import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
+import { seedCut } from "../lib/cut-seed.mjs";
+import { cacheSource } from "../lib/edit-cache.mjs";
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -94,6 +97,8 @@ import {
 	setSidebarRail,
 	sidebarRail,
 	setSlackSettings,
+	setStoragePublicBase,
+	storagePublicBases,
 	reviewNotices,
 	setReviewNotices,
 	slackSettings,
@@ -494,6 +499,31 @@ async function freeLocalPort() {
   });
 }
 
+/*
+ * The one cut in a project, if it has one.
+ *
+ * A project can hold several composition folders and at most one of them has a
+ * cut.json today — the editor is not a multi-timeline app yet, and pretending
+ * otherwise would mean a picker before there is anything to pick between. The
+ * first one found is the answer, and when a second appears this is where the
+ * choice goes.
+ */
+async function findCut(id, folder = null) {
+  const renders = join(mediaDir(id), "Renders");
+  if (folder) {
+    const dir = join(renders, basename(String(folder)));
+    const cut = await readCut(dir).catch(() => null);
+    return cut ? { folder: basename(String(folder)), dir, cut } : null;
+  }
+  for (const entry of await readdir(renders, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(renders, entry.name);
+    const cut = await readCut(dir).catch(() => null);
+    if (cut) return { folder: entry.name, dir, cut };
+  }
+  return null;
+}
+
 async function hyperframesProjects(id) {
   const renders = join(mediaDir(id), "Renders");
   const entries = await readdir(renders, { withFileTypes: true }).catch(() => []);
@@ -516,9 +546,14 @@ async function hyperframesProjects(id) {
               : null;
           }),
       );
+      /* Whether the editor can open this one. A stat, so the card can offer the
+         right verb — Edit, or Make editable — instead of one button that fails
+         half the time. */
+      const hasCut = Boolean(await stat(join(dir, "cut.json")).catch(() => null));
       return {
         folder: entry.name,
         title,
+        hasCut,
         updatedAt: info.mtime.toISOString(),
         renders: videoRenders.filter(Boolean).sort((a, b) => b.mtime.localeCompare(a.mtime)),
       };
@@ -4577,6 +4612,270 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    /*
+     * The cut editor's three reads and one write.
+     *
+     * Everything the timeline draws is a file that was made once at import — a
+     * proxy, a filmstrip frame, an array of peaks — so these are static reads
+     * with a project boundary on them and nothing else. Deliberately not one
+     * "give me the editor's state" endpoint: the browser asks for the handful of
+     * frames it can see and no more, and a bundle would defeat that.
+     */
+    /*
+     * Add a piece of audio to a cut.
+     *
+     * Caching happens here rather than in the browser because it is ffmpeg, and
+     * the peaks the timeline draws from have to exist before the clip does — a
+     * clip pointing at a source with no peaks is a silent grey bar.
+     */
+    if (p === "/api/edit/audio" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, body.folder);
+      if (!found) return json(res, 404, { error: "no cut to add to" });
+      const media = mediaDir(id);
+      const file = resolve(media, String(body.rel ?? ""));
+      if (!file.startsWith(`${media}${sep}`)) return json(res, 403, { error: "that file is not in this project" });
+      if (!(await stat(file).catch(() => null))) return json(res, 404, { error: "no such audio in this project" });
+
+      const cached = await cacheSource(file, join(media, ".edit-cache"));
+      const cut = found.cut;
+      cut.sources[cached.key] = { file: String(body.rel), seconds: cached.seconds, frames: cached.frames, interval: 0.5, count: cached.frames };
+      let track = cut.tracks.find((t) => t.kind === "audio");
+      if (!track) {
+        track = { id: "a1", kind: "audio", clips: [] };
+        cut.tracks.push(track);
+      }
+      const at = Math.max(0, Number(body.at) || 0);
+      track.clips.push({
+        id: `audio-${track.clips.length + 1}`,
+        source: cached.key,
+        in: 0,
+        out: Number(cached.seconds.toFixed(3)),
+        at: Number(at.toFixed(3)),
+      });
+      try {
+        await writeCut(found.dir, cut);
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, seconds: cached.seconds });
+    }
+
+    if (p === "/api/edit/seed" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const folder = basename(String(body.folder ?? ""));
+      const renders = resolve(mediaDir(id), "Renders");
+      const dir = resolve(renders, folder);
+      if (!folder || !dir.startsWith(`${renders}${sep}`)) return json(res, 404, { error: "that composition is not in this project" });
+      /* Caching a take is a few seconds of ffmpeg each, so this can run for half
+         a minute on a first seed. Held open rather than backgrounded: the button
+         that called it is the only thing waiting, and a job for it would be a
+         progress bar nobody reads. */
+      try {
+        const made = await seedCut({ dir, mediaRoot: mediaDir(id) });
+        return json(res, 200, { ok: true, folder, clips: made.clips, skipped: made.skipped });
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+    }
+
+    /*
+     * A first cut from nothing but footage.
+     *
+     * The Timeline used to require a composition: a brand-new project with two
+     * recordings and no HyperFrames folder answered "nothing to edit", which is
+     * exactly backwards — footage is the thing an editor exists to cut. This
+     * lays the project's takes end to end in a fresh Renders folder, with a
+     * shell index.html so the folder is an ordinary composition to every other
+     * panel, and the editor opens on it like any seeded cut.
+     */
+    if (p === "/api/edit/start" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const media = mediaDir(id);
+      const catalog = await readFile(join(projectDir(id), "catalog.json"), "utf8").then(JSON.parse).catch(() => ({ files: [] }));
+      const videos = (catalog.files ?? []).filter((f) => f.kind === "video");
+      /* The caller's order when it chose; recording order when it did not,
+         because that is the order the story was told in. */
+      const asked = Array.isArray(body.rels) && body.rels.length ? body.rels.map(String) : null;
+      const files = asked
+        ? asked.map((rel) => videos.find((f) => f.rel === rel)).filter(Boolean)
+        : videos.sort((a, b) => String(a.mtime ?? "").localeCompare(String(b.mtime ?? "")));
+      if (!files.length) {
+        return json(res, 400, { error: asked ? "none of those are videos this project knows about" : "this project has no footage yet — record something, or drop a video into it" });
+      }
+      const renders = join(media, "Renders");
+      /*
+       * One take gets a folder named after it, and gets it once: sending the
+       * same video to the Timeline twice reopens the cut it already has,
+       * rather than minting a numbered twin nobody asked for. A mixed
+       * selection keeps the numbered first-cut name, because there is no one
+       * take to name it after.
+       */
+      let folder;
+      if (files.length === 1) {
+        const base = `cut-${wpSlug(files[0].name.replace(/\.[^.]+$/, ""))}`;
+        folder = base;
+        for (let n = 2; ; n += 1) {
+          if (await stat(join(renders, folder, "cut.json")).catch(() => null)) {
+            return json(res, 200, { ok: true, folder, existing: true });
+          }
+          if (!(await stat(join(renders, folder)).catch(() => null))) break;
+          folder = `${base}-${n}`;
+        }
+      } else {
+        folder = "first-cut";
+        for (let n = 2; await stat(join(renders, folder)).catch(() => null); n += 1) folder = `first-cut-${n}`;
+      }
+      const dir = join(renders, folder);
+      await mkdir(dir, { recursive: true });
+      /* Caching a take is a few seconds of ffmpeg each; held open for the same
+         reason /api/edit/seed is — the button that asked is the only thing
+         waiting. */
+      const cut = emptyCut();
+      const track = { id: "v1", kind: "video", clips: [] };
+      cut.tracks.push(track);
+      let cursor = 0;
+      try {
+        for (const f of files) {
+          const cached = await cacheSource(join(media, f.rel), join(media, ".edit-cache"));
+          cut.sources[cached.key] = { file: f.rel, seconds: cached.seconds, frames: cached.frames, interval: 0.5, count: cached.frames };
+          track.clips.push({
+            id: `take-${track.clips.length + 1}`,
+            name: f.name,
+            source: cached.key,
+            in: 0,
+            out: Number(cached.seconds.toFixed(3)),
+            at: Number(cursor.toFixed(3)),
+          });
+          cursor += cached.seconds;
+        }
+        /* The shell: enough of a composition that the folder lists, previews and
+           seeds like any other — and nothing else, because the cut is the truth
+           here, not the markup. */
+        await writeFile(
+          join(dir, "index.html"),
+          [
+            "<!doctype html>",
+            '<html lang="en">',
+            '<head><meta charset="utf-8"><title>First cut</title></head>',
+            "<body>",
+            `<main data-composition-id="${folder}" data-width="1920" data-height="1080" data-duration="${cursor.toFixed(3)}"></main>`,
+            "</body>",
+            "</html>",
+            "",
+          ].join("\n"),
+          "utf8",
+        );
+        await writeCut(dir, cut);
+      } catch (error) {
+        await rm(dir, { recursive: true, force: true }).catch(() => {});
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, folder, clips: track.clips.length });
+    }
+
+    if (p === "/api/edit/cut" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, url.searchParams.get("folder"));
+      if (!found) return json(res, 404, { error: "this composition has no cut yet" });
+      return json(res, 200, { folder: found.folder, cut: found.cut });
+    }
+
+    if (p === "/api/edit/cut" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, body.folder);
+      if (!found) return json(res, 404, { error: "no cut to save over" });
+      /* writeCut refuses a cut with problems rather than writing one and
+         repairing it later, so a bad edit fails here with a sentence. */
+      try {
+        await writeCut(found.dir, body.cut);
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, folder: found.folder });
+    }
+
+    if (p.startsWith("/api/edit/cache/") && (req.method === "GET" || req.method === "HEAD")) {
+      const rest = p.slice("/api/edit/cache/".length).split("/");
+      const id = decodeURIComponent(rest.shift() ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return void res.writeHead(404).end();
+      const root = join(mediaDir(id), ".edit-cache");
+      const file = resolve(root, rest.join("/"));
+      /* Resolved back inside the cache before anything is opened: the path comes
+         from a URL, and a URL can say `..` as easily as it can say `proxy`. */
+      if (!file.startsWith(root + sep)) return void res.writeHead(403).end();
+      const info = await stat(file).catch(() => null);
+      if (!info?.isFile()) return void res.writeHead(404).end();
+      const type = extname(file) === ".mp4" ? "video/mp4" : extname(file) === ".json" ? "application/json" : "image/jpeg";
+      /* Ranges, because a <video> asks for them and a proxy that cannot be
+         range-requested is a proxy the browser will not seek. */
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+      if (range && type === "video/mp4") {
+        const start = Number(range[1] || 0);
+        const end = range[2] ? Number(range[2]) : info.size - 1;
+        res.writeHead(206, {
+          "content-type": type,
+          "content-length": end - start + 1,
+          "content-range": `bytes ${start}-${end}/${info.size}`,
+          "accept-ranges": "bytes",
+        });
+        return void createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes", "cache-control": "max-age=31536000, immutable" });
+      /* A HEAD is a question about the file, not a request for it. */
+      if (req.method === "HEAD") return void res.end();
+      return void createReadStream(file).pipe(res);
+    }
+
+    /*
+     * The composition itself, served flat so an iframe can mount it.
+     *
+     * A scene is animated markup. Nothing short of a browser renders it right, so
+     * the editor mounts the real composition and seeks it rather than trying to
+     * reproduce its look — a second renderer is a second thing to be wrong. The
+     * folder is served whole because every reference inside it is relative.
+     */
+    if (p.startsWith("/api/edit/scene/") && (req.method === "GET" || req.method === "HEAD")) {
+      const rest = p.slice("/api/edit/scene/".length).split("/");
+      const id = decodeURIComponent(rest.shift() ?? "");
+      const folder = decodeURIComponent(rest.shift() ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return void res.writeHead(404).end();
+      const root = join(mediaDir(id), "Renders", basename(folder));
+      const file = resolve(root, rest.map(decodeURIComponent).join("/") || "index.html");
+      if (!file.startsWith(root + sep)) return void res.writeHead(403).end();
+      const info = await stat(file).catch(() => null);
+      if (!info?.isFile()) return void res.writeHead(404).end();
+      const ext = extname(file);
+      const type = ext === ".html" ? "text/html" : ext === ".css" ? "text/css"
+        : ext === ".js" || ext === ".mjs" ? "text/javascript"
+        : ext === ".json" ? "application/json" : (MIME[ext] ?? "application/octet-stream");
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+      if (range && type.startsWith("video/")) {
+        const start = Number(range[1] || 0);
+        const end = range[2] ? Number(range[2]) : info.size - 1;
+        res.writeHead(206, {
+          "content-type": type,
+          "content-length": end - start + 1,
+          "content-range": `bytes ${start}-${end}/${info.size}`,
+          "accept-ranges": "bytes",
+        });
+        return void createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { "content-type": type, "content-length": info.size, "accept-ranges": "bytes" });
+      /* A HEAD is a question about the file, not a request for it. */
+      if (req.method === "HEAD") return void res.end();
+      return void createReadStream(file).pipe(res);
+    }
+
     if (p === "/api/hyperframes" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
@@ -7318,7 +7617,11 @@ async function fetchVoiceList() {
 
     if (storageName && req.method === "GET") {
       const r = await readRemote(storageName);
-      return r ? json(res, 200, r) : json(res, 404, { error: `no rclone remote named "${storageName}"` });
+      if (!r) return json(res, 404, { error: `no rclone remote named "${storageName}"` });
+      /* The public base is the Studio's own note about this remote, kept in its
+         own config — rclone's file belongs to rclone. */
+      const pub = (await storagePublicBases())[storageName] ?? null;
+      return json(res, 200, { ...r, publicBucket: pub?.bucket ?? null, publicBase: pub?.base ?? null });
     }
 
     /*
@@ -7329,6 +7632,17 @@ async function fetchVoiceList() {
      */
     if (storageName && req.method === "PUT") {
       const b = JSON.parse(await text(req));
+      /* The public base is Studio's note, not an rclone key — persisted apart,
+         and cleared by blanking either half. */
+      const touchesPublic = "publicBucket" in b || "publicBase" in b;
+      if (touchesPublic) {
+        const base = String(b.publicBase ?? "").trim();
+        if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
+        /* The bucket half defaults to "openscreen": that is the bucket every
+           "Send project to storage" writes into, so a pasted URL alone is
+           enough for project links to go permanent. */
+        await setStoragePublicBase(storageName, { bucket: String(b.publicBucket ?? "").trim() || (base ? "openscreen" : ""), base });
+      }
       const args = ["config", "update", storageName];
       if (b.endpoint) args.push("endpoint", String(b.endpoint));
       if (b.accessKeyId) args.push("access_key_id", String(b.accessKeyId));
@@ -7337,7 +7651,9 @@ async function fetchVoiceList() {
       if (b.secretAccessKey) args.push("secret_access_key", String(b.secretAccessKey));
       if (b.provider) args.push("provider", String(b.provider));
       if (b.region) args.push("region", String(b.region));
-      if (args.length === 3) return json(res, 400, { ok: false, err: "nothing to change" });
+      if (args.length === 3) {
+        return touchesPublic ? json(res, 200, { ok: true, out: "", err: "" }) : json(res, 400, { ok: false, err: "nothing to change" });
+      }
       const r = await capture("rclone", args);
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }
@@ -7388,6 +7704,61 @@ async function fetchVoiceList() {
       if (clean.split("/").some((seg) => seg === ".." || seg === "." || seg.startsWith("-"))) return null;
       return `${name}:${clean}`;
     };
+
+    /*
+     * One link-minting path, for the storage browser and the project cards
+     * both: existence first — rclone happily presigns a path that holds
+     * nothing — then the public base when the object lives in the public
+     * bucket, then the presign rclone can do.
+     */
+    const mintLink = async (remote, rel) => {
+      const clean = String(rel ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+      const target = remotePath(remote, clean);
+      if (!target) return { error: "that is not a path this can link" };
+      const there = await capture("rclone", ["lsf", target]);
+      if (!there.ok || !there.out.trim()) {
+        return { missing: true, error: "nothing is stored at that path yet — send the project to storage first, then link it" };
+      }
+      const pub = (await storagePublicBases())[remote];
+      if (pub?.base && (clean === pub.bucket || clean.startsWith(`${pub.bucket}/`))) {
+        const rest = clean.slice(pub.bucket.length).replace(/^\/+/, "");
+        return { url: `${pub.base.replace(/\/+$/, "")}/${rest.split("/").map(encodeURIComponent).join("/")}`, expiry: null, permanent: true };
+      }
+      const r = await capture("rclone", ["link", target]);
+      const linkUrl = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
+      if (!r.ok || !/^https?:\/\//.test(linkUrl)) {
+        const why = (r.err || "").split("\n").filter(Boolean).pop() ?? "rclone could not make a link for that";
+        // rclone writes both `NOTICE : ` and `NOTICE: `; strip either, and the
+        // timestamp with it, or the reason arrives wearing a log line.
+        return { error: why.replace(/^\d{4}\/\d{2}\/\d{2} [\d:]+ (?:ERROR|NOTICE|INFO)\s*:\s*/, "") };
+      }
+      // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
+      return { url: linkUrl, expiry: /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null };
+    };
+
+    /*
+     * A link for one project asset, without the caller having to know which
+     * remote holds it. The manifest's `remote` field is not an rclone remote
+     * name — older projects carry an object there, which is exactly what the
+     * first version of the card's Copy link sent, and the guard printed
+     * "[object Object] is not a path". So the copy is FOUND rather than
+     * assumed: every configured remote is asked whether it holds the file,
+     * and the first that does mints the link.
+     */
+    if (p === "/api/project/storage/link" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const rel = String(url.searchParams.get("rel") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const listed = await capture("rclone", ["listremotes"]);
+      const names = listed.out.split("\n").map((x) => x.trim().replace(/:$/, "")).filter((n) => REMOTE_NAME.test(n));
+      let failure = null;
+      for (const name of names) {
+        const made = await mintLink(name, `openscreen/projects/${id}/media/${rel}`);
+        if (made.url) return json(res, 200, { ...made, remote: name });
+        if (!made.missing) failure = made;
+      }
+      return json(res, 404, { error: failure?.error ?? "this file is not in storage yet — send the project to storage first" });
+    }
 
     /*
      * Copy a complete project to its shared-storage home.
@@ -7471,19 +7842,9 @@ async function fetchVoiceList() {
      * working is worse than one you were told the lifetime of.
      */
     if (opName === "link" && req.method === "GET") {
-      const target = remotePath(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
-      if (!target) return json(res, 400, { error: "that is not a path this can link" });
-      const r = await capture("rclone", ["link", target]);
-      const url = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
-      if (!r.ok || !/^https?:\/\//.test(url)) {
-        const why = (r.err || "").split("\n").filter(Boolean).pop() ?? "rclone could not make a link for that";
-        // rclone writes both `NOTICE : ` and `NOTICE: `; strip either, and the
-        // timestamp with it, or the reason arrives wearing a log line.
-        return json(res, 400, { error: why.replace(/^\d{4}\/\d{2}\/\d{2} [\d:]+ (?:ERROR|NOTICE|INFO)\s*:\s*/, "") });
-      }
-      // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
-      const expiry = /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null;
-      return json(res, 200, { url, expiry });
+      const made = await mintLink(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
+      if (made.url) return json(res, 200, made);
+      return json(res, made.missing ? 404 : 400, { error: made.error });
     }
 
     if (opName === "ls" && req.method === "GET") {
@@ -7642,7 +8003,10 @@ async function fetchVoiceList() {
       ];
       if (b.endpoint) args.push("endpoint", b.endpoint);
       if (b.region) args.push("region", b.region);
+      const base = String(b.publicBase ?? "").trim();
+      if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
       const r = await capture("rclone", args);
+      if (r.ok) await setStoragePublicBase(b.name, { bucket: String(b.publicBucket ?? "").trim() || (base ? "openscreen" : ""), base });
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }
 
@@ -8002,8 +8366,10 @@ async function fetchVoiceList() {
         res.writeHead(200, {
           "content-type": "font/woff2",
           // Immutable: the filename changes when the file does, because both are
-          // regenerated together by their build script.
-          "cache-control": "max-age=604800, immutable",
+          // regenerated together by their build script. Except under --watch,
+          // where the file changes under an open page — a reload mid-regeneration
+          // must not pin stale bytes under a fresh stamp for a week.
+          "cache-control": WATCH ? "no-store" : "max-age=604800, immutable",
         });
         return res.end(bytes);
       }
@@ -8044,8 +8410,13 @@ async function fetchVoiceList() {
       return res.end(src + (await templateStyles()));
     }
 
-    if (p === "/studio.js" || p === "/live-reload.js") {
-      const src = await readFile(join(TOOLKIT, "lib", p.slice(1)), "utf8").catch(() => null);
+      /* The editor imports these at runtime rather than riding inside studio.js,
+         because they are pure modules with no DOM assumptions — which is what let
+         them be built and measured against a fixture before there was a panel to
+         put them in. Same no-store rule: never older than the code loading them. */
+      if (p === "/studio.js" || p === "/live-reload.js" || p === "/lib/timeline-canvas.js" || p === "/lib/timeline-input.js") {
+        const name = p.startsWith("/lib/") ? p.slice("/lib/".length) : p.slice(1);
+        const src = await readFile(join(TOOLKIT, "lib", name), "utf8").catch(() => null);
       if (src == null) {
         res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         return res.end(`lib${p} is missing\n`);

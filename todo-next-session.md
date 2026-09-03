@@ -190,6 +190,43 @@ Supabase; `openid email profile`; then delete the password form.
 
 ---
 
+## 7b. Slack Socket Mode — browse Studio from Slack
+
+The other direction. Everything today is outbound (`lib/slack.mjs`: `postVideo`,
+`findChannel`, `whoami`) and Slack cannot reach back, because Studio is a process
+on a laptop behind NAT with no public URL.
+
+Socket Mode inverts it: the app dials out over a WebSocket and Slack pushes slash
+commands and button clicks down it. No tunnel, no Request URL, no server. Node
+has a native `WebSocket`, so there is no dependency to add.
+
+What it needs on top of what exists:
+
+- an app-level token `xapp-…` beside the bot token — `lib/settings.mjs`
+  `slackSettings()` already has the token/channel pattern, so it is one field
+- `connections:write` on the app, and Socket Mode switched on
+- `apps.connections.open` to get the socket URL, then reconnect on Slack's
+  `disconnect` frames
+- ack each envelope inside 3 seconds and post the real answer after, the same
+  shape the job system already uses
+
+What it buys: `/studio projects` lists the library with counts and last-updated;
+`/studio <project>` lists its renders with a **Post here** button — and posting
+is `postVideo`, which already works. That closes the loop.
+
+Three things to decide when it is built:
+
+- it only answers while Studio is running. Laptop asleep, no reply. That is
+  inherent to a local app and worth saying out loud rather than debugging later
+- it is a read hole into the library: anyone who can run the command sees project
+  names and sizes. An allowlist of channels or users belongs in the first commit,
+  not a later one
+- if "asleep" turns out to bite, the fallback is publishing a small read-only
+  index to something already hosted (OpenFrame is on Vercel) — a snapshot rather
+  than live, but it answers when the machine is shut
+
+---
+
 ## 8. Unfinished
 
 - [x] ~~Slack has no settings UI~~ — it does now (`lib/studio.js` ≈16490,

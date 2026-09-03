@@ -15,6 +15,7 @@
     "rm-resync": "./bin/rm-resync.mjs",
     "rm-retime-pip": "./bin/rm-retime-pip.mjs",
     "rm-compose": "./bin/rm-compose.mjs",
+    "rm-cut": "./bin/rm-cut.mjs",
     "rm-demo": "./bin/rm-demo.mjs",
     "rm-fal": "./bin/rm-fal.mjs",
     "rm-insert": "./bin/rm-insert.mjs",

@@ -804,9 +804,11 @@ define('rm-shader', RMShader)
  * deterministic point in time. This is the same treatment expressed as one
  * seekable WebGL pass. `RM.seek()` is the only clock it reads.
  *
- * It deliberately has no mark or copy. Pair it with rm-title or rm-lower-third
- * when a scene needs words; a background treatment should not make a lockup a
- * requirement.
+ * It carries the same optional lockup as rm-shader — mark, title, subtitle —
+ * because a closing card IS this treatment plus three lines, and pairing it
+ * with a separate rm-title made the words a second clip that every consumer
+ * (the timeline above all) had to know to keep on screen with it. No title
+ * asked for, no lockup drawn: as a plain background it is unchanged.
  */
 const PIXEL_REVEAL_FRAGMENT = [
   'precision highp float;uniform vec2 r;uniform float t;uniform float imageAspect;uniform float imageScale;uniform vec2 imageOffset;uniform sampler2D imageTex;uniform float pixelDensity;uniform float pixelGap;uniform float pixelRoundness;uniform float halftoneFrequency;uniform float colorFringing;uniform float flowIntensity;uniform float showDuotone;uniform vec3 paper;uniform vec3 cyanInk;uniform vec3 magentaInk;uniform vec3 yellowInk;uniform vec3 blackInk;uniform vec3 colorA;uniform vec3 colorB;varying vec2 v;',
@@ -818,6 +820,10 @@ const PIXEL_REVEAL_FRAGMENT = [
 
 class RMPixelReveal extends RMElement {
   static fields = [
+    'title',
+    'subtitle',
+    'mark',
+    'overlay',
     'image',
     'image-scale',
     'image-x',
@@ -893,8 +899,22 @@ class RMPixelReveal extends RMElement {
     const imageSource = assetUrl(this, rawImage)
     const hasImage = Boolean(imageSource)
     const stroke = `${borderRadius ? '.12cqw solid ' : '0 solid '}${border}`
-    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${paper};border:${stroke};border-radius:${borderRadius}cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
-      hasImage ? '<canvas aria-hidden="true"></canvas>' : '<div class="empty"><span>Choose or upload an image to make a pixel reveal</span></div>'
+    /* The lockup, word for word the rm-shader arrangement: mark, title, line —
+       reading order, a beat apart. The mark takes the treatment's accent so the
+       two cannot disagree about what the brand colour is. */
+    const text = dark ? 'var(--op-color-neutral-minus-max, #ffffff)' : 'var(--op-color-neutral-plus-max, #242424)'
+    const dots = dark ? 'var(--op-color-neutral-minus-seven, #caccce)' : 'var(--op-color-neutral-plus-seven, #333333)'
+    const title = this.esc(this.attr('title'))
+    const subtitle = this.attr('subtitle')
+    const showOverlay = this.attr('overlay', 'on') === 'on'
+    const markName = this.attr('mark', 'off')
+    const showMark = showOverlay && markName !== 'off' && markName !== ''
+    const markSrc = markName === 'on' ? SHADER_ICON : markUrl(markName)
+    const lockup = showOverlay && (title || subtitle || showMark)
+      ? `<div class="lockup">${showMark ? '<i class="mark anim" aria-hidden="true"></i>' : ''}${title ? `<h2 class="anim">${title}</h2>` : ''}${subtitle ? `<p class="anim">${this.esc(subtitle)}</p>` : ''}</div>`
+      : ''
+    this.shadowRoot.innerHTML = `<style>${TYPE}${TIMING}:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${paper};border:${stroke};border-radius:${borderRadius}cqw;}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}.lockup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.35cqw;padding:8cqw;color:${text};text-align:center;}.mark{inline-size:8cqw;block-size:8cqw;background:${colorA};mask:url(${markSrc}) center/contain no-repeat;-webkit-mask:url(${markSrc}) center/contain no-repeat;}.lockup h2{margin:0;font-size:6.4cqw;font-weight:800;letter-spacing:-.045em;line-height:.9;}.lockup p{margin:0;max-inline-size:34ch;font-size:1.45cqw;font-weight:650;line-height:1.35;color:${dots};}.lockup .mark{--lead:0ms;}.lockup h2{--lead:120ms;}.lockup p{--lead:240ms;}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:3cqw;color:var(--op-color-neutral-minus-seven, #caccce);font-size:1.15cqw;font-weight:650;text-align:center;}.empty span{padding:.7em 1em;border:1px dashed currentColor;border-radius:999px;}</style><div class="asset anim">${
+      hasImage ? `<canvas aria-hidden="true"></canvas>${lockup}` : '<div class="empty"><span>Choose or upload an image to make a pixel reveal</span></div>'
     }</div>`
 
     const canvas = this.shadowRoot.querySelector('canvas')

@@ -1,0 +1,189 @@
+<!-- The cut editor: a picture, and the timeline that decides what is in it. -->
+<template data-panel="timeline">
+  
+
+   <div data-el="empty" class="empty" data-region="main" hidden></div>
+
+   <div data-el="stage" class="tl" data-region="main" hidden>
+      <!-- The picture. A proxy, not the original: 720p at 5 Mbps seeks in a frame
+           where a 30 Mbps camera file takes most of a second, and the whole reason
+           this feels like an editor is that the picture keeps up with the hand. -->
+      <div class="tl__viewer">
+      <!-- The scene shelf: saved scenes from any project, offered beside the
+           picture so inserting one is done while looking at the cut. Opened and
+           closed by the Scenes button in the transport; its width animates from
+           zero, so the picture contracts rather than jumping. -->
+      <aside data-el="shelf" class="tl__shelf" aria-label="Saved scenes">
+         <div class="tl__shelf-head form-group form-group-inline form-group--no-padding">
+            <span class="form-label">Scenes from</span>
+            <select data-el="shelfProject" class="input form-control"></select>
+         </div>
+         <!-- A scene from a sentence, without leaving the cut: Claude drafts the
+              parts, the file is saved, and the editor opens on it right here. -->
+         <div data-el="shelfNew" class="tl__shelf-draft">
+            <input data-el="newName" class="input form-control" type="text" placeholder="New scene name">
+            <textarea data-el="newBrief" class="input form-control" rows="2" placeholder="What should it say?"></textarea>
+            <button data-el="draftScene" class="btn ghost" type="button">Draft with Claude</button>
+            <div data-el="newStatus" class="form-hint hint" hidden></div>
+         </div>
+         <div data-el="shelfList" class="tl__shelf-list"></div>
+         <div data-el="shelfEmpty" class="hint" hidden>No scenes saved in this project yet.</div>
+         <!-- The editor, in place of the cards while a scene is open. The stage is
+              the viewer itself — the preview frame mounts over the picture — so the
+              scene is edited exactly where the cut will show it. -->
+         <div data-el="shelfEditor" class="tl__editor" hidden>
+            <div class="tl__editor-bar">
+               <button data-el="editBack" class="btn ghost" type="button">Back</button>
+               <span class="tl__spacer"></span>
+               <button data-el="editFull" class="btn ghost" type="button" hidden>Full editor</button>
+               <button data-el="editInsert" class="btn ghost" type="button">Insert</button>
+               <button data-el="editSave" class="btn" type="button">Save scene</button>
+            </div>
+            <div class="form-group form-group--no-padding">
+               <span class="form-label">Name</span>
+               <input data-el="editName" class="input form-control" type="text">
+            </div>
+            <div class="form-group form-group--no-padding">
+               <span class="form-label">Wallpaper</span>
+               <select data-el="editWallpaper" class="input form-control"></select>
+            </div>
+            <div data-el="editParts" class="tl__editor-parts"></div>
+            <div data-el="editStatus" class="form-hint hint" hidden></div>
+         </div>
+      </aside>
+      <div class="tl__screen">
+         <!-- The frame. The stage around it is just black room; this is the box
+              that is actually 16:9, and everything that has to line up with the
+              picture — the scene layer above all — lines up with this. -->
+         <div class="tl__frame">
+         <!-- Not muted. A cut is judged on its sound as much as its picture — where a
+              sentence ends, whether a join lands on a breath — and a silent preview
+              can only answer half of that. Autoplay rules are satisfied because
+              playback only ever starts from a click. -->
+         <video data-el="video" class="tl__video" preload="auto" playsinline></video>
+         <!-- The graphics, over the footage.
+              A scene is markup and it animates; the only thing that renders it
+              correctly is the thing that renders it for real, so the composition
+              itself is mounted here and seeked from the same playhead. Its own
+              footage is hidden once loaded, because the proxy underneath is
+              already playing that and playing it faster. -->
+         <iframe data-el="scene" class="tl__scene" title="Scene" tabindex="-1" hidden></iframe>
+         <div data-el="gap" class="tl__gap" hidden>no clip here</div>
+         </div>
+      </div>
+      </div>
+
+      <!-- Music, or a voice track: sound that belongs to the cut rather than to
+           any one clip, so it plays from its own element on the same clock. -->
+      <audio data-el="bed" preload="auto"></audio>
+      <div class="tl__bar-container">
+      <div class="tl__bar">
+         <button data-el="play" class="btn btn--icon" type="button" aria-label="Play" title="Play"><rm-icon data-el="playIcon" name="play"></rm-icon></button>
+         <span data-el="clock" class="tl__clock">0:00.00</span>
+         <span data-el="under" class="hint"></span>
+         <!-- The cutting tools. Slice works at the playhead; the two deletes are
+              scoped to the selection and appear when a clip is picked. Every one
+              has a key, named in its tooltip; copy, cut, paste and undo live on
+              the usual keys once the timeline has focus. -->
+         <button data-el="slice" class="btn ghost" type="button" title="Slice at the playhead (S)">Slice</button>
+         <button data-el="removeClip" class="btn ghost" type="button" hidden title="Delete, leaving the gap (⌫)">Delete clip</button>
+         <button data-el="rippleClip" class="btn ghost" type="button" hidden title="Delete and close the gap (⇧⌫)">Ripple delete</button>
+         <span class="tl__spacer"></span>
+         <button data-el="shelfToggle" class="btn ghost" type="button" aria-expanded="false">Scenes</button>
+         <!-- Hidden outright when the project has no sound to offer. A disabled
+              button beside an empty menu is a promise the project cannot keep;
+              better not to raise the subject. -->
+         <span data-el="audio" class="tl__audio" hidden>
+            <div class="tl__add form-group form-group-inline form-group--no-padding">
+               <span class="form-label">Audio</span>
+               <select data-el="pick" class="input form-control tl__pick"></select>
+            </div>
+            <button data-el="add" class="btn ghost" type="button">Add at playhead</button>
+         </span>
+         <span data-el="stat" class="hint"></span>
+         <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
+      </div>
+      <!-- Focusable, so a selected clip can be deleted from the keyboard: click
+           a clip, press Delete or Backspace. -->
+      <canvas data-el="canvas" class="tl__canvas" tabindex="0"></canvas>
+      </div>
+   </div>
+</template>
+
+<!-- One saved scene, offered on the shelf. The frame renders the scene at its
+     own size and is scaled onto the card, same as the gallery does — a scene
+     reflowed to card width is a layout nobody will ever export. -->
+<template data-row="timeline-scene">
+   <div class="tl__shelf-card">
+      <div data-el="shot" class="tl__shelf-shot">
+         <iframe data-el="frame" class="tl__shelf-frame" title="Scene" tabindex="-1" hidden></iframe>
+      </div>
+      <div class="tl__shelf-meta">
+         <span data-el="name" class="tl__shelf-name"></span>
+         <span class="tl__spacer"></span>
+         <button data-el="edit" class="btn ghost" type="button">Edit</button>
+         <button data-el="insert" class="btn ghost" type="button">Insert</button>
+      </div>
+   </div>
+</template>
+
+<!-- One part of a scene being edited on the shelf: when it runs, and the words
+     it carries. The full palette lives on the Scenes page; this edits what a
+     part already has, which is the errand you run while looking at the cut. -->
+<template data-row="timeline-part">
+   <details class="tl__part">
+      <summary class="tl__part-head">
+         <span data-el="tag" class="tl__part-tag"></span>
+         <span data-el="when" class="hint"></span>
+      </summary>
+      <div class="tl__part-times">
+         <label class="tl__field"><span class="form-label">at&nbsp;(ms)</span><input data-el="at" class="input form-control" type="number" step="100" min="0"></label>
+         <label class="tl__field"><span class="form-label">for&nbsp;(ms)</span><input data-el="holds" class="input form-control" type="number" step="100" min="0"></label>
+      </div>
+      <div data-el="fields" class="tl__part-fields"></div>
+   </details>
+</template>
+
+<!-- One field of a part: its name and its current words. -->
+<template data-row="timeline-field">
+   <label class="tl__field">
+      <span data-el="label" class="form-label"></span>
+      <input data-el="input" class="input form-control" type="text">
+   </label>
+</template>
+
+<!-- The footage picker: poster cards, because footage is chosen by what it
+     looks like, not by its filename. Clicking a card selects it; the badge is
+     its place in the running order, in the order the cards were clicked. -->
+<template data-row="timeline-takes">
+   <div class="tl__takes">
+      <div data-el="grid" class="tl__takes-grid"></div>
+      <button data-el="start" class="btn" type="button" disabled>Cut the selected footage</button>
+   </div>
+</template>
+
+<template data-row="timeline-take">
+   <button class="tl__take" type="button" aria-pressed="false">
+      <span data-el="shot" class="tl__take-shot">
+         <!-- The moving preview. Loaded on first hover, never before: a grid of
+              takes must not stream every file just to be looked at. -->
+         <video data-el="clip" class="tl__take-clip" muted playsinline preload="none" hidden></video>
+      </span>
+      <span data-el="order" class="tl__take-order" hidden></span>
+      <span class="tl__take-meta">
+         <span data-el="name" class="tl__take-name"></span>
+         <span data-el="meta" class="hint"></span>
+      </span>
+   </button>
+</template>
+
+<!-- One composition, offered for editing. A row rather than markup built in
+     studio.js: the rule is that the templates hold the markup, and a chooser is
+     no more exempt than a card is. -->
+<template data-row="timeline-choice">
+   <div class="row margin-y-sm">
+      <span data-el="name"></span>
+      <span data-el="note" class="hint"></span>
+      <button data-el="go" class="btn" type="button"></button>
+   </div>
+</template>

@@ -1,4 +1,9 @@
 node_modules/
+# Without this, a *symlink* named node_modules is not ignored — `node_modules/`
+# matches directories only. A worktree pointed at the main checkout's deps got
+# committed as a 120000 entry, and checking it out replaced the real directory
+# with a link to itself: ELOOP on every pnpm command, in both checkouts.
+node_modules
 dist/
 *.tgz
 *.zip

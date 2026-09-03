@@ -1,0 +1,412 @@
+/*
+ * The cut editor.
+ *
+ * Two things stacked: a picture and a timeline. The picture is fixed to a 16:9
+ * box so the frame never resizes while you scrub — a preview that reflows as the
+ * source changes aspect is a preview you cannot judge a cut against.
+ */
+/*
+ * The panel fills its pane and the timeline is docked to the bottom of it.
+ *
+ * Two rows: the picture takes whatever is left, the transport and the timeline
+ * take what they need. Sizing the picture instead — 52vh, or a percentage width
+ * against a 16:9 box — decides the frame's height without knowing how tall the
+ * window is, and on a tall window it pushed the timeline off the bottom edge.
+ * The timeline is the thing being used; it is never the thing that gets pushed.
+ */
+.tl {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--op-space-small);
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* Black room. It takes the whole row and holds the frame in the middle of it,
+   which is what a viewer looks like everywhere else. */
+.tl__screen {
+  container-type: size;
+  display: grid;
+  place-items: center;
+  block-size: 100%;
+  min-block-size: 0;
+  background: var(--op-color-neutral-plus-max);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  overflow: hidden;
+}
+
+/*
+ * Letterboxed against whichever way round the room happens to be.
+ *
+ * `aspect-ratio` with a max on each axis is not enough: the axis that is not
+ * clamped keeps its size, so the frame comes out stretched rather than smaller
+ * — a 16:9 rule that produced a 1.25:1 picture. Asking the container how big it
+ * is in both directions and taking the smaller fit is the whole of it.
+ */
+.tl__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  inline-size: min(100cqw, calc(100cqh * 16 / 9));
+  overflow: hidden;
+}
+
+.tl__video {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+  display: block;
+  background: var(--op-color-neutral-plus-max);
+}
+
+/* Between clips there is no picture, and a frozen last frame would be a lie
+   about what the render will do. Say it instead. */
+.tl__gap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--m);
+  font-size: var(--op-font-small);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--op-color-neutral-plus-max);
+}
+
+.tl__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-small);
+  background-color: var(--panel);
+  border-block: 1px solid var(--line);
+  padding: var(--op-space-small);
+}
+
+.tl__bar .hint[data-el="stat"] {
+  inline-size: calc(var(--op-space-scale-unit) * 10);
+}
+
+.tl__spacer { margin-inline-start: auto; }
+
+/* Tabular figures, so a running clock does not shuffle its own digits. */
+.tl__clock {
+  font-family: var(--m);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--op-font-medium);
+  color: var(--op-color-neutral-minus-max);
+}
+
+/* `touch-action: none` so a drag on a trackpad edits rather than scrolls the
+   page — without it every clip move fights the scroller. */
+.tl__canvas {
+  inline-size: 100%;
+  display: block;
+  touch-action: none;
+  border-radius: var(--op-radius-medium);
+}
+
+/* The second row. It was pinned to the page with `position: absolute`, which
+   took it out of flow — so the picture above it no longer knew it was there and
+   grew straight underneath it. In flow it simply cannot be overlapped. */
+.tl__bar-container {
+  display: grid;
+  grid-template-rows: auto auto;
+  min-inline-size: 0;
+}
+
+/* The scene layer sits exactly over the picture and is never clickable — it is
+   something to look at, not something to edit through. */
+/* Rendered at the composition's own size and scaled down onto the frame, so
+   the overlay and the picture underneath agree at every window size. */
+.tl__scene {
+   position: absolute;
+   inset-block-start: 0;
+   inset-inline-start: 0;
+   border: 0;
+   pointer-events: none;
+   background: transparent;
+   transform-origin: 0 0;
+   transform: scale(var(--tl-scale, 1));
+}
+
+.tl__add {
+   display: inline-flex;
+   gap: var(--op-space-x-small);
+   align-items: center;
+}
+
+.tl__pick {
+   max-width: 14rem;
+}
+
+.tl__audio {
+   display: inline-flex;
+   gap: var(--op-space-x-small);
+   align-items: center;
+}
+
+/* The first row: the shelf beside the screen. The screen takes what the shelf
+   leaves, which is everything while the shelf is closed. The row owns its
+   height the way the screen used to, so the shelf scrolls instead of growing
+   the page — twelve cards must never push the timeline off the bottom. */
+.tl__viewer {
+   /* Size containment, same as the screen: without it the shelf's cards size
+      the row, the row sizes the panel, and the timeline is pushed off the
+      bottom — the exact fate the screen's own containment prevents. */
+   container-type: size;
+   display: flex;
+   gap: var(--op-space-small);
+   block-size: 100%;
+   min-block-size: 0;
+}
+
+.tl__viewer .tl__screen {
+   flex: 1;
+   min-inline-size: 0;
+}
+
+/*
+ * The drawer. Closed is zero width, not `display: none`, so opening is a
+ * contraction of the picture rather than a jump — the width is the animation.
+ * `interpolate-size` is not needed because both ends are lengths.
+ */
+.tl__shelf {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   inline-size: 0;
+   min-block-size: 0;
+   opacity: 0;
+   transition: inline-size 0.2s ease, opacity 0.2s ease;
+}
+
+.tl__shelf--open {
+   inline-size: calc(var(--op-space-scale-unit) * 40);
+   opacity: 1;
+}
+
+.tl__shelf-head {
+   flex: none;
+}
+
+/* The cards scroll; the picker stays. */
+.tl__shelf-list {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   overflow-y: auto;
+   min-block-size: 0;
+}
+
+.tl__shelf-card {
+   flex: none;
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   overflow: hidden;
+   background: var(--panel);
+}
+
+/* The same trick the frame uses: the scene renders at its own 1920 and is
+   scaled onto the card, so the card shows the real layout smaller. */
+.tl__shelf-shot {
+   position: relative;
+   aspect-ratio: 16 / 9;
+   overflow: hidden;
+   background: var(--op-color-neutral-plus-max);
+}
+
+.tl__shelf-frame {
+   position: absolute;
+   inset-block-start: 0;
+   inset-inline-start: 0;
+   inline-size: 1920px;
+   block-size: 1080px;
+   border: 0;
+   pointer-events: none;
+   transform-origin: 0 0;
+}
+
+.tl__shelf-meta {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: var(--op-space-x-small);
+   padding: var(--op-space-x-small);
+}
+
+.tl__shelf-name {
+   font-size: var(--op-font-small);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+/* Drafting a scene from a sentence, at the top of the shelf. */
+.tl__shelf-draft {
+   flex: none;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+}
+
+/* The in-place scene editor: fields on the shelf, stage on the viewer. */
+.tl__editor {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   overflow-y: auto;
+   min-block-size: 0;
+}
+
+.tl__editor-bar {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+}
+
+.tl__editor-parts {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+}
+
+.tl__part {
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   background: var(--panel);
+   padding: var(--op-space-x-small);
+}
+
+.tl__part-head {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   cursor: pointer;
+}
+
+.tl__part-tag {
+   font-family: var(--m);
+   font-size: var(--op-font-small);
+}
+
+.tl__part-times {
+   display: flex;
+   gap: var(--op-space-x-small);
+   margin-block-start: var(--op-space-x-small);
+}
+
+.tl__part-fields {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+   margin-block-start: var(--op-space-x-small);
+}
+
+.tl__field {
+   display: flex;
+   flex-direction: column;
+   gap: calc(var(--op-space-x-small) / 2);
+   min-inline-size: 0;
+}
+
+/*
+ * The footage picker.
+ *
+ * Cards, not checkboxes: footage is chosen by what it looks like, so each take
+ * shows its poster. Selection is the click, and the badge is the take's place
+ * in the running order — the order the cards were clicked is the order the
+ * cut will play them.
+ */
+.tl__takes {
+   display: flex;
+   flex-direction: column;
+   align-items: flex-start;
+   gap: var(--op-space-small);
+   inline-size: 100%;
+}
+
+.tl__takes-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fill, minmax(calc(var(--op-space-scale-unit) * 30), 1fr));
+   gap: var(--op-space-small);
+   inline-size: 100%;
+}
+
+.tl__take {
+   position: relative;
+   display: flex;
+   flex-direction: column;
+   padding: 0;
+   font: inherit;
+   color: inherit;
+   text-align: start;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   overflow: hidden;
+   cursor: pointer;
+}
+
+.tl__take:hover {
+   border-color: var(--muted);
+}
+
+.tl__take--on {
+   border-color: var(--accent);
+   box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tl__take-shot {
+   display: block;
+   aspect-ratio: 16 / 9;
+   background-color: var(--op-color-neutral-plus-max);
+   background-size: cover;
+   background-position: center;
+}
+
+.tl__take-order {
+   position: absolute;
+   inset-block-start: var(--op-space-x-small);
+   inset-inline-start: var(--op-space-x-small);
+   display: grid;
+   place-items: center;
+   inline-size: calc(var(--op-space-scale-unit) * 3);
+   block-size: calc(var(--op-space-scale-unit) * 3);
+   border-radius: var(--op-radius-pill, 999px);
+   background: var(--accent);
+   color: var(--op-color-neutral-plus-max);
+   font-family: var(--m);
+   font-size: var(--op-font-small);
+   font-weight: var(--op-font-weight-semi-bold);
+}
+
+.tl__take-meta {
+   display: flex;
+   flex-direction: column;
+   gap: calc(var(--op-space-x-small) / 2);
+   padding: var(--op-space-x-small);
+}
+
+.tl__take-name {
+   font-size: var(--op-font-small);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+/* The hover preview sits exactly over the poster, and only while the pointer
+   rests on the card — leave, and the poster is back. */
+.tl__take-shot {
+   position: relative;
+}
+
+.tl__take-clip {
+   position: absolute;
+   inset: 0;
+   inline-size: 100%;
+   block-size: 100%;
+   object-fit: cover;
+}
