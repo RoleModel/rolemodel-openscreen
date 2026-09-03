@@ -1996,6 +1996,27 @@ pre {
   gap: var(--op-space-small);
   grid-template-columns: auto 1fr auto auto;
   padding: var(--op-space-2x-small) var(--op-space-small);
+  block-size: "fit-content";
+  border-radius: var(--op-radius-large) var(--op-radius-large) 0 0;
+}
+.s3row {
+  align-items: center;
+  border-block-end: var(--op-border-width) solid var(--line);
+  background-color: var(--panel);
+  cursor: grab;
+  display: grid;
+  gap: var(--op-space-small);
+  grid-template-columns: auto 1fr auto auto;
+  padding: var(--op-space-2x-small) var(--op-space-small);
+  block-size: "fit-content";
+  border-radius: var(--op-radius-large) var(--op-radius-large) 0 0;
+}
+.s3row:last-child {
+  border-radius: 0 0 var(--op-radius-large) var(--op-radius-large) ;
+}
+
+.s3row .kebab {
+  position: relative;
 }
 
 .s3row:last-child {
@@ -2058,9 +2079,24 @@ pre {
  * pixels from the button that owns it. `relative` takes it out of the corner
  * pinning without taking away the box the menu is measured from.
  */
-.s3row__menu {
+/*
+ * Two classes, because one lost. `.kebab` pins itself absolute with a z-index,
+ * and whichever sheet loads later wins a one-class tie — so the trigger kept
+ * its corner pinning inside a row, overflowed the row's height, and the row
+ * below painted over its bottom half. The doubled selector outranks the base
+ * rule regardless of load order, and the compact trigger keeps the rows at
+ * the height they were designed at instead of growing them all to fit a
+ * card-sized button.
+ */
+.s3row__menu.kebab {
   inset: auto;
   position: relative;
+  z-index: auto;
+}
+
+.s3row .s3row__menu .kebab__trigger {
+  inline-size: var(--op-input-height-small);
+  block-size: var(--op-input-height-small);
 }
 
 /* The stop's own row, with the same problem one level down: four columns in

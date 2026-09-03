@@ -7702,6 +7702,15 @@ async function fetchVoiceList() {
        * the object lives in that bucket, the link is built from it and never
        * expires.
        */
+      /* Whichever kind of link, the object has to be there first. rclone will
+         happily presign a path that holds nothing, and a public base is string
+         arithmetic — so a file the project never sent became a dead URL on
+         somebody's clipboard. One listing call answers before anything is
+         minted. */
+      const there = await capture("rclone", ["lsf", target]);
+      if (!there.ok || !there.out.trim()) {
+        return json(res, 404, { error: "nothing is stored at that path yet — send the project to storage first, then link it" });
+      }
       const pub = (await storagePublicBases())[opRemote];
       if (pub?.base && (rel === pub.bucket || rel.startsWith(`${pub.bucket}/`))) {
         const rest = rel.slice(pub.bucket.length).replace(/^\/+/, "");
