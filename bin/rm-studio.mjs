@@ -35,7 +35,25 @@ import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
-import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/db.mjs";
+import {
+  createStudioSkill,
+  deleteStyleImage,
+  deleteStylePerson,
+  fetchSetting,
+  fetchStudioSkill,
+  fetchStudioSkills,
+  insertStyleImage,
+  insertStylePerson,
+  listStyleImages,
+  listStylePeople,
+  putSetting,
+  renameStylePerson,
+  stylePeopleById,
+  updateStudioSkill,
+  updateStyleImage,
+} from "../lib/db.mjs";
+import { deploymentProblem } from "../lib/deployment.mjs";
+import { DEFAULT_STYLE, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
@@ -83,8 +101,10 @@ import {
 	reviewerName,
 	setReviewerName,
 	setSharingSettings,
+	setStyleTemplate,
 	sharingProblem,
 	sharingSettings,
+	styleTemplate,
 	setSyncChoice,
 	syncChoice,
 	docsUrl,
@@ -176,6 +196,10 @@ const LIB = defaultRoot();
  * upgrade, and it is the thing they would think to back up.
  */
 const ADDED_DIR = join(LIB, "Brand");
+/* The collage generator's pictures, in the library beside the projects: a
+   picture in the shared database is a URL on fal's CDN, and a copy here is what
+   makes it usable with no network and safe from that CDN forgetting it. */
+const STYLE_DIR = join(LIB, "Style");
 const ADDED_INDEX = join(ADDED_DIR, "index.json");
 
 const readAdded = async () =>
@@ -5727,6 +5751,218 @@ const server = createServer(async (req, res) => {
      *
      * Written into the library, not the toolkit — see ADDED_DIR for why.
      */
+    /*
+     * The brand collage generator — the style app, brought into the Studio.
+     *
+     * Pictures are made by fal.ai with the key already saved under Restyle, kept
+     * as a row in the team's database and as a file in the library's Style
+     * folder, and can be copied into any project's Stills from the panel.
+     */
+    const styleClient = async () => {
+      const cfg = await sharingSettings();
+      const problem = deploymentProblem(cfg);
+      if (problem) throw new Error(problem);
+      return { databaseUrl: cfg.databaseUrl, by: cfg.session?.user?.login ?? null };
+    };
+    const styleKey = async () => {
+      const { key } = await falSettings();
+      if (!key) throw new Error("add a fal key first — under Restyle, or here in the fal.ai section");
+      return key;
+    };
+    /*
+     * Keep a copy. fal's CDN is where the picture is born, and nothing promises
+     * it stays there; the library's Style folder is ours. A copy that fails is
+     * reported, not fatal — the row still knows the URL.
+     */
+    const keepStyleImage = async (imageUrl, id) => {
+      await mkdir(STYLE_DIR, { recursive: true });
+      const r = await fetch(imageUrl, { signal: AbortSignal.timeout(60_000) });
+      if (!r.ok) throw new Error(`the picture could not be fetched (${r.status})`);
+      const ext = /\.(jpe?g|webp)(\?|$)/i.test(imageUrl) ? (/\.webp/i.test(imageUrl) ? ".webp" : ".jpg") : ".png";
+      const file = `${id}${ext}`;
+      await writeFile(join(STYLE_DIR, file), Buffer.from(await r.arrayBuffer()));
+      return file;
+    };
+    const savedStyleImage = async (client, image) => {
+      const row = await insertStyleImage({ ...client, image });
+      try {
+        const file = await keepStyleImage(row.url, row.id);
+        return await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { file } });
+      } catch (err) {
+        return { ...row, copyProblem: err.message };
+      }
+    };
+
+    if (p === "/api/style/state" && req.method === "GET") {
+      const { key } = await falSettings();
+      const template = (await styleTemplate()) ?? DEFAULT_STYLE;
+      const cfg = await sharingSettings();
+      const problem = deploymentProblem(cfg);
+      let images = [];
+      let people = [];
+      if (!problem) {
+        [images, people] = await Promise.all([
+          listStyleImages({ databaseUrl: cfg.databaseUrl }).catch(() => []),
+          listStylePeople({ databaseUrl: cfg.databaseUrl }).catch(() => []),
+        ]);
+      }
+      return json(res, 200, { hasKey: Boolean(key), problem, template, defaultTemplate: DEFAULT_STYLE, models: styleModelList(), images, people });
+    }
+
+    if (p === "/api/style/template" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      await setStyleTemplate(body.template);
+      return json(res, 200, { template: (await styleTemplate()) ?? DEFAULT_STYLE });
+    }
+
+    if (p === "/api/style/enhance" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const subject = String(body.subject ?? "").trim();
+      if (!subject) return json(res, 400, { error: "type a rough idea first" });
+      try {
+        return json(res, 200, { improved: await styleEnhance({ key: await styleKey(), subject }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/generate" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const subject = String(body.subject ?? "").trim();
+      if (!subject) return json(res, 400, { error: "describe what the image should show first" });
+      try {
+        const key = await styleKey();
+        const client = await styleClient();
+        const template = String(body.template ?? "").trim() || (await styleTemplate()) || DEFAULT_STYLE;
+        const wanted = (Array.isArray(body.people) ? body.people : []).map(String).slice(0, 4);
+        const people = wanted.length ? await stylePeopleById({ databaseUrl: client.databaseUrl, ids: wanted }) : [];
+        if (wanted.length && !people.length) return json(res, 400, { error: "the chosen people were not found" });
+        const { results, prompt, aspect } = await styleGenerate({ key, prompt: `${subject}. ${template}`, models: body.models, aspect: body.aspect, count: body.count, people });
+        const out = [];
+        for (const r of results) {
+          const images = [];
+          for (const url of r.urls) images.push(await savedStyleImage(client, { subject, prompt, model: r.model, aspect, url }));
+          out.push({ model: r.model, images, error: r.error });
+        }
+        return json(res, 200, { results: out });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/refine" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const key = await styleKey();
+        const client = await styleClient();
+        const { url, endpoint } = await styleRefine({ key, imageUrl: String(body.imageUrl ?? ""), instruction: body.instruction, mask: body.mask ?? null });
+        const subject = `${String(body.subject ?? "Refined image").replace(/( \(refined\))*$/, "")} (refined)`;
+        const image = await savedStyleImage(client, { subject, prompt: String(body.instruction ?? "").trim(), model: endpoint, aspect: String(body.aspect ?? "1:1"), url });
+        return json(res, 200, { image });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/images" && req.method === "PATCH") {
+      const body = JSON.parse(await text(req));
+      const subject = String(body.subject ?? "").trim();
+      if (!body.id || !subject) return json(res, 400, { error: "an id and a name are required" });
+      try {
+        const client = await styleClient();
+        return json(res, 200, { image: await updateStyleImage({ databaseUrl: client.databaseUrl, id: String(body.id), patch: { subject } }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/images" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      try {
+        const client = await styleClient();
+        const gone = await deleteStyleImage({ databaseUrl: client.databaseUrl, id: String(body.id) });
+        if (gone?.file) await rm(join(STYLE_DIR, basename(gone.file)), { force: true }).catch(() => {});
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * Into a project. The picture becomes a still in media/Stills under its
+     * subject, so it is in the catalog, in a cut, and in a Slack post like any
+     * other still. Copied from the library's file when there is one, fetched
+     * from the URL when there is not.
+     */
+    if (p === "/api/style/save" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const manifest = await readManifest(projectDir(id)).catch(() => null);
+      if (!manifest) return json(res, 404, { error: "pick a project" });
+      try {
+        const client = await styleClient();
+        const image = (await listStyleImages({ databaseUrl: client.databaseUrl })).find((x) => x.id === String(body.id));
+        if (!image) return json(res, 404, { error: "that picture is not in the library any more" });
+        const local = image.file ? join(STYLE_DIR, basename(image.file)) : null;
+        const ext = local ? extname(local) : ".png";
+        const stem = safeName(image.subject, "collage").slice(0, 60);
+        const dir = join(mediaDir(id), "Stills");
+        await mkdir(dir, { recursive: true });
+        let dest = join(dir, `${stem}${ext}`);
+        for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${stem}-${n}${ext}`);
+        if (local && (await stat(local).catch(() => null))?.isFile()) await copyFile(local, dest);
+        else {
+          const r = await fetch(image.url, { signal: AbortSignal.timeout(60_000) });
+          if (!r.ok) throw new Error(`the picture could not be fetched (${r.status})`);
+          await writeFile(dest, Buffer.from(await r.arrayBuffer()));
+        }
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { ok: true, rel: relative(mediaDir(id), dest) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/people" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const name = String(body.name ?? "").trim();
+      const photo = String(body.photo ?? "");
+      if (!name) return json(res, 400, { error: "a name is required" });
+      if (!photo.startsWith("data:image/")) return json(res, 400, { error: "the photo has to be an image" });
+      if (photo.length > 2_000_000) return json(res, 400, { error: "that photo is too large — try a smaller one" });
+      try {
+        const client = await styleClient();
+        return json(res, 200, { person: await insertStylePerson({ ...client, person: { name, photo } }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/people" && req.method === "PATCH") {
+      const body = JSON.parse(await text(req));
+      const name = String(body.name ?? "").trim();
+      if (!body.id || !name) return json(res, 400, { error: "an id and a name are required" });
+      try {
+        const client = await styleClient();
+        return json(res, 200, { person: await renameStylePerson({ databaseUrl: client.databaseUrl, id: String(body.id), name }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/style/people" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      try {
+        const client = await styleClient();
+        await deleteStylePerson({ databaseUrl: client.databaseUrl, id: String(body.id) });
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/brand/asset" && req.method === "POST") {
       const q = new URL(req.url, "http://studio.local").searchParams;
       // basename, then a scrub: this becomes a filename in a shared folder, and
@@ -8354,6 +8590,20 @@ async function fetchVoiceList() {
      * A separate prefix from /brand/, which resolves against TOOLKIT — these are
      * deliberately not there, so they cannot be reached through it.
      */
+    /*
+     * The collage generator's own copies, served by name only. The name is
+     * whatever the database row says; a path from the network is reduced to its
+     * basename before it touches the disk.
+     */
+    if (p.startsWith("/style/")) {
+      const file = join(STYLE_DIR, basename(decodeURIComponent(p.slice("/style/".length))));
+      const bytes = await readFile(file).catch(() => null);
+      if (!bytes) return json(res, 404, { error: "no such picture" });
+      const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[extname(file).toLowerCase()] ?? "application/octet-stream";
+      res.writeHead(200, { "content-type": type, "cache-control": "max-age=86400" });
+      return res.end(bytes);
+    }
+
     if (p.startsWith("/added/")) {
       const file = join(ADDED_DIR, basename(decodeURIComponent(p.slice("/added/".length))));
       const st = await stat(file).catch(() => null);

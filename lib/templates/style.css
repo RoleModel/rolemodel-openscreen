@@ -1,0 +1,192 @@
+/* The brand collage generator. One block; every class is its element. */
+.stylegen {
+  display: grid;
+  gap: var(--op-space-medium);
+}
+
+.stylegen__subject {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.stylegen__template {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+  resize: vertical;
+}
+
+.stylegen__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-small);
+  align-items: end;
+}
+
+.stylegen__field {
+  min-width: 12rem;
+}
+
+.stylegen__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.stylegen__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+}
+
+.stylegen__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  padding: var(--op-space-2x-small) var(--op-space-small);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-pill, 999px);
+  cursor: pointer;
+}
+
+.stylegen__check--off {
+  opacity: 0.45;
+}
+
+.stylegen__checkface {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.stylegen__advanced summary {
+  cursor: pointer;
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.stylegen__acts {
+  display: flex;
+  gap: var(--op-space-small);
+  justify-content: flex-end;
+}
+
+.stylegen__grid {
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.stylegen__grid--people {
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+}
+
+.stylegen__thumb {
+  display: block;
+  width: 100%;
+  border: none;
+  padding: 0;
+  cursor: zoom-in;
+  background-color: var(--sunk);
+  background-size: cover;
+  background-position: center;
+}
+
+.stylegen__thumb--pending {
+  background: linear-gradient(90deg, var(--sunk), var(--op-color-neutral-plus-six), var(--sunk));
+  background-size: 200% 100%;
+  animation: stylegen-shimmer 1.4s linear infinite;
+  cursor: progress;
+}
+
+@keyframes stylegen-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.stylegen__face {
+  aspect-ratio: 1;
+  background-size: cover;
+  background-position: center;
+}
+
+.stylegen__badge {
+  color: var(--op-color-neutral-plus-max);
+}
+
+.stylegen__badge--green { background: var(--op-color-academy-primary-base); }
+.stylegen__badge--yellow { background: var(--op-color-alerts-warning-base); color: var(--op-color-neutral-on-plus-max); }
+.stylegen__badge--purple { background: var(--op-color-primary-minus-two); }
+.stylegen__badge--blue { background: var(--op-color-alerts-info-base); }
+.stylegen__badge--orange { background: var(--op-color-alerts-notice-base); }
+.stylegen__badge--neutral { background: var(--op-color-neutral-minus-three); }
+
+.stylegen__name {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: var(--op-font-weight-semi-bold);
+  color: inherit;
+  padding: 0;
+}
+
+.stylegen__name:focus {
+  outline: var(--op-border-width) solid var(--op-color-primary-base);
+  outline-offset: 2px;
+  border-radius: var(--op-radius-small);
+}
+
+.stylegen__dialog,
+.stylegen__lightbox {
+  border: none;
+  border-radius: var(--op-radius-large);
+  padding: 0;
+  background: var(--op-color-neutral-plus-max);
+  color: var(--op-color-neutral-on-plus-max);
+  max-width: min(60rem, 92vw);
+}
+
+.stylegen__dialog::backdrop,
+.stylegen__lightbox::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+.stylegen__dialogform {
+  display: grid;
+  gap: var(--op-space-small);
+  padding: var(--op-space-large);
+}
+
+.stylegen__stage {
+  position: relative;
+  max-height: 60vh;
+  display: grid;
+  place-items: center;
+  background: var(--sunk);
+  border-radius: var(--op-radius-medium);
+  overflow: hidden;
+}
+
+.stylegen__stageimg {
+  max-width: 100%;
+  max-height: 60vh;
+  display: block;
+}
+
+.stylegen__mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.stylegen__lightbox {
+  background: transparent;
+}
+
+.stylegen__lightboximg {
+  max-width: 92vw;
+  max-height: 90vh;
+  display: block;
+  border-radius: var(--op-radius-large);
+}
