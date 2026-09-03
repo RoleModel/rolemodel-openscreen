@@ -5493,10 +5493,27 @@ const server = createServer(async (req, res) => {
       const dir = join(mediaDir(id), folder);
       await mkdir(dir, { recursive: true });
 
+      /*
+       * A recorder names its file by the clock: recording-1787840070424.mp4.
+       * That number is useless to a person, and it becomes the name of the
+       * captions file, the review link and the Slack post. So a clock-named
+       * recording lands as "<Project> 2026-09-03 12.34.mp4" — the project it
+       * belongs to and when it was made, which is what the number meant.
+       * Anything already named by a person is kept as is.
+       */
+      const clock = /^(?:recording|screen-recording|capture)[-_ ]?(\d{13})$/i.exec(basename(filename, rawExt));
+      let human = null;
+      if (clock) {
+        const at = new Date(Number(clock[1]));
+        const pad = (n) => String(n).padStart(2, "0");
+        const when = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}`;
+        const m = await readManifest(projectDir(id)).catch(() => null);
+        human = `${safeName(m?.name, "Recording")} ${when}`;
+      }
       // Never silently replace something already there: two takes with the same
       // name is normal, and losing the first one to an import is not.
       // Keeps everything a disk can take — see safeName.
-      const stem = safeName(basename(filename, rawExt), "import");
+      const stem = human ?? safeName(basename(filename, rawExt), "import");
       let dest = join(dir, `${stem}${ext}`);
       let n = 2;
       while (await stat(dest).then(() => true).catch(() => false)) {
