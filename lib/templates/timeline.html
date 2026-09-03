@@ -148,6 +148,16 @@
    </label>
 </template>
 
+<!-- One video, offered for a first cut. Checked by default: the common case is
+     "cut what I just recorded", and unticking is cheaper than ticking. -->
+<template data-row="timeline-take">
+   <label class="row margin-y-sm">
+      <input data-el="pick" type="checkbox" checked>
+      <span data-el="name"></span>
+      <span data-el="meta" class="hint"></span>
+   </label>
+</template>
+
 <!-- One composition, offered for editing. A row rather than markup built in
      studio.js: the rule is that the templates hold the markup, and a chooser is
      no more exempt than a card is. -->

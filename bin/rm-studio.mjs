@@ -4699,14 +4699,39 @@ const server = createServer(async (req, res) => {
       if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
       const media = mediaDir(id);
       const catalog = await readFile(join(projectDir(id), "catalog.json"), "utf8").then(JSON.parse).catch(() => ({ files: [] }));
-      /* Recording order, because that is the order the story was told in. */
-      const files = (catalog.files ?? [])
-        .filter((f) => f.kind === "video")
-        .sort((a, b) => String(a.mtime ?? "").localeCompare(String(b.mtime ?? "")));
-      if (!files.length) return json(res, 400, { error: "this project has no footage yet — record something, or drop a video into it" });
+      const videos = (catalog.files ?? []).filter((f) => f.kind === "video");
+      /* The caller's order when it chose; recording order when it did not,
+         because that is the order the story was told in. */
+      const asked = Array.isArray(body.rels) && body.rels.length ? body.rels.map(String) : null;
+      const files = asked
+        ? asked.map((rel) => videos.find((f) => f.rel === rel)).filter(Boolean)
+        : videos.sort((a, b) => String(a.mtime ?? "").localeCompare(String(b.mtime ?? "")));
+      if (!files.length) {
+        return json(res, 400, { error: asked ? "none of those are videos this project knows about" : "this project has no footage yet — record something, or drop a video into it" });
+      }
       const renders = join(media, "Renders");
-      let folder = "first-cut";
-      for (let n = 2; await stat(join(renders, folder)).catch(() => null); n += 1) folder = `first-cut-${n}`;
+      /*
+       * One take gets a folder named after it, and gets it once: sending the
+       * same video to the Timeline twice reopens the cut it already has,
+       * rather than minting a numbered twin nobody asked for. A mixed
+       * selection keeps the numbered first-cut name, because there is no one
+       * take to name it after.
+       */
+      let folder;
+      if (files.length === 1) {
+        const base = `cut-${wpSlug(files[0].name.replace(/\.[^.]+$/, ""))}`;
+        folder = base;
+        for (let n = 2; ; n += 1) {
+          if (await stat(join(renders, folder, "cut.json")).catch(() => null)) {
+            return json(res, 200, { ok: true, folder, existing: true });
+          }
+          if (!(await stat(join(renders, folder)).catch(() => null))) break;
+          folder = `${base}-${n}`;
+        }
+      } else {
+        folder = "first-cut";
+        for (let n = 2; await stat(join(renders, folder)).catch(() => null); n += 1) folder = `first-cut-${n}`;
+      }
       const dir = join(renders, folder);
       await mkdir(dir, { recursive: true });
       /* Caching a take is a few seconds of ffmpeg each; held open for the same
