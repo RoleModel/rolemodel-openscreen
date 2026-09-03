@@ -123,8 +123,15 @@
 
 <template data-row="board-setup-acts"><div class="board__setup-acts"></div></template>
 
-<!-- One way in: the account people already have. The mark keeps Slack's own
-     colours, which is the only way it is allowed to be shown. -->
-<template data-row="board-slack-sign-in">
-   <button class="btn ghost btn--small slackin" type="button"><img class="slackin__mark" src="/assets/slack.svg" alt=""><span>Sign in with Slack</span></button>
+<!-- One way in: the GitHub account people already have. The device flow shows a
+     code to type at github.com, so there is no redirect and no port to register. -->
+<template data-row="board-github-sign-in">
+   <button class="btn ghost btn--small" type="button"><i class="hgi-stroke hgi-github" aria-hidden="true"></i><span>Sign in with GitHub</span></button>
+</template>
+<template data-row="board-device-code">
+   <div class="board__device">
+      <p class="board__device-lead">Enter this code at <a data-el="where" href="https://github.com/login/device" target="_blank" rel="noopener">github.com/login/device</a></p>
+      <output class="board__device-code" data-el="code"></output>
+      <p class="hint" data-el="wait">Waiting for GitHub…</p>
+   </div>
 </template>

@@ -34,8 +34,8 @@ import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
-import { SUPABASE_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
-import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/supabase.mjs";
+import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
+import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/db.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
@@ -81,9 +81,9 @@ import {
 	currentProject,
 	reviewerName,
 	setReviewerName,
-	setSupabaseSettings,
-	supabaseProblem,
-	supabaseSettings,
+	setSharingSettings,
+	sharingProblem,
+	sharingSettings,
 	setSyncChoice,
 	syncChoice,
 	docsUrl,
@@ -1402,15 +1402,14 @@ async function materializeSharedSkill(skill) {
  * fresh install with nothing local still finds the workspace token a teammate
  * already set up.
  *
- * Every failure to reach Supabase is swallowed. This is a convenience layer over
+ * Every failure to reach the database is swallowed. This is a convenience layer over
  * a local setting: not being signed in, or being offline, must leave Slack
  * exactly as usable as it was before the table existed.
  */
 async function teamSlackSettings() {
   try {
-    const { cfg, token } = await SUPABASE_SYNC.token();
-    if (!cfg?.url || !cfg?.key || !token) return null;
-    return await fetchSetting({ url: cfg.url, key: cfg.key, token, name: "slack" });
+    const { databaseUrl } = await TEAM_SYNC.client();
+    return await fetchSetting({ databaseUrl, name: "slack" });
   } catch {
     return null;
   }
@@ -1434,10 +1433,9 @@ async function effectiveSlackSettings() {
 }
 
 async function sharedSkillClient() {
-  const { cfg, token } = await SUPABASE_SYNC.token();
-  const userId = cfg.session?.user?.id;
-  if (!userId) throw new Error("sign in to share and edit skills");
-  return { url: cfg.url, key: cfg.key, token, userId };
+  const { databaseUrl, by } = await TEAM_SYNC.client();
+  if (!by) throw new Error("sign in to share and edit skills");
+  return { databaseUrl, by };
 }
 
 async function syncSharedSkills() {
@@ -5906,18 +5904,16 @@ const server = createServer(async (req, res) => {
         let sharedWith = null;
         let shareProblem = null;
         try {
-          const { cfg, token: authToken } = await SUPABASE_SYNC.token();
-          if (cfg?.url && cfg?.key && authToken) {
+          const { cfg, databaseUrl, by } = await TEAM_SYNC.client();
+          if (databaseUrl) {
             const now = await effectiveSlackSettings();
             await putSetting({
-              url: cfg.url,
-              key: cfg.key,
-              token: authToken,
+              databaseUrl,
               name: "slack",
               value: { token: now.token ?? null, channel: now.channel ?? null },
-              userId: cfg.session?.user?.id ?? null,
+              by,
             });
-            sharedWith = cfg.session?.user?.email ?? "the team";
+            sharedWith = cfg.session?.user?.email ?? by ?? "the team";
           } else {
             shareProblem = "kept on this machine only — sign in on the Canvas to share it with the team";
           }
@@ -8747,7 +8743,7 @@ async function fetchVoiceList() {
       try {
         // Interview is the first Studio screen for a new project. Refresh the
         // shared cache here instead of requiring someone to visit Skills first:
-        // otherwise a perfectly healthy Supabase library looks empty until a
+        // otherwise a perfectly healthy shared library looks empty until a
         // completely unrelated screen happens to hydrate it.
         await syncSharedSkills().catch(() => {});
         const state = await readInterview(id);
@@ -9739,99 +9735,42 @@ async function fetchVoiceList() {
     /*
      * Sharing: what is configured, what is missing, and who you are signed in as.
      *
-     * The anon key comes back as-is because Supabase publishes it on purpose — it
-     * identifies the project and authorises nothing. The session does NOT come
-     * back: it holds a refresh token, and the panel has no use for one.
+     * The project address comes back as-is because it is public — it names the
+     * project and authorises nothing. The session does NOT come back: it holds a
+     * signed cookie, and the panel has no use for one.
      */
     if (p === "/api/board/sharing" && req.method === "GET") {
       return json(res, 200, await sharingState());
     }
 
     /*
-     * Sign in with a provider — Slack, as configured on the Supabase project.
+     * Sign in with GitHub — the device flow, in two endpoints.
      *
-     * Two endpoints because the browser leaves and comes back. The first hands
-     * out a URL; the second is where Supabase returns it, so it answers with a
-     * page rather than JSON — it is a navigation, not a fetch.
-     *
-     * The callback is this server's own origin, which means Supabase has to
-     * allow it. Studio takes a new port each launch, so the allow-list needs a
-     * wildcard for the port rather than one fixed address — the loopback host
-     * with a star where the port goes, and the same for localhost. Without them
-     * Supabase refuses the redirect and the browser lands on an error page
-     * belonging to somebody else, which is a hard thing to diagnose from here.
+     * The first asks GitHub for a code and returns what the panel shows: the
+     * code, and where to type it. The panel then asks the second every few
+     * seconds until GitHub says the person typed it, or gave up, or the code
+     * aged out. No redirect and no callback: the Studio's port changes every
+     * launch, and a flow that needs a fixed one would break on the second day.
      */
-    if (p === "/api/board/oauth/start" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      const origin = String(body.origin ?? "").replace(/\/+$/, "");
-      if (!/^https?:\/\/(127\.0\.0\.1|localhost):\d+$/.test(origin)) {
-        return json(res, 400, { error: "that sign-in has to start from the Studio in a browser" });
-      }
+    if (p === "/api/board/github/start" && req.method === "POST") {
       try {
-        const started = await SUPABASE_SYNC.beginOAuth({
-          provider: String(body.provider ?? "slack_oidc"),
-          redirectTo: `${origin}/api/board/oauth/callback`,
-        });
-        return json(res, 200, started);
+        return json(res, 200, await TEAM_SYNC.beginSignIn());
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
     }
 
-    if (p === "/api/board/oauth/callback") {
-      const code = url.searchParams.get("code");
-      const refused = url.searchParams.get("error_description") || url.searchParams.get("error");
-      const page = (heading, detail) => {
-        res.writeHead(refused || !code ? 400 : 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-        /*
-         * Plain markup on purpose, and its own ground.
-         *
-         * This is shown for a second in whatever browser the person happens to
-         * use, so it cannot depend on Studio's stylesheet, fonts or client
-         * script having loaded. That also means it cannot inherit a background:
-         * it declared dark text and left the ground to the browser, which in
-         * dark mode paints it dark — a page of black text on black, which is
-         * exactly as useful as a blank one. `color-scheme: light` stops the
-         * browser recolouring the form controls and links to match a dark UI
-         * that is no longer there.
-         */
-        res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${heading}</title><style>:root{color-scheme:light}html,body{background:#fff;color:#1a1a1a}body{font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;padding:2rem}main{max-width:34rem;text-align:center}h1{font-size:1.3rem;margin:0 0 .5rem}p{margin:.5rem 0;color:#444}a{color:#1264a3}</style><main><h1>${heading}</h1><p>${detail}</p><p><a href="/#storyboard">Back to the Studio</a></p></main>`);
-      };
-      if (refused) return page("Slack did not sign you in", `Slack said: ${refused}`);
-      if (!code) return page("That sign-in did not come back with a code", "Start it again from Canvas.");
+    if (p === "/api/board/github/poll" && req.method === "POST") {
       try {
-        const session = await SUPABASE_SYNC.completeOAuth({ code });
-        return page("Signed in", `You are signed in as ${session.user?.email ?? "your Slack account"}. This tab can be closed.`);
-      } catch (err) {
-        return page("That sign-in could not be finished", String(err.message));
-      }
-    }
-
-    if (p === "/api/board/signin" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      try {
-        await SUPABASE_SYNC.signIn({ email: String(body.email ?? ""), password: String(body.password ?? "") });
-      } catch (err) {
-        return json(res, 400, { error: String(err.message) });
-      }
-      return json(res, 200, await sharingState());
-    }
-
-    if (p === "/api/board/signup" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      try {
-        const r = await SUPABASE_SYNC.signUp({ email: String(body.email ?? ""), password: String(body.password ?? "") });
-        // An account awaiting confirmation is not a failure, and saying so is the
-        // whole message — "check your email" and "that did not work" are
-        // different instructions.
-        return json(res, 200, { ...(await sharingState()), needsConfirmation: r.needsConfirmation, email: r.email });
+        const r = await TEAM_SYNC.pollSignIn();
+        return json(res, 200, { ...r, ...(await sharingState()) });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
     }
 
     if (p === "/api/board/signout" && req.method === "POST") {
-      await SUPABASE_SYNC.signOut();
+      await TEAM_SYNC.signOut();
       return json(res, 200, await sharingState());
     }
 
@@ -10017,7 +9956,7 @@ async function fetchVoiceList() {
      * Pull, merge, push.
      *
      * Reports rather than throws when the chosen adapter is not ready: the board
-     * still works, and "Supabase is not available" is a true and actionable thing
+     * still works, and "sharing is not available" is a true and actionable thing
      * to show, whereas a 500 makes a working local board look broken.
      */
     if (p === "/api/board/sync" && req.method === "POST") {
@@ -10995,11 +10934,13 @@ async function syncState() {
  * asks for, and the session holds a refresh token, which is a credential.
  */
 async function sharingState() {
-	const cfg = await supabaseSettings();
+	const cfg = await sharingSettings();
+	const problem = sharingProblem(cfg);
 	return {
-		url: cfg.url,
-		signedInAs: cfg.session?.user?.email ?? null,
-		problem: supabaseProblem(cfg),
+		/* Whether this build carries a database at all; never the credential itself. */
+		configured: !cfg.broken && Boolean(cfg.databaseUrl && cfg.githubClientId),
+		signedInAs: cfg.session?.user?.email ?? cfg.session?.user?.login ?? null,
+		problem,
 	};
 }
 

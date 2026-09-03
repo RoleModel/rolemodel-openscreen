@@ -130,36 +130,65 @@ overwrite whatever arrived since the last pull with a board that never saw it,
 which is exactly how somebody's ratings disappear between two people looking at
 the same screen.
 
-## Supabase is wired up and has not been run
+## Sharing runs on the team's Postgres
 
-This is the part to read before switching.
+`TEAM_SYNC` in [`board-store.mjs`](../lib/board-store.mjs) is the shared adapter.
+It talks to one Postgres database — Neon today — through Drizzle over Neon's
+HTTP driver ([`lib/db.mjs`](../lib/db.mjs), typed against
+[`lib/schema.mjs`](../lib/schema.mjs)). The tables and the role it connects as
+are in [`sql/studio.sql`](../sql/studio.sql).
 
-`SUPABASE_SYNC` in [`board-store.mjs`](../lib/board-store.mjs) is a stub. Nothing
-here has talked to a Supabase project: there is no schema applied, no anon key,
-and no row-level security policy. It is wired so that finishing it is an
-implementation rather than a redesign, and left `ready: false` so nobody
-discovers it is untested by having a review fail in front of a client.
+`syncFor` refuses an adapter that is not ready, so **choosing "Everyone on the
+team" does not turn it on** — it records an intent that takes effect when this
+machine has a deployment and a sign-in. A machine that chose `"supabase"` before
+the move is treated as having chosen the team.
 
-`syncFor` refuses an adapter that is not ready, so **storing `"supabase"` does
-not turn it on** — it records an intent that takes effect when the adapter works.
+### Where the credential lives
 
-### What has to be true before `ready` flips
+This repo is public and the database credential is not, so it is never
+committed. The release workflow writes `lib/deployment.json` — the connection
+string and the GitHub app's client id — from the repo's secrets
+(`RM_DATABASE_URL`, `RM_GITHUB_CLIENT_ID`) into the tarball Homebrew installs.
+Every install of a release carries it; a checkout does not, and sets
+`RM_DATABASE_URL` and `RM_GITHUB_CLIENT_ID` in the environment to develop
+against a database.
 
-1. A `storyboards` table exists, keyed by project id, with `ratings`, `takes` and
-   `comments` as jsonb.
-2. **RLS is on**, with a policy scoped to the team, tested by trying to read
-   another team's row with a real anon key. This is the part that matters: a
-   board carries client names and unreleased footage paths, and a permissive
-   policy on a public anon key publishes both.
-3. `whoami` resolves to a **person**, not a device. Ratings are attributed, and
+**Anyone who can install a release can reach the tables.** That is the
+deliberate trade for a small team: one shared credential, no per-machine setup.
+Two things keep it bounded:
+
+- The credential is the `studio_app` role, which may read and write three tables
+  and nothing else — no delete, no DDL. Never the owner's login; both the config
+  and the release workflow refuse one.
+- Rotating it is re-running `sql/studio.sql` with a new password, updating the
+  secret, and cutting a release.
+
+### Setting up the database, once
+
+```sh
+psql "$OWNER_URL" -v studio_password="<new password>" -f sql/studio.sql
+gh secret set RM_DATABASE_URL --body "postgresql://studio_app:<new password>@<pooler host>/neondb?sslmode=require"
+gh secret set RM_GITHUB_CLIENT_ID --body "<the OAuth app's client id>"
+```
+
+### Signing in is attribution, not access
+
+Access is the credential above. Signing in says **whose** rating this is. It is
+GitHub's device flow: press the button, a code appears, type it at
+github.com/login/device, and the panel notices. No redirect, no callback port,
+no client secret — the OAuth app only needs **Device Flow** enabled. The scopes
+asked for are `read:user user:email`, and the token is kept in the same 0600
+config file as the other tokens.
+
+### What has to stay true
+
+1. The role can reach three tables and cannot delete or alter anything.
+2. `whoami` resolves to a **person**, not a device. Ratings are attributed, and
    "someone on a Mac said Hero" is not attribution.
-4. A pull-merge-push round trip has been run from two machines at once and the
-   ratings from both survived.
-
-The merge must run **client-side on every pull** — `mergeBoards`, not a
-server-side upsert of individual fields. Two people rating different takes in the
-same second must both survive, and a last-write-wins on the whole row would drop
-one.
+3. The merge runs **client-side on every pull** — `mergeBoards`, not a
+   server-side upsert of individual fields. Two people rating different takes in
+   the same second must both survive, and a last-write-wins on the whole row
+   would drop one.
 
 ### Who a rating belongs to
 

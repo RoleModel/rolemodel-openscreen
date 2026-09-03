@@ -734,17 +734,18 @@ textarea.form-control.board__brief {
  * taking the button's — which is the only way Slack's mark is allowed to be
  * shown, and the only way it is recognisable at this size.
  */
-.slackin {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--op-space-x-small);
+/* The device code: big enough to read across a room, since it is typed elsewhere. */
+.board__device {
+  display: grid;
+  gap: var(--op-space-x-small, 0.5rem);
 }
-
-.slackin__mark {
-  /* Sized from the type beside it, so the pair scales together. */
-  block-size: 1.15em;
-  inline-size: auto;
-  flex: 0 0 auto;
+.board__device-lead {
+  margin: 0;
+}
+.board__device-code {
+  font: var(--op-font-weight-semi-bold) var(--op-font-x-large) / 1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  user-select: all;
 }
 
 /* The node buttons are grid cells, not .btn, so they carry no flex gap — give

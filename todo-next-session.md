@@ -182,11 +182,12 @@ throwaway recording before building anything.
 
 ---
 
-## 7. Sign in to Studio with Slack
+## 7. Sign in to Studio with GitHub
 
-Unchanged; do as its own piece — auth failures lock you out of your own tool.
-One-shot loopback listener on a fixed port for the callback; enable Slack OIDC in
-Supabase; `openid email profile`; then delete the password form.
+Done 2026-09-03: sharing moved from Supabase to the team's Neon Postgres over
+Drizzle, with GitHub's device flow for attribution. Left to do by hand: enable
+Device Flow on the GitHub OAuth app and set `RM_GITHUB_CLIENT_ID` as a repo
+secret (see docs/STORYBOARD.md, "Setting up the database, once").
 
 ---
 

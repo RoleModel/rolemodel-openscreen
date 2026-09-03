@@ -100,21 +100,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The tarball Homebrew installs is built here, not taken from GitHub's
+      # source archive, because it carries one file the repo does not:
+      # lib/deployment.json — where the team's database is, and which GitHub
+      # app to sign in through. This repo is public and the credential is not,
+      # so it cannot be committed; it comes from the repo's secrets at release
+      # time instead. Anyone who can install the release can reach the tables —
+      # that is the deliberate trade, and sql/studio.sql limits what the role in
+      # that string can do to three tables.
+      #
+      # `git archive` with a prefix, so the tarball unpacks into one directory
+      # the way Homebrew expects; the generated file is appended under the same
+      # prefix before compressing.
+      - name: Build the release tarball, with the deployment baked in
+        id: build
+        env:
+          RM_DATABASE_URL: ${{ secrets.RM_DATABASE_URL }}
+          RM_GITHUB_CLIENT_ID: ${{ secrets.RM_GITHUB_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          NAME="rolemodel-openscreen-${GITHUB_REF_NAME}"
+          if [ -z "$RM_DATABASE_URL" ] || [ -z "$RM_GITHUB_CLIENT_ID" ]; then
+            echo "::error::RM_DATABASE_URL and RM_GITHUB_CLIENT_ID must be set as repository secrets — a release without them cannot share storyboards"
+            exit 1
+          fi
+          case "$RM_DATABASE_URL" in
+            *neondb_owner*) echo "::error::RM_DATABASE_URL is the OWNER's connection string; bake the studio_app role from sql/studio.sql instead"; exit 1;;
+          esac
+          mkdir -p /tmp/stage/"$NAME"/lib
+          node -e '
+            const fs = require("node:fs");
+            fs.writeFileSync(process.argv[1], JSON.stringify({
+              databaseUrl: process.env.RM_DATABASE_URL,
+              githubClientId: process.env.RM_GITHUB_CLIENT_ID,
+            }, null, 2) + "\n");
+          ' /tmp/stage/"$NAME"/lib/deployment.json
+          git archive --format=tar --prefix="$NAME/" "$GITHUB_REF_NAME" -o /tmp/"$NAME".tar
+          tar -rf /tmp/"$NAME".tar -C /tmp/stage "$NAME/lib/deployment.json"
+          gzip -n -9 /tmp/"$NAME".tar
+          echo "asset=/tmp/$NAME.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
+
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes "${{ steps.build.outputs.asset }}"
 
       - name: Compute the tarball checksum
         id: sum
         run: |
-          URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
-          # The tag archive is generated on demand; give it a moment to exist.
-          for i in 1 2 3 4 5; do
-            curl -fsSL "$URL" -o /tmp/src.tar.gz && break || sleep 5
-          done
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.build.outputs.name }}"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "sha=$(sha256sum /tmp/src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum "${{ steps.build.outputs.asset }}" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       # Cross-repo push needs a PAT with `contents: write` on the tap.
       # Store it as the TAP_TOKEN secret on this repo.
