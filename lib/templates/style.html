@@ -1,0 +1,144 @@
+<!-- Style: the brand collage generator, brought in from the style app. -->
+<template data-panel="style">
+   <p class="lede" data-region="main">Brand collage images from fal.ai — black-and-white cutouts of real people, flat colour blocks, graph paper. Every picture is kept in the team library; send one to a project and it becomes a still.</p>
+   <p data-el="problem" class="hint" data-region="main" hidden></p>
+
+   <div class="stylegen" data-region="main">
+      <div class="client">Make</div>
+      <label class="form-group">
+         <span class="form-label">What should the image show?</span>
+         <textarea data-el="subject" class="form-control stylegen__subject" rows="3" placeholder="e.g. A developer pair-programming with an AI assistant on a laptop"></textarea>
+      </label>
+      <div class="stylegen__row">
+         <label class="form-group stylegen__field">
+            <span class="form-label">Aspect</span>
+            <select data-el="aspect" class="form-control">
+               <option value="1:1" selected>Square (1:1)</option>
+               <option value="4:3">Landscape (4:3)</option>
+               <option value="16:9">Landscape (16:9)</option>
+               <option value="3:4">Portrait (3:4)</option>
+               <option value="9:16">Portrait (9:16)</option>
+            </select>
+         </label>
+         <label class="form-group stylegen__field">
+            <span class="form-label">Images</span>
+            <select data-el="count" class="form-control">
+               <option value="1" selected>1</option>
+               <option value="2">2</option>
+               <option value="3">3</option>
+               <option value="4">4</option>
+            </select>
+         </label>
+      </div>
+      <div class="form-group">
+         <span class="form-label">Models <span class="stylegen__soft">pick several to compare side by side</span></span>
+         <div data-el="models" class="stylegen__checks"></div>
+      </div>
+      <div class="form-group">
+         <span class="form-label">People in this image <span class="stylegen__soft">reference photos, so it is really them</span></span>
+         <div data-el="peoplePick" class="stylegen__checks"></div>
+      </div>
+      <details class="stylegen__advanced">
+         <summary>Advanced: the style template</summary>
+         <textarea data-el="template" class="form-control stylegen__template" rows="6"></textarea>
+         <p class="hint">The final prompt is your subject followed by this. Edit with care — this is what keeps every image on-brand. Saved on this machine.</p>
+         <button data-el="resetTemplate" class="btn ghost btn--small" type="button">Back to the default</button>
+      </details>
+      <p data-el="said" class="hint" hidden></p>
+      <div class="stylegen__acts">
+         <button data-el="enhance" class="btn ghost" type="button">Enhance</button>
+         <button data-el="go" class="btn btn--primary" type="button">Generate</button>
+      </div>
+      <div data-el="results" class="grid stylegen__grid"></div>
+
+      <div class="client">Library <span data-el="libCount" class="stylegen__soft"></span></div>
+      <div data-el="library" class="grid stylegen__grid"></div>
+      <p data-el="libEmpty" class="hint" hidden>Nothing here yet — describe a subject above and press Generate.</p>
+
+      <div class="client">People</div>
+      <p class="hint">Teammates whose photos can be placed in a picture. Clear, well-lit headshots work best. Photos are resized here before they are stored.</p>
+      <div class="stylegen__row">
+         <input data-el="personPhoto" class="form-control" type="file" accept="image/*" multiple />
+         <input data-el="personName" class="form-control" type="text" placeholder="Name (optional — used for a single photo)" />
+         <button data-el="addPerson" class="btn" type="button">Add people</button>
+      </div>
+      <div data-el="people" class="grid stylegen__grid stylegen__grid--people"></div>
+   </div>
+   <div data-region="footer"><button data-el="footGo" class="btn" type="button"><rm-icon name="ai-image"></rm-icon>Generate</button></div>
+</template>
+
+<!-- One picture, made or kept. -->
+<template data-row="style-tile">
+   <div class="card card--media stylegen__tile">
+      <div class="thumbwrap">
+         <button data-el="open" class="thumb stylegen__thumb" type="button" aria-label="See it large"></button>
+         <span data-el="badge" class="kind stylegen__badge"></span>
+      </div>
+      <div class="card__body">
+         <input data-el="subject" class="stylegen__name" type="text" aria-label="Name" />
+         <div data-el="when" class="path"></div>
+         <div data-el="note" class="path"></div>
+      </div>
+   </div>
+</template>
+
+<!-- A picture on its way. -->
+<template data-row="style-placeholder">
+   <div class="card card--media stylegen__tile stylegen__tile--pending">
+      <div class="thumbwrap"><div class="thumb stylegen__thumb stylegen__thumb--pending"></div><span data-el="badge" class="kind stylegen__badge"></span></div>
+      <div class="card__body"><div class="path">Generating…</div></div>
+   </div>
+</template>
+
+<!-- One teammate. -->
+<template data-row="style-person">
+   <div class="card card--media stylegen__tile">
+      <div class="thumbwrap"><div data-el="face" class="thumb stylegen__face"></div></div>
+      <div class="card__body">
+         <input data-el="name" class="stylegen__name" type="text" aria-label="Name" />
+      </div>
+   </div>
+</template>
+
+<!-- A model or a person to tick. -->
+<template data-row="style-check">
+   <label class="stylegen__check">
+      <input data-el="box" type="checkbox" />
+      <img data-el="face" class="stylegen__checkface" alt="" hidden />
+      <span data-el="text"></span>
+      <small data-el="sub" class="stylegen__soft"></small>
+   </label>
+</template>
+
+<!-- Refine: paint a mask, or describe a whole-image edit. -->
+<template data-row="style-refine">
+   <dialog class="stylegen__dialog">
+      <form class="stylegen__dialogform" method="dialog">
+         <h2 data-el="title">Refine image</h2>
+         <p class="hint">Paint over the area to change for precise inpainting, or leave it unpainted and describe an overall edit.</p>
+         <div data-el="stage" class="stylegen__stage">
+            <img data-el="img" class="stylegen__stageimg" alt="" />
+            <canvas data-el="canvas" class="stylegen__mask"></canvas>
+         </div>
+         <div class="stylegen__row">
+            <span data-el="maskState" class="hint">No mask — whole-image edit</span>
+            <label class="stylegen__soft">Brush <input data-el="brush" type="range" min="10" max="90" value="40" /></label>
+            <button data-el="clearMask" class="btn ghost btn--small" type="button">Clear mask</button>
+         </div>
+         <label class="form-group">
+            <span class="form-label">What should change?</span>
+            <textarea data-el="instruction" class="form-control" rows="2" placeholder="e.g. replace the laptop with an open sketchbook"></textarea>
+         </label>
+         <p data-el="status" class="hint" hidden></p>
+         <div class="stylegen__acts">
+            <button data-el="cancel" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Cancel</button>
+            <button data-el="go" class="btn btn--primary" type="button">Refine</button>
+         </div>
+      </form>
+   </dialog>
+</template>
+
+<!-- The picture, large. -->
+<template data-row="style-lightbox">
+   <dialog class="stylegen__lightbox"><img data-el="img" class="stylegen__lightboximg" alt="" /></dialog>
+</template>

@@ -60,6 +60,29 @@ create table if not exists public.studio_skills (
   updated_at    timestamptz not null default now()
 );
 
+-- The brand collage generator's library: every picture made, and the teammates
+-- whose photos can be placed in one. Pictures are also copied into the library's
+-- Style folder on the machine that made them; `url` is where they came from.
+create table if not exists public.style_images (
+  id          uuid primary key default gen_random_uuid(),
+  subject     text not null,
+  prompt      text,
+  model       text,
+  aspect      text,
+  url         text not null,
+  file        text,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.style_people (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  photo       text not null,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
+
 -- The role every Studio connects as. Created once; the password comes from the
 -- psql variable so it is never written into this file. `\gexec` runs the
 -- statement the select builds — a psql variable cannot be read inside a DO block.
@@ -68,9 +91,13 @@ select format('create role studio_app login password %L', :'studio_password')
 select format('alter role studio_app with login password %L', :'studio_password')
   where exists (select 1 from pg_roles where rolname = 'studio_app') \gexec
 
--- What the role may reach at all. No `delete` anywhere — nothing in the app
--- deletes a board, a setting or a skill, so the role cannot either.
+-- What the role may reach at all. No `delete` on the boards, settings or
+-- skills — nothing in the app deletes those, so the role cannot either.
 grant usage on schema public to studio_app;
 grant select, insert, update on public.storyboards     to studio_app;
 grant select, insert, update on public.studio_settings to studio_app;
 grant select, insert, update on public.studio_skills   to studio_app;
+-- The one exception to "no delete": a bad generation is noise in a shared
+-- library, and a teammate who left should be removable from the people list.
+grant select, insert, update, delete on public.style_images to studio_app;
+grant select, insert, update, delete on public.style_people to studio_app;
