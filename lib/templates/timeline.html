@@ -18,6 +18,14 @@
             <span class="form-label">Scenes from</span>
             <select data-el="shelfProject" class="input form-control"></select>
          </div>
+         <!-- A scene from a sentence, without leaving the cut: Claude drafts the
+              parts, the file is saved, and the editor opens on it right here. -->
+         <div data-el="shelfNew" class="tl__shelf-draft">
+            <input data-el="newName" class="input form-control" type="text" placeholder="New scene name">
+            <textarea data-el="newBrief" class="input form-control" rows="2" placeholder="What should it say?"></textarea>
+            <button data-el="draftScene" class="btn ghost" type="button">Draft with Claude</button>
+            <div data-el="newStatus" class="form-hint hint" hidden></div>
+         </div>
          <div data-el="shelfList" class="tl__shelf-list"></div>
          <div data-el="shelfEmpty" class="hint" hidden>No scenes saved in this project yet.</div>
          <!-- The editor, in place of the cards while a scene is open. The stage is
@@ -28,6 +36,7 @@
                <button data-el="editBack" class="btn ghost" type="button">Back</button>
                <span class="tl__spacer"></span>
                <button data-el="editFull" class="btn ghost" type="button" hidden>Full editor</button>
+               <button data-el="editInsert" class="btn ghost" type="button">Insert</button>
                <button data-el="editSave" class="btn" type="button">Save scene</button>
             </div>
             <div class="form-group form-group--no-padding">
@@ -72,6 +81,9 @@
          <button data-el="play" class="btn btn--icon" type="button" aria-label="Play" title="Play"><rm-icon data-el="playIcon" name="play"></rm-icon></button>
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
+         <!-- Scoped to the selection: appears when a clip is picked, and says
+              which kind of thing the key command would also do. -->
+         <button data-el="removeClip" class="btn ghost" type="button" hidden>Delete clip</button>
          <span class="tl__spacer"></span>
          <button data-el="shelfToggle" class="btn ghost" type="button" aria-expanded="false">Scenes</button>
          <!-- Hidden outright when the project has no sound to offer. A disabled
@@ -87,7 +99,9 @@
          <span data-el="stat" class="hint"></span>
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>
-      <canvas data-el="canvas" class="tl__canvas"></canvas>
+      <!-- Focusable, so a selected clip can be deleted from the keyboard: click
+           a clip, press Delete or Backspace. -->
+      <canvas data-el="canvas" class="tl__canvas" tabindex="0"></canvas>
       </div>
    </div>
 </template>

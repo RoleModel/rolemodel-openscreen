@@ -83,7 +83,7 @@
   padding: var(--op-space-small);
 }
 
-.tl__bar .hint {
+.tl__bar .hint[data-el="stat"] {
   inline-size: calc(var(--op-space-scale-unit) * 10);
 }
 
@@ -242,6 +242,14 @@
    overflow: hidden;
    text-overflow: ellipsis;
    white-space: nowrap;
+}
+
+/* Drafting a scene from a sentence, at the top of the shelf. */
+.tl__shelf-draft {
+   flex: none;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
 }
 
 /* The in-place scene editor: fields on the shelf, stage on the viewer. */
