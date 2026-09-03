@@ -189,7 +189,42 @@ const readAdded = async () =>
  * until you remember to press Re-index is the tool failing to notice its own
  * output — the catalog was hours older than the file it was missing.
  */
+/**
+ * Put every transcript beside the clip it belongs to, as `<clip>.vtt`.
+ *
+ * Transcripts are written to paper-edits/ under an encoded name, which is right
+ * for the paper edit — two folders may each hold a take.mp4 — and useless for
+ * anyone else: the asset download and the storage upload take media/ and
+ * nothing outside it, so the captions never left the machine. This mirrors each
+ * one into media/ under the clip's own name, where the zip, the upload and a
+ * Framer video component can all find it. The paper-edits copy stays the
+ * source; this copy is refreshed whenever it is older.
+ */
+async function publishTranscripts(id) {
+  const edits = paperEditDir(id);
+  const root = mediaDir(id);
+  const names = await readdir(edits).catch(() => []);
+  for (const name of names) {
+    if (!name.endsWith(".vtt") || name.endsWith(".words.vtt")) continue;
+    let rel;
+    try {
+      rel = Buffer.from(name.slice(0, -4), "base64url").toString("utf8");
+    } catch {
+      continue;
+    }
+    const clip = resolve(root, rel);
+    if (!clip.startsWith(root + sep) || !(await stat(clip).catch(() => null))?.isFile()) continue;
+    const from = join(edits, name);
+    const to = join(dirname(clip), `${basename(clip, extname(clip))}.vtt`);
+    const [src, dst] = await Promise.all([stat(from).catch(() => null), stat(to).catch(() => null)]);
+    if (!src || (dst && dst.mtimeMs >= src.mtimeMs)) continue;
+    await copyFile(from, to).catch(() => {});
+  }
+}
+
 async function reindex(id, { force = false } = {}) {
+  // The captions travel with the media, so they are placed before it is listed.
+  await publishTranscripts(id).catch(() => {});
   // Reuse what was probed last time so this is cheap enough to run on every
   // load; only new or changed files cost an ffprobe.
   const previous = await readFile(join(projectDir(id), "catalog.json"), "utf8")
@@ -1610,6 +1645,11 @@ async function renameMediaReferences(id, oldRel, nextRel, oldPath, nextPath) {
     const to = join(edits, `${nextKey}${suffix}`);
     if (await stat(from).catch(() => null)) await rename(from, to).catch(() => {});
   }
+  // The captions beside the clip follow its name, or the next upload carries a
+  // .vtt that names a file no longer there.
+  const oldSidecar = join(dirname(oldPath), `${basename(oldPath, extname(oldPath))}.vtt`);
+  const nextSidecar = join(dirname(nextPath), `${basename(nextPath, extname(nextPath))}.vtt`);
+  if (await stat(oldSidecar).catch(() => null)) await rename(oldSidecar, nextSidecar).catch(() => {});
   const oldFrames = join(multiAssemblyDir(id), "visual-beats", oldKey);
   const nextFrames = join(multiAssemblyDir(id), "visual-beats", nextKey);
   if (await stat(oldFrames).catch(() => null)) await rename(oldFrames, nextFrames).catch(() => {});
