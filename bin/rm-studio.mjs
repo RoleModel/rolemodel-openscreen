@@ -36,6 +36,7 @@ import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
 import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/db.mjs";
+import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
@@ -188,7 +189,42 @@ const readAdded = async () =>
  * until you remember to press Re-index is the tool failing to notice its own
  * output — the catalog was hours older than the file it was missing.
  */
+/**
+ * Put every transcript beside the clip it belongs to, as `<clip>.vtt`.
+ *
+ * Transcripts are written to paper-edits/ under an encoded name, which is right
+ * for the paper edit — two folders may each hold a take.mp4 — and useless for
+ * anyone else: the asset download and the storage upload take media/ and
+ * nothing outside it, so the captions never left the machine. This mirrors each
+ * one into media/ under the clip's own name, where the zip, the upload and a
+ * Framer video component can all find it. The paper-edits copy stays the
+ * source; this copy is refreshed whenever it is older.
+ */
+async function publishTranscripts(id) {
+  const edits = paperEditDir(id);
+  const root = mediaDir(id);
+  const names = await readdir(edits).catch(() => []);
+  for (const name of names) {
+    if (!name.endsWith(".vtt") || name.endsWith(".words.vtt")) continue;
+    let rel;
+    try {
+      rel = Buffer.from(name.slice(0, -4), "base64url").toString("utf8");
+    } catch {
+      continue;
+    }
+    const clip = resolve(root, rel);
+    if (!clip.startsWith(root + sep) || !(await stat(clip).catch(() => null))?.isFile()) continue;
+    const from = join(edits, name);
+    const to = join(dirname(clip), `${basename(clip, extname(clip))}.vtt`);
+    const [src, dst] = await Promise.all([stat(from).catch(() => null), stat(to).catch(() => null)]);
+    if (!src || (dst && dst.mtimeMs >= src.mtimeMs)) continue;
+    await copyFile(from, to).catch(() => {});
+  }
+}
+
 async function reindex(id, { force = false } = {}) {
+  // The captions travel with the media, so they are placed before it is listed.
+  await publishTranscripts(id).catch(() => {});
   // Reuse what was probed last time so this is cheap enough to run on every
   // load; only new or changed files cost an ffprobe.
   const previous = await readFile(join(projectDir(id), "catalog.json"), "utf8")
@@ -1609,6 +1645,11 @@ async function renameMediaReferences(id, oldRel, nextRel, oldPath, nextPath) {
     const to = join(edits, `${nextKey}${suffix}`);
     if (await stat(from).catch(() => null)) await rename(from, to).catch(() => {});
   }
+  // The captions beside the clip follow its name, or the next upload carries a
+  // .vtt that names a file no longer there.
+  const oldSidecar = join(dirname(oldPath), `${basename(oldPath, extname(oldPath))}.vtt`);
+  const nextSidecar = join(dirname(nextPath), `${basename(nextPath, extname(nextPath))}.vtt`);
+  if (await stat(oldSidecar).catch(() => null)) await rename(oldSidecar, nextSidecar).catch(() => {});
   const oldFrames = join(multiAssemblyDir(id), "visual-beats", oldKey);
   const nextFrames = join(multiAssemblyDir(id), "visual-beats", nextKey);
   if (await stat(oldFrames).catch(() => null)) await rename(oldFrames, nextFrames).catch(() => {});
@@ -5452,10 +5493,27 @@ const server = createServer(async (req, res) => {
       const dir = join(mediaDir(id), folder);
       await mkdir(dir, { recursive: true });
 
+      /*
+       * A recorder names its file by the clock: recording-1787840070424.mp4.
+       * That number is useless to a person, and it becomes the name of the
+       * captions file, the review link and the Slack post. So a clock-named
+       * recording lands as "<Project> 2026-09-03 12.34.mp4" — the project it
+       * belongs to and when it was made, which is what the number meant.
+       * Anything already named by a person is kept as is.
+       */
+      const clock = /^(?:recording|screen-recording|capture)[-_ ]?(\d{13})$/i.exec(basename(filename, rawExt));
+      let human = null;
+      if (clock) {
+        const at = new Date(Number(clock[1]));
+        const pad = (n) => String(n).padStart(2, "0");
+        const when = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}`;
+        const m = await readManifest(projectDir(id)).catch(() => null);
+        human = `${safeName(m?.name, "Recording")} ${when}`;
+      }
       // Never silently replace something already there: two takes with the same
       // name is normal, and losing the first one to an import is not.
       // Keeps everything a disk can take — see safeName.
-      const stem = safeName(basename(filename, rawExt), "import");
+      const stem = human ?? safeName(basename(filename, rawExt), "import");
       let dest = join(dir, `${stem}${ext}`);
       let n = 2;
       while (await stat(dest).then(() => true).catch(() => false)) {
@@ -5515,6 +5573,51 @@ const server = createServer(async (req, res) => {
      * derived paper-edit files to their new key, and rewrite only ordinary text
      * project files — never a binary recording.
      */
+    /*
+     * Convert one media file — WebM, MP4, ProRes, GIF, or just its audio.
+     *
+     * Answers with a Console step rather than running ffmpeg here: a VP9 encode
+     * of ten minutes of footage is a long job, and the Console is where long
+     * jobs are watched and stopped. The recipe lives in lib/convert.mjs; this
+     * route only checks that the source is this project's and picks a name that
+     * is not already taken, so nothing a conversion writes can land on top of
+     * something somebody already sent out.
+     */
+    if (p === "/api/media/convert" && req.method === "GET") {
+      const kind = String(url.searchParams.get("kind") ?? "video");
+      return json(res, 200, { formats: formatsFor(kind), sizes: Object.entries(SIZES).map(([id, x]) => ({ id, label: x.label })) });
+    }
+
+    if (p === "/api/media/convert" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      const format = String(body.format ?? "");
+      const size = String(body.size ?? "source");
+      if (!id || !rel) return json(res, 400, { error: "pick media to convert" });
+      if (!FORMATS[format]) return json(res, 400, { error: `pick one of: ${Object.keys(FORMATS).join(", ")}` });
+
+      const root = mediaDir(id);
+      const source = requestedPath({ projectId: id, rel });
+      if (!source.startsWith(root + sep)) return json(res, 403, { error: "that file is outside this project's media" });
+      const info = await stat(source).catch(() => null);
+      if (!info?.isFile()) return json(res, 404, { error: "that media file is no longer in this project" });
+
+      const kind = AUDIO_EXT.has(extname(source).toLowerCase()) ? "audio" : "video";
+      let args;
+      let output;
+      try {
+        output = outputFor(source, format, (candidate) => existsSync(candidate));
+        args = ffmpegArgs({ source, output, format, size, kind });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+      const label = `convert ${rel} → ${basename(output)}`;
+      const existing = jobs.list().find((job) => job.running && job.label === label);
+      if (existing) return json(res, 200, { job: existing, alreadyRunning: true, out: relative(root, output) });
+      return json(res, 200, { out: relative(root, output), step: { bin: "ffmpeg", args, label, cwd: dirname(source), project: id } });
+    }
+
     if (p === "/api/media/rename" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
