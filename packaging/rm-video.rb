@@ -31,7 +31,13 @@ class RmVideo < Formula
   ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-cut rm-insert rm-align-audio rm-render-alignment rm-render-hyperframes rm-render-pip rm-adopt rm-resync rm-retime-pip rm-reconcile rm-visual-beats rm-fal].freeze
 
   def install
-    system "pnpm", "install", "--prod", "--frozen-lockfile"
+    # `--trust-lockfile`: pnpm 11 verifies every lockfile entry against its
+    # registry before installing, dev dependencies included — and one of those
+    # (@rolemodel/optics) lives in a private registry the installing machine has
+    # no token for, so the verification died with a 401 after every production
+    # package had already downloaded fine. The lockfile is committed and the
+    # tarball is checksummed; trusting it is what a release means.
+    system "pnpm", "install", "--prod", "--frozen-lockfile", "--trust-lockfile"
 
     # The tree is self-locating: lib/theme.mjs resolves ROOT from its own path,
     # so the whole thing goes to libexec and only the entry points are linked.
