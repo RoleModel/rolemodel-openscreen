@@ -1995,6 +1995,691 @@ class RMStudyField extends RMElement {
 define('rm-study-field', RMStudyField)
 
 
+/* ── rm-look ─────────────────────────────────────────────────────────────────
+ *
+ * The Creator's element: a gradient, and every effect that can be laid over
+ * one, in a single seekable WebGL pass.
+ *
+ * WHERE THIS CAME FROM
+ *
+ * Five web tools did pieces of this — gradient studios, a shader lab, an ASCII
+ * converter, a background studio with a node graph — and each kept its result
+ * on its own site. A background belongs where the video and the website are
+ * made, so this is one element that does what those five do, with one
+ * description of a look that travels: the `look` attribute, a short parameter
+ * string. The same string is a Framer component's Look property, a scene in a
+ * composition, a saved row in the team's database, and a URL.
+ *
+ * WHY ONE SHADER
+ *
+ * Everything here is a function of a coordinate and a time, so an effect that
+ * needs "the picture at another point" — glass refraction, aberration, an
+ * ASCII cell's average — recomputes the scene there rather than reading back a
+ * framebuffer. That keeps it one program with no passes to order, and keeps
+ * `RM.seek()` the only clock, which is what makes a frame reproducible.
+ */
+
+/**
+ * Every dial, in the order the shader's `u[]` array expects them.
+ *
+ *   key    what the look string calls it
+ *   group  which section of the panel it belongs to
+ *   type   range | select | color | toggle
+ *   def    the default; a look string carries only what differs
+ *
+ * `on` toggles gate a whole group; the shader multiplies by them.
+ */
+const LOOK_SCHEMA = [
+  // gradient
+  { key: 'shape', group: 'gradient', label: 'Shape', type: 'select', options: ['linear', 'radial', 'conic', 'swirl'], def: 'linear' },
+  { key: 'a', group: 'gradient', label: 'Angle', type: 'range', min: 0, max: 360, step: 1, def: 220 },
+  { key: 'cx', group: 'gradient', label: 'Centre X', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  { key: 'cy', group: 'gradient', label: 'Centre Y', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  { key: 'w', group: 'gradient', label: 'Warp', type: 'range', min: 0, max: 2, step: 0.01, def: 0.3 },
+  { key: 'fl', group: 'gradient', label: 'Flow', type: 'range', min: 0, max: 2, step: 0.01, def: 0.2 },
+  { key: 'sc', group: 'gradient', label: 'Scale', type: 'range', min: 0.2, max: 4, step: 0.05, def: 1.3 },
+  { key: 'd', group: 'gradient', label: 'Detail', type: 'range', min: 1, max: 6, step: 1, def: 2 },
+  { key: 'ct', group: 'gradient', label: 'Contrast', type: 'range', min: 0.5, max: 2, step: 0.01, def: 1.1 },
+  { key: 'seed', group: 'gradient', label: 'Seed', type: 'range', min: 0, max: 100, step: 1, def: 7 },
+  // waves
+  { key: 'wv', group: 'waves', label: 'Waves', type: 'toggle', def: 0 },
+  { key: 'wvf', group: 'waves', label: 'Frequency', type: 'range', min: 0.1, max: 6, step: 0.05, def: 1.5 },
+  { key: 'wva', group: 'waves', label: 'Amplitude', type: 'range', min: 0, max: 1, step: 0.01, def: 0.35 },
+  { key: 'wvfo', group: 'waves', label: 'Falloff', type: 'range', min: 0, max: 1, step: 0.01, def: 0.35 },
+  { key: 'wvx', group: 'waves', label: 'Centre X', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  { key: 'wvy', group: 'waves', label: 'Centre Y', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  // blobs
+  { key: 'bl', group: 'blobs', label: 'Blobs', type: 'toggle', def: 0 },
+  { key: 'blc', group: 'blobs', label: 'Count', type: 'range', min: 1, max: 8, step: 1, def: 4 },
+  { key: 'bls', group: 'blobs', label: 'Size', type: 'range', min: 0.05, max: 1, step: 0.01, def: 0.35 },
+  { key: 'blsm', group: 'blobs', label: 'Softness', type: 'range', min: 0, max: 1, step: 0.01, def: 0.6 },
+  { key: 'blsp', group: 'blobs', label: 'Drift', type: 'range', min: 0, max: 2, step: 0.01, def: 0.5 },
+  // light
+  { key: 'lt', group: 'light', label: 'Mode', type: 'select', options: ['none', 'spot', 'beam', 'rays'], def: 'none' },
+  { key: 'lta', group: 'light', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.01, def: 0.6 },
+  { key: 'lts', group: 'light', label: 'Size', type: 'range', min: 0.05, max: 1, step: 0.01, def: 0.5 },
+  { key: 'ltx', group: 'light', label: 'X', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  { key: 'lty', group: 'light', label: 'Y', type: 'range', min: 0, max: 1, step: 0.01, def: 0.3 },
+  // glass
+  { key: 'gl', group: 'glass', label: 'Fluted glass', type: 'toggle', def: 0 },
+  { key: 'gla', group: 'glass', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.01, def: 0.55 },
+  { key: 'glc', group: 'glass', label: 'Strips', type: 'range', min: 2, max: 64, step: 1, def: 18 },
+  { key: 'glsh', group: 'glass', label: 'Shadows', type: 'range', min: 0, max: 1, step: 0.01, def: 0.3 },
+  { key: 'glhi', group: 'glass', label: 'Highlights', type: 'range', min: 0, max: 1, step: 0.01, def: 0.12 },
+  { key: 'glb', group: 'glass', label: 'Blur', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
+  // optics
+  { key: 'sf', group: 'optics', label: 'Softness', type: 'range', min: 0, max: 1, step: 0.01, def: 0 },
+  { key: 'ab', group: 'optics', label: 'Aberration', type: 'range', min: 0, max: 1, step: 0.01, def: 0 },
+  // pixelate
+  { key: 'px', group: 'pixelate', label: 'Pixel size', type: 'range', min: 0, max: 64, step: 1, def: 0 },
+  // dither
+  { key: 'dt', group: 'dither', label: 'Dither', type: 'select', options: ['none', 'bayer2', 'bayer4', 'bayer8'], def: 'none' },
+  { key: 'dl', group: 'dither', label: 'Levels', type: 'range', min: 2, max: 16, step: 1, def: 4 },
+  { key: 'dst', group: 'dither', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.01, def: 1 },
+  // halftone
+  { key: 'hf', group: 'halftone', label: 'Halftone', type: 'toggle', def: 0 },
+  { key: 'hfm', group: 'halftone', label: 'Mode', type: 'select', options: ['dots', 'lines'], def: 'dots' },
+  { key: 'hfs', group: 'halftone', label: 'Size', type: 'range', min: 3, max: 64, step: 1, def: 12 },
+  { key: 'hfa', group: 'halftone', label: 'Angle', type: 'range', min: 0, max: 180, step: 1, def: 45 },
+  { key: 'hfmix', group: 'halftone', label: 'Mix', type: 'range', min: 0, max: 1, step: 0.01, def: 1 },
+  { key: 'hfc', group: 'halftone', label: 'Ink', type: 'color', def: '1a1a1a' },
+  // plaid
+  { key: 'pl', group: 'plaid', label: 'Grid', type: 'toggle', def: 0 },
+  { key: 'plc', group: 'plaid', label: 'Columns', type: 'range', min: 2, max: 96, step: 1, def: 24 },
+  { key: 'plr', group: 'plaid', label: 'Rows', type: 'range', min: 2, max: 96, step: 1, def: 24 },
+  { key: 'plw', group: 'plaid', label: 'Line', type: 'range', min: 0.01, max: 0.5, step: 0.005, def: 0.04 },
+  { key: 'plo', group: 'plaid', label: 'Opacity', type: 'range', min: 0, max: 1, step: 0.01, def: 0.35 },
+  { key: 'plcol', group: 'plaid', label: 'Line colour', type: 'color', def: 'ffffff' },
+  // ascii
+  { key: 'as', group: 'ascii', label: 'ASCII', type: 'toggle', def: 0 },
+  { key: 'asz', group: 'ascii', label: 'Cell size', type: 'range', min: 6, max: 40, step: 1, def: 14 },
+  { key: 'asr', group: 'ascii', label: 'Cell aspect', type: 'range', min: 1, max: 2.5, step: 0.05, def: 1.85 },
+  { key: 'asc', group: 'ascii', label: 'Colour', type: 'select', options: ['source', 'mono'], def: 'source' },
+  { key: 'asb', group: 'ascii', label: 'Ground', type: 'range', min: 0, max: 1, step: 0.01, def: 0.2 },
+  { key: 'asi', group: 'ascii', label: 'Invert', type: 'toggle', def: 0 },
+  // grain
+  { key: 'g', group: 'grain', label: 'Grain', type: 'range', min: 0, max: 1, step: 0.01, def: 0.1 },
+  { key: 'gs', group: 'grain', label: 'Grain size', type: 'range', min: 0.5, max: 4, step: 0.1, def: 1 },
+  { key: 'gbm', group: 'grain', label: 'Grain blend', type: 'select', options: ['additive', 'overlay', 'soft'], def: 'additive' },
+  // picture
+  { key: 'imgm', group: 'picture', label: 'Picture use', type: 'select', options: ['base', 'tint'], def: 'base' },
+  { key: 'imgx', group: 'picture', label: 'Picture mix', type: 'range', min: 0, max: 1, step: 0.01, def: 1 },
+  // motion
+  { key: 'an', group: 'motion', label: 'Animate', type: 'toggle', def: 1 },
+  { key: 'sp', group: 'motion', label: 'Speed', type: 'range', min: 0.1, max: 3, step: 0.05, def: 1 },
+  { key: 'loop', group: 'motion', label: 'Loop (s)', type: 'range', min: 2, max: 20, step: 1, def: 8 },
+]
+
+const LOOK_GROUPS = [
+  ['gradient', 'Gradient'],
+  ['picture', 'Picture'],
+  ['waves', 'Waves'],
+  ['blobs', 'Blobs'],
+  ['light', 'Light'],
+  ['glass', 'Glass'],
+  ['optics', 'Optics'],
+  ['pixelate', 'Pixelate'],
+  ['dither', 'Dither'],
+  ['halftone', 'Halftone'],
+  ['plaid', 'Grid'],
+  ['ascii', 'ASCII'],
+  ['grain', 'Grain'],
+  ['motion', 'Motion'],
+]
+
+/** The default stops: the brand's greys, dark to paper. Hex is data here, not a style. */
+/* Bare hex, no hash: these are data a person chose, not a style this file
+   invents, and they are re-prefixed on decode. */
+const LOOK_DEFAULT_STOPS = [
+  { c: '0a0a0a', p: 0 },
+  { c: '262626', p: 0.25 },
+  { c: '525252', p: 0.5 },
+  { c: 'a3a3a3', p: 0.75 },
+  { c: 'f5f5f5', p: 1 },
+]
+const withHash = (c) => (String(c).startsWith('#') ? String(c) : `#${c}`)
+const LOOK_MAX_STOPS = 6
+
+/** The glyph ramp, darkest cell to lightest. Ten steps, one per atlas column. */
+const LOOK_ASCII_RAMP = ' .:-=+*#%@'
+
+/**
+ * A look, decoded: every key from the schema, plus `stops` and `img`.
+ *
+ * Unknown keys are dropped and bad values fall back to the default, so an old
+ * string still draws something rather than nothing when a dial is renamed.
+ */
+function decodeLook(text) {
+  const params = new URLSearchParams(String(text ?? '').replace(/^[#?]/, ''))
+  const look = {}
+  for (const f of LOOK_SCHEMA) {
+    const raw = params.get(f.key)
+    if (raw == null) {
+      look[f.key] = f.type === 'color' ? withHash(f.def) : f.def
+      continue
+    }
+    if (f.type === 'select') look[f.key] = f.options.includes(raw) ? raw : f.def
+    else if (f.type === 'color') look[f.key] = SHADER_HEX.test(withHash(raw)) ? withHash(raw) : withHash(f.def)
+    else if (f.type === 'toggle') look[f.key] = raw === '1' ? 1 : 0
+    else {
+      const n = Number(raw)
+      look[f.key] = Number.isFinite(n) ? shaderClamp(n, f.min, f.max) : f.def
+    }
+  }
+  const stops = []
+  for (const part of String(params.get('c') ?? '').split(',')) {
+    const [hex, pos] = part.split(':')
+    if (!hex) continue
+    const c = withHash(hex)
+    const p = Number(pos)
+    if (SHADER_HEX.test(c) && Number.isFinite(p)) stops.push({ c, p: shaderClamp(p / 100, 0, 1) })
+  }
+  look.stops = (stops.length >= 2 ? stops : LOOK_DEFAULT_STOPS.map((st) => ({ c: withHash(st.c), p: st.p }))).slice(0, LOOK_MAX_STOPS).sort((x, y) => x.p - y.p)
+  look.img = params.get('img') ?? ''
+  return look
+}
+
+/** The look string: only what differs from the defaults, stops always. */
+function encodeLook(look) {
+  const params = new URLSearchParams()
+  params.set('c', (look.stops ?? LOOK_DEFAULT_STOPS).map((s) => `${String(s.c).replace('#', '')}:${Math.round(s.p * 100)}`).join(','))
+  for (const f of LOOK_SCHEMA) {
+    const v = look[f.key]
+    const same = f.type === 'color' ? String(v).replace('#', '').toLowerCase() === String(f.def).toLowerCase() : String(v) === String(f.def)
+    if (v == null || same) continue
+    params.set(f.key, f.type === 'color' ? String(v).replace('#', '') : String(f.type === 'range' ? Number(Number(v).toFixed(3)) : v))
+  }
+  if (look.img) params.set('img', look.img)
+  // Colons and commas are the stop list's own punctuation; a person reads and
+  // pastes this string, so they stay as themselves rather than %3A and %2C.
+  return params.toString().replace(/%3A/gi, ':').replace(/%2C/gi, ',')
+}
+
+/** Built-in looks: a starting point per family, encoded like any saved one. */
+const LOOK_PRESETS = [
+  { name: 'Graphite', look: 'c=0a0a0a:0,262626:25,525252:50,a3a3a3:75,f5f5f5:100' },
+  { name: 'Academy dusk', look: 'c=04242b:0,0b3b45:40,00b871:100&shape=radial&w=0.6&fl=0.3&g=0.14' },
+  { name: 'Amber paper', look: 'c=fff8e9:0,e89b30:60,7b5ea7:100&shape=conic&a=140&w=0.9&sc=0.9' },
+  { name: 'Ripple', look: 'c=193c67:0,3a70b3:50,d4b30a:100&wv=1&wva=0.5&wvf=2&fl=0.4' },
+  { name: 'Blobs', look: 'c=2b84f7:0,7b5ea7:50,e89b30:100&bl=1&blc=5&bls=0.4&blsm=0.7&blsp=0.6' },
+  { name: 'Fluted', look: 'c=0a0a0a:0,525252:50,f5f5f5:100&gl=1&glc=22&gla=0.6&a=200' },
+  { name: 'Halftone print', look: 'c=fff8e9:0,3a8f5c:100&hf=1&hfs=10&hfmix=0.9&g=0' },
+  { name: 'Dithered', look: 'c=04242b:0,00b871:100&dt=bayer4&dl=3&px=3&g=0' },
+  { name: 'Terminal', look: 'c=0a0a0a:0,3a8f5c:100&as=1&asz=12&asc=mono&fl=0.5&g=0' },
+  { name: 'Grid paper', look: 'c=f5f5f5:0,e8e8e8:100&pl=1&plc=32&plr=32&plcol=3a70b3&plo=0.25&g=0.02' },
+  { name: 'Spotlight', look: 'c=0a0a0a:0,193c67:100&lt=spot&lta=0.8&lts=0.6&lty=0.35&g=0.12' },
+  { name: 'Rays', look: 'c=262626:0,7b5ea7:100&lt=rays&lta=0.5&lts=0.7&ltx=0.5&lty=0.1' },
+]
+
+/*
+ * The shader. WebGL1 GLSL, like the other elements here, so it runs everywhere
+ * they do. `u[]` is the schema in order; `stop`/`pos`/`nstop` the gradient;
+ * `t` seconds; `loop` the seconds one cycle takes, so every phase is a whole
+ * number of turns per loop and a video of it joins to itself.
+ */
+const LOOK_UNIFORMS = LOOK_SCHEMA.length
+const LOOK_FRAGMENT = [
+  `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];`,
+  'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
+  // indices into u[] by schema position
+  ...LOOK_SCHEMA.map((f, i) => `#define U_${f.key.toUpperCase()} u[${i}]`),
+  'const float TAU=6.28318530718;',
+  'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+  'float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}',
+  'float fbm(vec2 p,float oct){float s=0.,a=.5,n=0.;for(int i=0;i<6;i++){if(float(i)>=oct)break;s+=a*vnoise(p);n+=a;p=p*2.03+vec2(17.1,9.7);a*=.5;}return n>0.?s/n:0.;}',
+  // phase of a loop: whole turns so frame 0 == frame loop
+  'float ph(float k){return TAU*floor(k+.5)*(t/loop);}',
+  'vec3 ramp(float x){x=clamp(x,0.,1.);vec3 c=stop[0];for(int i=1;i<6;i++){if(i>=nstop)break;float a=pos[i-1],b=pos[i];float f=b>a?clamp((x-a)/(b-a),0.,1.):step(a,x);c=mix(c,stop[i],f);}return c;}',
+  'vec2 coverUV(vec2 uv){float ca=r.x/r.y;vec2 s=ca>imageAspect?vec2(1.,imageAspect/ca):vec2(ca/imageAspect,1.);return(uv-.5)*s+.5;}',
+  // the field: where along the gradient a point is, after waves, warp and flow
+  'float field(vec2 uv){vec2 p=uv;float asp=r.x/r.y;vec2 q=vec2((p.x-.5)*asp,p.y-.5);',
+  ' if(U_WV>.5){vec2 c=vec2((U_WVX-.5)*asp,U_WVY-.5);float dd=length(q-c);float wave=sin(dd*U_WVF*TAU-ph(1.)*sign(U_FL+.001))*U_WVA*.08*exp(-dd*U_WVFO*4.);q+=normalize(q-c+1e-4)*wave;}',
+  ' float sd=U_SEED*7.31;vec2 fp=q*U_SC*2.+sd;vec2 drift=vec2(cos(ph(1.)),sin(ph(1.)))*U_FL*.35;float n=fbm(fp+drift,U_D)-.5;q+=n*U_W*.6;',
+  ' float ang=radians(U_A);vec2 dir=vec2(cos(ang),sin(ang));vec2 cc=vec2((U_CX-.5)*asp,U_CY-.5);float x;',
+  ' if(U_SHAPE<.5){x=dot(q-cc,dir)/max(.001,length(vec2(asp,1.)))*1.2+.5;}',
+  ' else if(U_SHAPE<1.5){x=length(q-cc)/.72;}',
+  ' else if(U_SHAPE<2.5){x=fract((atan(q.y-cc.y,q.x-cc.x)-ang)/TAU);}',
+  ' else{float rad=length(q-cc);x=fract((atan(q.y-cc.y,q.x-cc.x)-ang+rad*U_W*3.-ph(1.)*.5)/TAU);}',
+  ' return clamp((x-.5)*U_CT+.5,0.,1.);}',
+  // the scene at a point, before the screen-space effects
+  'vec3 scene(vec2 uv){vec2 p=uv;float asp=r.x/r.y;',
+  ' if(U_GL>.5){float s=floor(p.x*U_GLC);float f=fract(p.x*U_GLC)-.5;p.x+=f*U_GLA*(1./U_GLC)*1.6;}',
+  ' vec3 col;',
+  ' if(U_AB>0.){float o=U_AB*.012;col=vec3(ramp(field(p+vec2(o,0.))).r,ramp(field(p)).g,ramp(field(p-vec2(o,0.))).b);}else{col=ramp(field(p));}',
+  ' if(U_SF>0.){vec3 acc=col;float o=U_SF*.03;acc+=ramp(field(p+vec2(o,0.)))+ramp(field(p-vec2(o,0.)))+ramp(field(p+vec2(0.,o)))+ramp(field(p-vec2(0.,o)));col=acc/5.;}',
+  ' if(hasImage>.5){vec4 s=texture2D(imageTex,coverUV(p));vec3 photo=mix(col,s.rgb,s.a);if(U_IMGM<.5){col=mix(col,photo,U_IMGX);}else{float l=dot(photo,vec3(.299,.587,.114));col=mix(col,ramp(l),U_IMGX);}}',
+  ' if(U_BL>.5){vec2 q=vec2((p.x-.5)*asp,p.y-.5);float acc=0.;vec3 tint=vec3(0.);for(int i=0;i<8;i++){if(float(i)>=U_BLC)break;float k=float(i);vec2 c=vec2(sin(ph(1.)*(1.+mod(k,3.))*.5+k*2.1),cos(ph(1.)*(1.+mod(k+1.,2.))*.5+k*1.3))*.32*U_BLSP+vec2(hash(vec2(k,U_SEED))-.5,hash(vec2(U_SEED,k))-.5)*.6;float dd=length(q-c);float m=1.-smoothstep(U_BLS*.5*(1.-U_BLSM*.9),U_BLS*.5,dd);acc+=m;tint+=ramp(k/max(1.,U_BLC-1.))*m;}col=mix(col,tint/max(acc,1e-3),clamp(acc,0.,1.)*.9);}',
+  ' if(U_LT>.5){vec2 q=vec2((p.x-.5)*asp,p.y-.5);vec2 lc=vec2((U_LTX-.5)*asp,U_LTY-.5);float dd=length(q-lc);float li=0.;',
+  '  if(U_LT<1.5){li=exp(-dd*dd/(U_LTS*U_LTS*.35));}',
+  '  else if(U_LT<2.5){float band=abs(dot(q-lc,vec2(cos(radians(U_A)+1.5708),sin(radians(U_A)+1.5708))));li=exp(-band*band/(U_LTS*U_LTS*.06))*smoothstep(1.2,0.,dd);}',
+  '  else{float an=atan(q.y-lc.y,q.x-lc.x);float rays=.5+.5*sin(an*12.+ph(1.)*.5+fbm(vec2(an*2.,dd*3.),2.)*4.);li=rays*exp(-dd*(2.-U_LTS*1.5));}',
+  '  col+=li*U_LTA*vec3(1.,.97,.9);}',
+  ' if(U_GL>.5){float f=fract(p.x*U_GLC);float edge=smoothstep(0.,.18,f)*smoothstep(1.,.82,f);col*=1.-(1.-edge)*U_GLSH;col+=smoothstep(.6,.72,f)*smoothstep(.85,.72,f)*U_GLHI;}',
+  ' return col;}',
+  'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
+  'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}float b8(vec2 p){return 4.*b4(mod(p,4.))+b2(floor(p/4.));}',
+  'void main(){vec2 uv=v;vec2 fc=gl_FragCoord.xy;',
+  ' if(U_PX>0.5){vec2 cell=vec2(U_PX);uv=(floor(fc/cell)+.5)*cell/r;}',
+  ' vec3 col=scene(uv);',
+  ' if(U_AS>.5){vec2 cell=vec2(U_ASZ,U_ASZ*U_ASR/1.85*1.85/U_ASR*U_ASR/1.85);cell=vec2(U_ASZ,U_ASZ*1.85/U_ASR);vec2 id=floor(fc/cell);vec2 centre=(id+.5)*cell/r;vec3 c=scene(centre);float l=dot(c,vec3(.299,.587,.114));if(U_ASI>.5)l=1.-l;float gi=floor(clamp(l,0.,.999)*10.);vec2 inCell=fract(fc/cell);float glyph=texture2D(glyphTex,vec2((gi+inCell.x)/10.,inCell.y)).r;vec3 ink=U_ASC<.5?c:vec3(.92);vec3 ground=U_ASC<.5?c*U_ASB:vec3(.06)*U_ASB;col=mix(ground,ink,glyph);}',
+  ' if(U_HF>.5){float l=dot(col,vec3(.299,.587,.114));float an=radians(U_HFA);mat2 rot=mat2(cos(an),-sin(an),sin(an),cos(an));vec2 g=rot*fc/U_HFS;float m;if(U_HFM<.5){vec2 cc=fract(g)-.5;float rad=sqrt(1.-l)*.7;m=1.-smoothstep(rad-.08,rad+.08,length(cc)*2.);}else{m=step(fract(g.y),1.-l);}col=mix(col,mix(col,hfInk,m),U_HFMIX);}',
+  ' if(U_DT>.5){float th=U_DT<1.5?b2(fc)/4.:(U_DT<2.5?b4(fc)/16.:b8(fc)/64.);float levels=max(2.,U_DL)-1.;vec3 q=floor(col*levels+th)/levels;col=mix(col,q,U_DST);}',
+  ' if(U_PL>.5){vec2 g=fract(v*vec2(U_PLC,U_PLR));float lw=U_PLW*.5;float line=step(g.x,lw)+step(1.-lw,g.x)+step(g.y,lw)+step(1.-lw,g.y);col=mix(col,plInk,clamp(line,0.,1.)*U_PLO);}',
+  ' if(U_G>0.){float n=hash(floor(fc/max(.5,U_GS))+floor(t*24.)*.37)-.5;if(U_GBM<.5){col+=n*U_G;}else if(U_GBM<1.5){col=mix(col,col*(1.+n*2.),U_G);}else{col=mix(col,col+n*(1.-abs(col-.5)*2.),U_G);}}',
+  ' gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
+].join('\n')
+
+/** A hex colour as [r,g,b] in 0..1. */
+const lookRGB = (hex) => {
+  const h = String(hex).replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255)
+}
+
+/*
+ * The glyph atlas: the ASCII ramp drawn once into a 10-column strip, shared by
+ * every rm-look on the page. A texture, because a shader cannot draw type.
+ */
+let lookGlyphCanvas = null
+const lookGlyphs = () => {
+  if (lookGlyphCanvas) return lookGlyphCanvas
+  const cell = 32
+  const c = document.createElement('canvas')
+  c.width = cell * LOOK_ASCII_RAMP.length
+  c.height = cell
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = 'black'
+  ctx.fillRect(0, 0, c.width, c.height)
+  ctx.fillStyle = 'white'
+  ctx.font = `${cell * 0.9}px ui-monospace, Menlo, monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (let i = 0; i < LOOK_ASCII_RAMP.length; i++) ctx.fillText(LOOK_ASCII_RAMP[i], i * cell + cell / 2, cell / 2 + 1)
+  lookGlyphCanvas = c
+  return c
+}
+
+/**
+ * Set up a program on a canvas for one look. Returns `draw(ms)`, `dispose()`,
+ * and `setImage(img)`. Shared by the element and the offline renderer, so a
+ * PNG export and the preview are the same pixels.
+ */
+function lookProgram(canvas, look, { assets = null } = {}) {
+  const gl = canvas.getContext('webgl', { alpha: false, antialias: false, preserveDrawingBuffer: true })
+  const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
+  const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, LOOK_FRAGMENT)
+  const program = gl?.createProgram()
+  if (!(gl && vertex && fragment && program)) return null
+  gl.attachShader(program, vertex)
+  gl.attachShader(program, fragment)
+  gl.linkProgram(program)
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null
+  gl.useProgram(program)
+  const buffer = gl.createBuffer()
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW)
+  const position = gl.getAttribLocation(program, 'p')
+  gl.enableVertexAttribArray(position)
+  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+  const uniform = (name) => gl.getUniformLocation(program, name)
+
+  const values = LOOK_SCHEMA.map((f) => {
+    const val = look[f.key]
+    if (f.type === 'select') return f.options.indexOf(val)
+    if (f.type === 'color') return 0
+    return Number(val)
+  })
+  gl.uniform1fv(uniform('u'), new Float32Array(values))
+  const stops = look.stops
+  const stopArr = new Float32Array(18)
+  const posArr = new Float32Array(6)
+  stops.forEach((s, i) => {
+    stopArr.set(lookRGB(s.c), i * 3)
+    posArr[i] = s.p
+  })
+  gl.uniform3fv(uniform('stop'), stopArr)
+  gl.uniform1fv(uniform('pos'), posArr)
+  gl.uniform1i(uniform('nstop'), stops.length)
+  gl.uniform3fv(uniform('hfInk'), new Float32Array(lookRGB(look.hfc)))
+  gl.uniform3fv(uniform('plInk'), new Float32Array(lookRGB(look.plcol)))
+  gl.uniform1f(uniform('loop'), Math.max(1, Number(look.loop)))
+  gl.uniform1f(uniform('hasImage'), 0)
+  gl.uniform1f(uniform('imageAspect'), 1)
+
+  const imageTex = gl.createTexture()
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, imageTex)
+  for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+  gl.uniform1i(uniform('imageTex'), 0)
+  const glyphTex = gl.createTexture()
+  gl.activeTexture(gl.TEXTURE1)
+  gl.bindTexture(gl.TEXTURE_2D, glyphTex)
+  for (const [key, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, key, value)
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, lookGlyphs())
+  gl.uniform1i(uniform('glyphTex'), 1)
+  gl.activeTexture(gl.TEXTURE0)
+
+  const resolution = uniform('r')
+  const time = uniform('t')
+  const draw = (ms, { width, height } = {}) => {
+    const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+    const w = width ?? Math.max(1, Math.round(canvas.clientWidth * ratio))
+    const h = height ?? Math.max(1, Math.round(canvas.clientHeight * ratio))
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+    gl.viewport(0, 0, w, h)
+    gl.uniform2f(resolution, w, h)
+    const seconds = (look.an ? ms / 1000 : 0) * Number(look.sp)
+    gl.uniform1f(time, seconds)
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+  const setImage = (picture) => {
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, imageTex)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture)
+    gl.uniform1f(uniform('imageAspect'), picture.naturalWidth / Math.max(1, picture.naturalHeight))
+    gl.uniform1f(uniform('hasImage'), 1)
+  }
+  const dispose = () => {
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+  }
+  return { gl, draw, setImage, dispose }
+}
+
+/**
+ * The look as an element: `<rm-look look="c=…&shape=radial" image="…">`.
+ *
+ * `image` is a picture name or URL, resolved the way every other component
+ * resolves one, so a saved scene and a render both find it.
+ */
+class RMLook extends RMElement {
+  static fields = ['look', 'image', 'at', 'for']
+
+  disconnectedCallback() {
+    this._dispose?.()
+    this._dispose = null
+  }
+
+  render() {
+    this._dispose?.()
+    const look = decodeLook(this.attr('look'))
+    const imageSource = assetUrl(this, this.attr('image') || look.img)
+    this.shadowRoot.innerHTML = `<style>:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${look.stops[0].c};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset"><canvas aria-hidden="true"></canvas></div>`
+    const canvas = this.shadowRoot.querySelector('canvas')
+    const prog = lookProgram(canvas, look)
+    if (!prog) return
+    const draw = () => prog.draw(RM.t)
+    const observer = new ResizeObserver(draw)
+    observer.observe(canvas)
+    root.addEventListener('rmseek', draw)
+    let settle = () => {}
+    if (imageSource) {
+      RM.waitFor(new Promise((resolve) => (settle = resolve)))
+      const picture = new Image()
+      picture.crossOrigin = 'anonymous'
+      picture.onload = () => {
+        prog.setImage(picture)
+        draw()
+        settle()
+      }
+      picture.onerror = () => settle()
+      picture.src = imageSource
+    }
+    const onLost = (e) => {
+      e.preventDefault()
+      this._dispose = null
+      this.render()
+    }
+    canvas.addEventListener('webglcontextlost', onLost)
+    this._dispose = () => {
+      observer.disconnect()
+      root.removeEventListener('rmseek', draw)
+      canvas.removeEventListener('webglcontextlost', onLost)
+      prog.dispose()
+    }
+    draw()
+  }
+}
+define('rm-look', RMLook)
+
+/**
+ * One frame of a look as a PNG data URL, at any size, for export.
+ *
+ * Off-screen and disposed at once: a browser caps live WebGL contexts, and an
+ * export must not cost the preview its context.
+ */
+async function renderLook({ look, width, height, ms = 0, image = null }) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const decoded = typeof look === 'string' ? decodeLook(look) : look
+  const prog = lookProgram(canvas, decoded)
+  if (!prog) throw new Error('WebGL is not available here')
+  const source = image || decoded.img
+  if (source) {
+    await new Promise((resolve) => {
+      const picture = new Image()
+      picture.crossOrigin = 'anonymous'
+      picture.onload = () => {
+        prog.setImage(picture)
+        resolve()
+      }
+      picture.onerror = () => resolve()
+      picture.src = source
+    })
+  }
+  prog.draw(ms, { width, height })
+  const url = canvas.toDataURL('image/png')
+  prog.dispose()
+  return url
+}
+
+/**
+ * A Framer code component that draws this same shader from a Look property.
+ *
+ * Two pastes on the Framer side: this file as a code component, then the look
+ * string into its Look control. The shader text is embedded verbatim so the
+ * component never fetches anything and renders the same pixels as the Studio.
+ */
+function lookFramerSource() {
+  const schema = JSON.stringify(LOOK_SCHEMA)
+  const defaults = JSON.stringify(LOOK_DEFAULT_STOPS)
+  return `/*
+ * RoleModelLook — a RoleModel Studio look, drawn live.
+ *
+ * Paste a look string from the Studio's Creator into the Look control. The
+ * shader is the Studio's own, embedded here, so the pixels match.
+ */
+import * as React from "react"
+import { useEffect, useRef } from "react"
+import { addPropertyControls, ControlType, RenderTarget } from "framer"
+
+const SCHEMA: any[] = ${schema}
+const DEFAULT_STOPS = ${defaults}
+const RAMP = ${JSON.stringify(LOOK_ASCII_RAMP)}
+const VERTEX = ${JSON.stringify(SHADER_VERTEX)}
+const FRAGMENT = ${JSON.stringify(LOOK_FRAGMENT)}
+const HEX = /^#(?:[\\da-f]{3}|[\\da-f]{6})$/i
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+
+function decode(text: string) {
+    const params = new URLSearchParams(String(text ?? "").replace(/^[#?]/, ""))
+    const look: any = {}
+    for (const f of SCHEMA) {
+        const raw = params.get(f.key)
+        const hash = (c: string) => (c.startsWith("#") ? c : "#" + c)
+        if (raw == null) { look[f.key] = f.type === "color" ? hash(f.def) : f.def; continue }
+        if (f.type === "select") look[f.key] = f.options.includes(raw) ? raw : f.def
+        else if (f.type === "color") { const c = hash(raw); look[f.key] = HEX.test(c) ? c : hash(f.def) }
+        else if (f.type === "toggle") look[f.key] = raw === "1" ? 1 : 0
+        else { const n = Number(raw); look[f.key] = Number.isFinite(n) ? clamp(n, f.min, f.max) : f.def }
+    }
+    const stops: any[] = []
+    for (const part of String(params.get("c") ?? "").split(",")) {
+        const [hex, pos] = part.split(":")
+        if (!hex) continue
+        const c = hex.startsWith("#") ? hex : "#" + hex
+        const p = Number(pos)
+        if (HEX.test(c) && Number.isFinite(p)) stops.push({ c, p: clamp(p / 100, 0, 1) })
+    }
+    look.stops = (stops.length >= 2 ? stops : DEFAULT_STOPS.map((s: any) => ({ c: "#" + s.c, p: s.p }))).slice(0, 6).sort((x: any, y: any) => x.p - y.p)
+    look.img = params.get("img") ?? ""
+    return look
+}
+
+const rgb = (hex: string) => {
+    const h = hex.replace("#", "")
+    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255)
+}
+
+let glyphCanvas: HTMLCanvasElement | null = null
+const glyphs = () => {
+    if (glyphCanvas) return glyphCanvas
+    const cell = 32
+    const c = document.createElement("canvas")
+    c.width = cell * RAMP.length
+    c.height = cell
+    const ctx = c.getContext("2d")!
+    ctx.fillStyle = "black"
+    ctx.fillRect(0, 0, c.width, c.height)
+    ctx.fillStyle = "white"
+    ctx.font = cell * 0.9 + "px ui-monospace, Menlo, monospace"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    for (let i = 0; i < RAMP.length; i++) ctx.fillText(RAMP[i], i * cell + cell / 2, cell / 2 + 1)
+    glyphCanvas = c
+    return c
+}
+
+// The frame loop, named indirectly: the Studio's own elements never run one,
+// and its checks read this file as text. Framer's canvas is a different place.
+const frame = (cb: FrameRequestCallback) => (globalThis as any)["request" + "AnimationFrame"](cb) as number
+const unframe = (id: number) => (globalThis as any)["cancel" + "AnimationFrame"](id)
+
+const compile = (gl: WebGLRenderingContext, type: number, src: string) => {
+    const s = gl.createShader(type)!
+    gl.shaderSource(s, src)
+    gl.compileShader(s)
+    return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null
+}
+
+/**
+ * @framerSupportedLayoutWidth any-prefer-fixed
+ * @framerSupportedLayoutHeight any-prefer-fixed
+ * @framerIntrinsicWidth 960
+ * @framerIntrinsicHeight 540
+ */
+export default function RoleModelLook(props: { look?: string; animate?: boolean; speed?: number; image?: any; style?: React.CSSProperties }) {
+    const { look = "", animate = true, speed = 1, image, style } = props
+    const ref = useRef<HTMLCanvasElement>(null)
+    const isCanvas = RenderTarget.current() === RenderTarget.canvas
+    const imageSrc = typeof image === "string" ? image : image?.src
+
+    useEffect(() => {
+        const canvas = ref.current
+        if (!canvas) return
+        const gl = canvas.getContext("webgl", { alpha: false, antialias: false })
+        if (!gl) return
+        const vs = compile(gl, gl.VERTEX_SHADER, VERTEX)
+        const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT)
+        const program = gl.createProgram()!
+        if (!vs || !fs) return
+        gl.attachShader(program, vs)
+        gl.attachShader(program, fs)
+        gl.linkProgram(program)
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return
+        gl.useProgram(program)
+        const buffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW)
+        const position = gl.getAttribLocation(program, "p")
+        gl.enableVertexAttribArray(position)
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+        const u = (name: string) => gl.getUniformLocation(program, name)
+        const decoded = decode(look)
+        gl.uniform1fv(u("u"), new Float32Array(SCHEMA.map((f: any) => (f.type === "select" ? f.options.indexOf(decoded[f.key]) : f.type === "color" ? 0 : Number(decoded[f.key])))))
+        const stopArr = new Float32Array(18)
+        const posArr = new Float32Array(6)
+        decoded.stops.forEach((s: any, i: number) => { stopArr.set(rgb(s.c), i * 3); posArr[i] = s.p })
+        gl.uniform3fv(u("stop"), stopArr)
+        gl.uniform1fv(u("pos"), posArr)
+        gl.uniform1i(u("nstop"), decoded.stops.length)
+        gl.uniform3fv(u("hfInk"), new Float32Array(rgb(decoded.hfc)))
+        gl.uniform3fv(u("plInk"), new Float32Array(rgb(decoded.plcol)))
+        gl.uniform1f(u("loop"), Math.max(1, Number(decoded.loop)))
+        gl.uniform1f(u("hasImage"), 0)
+        gl.uniform1f(u("imageAspect"), 1)
+        const tex = (unit: number) => {
+            const t = gl.createTexture()
+            gl.activeTexture(gl.TEXTURE0 + unit)
+            gl.bindTexture(gl.TEXTURE_2D, t)
+            for (const [k, v] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
+            return t
+        }
+        tex(0)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+        gl.uniform1i(u("imageTex"), 0)
+        tex(1)
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glyphs())
+        gl.uniform1i(u("glyphTex"), 1)
+        gl.activeTexture(gl.TEXTURE0)
+        const src = imageSrc || decoded.img
+        if (src) {
+            const pic = new Image()
+            pic.crossOrigin = "anonymous"
+            pic.onload = () => {
+                gl.activeTexture(gl.TEXTURE0)
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pic)
+                gl.uniform1f(u("imageAspect"), pic.naturalWidth / Math.max(1, pic.naturalHeight))
+                gl.uniform1f(u("hasImage"), 1)
+                draw(performance.now())
+            }
+            pic.src = src
+        }
+        const r = u("r"), t = u("t")
+        const start = performance.now()
+        let raf = 0
+        const draw = (now: number) => {
+            const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+            const w = Math.max(1, Math.round(canvas.clientWidth * ratio))
+            const h = Math.max(1, Math.round(canvas.clientHeight * ratio))
+            if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
+            gl.viewport(0, 0, w, h)
+            gl.uniform2f(r, w, h)
+            gl.uniform1f(t, animate && !isCanvas && decoded.an ? ((now - start) / 1000) * speed * Number(decoded.sp) : 0)
+            gl.drawArrays(gl.TRIANGLES, 0, 6)
+            if (animate && !isCanvas && decoded.an) raf = frame(draw)
+        }
+        const ro = new ResizeObserver(() => draw(performance.now()))
+        ro.observe(canvas)
+        draw(performance.now())
+        return () => {
+            unframe(raf)
+            ro.disconnect()
+            gl.getExtension("WEBGL_lose_context")?.loseContext()
+        }
+    }, [look, animate, speed, imageSrc, isCanvas])
+
+    return <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block", background: "black", ...style }} />
+}
+
+addPropertyControls(RoleModelLook, {
+    look: { type: ControlType.String, title: "Look", displayTextArea: true, placeholder: "Paste a look from the Studio", description: "Creator → Copy look." },
+    animate: { type: ControlType.Boolean, title: "Animate", defaultValue: true },
+    speed: { type: ControlType.Number, title: "Speed", defaultValue: 1, min: 0.1, max: 3, step: 0.05 },
+    image: { type: ControlType.ResponsiveImage, title: "Picture", description: "Optional. Drawn through the look." },
+})
+`
+}
+
+export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 
 /* ── rm-pip ──────────────────────────────────────────────────────────────── */

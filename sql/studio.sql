@@ -89,6 +89,18 @@ create table if not exists public.style_people (
   created_at  timestamptz not null default now()
 );
 
+-- The Creator's saved looks: a name and the look string that is the whole
+-- design, plus a small preview the machine that saved it rendered.
+create table if not exists public.looks (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  look          text not null,
+  preview_file  text,
+  project_id    text,
+  created_by    text,
+  created_at    timestamptz not null default now()
+);
+
 -- The role every Studio connects as. Created once; the password comes from the
 -- psql variable so it is never written into this file. `\gexec` runs the
 -- statement the select builds — a psql variable cannot be read inside a DO block.
@@ -107,3 +119,4 @@ grant select, insert, update on public.studio_skills   to studio_app;
 -- library, and a teammate who left should be removable from the people list.
 grant select, insert, update, delete on public.style_images to studio_app;
 grant select, insert, update, delete on public.style_people to studio_app;
+grant select, insert, update, delete on public.looks to studio_app;

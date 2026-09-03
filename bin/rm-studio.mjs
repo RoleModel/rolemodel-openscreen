@@ -37,18 +37,22 @@ import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, par
 import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
 import {
   createStudioSkill,
+  deleteLook,
   deleteStyleImage,
   deleteStylePerson,
   fetchSetting,
   fetchStudioSkill,
   fetchStudioSkills,
+  insertLook,
   insertStyleImage,
   insertStylePerson,
+  listLooks,
   listStyleImages,
   listStylePeople,
   putSetting,
   renameStylePerson,
   stylePeopleById,
+  updateLook,
   updateStudioSkill,
   updateStyleImage,
 } from "../lib/db.mjs";
@@ -200,6 +204,8 @@ const ADDED_DIR = join(LIB, "Brand");
    picture in the shared database is a URL on fal's CDN, and a copy here is what
    makes it usable with no network and safe from that CDN forgetting it. */
 const STYLE_DIR = join(LIB, "Style");
+/* The Creator's previews and exported PNGs that belong to no project. */
+const LOOKS_DIR = join(LIB, "Looks");
 
 /*
  * The team's pictures, from the database, kept for a minute.
@@ -5897,6 +5903,106 @@ const server = createServer(async (req, res) => {
       return copyProblem ? { ...row, copyProblem } : row;
     };
 
+    /*
+     * The Creator: saved looks, and a PNG of one.
+     *
+     * A look is a string; the row is a name for it. The preview is rendered by
+     * the browser that saved it (the shader lives there) and kept in the
+     * library's Looks folder, so the saved shelf shows pictures, not names.
+     */
+    const pngBytes = (dataUrl) => {
+      const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ""));
+      if (!m) throw new Error("the picture has to be a PNG data URI");
+      const bytes = Buffer.from(m[1], "base64");
+      if (bytes.length > 60_000_000) throw new Error("that picture is too large");
+      return bytes;
+    };
+
+    if (p === "/api/looks" && req.method === "GET") {
+      try {
+        const client = await styleClient();
+        return json(res, 200, { looks: await listLooks({ databaseUrl: client.databaseUrl }) });
+      } catch (err) {
+        return json(res, 200, { looks: [], problem: String(err.message) });
+      }
+    }
+
+    if (p === "/api/looks" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const name = String(body.name ?? "").trim();
+      const look = String(body.look ?? "").trim();
+      if (!name || !look) return json(res, 400, { error: "a name and a look are required" });
+      try {
+        const client = await styleClient();
+        let row = await insertLook({ ...client, look: { name, look, project_id: body.projectId ? String(body.projectId) : null } });
+        if (body.preview) {
+          await mkdir(LOOKS_DIR, { recursive: true });
+          const file = `${row.id}.png`;
+          await writeFile(join(LOOKS_DIR, file), pngBytes(body.preview));
+          row = await updateLook({ databaseUrl: client.databaseUrl, id: row.id, patch: { preview_file: file } });
+        }
+        return json(res, 200, { look: row });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/looks" && req.method === "PATCH") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      try {
+        const client = await styleClient();
+        const patch = {};
+        if (body.name !== undefined) patch.name = String(body.name).trim();
+        if (body.look !== undefined) patch.look = String(body.look).trim();
+        if (body.preview) {
+          await mkdir(LOOKS_DIR, { recursive: true });
+          const file = `${String(body.id)}.png`;
+          await writeFile(join(LOOKS_DIR, file), pngBytes(body.preview));
+          patch.preview_file = file;
+        }
+        return json(res, 200, { look: await updateLook({ databaseUrl: client.databaseUrl, id: String(body.id), patch }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/looks" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      try {
+        const client = await styleClient();
+        const gone = await deleteLook({ databaseUrl: client.databaseUrl, id: String(body.id) });
+        if (gone?.preview_file) await rm(join(LOOKS_DIR, basename(gone.preview_file)), { force: true }).catch(() => {});
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * A PNG of a look, rendered in the browser at the size asked for, kept as a
+     * still in the open project — or in the library's Looks folder when no
+     * project is open. Like a converted clip: beside the work, never over a file.
+     */
+    if (p === "/api/looks/png" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const bytes = pngBytes(body.dataUrl);
+        const stem = safeName(String(body.name ?? "look"), "look").slice(0, 60);
+        const projectId = body.projectId && (await readManifest(projectDir(String(body.projectId))).catch(() => null)) ? String(body.projectId) : null;
+        const dir = projectId ? join(mediaDir(projectId), "Stills") : LOOKS_DIR;
+        await mkdir(dir, { recursive: true });
+        let dest = join(dir, `${stem}.png`);
+        for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${stem}-${n}.png`);
+        await writeFile(dest, bytes);
+        if (projectId) await reindex(projectId, { force: true }).catch(() => {});
+        return json(res, 200, { ok: true, where: projectId ? `${relative(mediaDir(projectId), dest)} in the project` : `Looks/${basename(dest)} in the library`, rel: projectId ? relative(mediaDir(projectId), dest) : null, file: basename(dest) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/style/state" && req.method === "GET") {
       const { key } = await falSettings();
       const template = (await styleTemplate()) ?? DEFAULT_STYLE;
@@ -8752,6 +8858,14 @@ async function fetchVoiceList() {
      * whatever the database row says; a path from the network is reduced to its
      * basename before it touches the disk.
      */
+    if (p.startsWith("/looks/")) {
+      const file = join(LOOKS_DIR, basename(decodeURIComponent(p.slice("/looks/".length))));
+      const bytes = await readFile(file).catch(() => null);
+      if (!bytes) return json(res, 404, { error: "no such preview" });
+      res.writeHead(200, { "content-type": "image/png", "cache-control": "max-age=86400" });
+      return res.end(bytes);
+    }
+
     if (p.startsWith("/style/")) {
       const name = basename(decodeURIComponent(p.slice("/style/".length)));
       let file = join(STYLE_DIR, name);
