@@ -7638,7 +7638,10 @@ async function fetchVoiceList() {
       if (touchesPublic) {
         const base = String(b.publicBase ?? "").trim();
         if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
-        await setStoragePublicBase(storageName, { bucket: String(b.publicBucket ?? "").trim(), base });
+        /* The bucket half defaults to "openscreen": that is the bucket every
+           "Send project to storage" writes into, so a pasted URL alone is
+           enough for project links to go permanent. */
+        await setStoragePublicBase(storageName, { bucket: String(b.publicBucket ?? "").trim() || (base ? "openscreen" : ""), base });
       }
       const args = ["config", "update", storageName];
       if (b.endpoint) args.push("endpoint", String(b.endpoint));
@@ -7701,6 +7704,61 @@ async function fetchVoiceList() {
       if (clean.split("/").some((seg) => seg === ".." || seg === "." || seg.startsWith("-"))) return null;
       return `${name}:${clean}`;
     };
+
+    /*
+     * One link-minting path, for the storage browser and the project cards
+     * both: existence first — rclone happily presigns a path that holds
+     * nothing — then the public base when the object lives in the public
+     * bucket, then the presign rclone can do.
+     */
+    const mintLink = async (remote, rel) => {
+      const clean = String(rel ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+      const target = remotePath(remote, clean);
+      if (!target) return { error: "that is not a path this can link" };
+      const there = await capture("rclone", ["lsf", target]);
+      if (!there.ok || !there.out.trim()) {
+        return { missing: true, error: "nothing is stored at that path yet — send the project to storage first, then link it" };
+      }
+      const pub = (await storagePublicBases())[remote];
+      if (pub?.base && (clean === pub.bucket || clean.startsWith(`${pub.bucket}/`))) {
+        const rest = clean.slice(pub.bucket.length).replace(/^\/+/, "");
+        return { url: `${pub.base.replace(/\/+$/, "")}/${rest.split("/").map(encodeURIComponent).join("/")}`, expiry: null, permanent: true };
+      }
+      const r = await capture("rclone", ["link", target]);
+      const linkUrl = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
+      if (!r.ok || !/^https?:\/\//.test(linkUrl)) {
+        const why = (r.err || "").split("\n").filter(Boolean).pop() ?? "rclone could not make a link for that";
+        // rclone writes both `NOTICE : ` and `NOTICE: `; strip either, and the
+        // timestamp with it, or the reason arrives wearing a log line.
+        return { error: why.replace(/^\d{4}\/\d{2}\/\d{2} [\d:]+ (?:ERROR|NOTICE|INFO)\s*:\s*/, "") };
+      }
+      // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
+      return { url: linkUrl, expiry: /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null };
+    };
+
+    /*
+     * A link for one project asset, without the caller having to know which
+     * remote holds it. The manifest's `remote` field is not an rclone remote
+     * name — older projects carry an object there, which is exactly what the
+     * first version of the card's Copy link sent, and the guard printed
+     * "[object Object] is not a path". So the copy is FOUND rather than
+     * assumed: every configured remote is asked whether it holds the file,
+     * and the first that does mints the link.
+     */
+    if (p === "/api/project/storage/link" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const rel = String(url.searchParams.get("rel") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const listed = await capture("rclone", ["listremotes"]);
+      const names = listed.out.split("\n").map((x) => x.trim().replace(/:$/, "")).filter((n) => REMOTE_NAME.test(n));
+      let failure = null;
+      for (const name of names) {
+        const made = await mintLink(name, `openscreen/projects/${id}/media/${rel}`);
+        if (made.url) return json(res, 200, { ...made, remote: name });
+        if (!made.missing) failure = made;
+      }
+      return json(res, 404, { error: failure?.error ?? "this file is not in storage yet — send the project to storage first" });
+    }
 
     /*
      * Copy a complete project to its shared-storage home.
@@ -7784,47 +7842,9 @@ async function fetchVoiceList() {
      * working is worse than one you were told the lifetime of.
      */
     if (opName === "link" && req.method === "GET") {
-      /* Trimmed the same way remotePath trims, so the bucket comparison below
-         sees the path the way rclone will. */
-      const rel = String(new URL(req.url, "http://studio.local").searchParams.get("path") ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
-      const target = remotePath(opRemote, rel);
-      if (!target) return json(res, 400, { error: "that is not a path this can link" });
-      /*
-       * The permanent answer first.
-       *
-       * A presigned URL is the best rclone can mint, and R2 caps one at a week
-       * — a link that has to be re-made every Monday is not a link anybody can
-       * put in a doc. A bucket the person has made public has a stable URL
-       * rclone knows nothing about; when this remote has one configured and
-       * the object lives in that bucket, the link is built from it and never
-       * expires.
-       */
-      /* Whichever kind of link, the object has to be there first. rclone will
-         happily presign a path that holds nothing, and a public base is string
-         arithmetic — so a file the project never sent became a dead URL on
-         somebody's clipboard. One listing call answers before anything is
-         minted. */
-      const there = await capture("rclone", ["lsf", target]);
-      if (!there.ok || !there.out.trim()) {
-        return json(res, 404, { error: "nothing is stored at that path yet — send the project to storage first, then link it" });
-      }
-      const pub = (await storagePublicBases())[opRemote];
-      if (pub?.base && (rel === pub.bucket || rel.startsWith(`${pub.bucket}/`))) {
-        const rest = rel.slice(pub.bucket.length).replace(/^\/+/, "");
-        const url = `${pub.base.replace(/\/+$/, "")}/${rest.split("/").map(encodeURIComponent).join("/")}`;
-        return json(res, 200, { url, expiry: null, permanent: true });
-      }
-      const r = await capture("rclone", ["link", target]);
-      const url = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
-      if (!r.ok || !/^https?:\/\//.test(url)) {
-        const why = (r.err || "").split("\n").filter(Boolean).pop() ?? "rclone could not make a link for that";
-        // rclone writes both `NOTICE : ` and `NOTICE: `; strip either, and the
-        // timestamp with it, or the reason arrives wearing a log line.
-        return json(res, 400, { error: why.replace(/^\d{4}\/\d{2}\/\d{2} [\d:]+ (?:ERROR|NOTICE|INFO)\s*:\s*/, "") });
-      }
-      // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
-      const expiry = /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null;
-      return json(res, 200, { url, expiry });
+      const made = await mintLink(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
+      if (made.url) return json(res, 200, made);
+      return json(res, made.missing ? 404 : 400, { error: made.error });
     }
 
     if (opName === "ls" && req.method === "GET") {
@@ -7986,7 +8006,7 @@ async function fetchVoiceList() {
       const base = String(b.publicBase ?? "").trim();
       if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
       const r = await capture("rclone", args);
-      if (r.ok) await setStoragePublicBase(b.name, { bucket: String(b.publicBucket ?? "").trim(), base });
+      if (r.ok) await setStoragePublicBase(b.name, { bucket: String(b.publicBucket ?? "").trim() || (base ? "openscreen" : ""), base });
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }
 
