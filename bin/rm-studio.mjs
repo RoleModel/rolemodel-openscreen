@@ -71,7 +71,7 @@ import {
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
 import { openFrame, shareVideo } from "../lib/openframe.mjs";
-import { readCut, writeCut } from "../lib/cut.mjs";
+import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
 import { cacheSource } from "../lib/edit-cache.mjs";
 import { slack } from "../lib/slack.mjs";
@@ -4681,6 +4681,78 @@ const server = createServer(async (req, res) => {
       } catch (error) {
         return json(res, 400, { error: error.message });
       }
+    }
+
+    /*
+     * A first cut from nothing but footage.
+     *
+     * The Timeline used to require a composition: a brand-new project with two
+     * recordings and no HyperFrames folder answered "nothing to edit", which is
+     * exactly backwards — footage is the thing an editor exists to cut. This
+     * lays the project's takes end to end in a fresh Renders folder, with a
+     * shell index.html so the folder is an ordinary composition to every other
+     * panel, and the editor opens on it like any seeded cut.
+     */
+    if (p === "/api/edit/start" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const media = mediaDir(id);
+      const catalog = await readFile(join(projectDir(id), "catalog.json"), "utf8").then(JSON.parse).catch(() => ({ files: [] }));
+      /* Recording order, because that is the order the story was told in. */
+      const files = (catalog.files ?? [])
+        .filter((f) => f.kind === "video")
+        .sort((a, b) => String(a.mtime ?? "").localeCompare(String(b.mtime ?? "")));
+      if (!files.length) return json(res, 400, { error: "this project has no footage yet — record something, or drop a video into it" });
+      const renders = join(media, "Renders");
+      let folder = "first-cut";
+      for (let n = 2; await stat(join(renders, folder)).catch(() => null); n += 1) folder = `first-cut-${n}`;
+      const dir = join(renders, folder);
+      await mkdir(dir, { recursive: true });
+      /* Caching a take is a few seconds of ffmpeg each; held open for the same
+         reason /api/edit/seed is — the button that asked is the only thing
+         waiting. */
+      const cut = emptyCut();
+      const track = { id: "v1", kind: "video", clips: [] };
+      cut.tracks.push(track);
+      let cursor = 0;
+      try {
+        for (const f of files) {
+          const cached = await cacheSource(join(media, f.rel), join(media, ".edit-cache"));
+          cut.sources[cached.key] = { file: f.rel, seconds: cached.seconds, frames: cached.frames, interval: 0.5, count: cached.frames };
+          track.clips.push({
+            id: `take-${track.clips.length + 1}`,
+            name: f.name,
+            source: cached.key,
+            in: 0,
+            out: Number(cached.seconds.toFixed(3)),
+            at: Number(cursor.toFixed(3)),
+          });
+          cursor += cached.seconds;
+        }
+        /* The shell: enough of a composition that the folder lists, previews and
+           seeds like any other — and nothing else, because the cut is the truth
+           here, not the markup. */
+        await writeFile(
+          join(dir, "index.html"),
+          [
+            "<!doctype html>",
+            '<html lang="en">',
+            '<head><meta charset="utf-8"><title>First cut</title></head>',
+            "<body>",
+            `<main data-composition-id="${folder}" data-width="1920" data-height="1080" data-duration="${cursor.toFixed(3)}"></main>`,
+            "</body>",
+            "</html>",
+            "",
+          ].join("\n"),
+          "utf8",
+        );
+        await writeCut(dir, cut);
+      } catch (error) {
+        await rm(dir, { recursive: true, force: true }).catch(() => {});
+        return json(res, 400, { error: error.message });
+      }
+      return json(res, 200, { ok: true, folder, clips: track.clips.length });
     }
 
     if (p === "/api/edit/cut" && req.method === "GET") {
