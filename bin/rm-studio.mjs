@@ -97,6 +97,8 @@ import {
 	setSidebarRail,
 	sidebarRail,
 	setSlackSettings,
+	setStoragePublicBase,
+	storagePublicBases,
 	reviewNotices,
 	setReviewNotices,
 	slackSettings,
@@ -7518,7 +7520,11 @@ async function fetchVoiceList() {
 
     if (storageName && req.method === "GET") {
       const r = await readRemote(storageName);
-      return r ? json(res, 200, r) : json(res, 404, { error: `no rclone remote named "${storageName}"` });
+      if (!r) return json(res, 404, { error: `no rclone remote named "${storageName}"` });
+      /* The public base is the Studio's own note about this remote, kept in its
+         own config — rclone's file belongs to rclone. */
+      const pub = (await storagePublicBases())[storageName] ?? null;
+      return json(res, 200, { ...r, publicBucket: pub?.bucket ?? null, publicBase: pub?.base ?? null });
     }
 
     /*
@@ -7529,6 +7535,14 @@ async function fetchVoiceList() {
      */
     if (storageName && req.method === "PUT") {
       const b = JSON.parse(await text(req));
+      /* The public base is Studio's note, not an rclone key — persisted apart,
+         and cleared by blanking either half. */
+      const touchesPublic = "publicBucket" in b || "publicBase" in b;
+      if (touchesPublic) {
+        const base = String(b.publicBase ?? "").trim();
+        if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
+        await setStoragePublicBase(storageName, { bucket: String(b.publicBucket ?? "").trim(), base });
+      }
       const args = ["config", "update", storageName];
       if (b.endpoint) args.push("endpoint", String(b.endpoint));
       if (b.accessKeyId) args.push("access_key_id", String(b.accessKeyId));
@@ -7537,7 +7551,9 @@ async function fetchVoiceList() {
       if (b.secretAccessKey) args.push("secret_access_key", String(b.secretAccessKey));
       if (b.provider) args.push("provider", String(b.provider));
       if (b.region) args.push("region", String(b.region));
-      if (args.length === 3) return json(res, 400, { ok: false, err: "nothing to change" });
+      if (args.length === 3) {
+        return touchesPublic ? json(res, 200, { ok: true, out: "", err: "" }) : json(res, 400, { ok: false, err: "nothing to change" });
+      }
       const r = await capture("rclone", args);
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }
@@ -7671,8 +7687,27 @@ async function fetchVoiceList() {
      * working is worse than one you were told the lifetime of.
      */
     if (opName === "link" && req.method === "GET") {
-      const target = remotePath(opRemote, new URL(req.url, "http://studio.local").searchParams.get("path"));
+      /* Trimmed the same way remotePath trims, so the bucket comparison below
+         sees the path the way rclone will. */
+      const rel = String(new URL(req.url, "http://studio.local").searchParams.get("path") ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+      const target = remotePath(opRemote, rel);
       if (!target) return json(res, 400, { error: "that is not a path this can link" });
+      /*
+       * The permanent answer first.
+       *
+       * A presigned URL is the best rclone can mint, and R2 caps one at a week
+       * — a link that has to be re-made every Monday is not a link anybody can
+       * put in a doc. A bucket the person has made public has a stable URL
+       * rclone knows nothing about; when this remote has one configured and
+       * the object lives in that bucket, the link is built from it and never
+       * expires.
+       */
+      const pub = (await storagePublicBases())[opRemote];
+      if (pub?.base && (rel === pub.bucket || rel.startsWith(`${pub.bucket}/`))) {
+        const rest = rel.slice(pub.bucket.length).replace(/^\/+/, "");
+        const url = `${pub.base.replace(/\/+$/, "")}/${rest.split("/").map(encodeURIComponent).join("/")}`;
+        return json(res, 200, { url, expiry: null, permanent: true });
+      }
       const r = await capture("rclone", ["link", target]);
       const url = r.out.trim().split("\n").filter(Boolean).pop() ?? "";
       if (!r.ok || !/^https?:\/\//.test(url)) {
@@ -7842,7 +7877,10 @@ async function fetchVoiceList() {
       ];
       if (b.endpoint) args.push("endpoint", b.endpoint);
       if (b.region) args.push("region", b.region);
+      const base = String(b.publicBase ?? "").trim();
+      if (base && !/^https?:\/\//.test(base)) return json(res, 400, { ok: false, err: "the public base URL must start with https://" });
       const r = await capture("rclone", args);
+      if (r.ok) await setStoragePublicBase(b.name, { bucket: String(b.publicBucket ?? "").trim(), base });
       return json(res, r.ok ? 200 : 500, { ok: r.ok, out: r.out, err: r.err });
     }
 
