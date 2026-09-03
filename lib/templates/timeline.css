@@ -243,3 +243,64 @@
    text-overflow: ellipsis;
    white-space: nowrap;
 }
+
+/* The in-place scene editor: fields on the shelf, stage on the viewer. */
+.tl__editor {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-small);
+   overflow-y: auto;
+   min-block-size: 0;
+}
+
+.tl__editor-bar {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+}
+
+.tl__editor-parts {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+}
+
+.tl__part {
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   background: var(--panel);
+   padding: var(--op-space-x-small);
+}
+
+.tl__part-head {
+   display: flex;
+   align-items: center;
+   gap: var(--op-space-x-small);
+   cursor: pointer;
+}
+
+.tl__part-tag {
+   font-family: var(--m);
+   font-size: var(--op-font-small);
+}
+
+.tl__part-times {
+   display: flex;
+   gap: var(--op-space-x-small);
+   margin-block-start: var(--op-space-x-small);
+}
+
+.tl__part-fields {
+   display: flex;
+   flex-direction: column;
+   gap: var(--op-space-x-small);
+   margin-block-start: var(--op-space-x-small);
+}
+
+.tl__field {
+   display: flex;
+   flex-direction: column;
+   gap: calc(var(--op-space-x-small) / 2);
+   min-inline-size: 0;
+}

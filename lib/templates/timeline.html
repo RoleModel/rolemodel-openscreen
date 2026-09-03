@@ -20,6 +20,27 @@
          </div>
          <div data-el="shelfList" class="tl__shelf-list"></div>
          <div data-el="shelfEmpty" class="hint" hidden>No scenes saved in this project yet.</div>
+         <!-- The editor, in place of the cards while a scene is open. The stage is
+              the viewer itself — the preview frame mounts over the picture — so the
+              scene is edited exactly where the cut will show it. -->
+         <div data-el="shelfEditor" class="tl__editor" hidden>
+            <div class="tl__editor-bar">
+               <button data-el="editBack" class="btn ghost" type="button">Back</button>
+               <span class="tl__spacer"></span>
+               <button data-el="editFull" class="btn ghost" type="button" hidden>Full editor</button>
+               <button data-el="editSave" class="btn" type="button">Save scene</button>
+            </div>
+            <div class="form-group form-group--no-padding">
+               <span class="form-label">Name</span>
+               <input data-el="editName" class="input form-control" type="text">
+            </div>
+            <div class="form-group form-group--no-padding">
+               <span class="form-label">Wallpaper</span>
+               <select data-el="editWallpaper" class="input form-control"></select>
+            </div>
+            <div data-el="editParts" class="tl__editor-parts"></div>
+            <div data-el="editStatus" class="form-hint hint" hidden></div>
+         </div>
       </aside>
       <div class="tl__screen">
          <!-- The frame. The stage around it is just black room; this is the box
@@ -81,9 +102,36 @@
       </div>
       <div class="tl__shelf-meta">
          <span data-el="name" class="tl__shelf-name"></span>
+         <span class="tl__spacer"></span>
+         <button data-el="edit" class="btn ghost" type="button">Edit</button>
          <button data-el="insert" class="btn ghost" type="button">Insert</button>
       </div>
    </div>
+</template>
+
+<!-- One part of a scene being edited on the shelf: when it runs, and the words
+     it carries. The full palette lives on the Scenes page; this edits what a
+     part already has, which is the errand you run while looking at the cut. -->
+<template data-row="timeline-part">
+   <details class="tl__part">
+      <summary class="tl__part-head">
+         <span data-el="tag" class="tl__part-tag"></span>
+         <span data-el="when" class="hint"></span>
+      </summary>
+      <div class="tl__part-times">
+         <label class="tl__field"><span class="form-label">at&nbsp;(ms)</span><input data-el="at" class="input form-control" type="number" step="100" min="0"></label>
+         <label class="tl__field"><span class="form-label">for&nbsp;(ms)</span><input data-el="holds" class="input form-control" type="number" step="100" min="0"></label>
+      </div>
+      <div data-el="fields" class="tl__part-fields"></div>
+   </details>
+</template>
+
+<!-- One field of a part: its name and its current words. -->
+<template data-row="timeline-field">
+   <label class="tl__field">
+      <span data-el="label" class="form-label"></span>
+      <input data-el="input" class="input form-control" type="text">
+   </label>
 </template>
 
 <!-- One composition, offered for editing. A row rather than markup built in
