@@ -1,0 +1,66 @@
+<!-- Creator: gradients, shaders, glass, dither, halftone, ASCII, grain — one look. -->
+<template data-panel="creator">
+   <p class="lede" data-region="main">One background, every treatment: a gradient with warp and flow, then waves, blobs, light, fluted glass, optics, pixels, dither, halftone, a grid, ASCII and grain. One seekable WebGL pass, so a frame is always the same frame. Copy it into Framer, save it as a scene, export a PNG.</p>
+   <div class="wpprev creator__stage" data-region="main">
+      <rm-scene assets="/brand/imagery"><rm-look data-el="look" at="0" for="60000"></rm-look></rm-scene>
+   </div>
+   <div class="ctl" data-region="main">
+      <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
+      <input data-el="scrub" type="range" min="0" max="20000" step="20" value="0" class="form-control" />
+      <span data-el="clock" class="v">0 ms</span>
+      <select data-el="ratio" class="form-control creator__ratio" aria-label="PNG shape">
+         <option value="16/9" selected>16:9</option>
+         <option value="1/1">1:1</option>
+         <option value="4/3">4:3</option>
+         <option value="3/2">3:2</option>
+         <option value="21/9">21:9</option>
+         <option value="9/16">9:16</option>
+         <option value="4/5">4:5</option>
+         <option value="3/4">3:4</option>
+      </select>
+   </div>
+   <div class="client" data-region="main">Presets</div>
+   <div data-el="presets" class="grid creator__presets" data-region="main"></div>
+   <div class="client" data-region="main">Saved looks <span data-el="savedCount" class="creator__soft"></span></div>
+   <p data-el="savedEmpty" class="hint" data-region="main">Nothing saved yet. Press Save look and it is kept for the team.</p>
+   <div data-el="saved" class="grid creator__presets" data-region="main"></div>
+   <div class="client" data-region="main">The look</div>
+   <p class="hint" data-region="main">This string is the whole design. Paste it into the Framer component's Look control, or into this box to load one.</p>
+   <textarea data-el="lookText" class="form-control creator__looktext" rows="3" spellcheck="false" data-region="main"></textarea>
+   <pre data-el="markup" class="cmd-note" data-region="main"></pre>
+   <div data-region="footer">
+      <button data-el="copyLook" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy look</button>
+      <button data-el="copyFramer" class="btn ghost" type="button"><rm-icon name="code"></rm-icon>Copy Framer component</button>
+      <select data-el="pngSize" class="form-control creator__pngsize" aria-label="PNG size">
+         <option value="1280">1280 wide</option>
+         <option value="1920" selected>1920 wide</option>
+         <option value="2560">2560 wide</option>
+         <option value="3840">3840 wide</option>
+      </select>
+      <button data-el="png" class="btn ghost" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
+      <button data-el="save" class="btn btn--primary" type="button"><rm-icon name="bookmark-02"></rm-icon>Save look</button>
+   </div>
+</template>
+
+<!-- A preset or a saved look: a live thumbnail of the look itself. -->
+<template data-row="creator-preset">
+   <button class="card creator__preset" type="button">
+      <div class="thumb creator__thumb"><rm-look data-el="art" at="0" for="60000"></rm-look></div>
+      <div class="card__body"><input data-el="name" class="creator__name" type="text" aria-label="Name" readonly /></div>
+   </button>
+</template>
+
+<!-- One gradient stop: a colour and where it sits. -->
+<template data-row="creator-stop">
+   <div class="creator__stop">
+      <span data-el="swatch" class="creator__swatch"></span>
+      <input data-el="hex" class="form-control creator__hex" type="text" aria-label="Colour" maxlength="7" />
+      <input data-el="pos" class="form-control" type="range" min="0" max="100" step="1" aria-label="Position" />
+      <span data-el="readout" class="v"></span>
+      <button data-el="remove" class="btn ghost btn--small" type="button" aria-label="Remove stop">×</button>
+   </div>
+</template>
+
+<template data-row="creator-toggle">
+   <label data-el="label" class="form-label"></label><input data-el="input" type="checkbox" class="creator__check" />
+</template>
