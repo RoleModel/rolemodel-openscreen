@@ -81,9 +81,13 @@
          <button data-el="play" class="btn btn--icon" type="button" aria-label="Play" title="Play"><rm-icon data-el="playIcon" name="play"></rm-icon></button>
          <span data-el="clock" class="tl__clock">0:00.00</span>
          <span data-el="under" class="hint"></span>
-         <!-- Scoped to the selection: appears when a clip is picked, and says
-              which kind of thing the key command would also do. -->
-         <button data-el="removeClip" class="btn ghost" type="button" hidden>Delete clip</button>
+         <!-- The cutting tools. Slice works at the playhead; the two deletes are
+              scoped to the selection and appear when a clip is picked. Every one
+              has a key, named in its tooltip; copy, cut, paste and undo live on
+              the usual keys once the timeline has focus. -->
+         <button data-el="slice" class="btn ghost" type="button" title="Slice at the playhead (S)">Slice</button>
+         <button data-el="removeClip" class="btn ghost" type="button" hidden title="Delete, leaving the gap (⌫)">Delete clip</button>
+         <button data-el="rippleClip" class="btn ghost" type="button" hidden title="Delete and close the gap (⇧⌫)">Ripple delete</button>
          <span class="tl__spacer"></span>
          <button data-el="shelfToggle" class="btn ghost" type="button" aria-expanded="false">Scenes</button>
          <!-- Hidden outright when the project has no sound to offer. A disabled
