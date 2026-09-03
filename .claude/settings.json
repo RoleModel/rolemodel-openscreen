@@ -1,4 +1,5 @@
 {
+  "outputStyle": "ELI5",
   "$comment": [
     "Auto-mode setup. Auto mode does its work through Bash, so the prompts that",
     "matter are the read-only inspection commands it runs constantly. Everything",

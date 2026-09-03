@@ -1656,7 +1656,7 @@ pre {
 .empty {
   color: var(--muted);
   font-size: var(--op-font-small);
-  padding: var(--op-space-3x-large) 0;
+  padding: var(--op-space-3x-large);
 }
 
 .note {
