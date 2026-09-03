@@ -178,7 +178,6 @@
    inline-size: 0;
    min-block-size: 0;
    opacity: 0;
-   overflow: hidden;
    transition: inline-size 0.2s ease, opacity 0.2s ease;
 }
 
@@ -311,4 +310,103 @@
    flex-direction: column;
    gap: calc(var(--op-space-x-small) / 2);
    min-inline-size: 0;
+}
+
+/*
+ * The footage picker.
+ *
+ * Cards, not checkboxes: footage is chosen by what it looks like, so each take
+ * shows its poster. Selection is the click, and the badge is the take's place
+ * in the running order — the order the cards were clicked is the order the
+ * cut will play them.
+ */
+.tl__takes {
+   display: flex;
+   flex-direction: column;
+   align-items: flex-start;
+   gap: var(--op-space-small);
+   inline-size: 100%;
+}
+
+.tl__takes-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fill, minmax(calc(var(--op-space-scale-unit) * 30), 1fr));
+   gap: var(--op-space-small);
+   inline-size: 100%;
+}
+
+.tl__take {
+   position: relative;
+   display: flex;
+   flex-direction: column;
+   padding: 0;
+   font: inherit;
+   color: inherit;
+   text-align: start;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--op-radius-medium);
+   overflow: hidden;
+   cursor: pointer;
+}
+
+.tl__take:hover {
+   border-color: var(--muted);
+}
+
+.tl__take--on {
+   border-color: var(--accent);
+   box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tl__take-shot {
+   display: block;
+   aspect-ratio: 16 / 9;
+   background-color: var(--op-color-neutral-plus-max);
+   background-size: cover;
+   background-position: center;
+}
+
+.tl__take-order {
+   position: absolute;
+   inset-block-start: var(--op-space-x-small);
+   inset-inline-start: var(--op-space-x-small);
+   display: grid;
+   place-items: center;
+   inline-size: calc(var(--op-space-scale-unit) * 3);
+   block-size: calc(var(--op-space-scale-unit) * 3);
+   border-radius: var(--op-radius-pill, 999px);
+   background: var(--accent);
+   color: var(--op-color-neutral-plus-max);
+   font-family: var(--m);
+   font-size: var(--op-font-small);
+   font-weight: var(--op-font-weight-semi-bold);
+}
+
+.tl__take-meta {
+   display: flex;
+   flex-direction: column;
+   gap: calc(var(--op-space-x-small) / 2);
+   padding: var(--op-space-x-small);
+}
+
+.tl__take-name {
+   font-size: var(--op-font-small);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+/* The hover preview sits exactly over the poster, and only while the pointer
+   rests on the card — leave, and the poster is back. */
+.tl__take-shot {
+   position: relative;
+}
+
+.tl__take-clip {
+   position: absolute;
+   inset: 0;
+   inline-size: 100%;
+   block-size: 100%;
+   object-fit: cover;
 }

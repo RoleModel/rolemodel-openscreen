@@ -148,14 +148,29 @@
    </label>
 </template>
 
-<!-- One video, offered for a first cut. Checked by default: the common case is
-     "cut what I just recorded", and unticking is cheaper than ticking. -->
+<!-- The footage picker: poster cards, because footage is chosen by what it
+     looks like, not by its filename. Clicking a card selects it; the badge is
+     its place in the running order, in the order the cards were clicked. -->
+<template data-row="timeline-takes">
+   <div class="tl__takes">
+      <div data-el="grid" class="tl__takes-grid"></div>
+      <button data-el="start" class="btn" type="button" disabled>Cut the selected footage</button>
+   </div>
+</template>
+
 <template data-row="timeline-take">
-   <label class="row margin-y-sm">
-      <input data-el="pick" type="checkbox" checked>
-      <span data-el="name"></span>
-      <span data-el="meta" class="hint"></span>
-   </label>
+   <button class="tl__take" type="button" aria-pressed="false">
+      <span data-el="shot" class="tl__take-shot">
+         <!-- The moving preview. Loaded on first hover, never before: a grid of
+              takes must not stream every file just to be looked at. -->
+         <video data-el="clip" class="tl__take-clip" muted playsinline preload="none" hidden></video>
+      </span>
+      <span data-el="order" class="tl__take-order" hidden></span>
+      <span class="tl__take-meta">
+         <span data-el="name" class="tl__take-name"></span>
+         <span data-el="meta" class="hint"></span>
+      </span>
+   </button>
 </template>
 
 <!-- One composition, offered for editing. A row rather than markup built in
