@@ -8366,8 +8366,10 @@ async function fetchVoiceList() {
         res.writeHead(200, {
           "content-type": "font/woff2",
           // Immutable: the filename changes when the file does, because both are
-          // regenerated together by their build script.
-          "cache-control": "max-age=604800, immutable",
+          // regenerated together by their build script. Except under --watch,
+          // where the file changes under an open page — a reload mid-regeneration
+          // must not pin stale bytes under a fresh stamp for a week.
+          "cache-control": WATCH ? "no-store" : "max-age=604800, immutable",
         });
         return res.end(bytes);
       }
