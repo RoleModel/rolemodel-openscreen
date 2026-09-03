@@ -10,7 +10,6 @@ dist/
 .DS_Store
 .env
 .env.*
-supabase/.temp/
 
 # Working files from real recordings — never commit client footage or captures
 *.openscreen
@@ -28,3 +27,4 @@ HANDOFF.md
 # Affinity's lock file, written while a document is open. The .af source beside it
 # is worth keeping; a lock naming this machine is not.
 *.af~lock~
+lib/deployment.json
