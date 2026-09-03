@@ -45,10 +45,6 @@
          <button data-el="resetTemplate" class="btn ghost btn--small" type="button">Back to the default</button>
       </details>
       <p data-el="said" class="hint" hidden></p>
-      <div class="stylegen__acts">
-         <button data-el="enhance" class="btn ghost" type="button">Enhance</button>
-         <button data-el="go" class="btn btn--primary" type="button">Generate</button>
-      </div>
       <div data-el="results" class="grid stylegen__grid"></div>
 
       <div class="client">Library <span data-el="libCount" class="stylegen__soft"></span></div>
@@ -60,11 +56,15 @@
       <div class="stylegen__row">
          <input data-el="personPhoto" class="form-control" type="file" accept="image/*" multiple />
          <input data-el="personName" class="form-control" type="text" placeholder="Name (optional — used for a single photo)" />
-         <button data-el="addPerson" class="btn" type="button">Add people</button>
       </div>
       <div data-el="people" class="grid stylegen__grid stylegen__grid--people"></div>
    </div>
-   <div data-region="footer"><button data-el="footGo" class="btn" type="button"><rm-icon name="ai-image"></rm-icon>Generate</button></div>
+   <!-- Every action in the footer, like every other panel: one Generate, not two. -->
+   <div data-region="footer">
+      <button data-el="addPerson" class="btn ghost" type="button"><rm-icon name="user-add-01"></rm-icon>Add people</button>
+      <button data-el="enhance" class="btn ghost" type="button"><rm-icon name="sparkles"></rm-icon>Enhance</button>
+      <button data-el="go" class="btn btn--primary" type="button"><rm-icon name="ai-image"></rm-icon>Generate</button>
+   </div>
 </template>
 
 <!-- One picture, made or kept. -->
@@ -72,13 +72,13 @@
    <div class="card card--media stylegen__tile">
       <div class="thumbwrap">
          <button data-el="open" class="thumb stylegen__thumb" type="button" aria-label="See it large"></button>
-         <span data-el="badge" class="kind stylegen__badge"></span>
       </div>
       <div class="card__body">
          <input data-el="subject" class="stylegen__name" type="text" aria-label="Name" />
          <div data-el="where" class="path"></div>
          <div data-el="when" class="path"></div>
          <div data-el="note" class="path"></div>
+         <span data-el="badge" class="kind stylegen__badge"></span>
       </div>
    </div>
 </template>
@@ -86,8 +86,8 @@
 <!-- A picture on its way. -->
 <template data-row="style-placeholder">
    <div class="card card--media stylegen__tile stylegen__tile--pending">
-      <div class="thumbwrap"><div class="thumb stylegen__thumb stylegen__thumb--pending"></div><span data-el="badge" class="kind stylegen__badge"></span></div>
-      <div class="card__body"><div class="path">Generating…</div></div>
+      <div class="thumbwrap"><div class="thumb stylegen__thumb stylegen__thumb--pending"></div></div>
+      <div class="card__body"><div class="path">Generating…</div><span data-el="badge" class="kind stylegen__badge"></span></div>
    </div>
 </template>
 
