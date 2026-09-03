@@ -71,9 +71,15 @@ create table if not exists public.style_images (
   aspect      text,
   url         text not null,
   file        text,
+  -- The project a picture was made in, and where it landed there. Any Studio
+  -- that opens the project copies the picture into place if it is missing.
+  project_id  text,
+  project_rel text,
   created_by  text,
   created_at  timestamptz not null default now()
 );
+alter table public.style_images add column if not exists project_id text;
+alter table public.style_images add column if not exists project_rel text;
 
 create table if not exists public.style_people (
   id          uuid primary key default gen_random_uuid(),

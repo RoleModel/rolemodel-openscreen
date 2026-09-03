@@ -53,7 +53,7 @@ import {
   updateStyleImage,
 } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
-import { DEFAULT_STYLE, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine } from "../lib/style-gen.mjs";
+import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
@@ -200,6 +200,90 @@ const ADDED_DIR = join(LIB, "Brand");
    picture in the shared database is a URL on fal's CDN, and a copy here is what
    makes it usable with no network and safe from that CDN forgetting it. */
 const STYLE_DIR = join(LIB, "Style");
+
+/*
+ * The team's pictures, from the database, kept for a minute.
+ *
+ * Every project reindex asks "which pictures were made in this project", and a
+ * page load reindexes every project. One query a minute answers all of them.
+ */
+let styleRowsAt = 0;
+let styleRowsMemo = [];
+async function styleRows({ fresh = false } = {}) {
+  const cfg = await sharingSettings();
+  if (deploymentProblem(cfg)) return [];
+  if (!fresh && Date.now() - styleRowsAt < 60_000) return styleRowsMemo;
+  styleRowsMemo = await listStyleImages({ databaseUrl: cfg.databaseUrl }).catch(() => styleRowsMemo);
+  styleRowsAt = Date.now();
+  return styleRowsMemo;
+}
+
+/**
+ * The library's own copy of a picture, fetched if this machine has none yet.
+ *
+ * A teammate's generation is a row with a URL; the file is on their disk. The
+ * first time this machine needs it, it is fetched from the URL and kept, so the
+ * second time is local — and a project can be filled in from the database.
+ */
+async function styleFileFor(row) {
+  if (!row?.file) return null;
+  const local = join(STYLE_DIR, basename(row.file));
+  if ((await stat(local).catch(() => null))?.isFile()) return local;
+  // A picture made in a browser has no CDN copy; only the machine that made
+  // it, or a project it was placed in, holds the file.
+  if (!/^https?:\/\//.test(row.url)) return null;
+  const r = await fetch(row.url, { signal: AbortSignal.timeout(60_000) }).catch(() => null);
+  if (!r?.ok) return null;
+  await mkdir(STYLE_DIR, { recursive: true });
+  await writeFile(local, Buffer.from(await r.arrayBuffer()));
+  return local;
+}
+
+/**
+ * Put a picture into a project's Stills, under its subject, never over a file.
+ * Returns the media-relative path it landed at.
+ */
+async function placeStyleImage(row, projectId, { rel = null } = {}) {
+  const src = await styleFileFor(row);
+  const ext = src ? extname(src) : ".png";
+  const dir = join(mediaDir(projectId), "Stills");
+  await mkdir(dir, { recursive: true });
+  let dest = rel ? join(mediaDir(projectId), rel) : join(dir, `${safeName(row.subject, "collage").slice(0, 60)}${ext}`);
+  if (!rel) for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${safeName(row.subject, "collage").slice(0, 60)}-${n}${ext}`);
+  if (!dest.startsWith(mediaDir(projectId) + sep)) throw new Error("that path is outside the project");
+  if (src) await copyFile(src, dest);
+  else {
+    if (!/^https?:\/\//.test(row.url)) throw new Error("that picture lives only on the machine that made it");
+    const r = await fetch(row.url, { signal: AbortSignal.timeout(60_000) });
+    if (!r.ok) throw new Error(`the picture could not be fetched (${r.status})`);
+    await writeFile(dest, Buffer.from(await r.arrayBuffer()));
+  }
+  return relative(mediaDir(projectId), dest);
+}
+
+/**
+ * Every picture made in this project, on this disk.
+ *
+ * The row says where the picture belongs (project_rel); if that file is not
+ * here, it is copied in. So a project opened on a second machine shows the
+ * pictures made on the first, with no step to remember.
+ */
+async function materializeStyleImages(projectId) {
+  const rows = (await styleRows()).filter((r) => r.project_id === projectId && r.project_rel);
+  let placed = 0;
+  for (const row of rows) {
+    const dest = join(mediaDir(projectId), row.project_rel);
+    if (!dest.startsWith(mediaDir(projectId) + sep)) continue;
+    if ((await stat(dest).catch(() => null))?.isFile()) continue;
+    try {
+      await placeStyleImage(row, projectId, { rel: row.project_rel });
+      placed++;
+    } catch {
+      /* a picture that cannot be fetched is a hole, not a failed index */
+    }
+  }
+  return placed;
+}
 const ADDED_INDEX = join(ADDED_DIR, "index.json");
 
 const readAdded = async () =>
@@ -249,6 +333,8 @@ async function publishTranscripts(id) {
 async function reindex(id, { force = false } = {}) {
   // The captions travel with the media, so they are placed before it is listed.
   await publishTranscripts(id).catch(() => {});
+  // And so do the collage pictures made in this project, on any machine.
+  await materializeStyleImages(id).catch(() => {});
   // Reuse what was probed last time so this is cheap enough to run on every
   // load; only new or changed files cost an ffprobe.
   const previous = await readFile(join(projectDir(id), "catalog.json"), "utf8")
@@ -5783,14 +5869,32 @@ const server = createServer(async (req, res) => {
       await writeFile(join(STYLE_DIR, file), Buffer.from(await r.arrayBuffer()));
       return file;
     };
-    const savedStyleImage = async (client, image) => {
-      const row = await insertStyleImage({ ...client, image });
+    /*
+     * Save a picture: a row, the library's copy, and — when it was made with a
+     * project open — a still in that project, remembered on the row so every
+     * other machine puts it in the same place.
+     */
+    const savedStyleImage = async (client, image, projectId = null) => {
+      const inProject = projectId && (await readManifest(projectDir(projectId)).catch(() => null)) ? projectId : null;
+      let row = await insertStyleImage({ ...client, image: { ...image, project_id: inProject } });
+      let copyProblem = null;
       try {
         const file = await keepStyleImage(row.url, row.id);
-        return await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { file } });
+        row = await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { file } });
       } catch (err) {
-        return { ...row, copyProblem: err.message };
+        copyProblem = err.message;
       }
+      if (inProject) {
+        try {
+          const rel = await placeStyleImage(row, inProject);
+          row = await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { project_rel: rel } });
+          await reindex(inProject, { force: true }).catch(() => {});
+        } catch (err) {
+          copyProblem = copyProblem ?? err.message;
+        }
+      }
+      styleRowsAt = 0;
+      return copyProblem ? { ...row, copyProblem } : row;
     };
 
     if (p === "/api/style/state" && req.method === "GET") {
@@ -5806,7 +5910,8 @@ const server = createServer(async (req, res) => {
           listStylePeople({ databaseUrl: cfg.databaseUrl }).catch(() => []),
         ]);
       }
-      return json(res, 200, { hasKey: Boolean(key), problem, template, defaultTemplate: DEFAULT_STYLE, models: styleModelList(), images, people });
+      const names = Object.fromEntries((await listProjects().catch(() => [])).map((pr) => [pr.id, pr.name]));
+      return json(res, 200, { hasKey: Boolean(key), problem, template, defaultTemplate: DEFAULT_STYLE, models: styleModelList(), palette: BRAND_PALETTE, cutoutModel: REMOVE_BG, projectNames: names, images, people });
     }
 
     if (p === "/api/style/template" && req.method === "POST") {
@@ -5838,10 +5943,11 @@ const server = createServer(async (req, res) => {
         const people = wanted.length ? await stylePeopleById({ databaseUrl: client.databaseUrl, ids: wanted }) : [];
         if (wanted.length && !people.length) return json(res, 400, { error: "the chosen people were not found" });
         const { results, prompt, aspect } = await styleGenerate({ key, prompt: `${subject}. ${template}`, models: body.models, aspect: body.aspect, count: body.count, people });
+        const projectId = body.projectId ? String(body.projectId) : null;
         const out = [];
         for (const r of results) {
           const images = [];
-          for (const url of r.urls) images.push(await savedStyleImage(client, { subject, prompt, model: r.model, aspect, url }));
+          for (const url of r.urls) images.push(await savedStyleImage(client, { subject, prompt, model: r.model, aspect, url }, projectId));
           out.push({ model: r.model, images, error: r.error });
         }
         return json(res, 200, { results: out });
@@ -5857,8 +5963,65 @@ const server = createServer(async (req, res) => {
         const client = await styleClient();
         const { url, endpoint } = await styleRefine({ key, imageUrl: String(body.imageUrl ?? ""), instruction: body.instruction, mask: body.mask ?? null });
         const subject = `${String(body.subject ?? "Refined image").replace(/( \(refined\))*$/, "")} (refined)`;
-        const image = await savedStyleImage(client, { subject, prompt: String(body.instruction ?? "").trim(), model: endpoint, aspect: String(body.aspect ?? "1:1"), url });
+        const image = await savedStyleImage(client, { subject, prompt: String(body.instruction ?? "").trim(), model: endpoint, aspect: String(body.aspect ?? "1:1"), url }, body.projectId ? String(body.projectId) : null);
         return json(res, 200, { image });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * The background off a picture. Bria needs a URL it can fetch, and the row's
+     * URL is one: fal's own CDN for a generated picture, the old app's host for a
+     * migrated one. The cutout is a new row beside the original.
+     */
+    if (p === "/api/style/remove-bg" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const key = await styleKey();
+        const client = await styleClient();
+        const source = (await styleRows({ fresh: true })).find((x) => x.id === String(body.id));
+        if (!source) return json(res, 404, { error: "that picture is not in the library any more" });
+        const { url, endpoint } = await styleRemoveBackground({ key, imageUrl: source.url });
+        const subject = `${source.subject.replace(/( \(cutout\))*$/, "")} (cutout)`;
+        const image = await savedStyleImage(client, { subject, prompt: source.prompt, model: endpoint, aspect: source.aspect, url }, body.projectId ? String(body.projectId) : source.project_id);
+        return json(res, 200, { image });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * A picture made in the browser — a cutout on a brand colour — kept like the
+     * rest. The data URI becomes the library file; there is no CDN copy, so the
+     * row's URL is the Studio's own /style/ path and a teammate's machine fetches
+     * it from here when this one is reachable, and from the project otherwise.
+     */
+    if (p === "/api/style/upload" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const dataUrl = String(body.dataUrl ?? "");
+      const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+      if (!m) return json(res, 400, { error: "the picture has to be a PNG, JPEG or WebP data URI" });
+      const bytes = Buffer.from(m[2], "base64");
+      if (bytes.length > 25_000_000) return json(res, 400, { error: "that picture is too large" });
+      try {
+        const client = await styleClient();
+        const subject = String(body.subject ?? "Picture").trim() || "Picture";
+        const projectId = body.projectId && (await readManifest(projectDir(String(body.projectId))).catch(() => null)) ? String(body.projectId) : null;
+        let row = await insertStyleImage({ ...client, image: { subject, prompt: body.prompt ? String(body.prompt) : null, model: String(body.model ?? "composite"), aspect: body.aspect ? String(body.aspect) : null, url: "pending", project_id: projectId } });
+        await mkdir(STYLE_DIR, { recursive: true });
+        const file = `${row.id}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
+        await writeFile(join(STYLE_DIR, file), bytes);
+        // The URL column is not nullable and nothing on a CDN holds this one:
+        // the Studio's own path stands in, and styleFileFor knows to skip it.
+        row = await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { file, url: `/style/${file}` } });
+        if (projectId) {
+          const rel = await placeStyleImage(row, projectId);
+          row = await updateStyleImage({ databaseUrl: client.databaseUrl, id: row.id, patch: { project_rel: rel } });
+          await reindex(projectId, { force: true }).catch(() => {});
+        }
+        styleRowsAt = 0;
+        return json(res, 200, { image: row });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -5883,6 +6046,7 @@ const server = createServer(async (req, res) => {
         const client = await styleClient();
         const gone = await deleteStyleImage({ databaseUrl: client.databaseUrl, id: String(body.id) });
         if (gone?.file) await rm(join(STYLE_DIR, basename(gone.file)), { force: true }).catch(() => {});
+        styleRowsAt = 0;
         return json(res, 200, { ok: true });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
@@ -5902,23 +6066,16 @@ const server = createServer(async (req, res) => {
       if (!manifest) return json(res, 404, { error: "pick a project" });
       try {
         const client = await styleClient();
-        const image = (await listStyleImages({ databaseUrl: client.databaseUrl })).find((x) => x.id === String(body.id));
+        const image = (await styleRows({ fresh: true })).find((x) => x.id === String(body.id));
         if (!image) return json(res, 404, { error: "that picture is not in the library any more" });
-        const local = image.file ? join(STYLE_DIR, basename(image.file)) : null;
-        const ext = local ? extname(local) : ".png";
-        const stem = safeName(image.subject, "collage").slice(0, 60);
-        const dir = join(mediaDir(id), "Stills");
-        await mkdir(dir, { recursive: true });
-        let dest = join(dir, `${stem}${ext}`);
-        for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${stem}-${n}${ext}`);
-        if (local && (await stat(local).catch(() => null))?.isFile()) await copyFile(local, dest);
-        else {
-          const r = await fetch(image.url, { signal: AbortSignal.timeout(60_000) });
-          if (!r.ok) throw new Error(`the picture could not be fetched (${r.status})`);
-          await writeFile(dest, Buffer.from(await r.arrayBuffer()));
+        const rel = await placeStyleImage(image, id);
+        // A picture with no home yet adopts this project, so other machines follow.
+        if (!image.project_id) {
+          await updateStyleImage({ databaseUrl: client.databaseUrl, id: image.id, patch: { project_id: id, project_rel: rel } });
+          styleRowsAt = 0;
         }
         await reindex(id, { force: true }).catch(() => {});
-        return json(res, 200, { ok: true, rel: relative(mediaDir(id), dest) });
+        return json(res, 200, { ok: true, rel });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -8596,8 +8753,19 @@ async function fetchVoiceList() {
      * basename before it touches the disk.
      */
     if (p.startsWith("/style/")) {
-      const file = join(STYLE_DIR, basename(decodeURIComponent(p.slice("/style/".length))));
-      const bytes = await readFile(file).catch(() => null);
+      const name = basename(decodeURIComponent(p.slice("/style/".length)));
+      let file = join(STYLE_DIR, name);
+      let bytes = await readFile(file).catch(() => null);
+      if (!bytes) {
+        // Not on this disk yet: a teammate made it. Fetch once from the row's
+        // URL and keep it, so the library reads the same everywhere.
+        const row = (await styleRows()).find((r) => r.file === name);
+        const local = row ? await styleFileFor(row) : null;
+        if (local) {
+          file = local;
+          bytes = await readFile(local).catch(() => null);
+        }
+      }
       if (!bytes) return json(res, 404, { error: "no such picture" });
       const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[extname(file).toLowerCase()] ?? "application/octet-stream";
       res.writeHead(200, { "content-type": type, "cache-control": "max-age=86400" });
