@@ -36,6 +36,7 @@ import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
 import { createStudioSkill, fetchSetting, fetchStudioSkill, fetchStudioSkills, putSetting, updateStudioSkill } from "../lib/db.mjs";
+import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
 import {
 	RATINGS,
@@ -5515,6 +5516,51 @@ const server = createServer(async (req, res) => {
      * derived paper-edit files to their new key, and rewrite only ordinary text
      * project files — never a binary recording.
      */
+    /*
+     * Convert one media file — WebM, MP4, ProRes, GIF, or just its audio.
+     *
+     * Answers with a Console step rather than running ffmpeg here: a VP9 encode
+     * of ten minutes of footage is a long job, and the Console is where long
+     * jobs are watched and stopped. The recipe lives in lib/convert.mjs; this
+     * route only checks that the source is this project's and picks a name that
+     * is not already taken, so nothing a conversion writes can land on top of
+     * something somebody already sent out.
+     */
+    if (p === "/api/media/convert" && req.method === "GET") {
+      const kind = String(url.searchParams.get("kind") ?? "video");
+      return json(res, 200, { formats: formatsFor(kind), sizes: Object.entries(SIZES).map(([id, x]) => ({ id, label: x.label })) });
+    }
+
+    if (p === "/api/media/convert" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const rel = String(body.rel ?? "");
+      const format = String(body.format ?? "");
+      const size = String(body.size ?? "source");
+      if (!id || !rel) return json(res, 400, { error: "pick media to convert" });
+      if (!FORMATS[format]) return json(res, 400, { error: `pick one of: ${Object.keys(FORMATS).join(", ")}` });
+
+      const root = mediaDir(id);
+      const source = requestedPath({ projectId: id, rel });
+      if (!source.startsWith(root + sep)) return json(res, 403, { error: "that file is outside this project's media" });
+      const info = await stat(source).catch(() => null);
+      if (!info?.isFile()) return json(res, 404, { error: "that media file is no longer in this project" });
+
+      const kind = AUDIO_EXT.has(extname(source).toLowerCase()) ? "audio" : "video";
+      let args;
+      let output;
+      try {
+        output = outputFor(source, format, (candidate) => existsSync(candidate));
+        args = ffmpegArgs({ source, output, format, size, kind });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+      const label = `convert ${rel} → ${basename(output)}`;
+      const existing = jobs.list().find((job) => job.running && job.label === label);
+      if (existing) return json(res, 200, { job: existing, alreadyRunning: true, out: relative(root, output) });
+      return json(res, 200, { out: relative(root, output), step: { bin: "ffmpeg", args, label, cwd: dirname(source), project: id } });
+    }
+
     if (p === "/api/media/rename" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
