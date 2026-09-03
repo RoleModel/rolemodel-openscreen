@@ -74,7 +74,7 @@
 }
 
 .stylegen__grid--people {
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
 }
 
 .stylegen__thumb {
@@ -189,4 +189,19 @@
   max-height: 90vh;
   display: block;
   border-radius: var(--op-radius-large);
+}
+
+.stylegen__swatch {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  border: var(--op-border-width) solid var(--line);
+}
+
+/* A cutout has nothing behind it; a checker shows that instead of the card's ground. */
+.stylegen__thumb--cutout {
+  background-color: var(--op-color-neutral-plus-six);
+  background-image: linear-gradient(45deg, var(--op-color-neutral-plus-four) 25%, transparent 25%, transparent 75%, var(--op-color-neutral-plus-four) 75%), linear-gradient(45deg, var(--op-color-neutral-plus-four) 25%, transparent 25%, transparent 75%, var(--op-color-neutral-plus-four) 75%);
+  background-size: 16px 16px, 16px 16px, cover;
+  background-position: 0 0, 8px 8px, center;
 }

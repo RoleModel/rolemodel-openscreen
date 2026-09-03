@@ -76,6 +76,7 @@
       </div>
       <div class="card__body">
          <input data-el="subject" class="stylegen__name" type="text" aria-label="Name" />
+         <div data-el="where" class="path"></div>
          <div data-el="when" class="path"></div>
          <div data-el="note" class="path"></div>
       </div>
@@ -133,6 +134,23 @@
          <div class="stylegen__acts">
             <button data-el="cancel" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Cancel</button>
             <button data-el="go" class="btn btn--primary" type="button">Refine</button>
+         </div>
+      </form>
+   </dialog>
+</template>
+
+<!-- A cutout on brand colours: pick the colours, get one picture per colour. -->
+<template data-row="style-colours">
+   <dialog class="stylegen__dialog">
+      <form class="stylegen__dialogform" method="dialog">
+         <h2 data-el="title">On brand colours</h2>
+         <p class="hint">One picture per colour you tick, the cutout placed on a flat ground. They are kept in the library and, when a project is open, in that project.</p>
+         <div data-el="swatches" class="stylegen__checks"></div>
+         <label class="stylegen__check"><input data-el="normalize" type="checkbox" /> <span>Even out the levels first</span></label>
+         <p data-el="status" class="hint" hidden></p>
+         <div class="stylegen__acts">
+            <button data-el="cancel" class="btn ghost" type="button"><rm-icon name="cancel-01"></rm-icon>Cancel</button>
+            <button data-el="go" class="btn btn--primary" type="button">Make them</button>
          </div>
       </form>
    </dialog>
