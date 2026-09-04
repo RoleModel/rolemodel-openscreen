@@ -88,6 +88,13 @@
          <button data-el="slice" class="btn ghost" type="button" title="Slice at the playhead (S)">Slice</button>
          <button data-el="removeClip" class="btn ghost" type="button" hidden title="Delete, leaving the gap (⌫)">Delete clip</button>
          <button data-el="rippleClip" class="btn ghost" type="button" hidden title="Delete and close the gap (⇧⌫)">Ripple delete</button>
+         <!-- Zoom, as buttons. ⌘ + scroll does the same on the canvas, and pinch
+              on a trackpad; the buttons are for finding out that it can be done. -->
+         <span class="tl__zoom" role="group" aria-label="Zoom">
+            <button data-el="zoomOut" class="btn ghost btn--icon" type="button" aria-label="Zoom out" title="Zoom out (−) · ⌘ + scroll on the timeline zooms too"><rm-icon name="zoom-out-area"></rm-icon></button>
+            <button data-el="zoomFit" class="btn ghost" type="button" title="Fit the whole cut (0)">Fit</button>
+            <button data-el="zoomIn" class="btn ghost btn--icon" type="button" aria-label="Zoom in" title="Zoom in (=) · ⌘ + scroll on the timeline zooms too"><rm-icon name="zoom-in-area"></rm-icon></button>
+         </span>
          <span class="tl__spacer"></span>
          <button data-el="shelfToggle" class="btn ghost" type="button" aria-expanded="false">Scenes</button>
          <!-- Hidden outright when the project has no sound to offer. A disabled

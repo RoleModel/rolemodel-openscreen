@@ -410,3 +410,10 @@
    block-size: 100%;
    object-fit: cover;
 }
+
+/* The zoom group: three buttons that read as one control. */
+.tl__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--op-space-3x-small);
+}
