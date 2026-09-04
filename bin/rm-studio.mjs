@@ -161,6 +161,14 @@ jobs.addPath("/opt/homebrew/bin");
 // available to those background jobs instead of requiring a separately linked
 // `node` command in the user's shell.
 jobs.addPath(dirname(process.execPath));
+/*
+ * And the same PATH for this process, not only for jobs. Library modules —
+ * the cut cache, the seed, the clock — spawn ffmpeg and ffprobe themselves
+ * with the environment they were given, and launched from the app that
+ * environment had no Homebrew in it: "spawn ffmpeg ENOENT" the moment a take
+ * was sent to the Timeline, while every job beside it ran fine.
+ */
+process.env.PATH = jobs.childEnv().PATH;
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => {
