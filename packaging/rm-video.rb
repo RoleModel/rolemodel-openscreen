@@ -28,7 +28,7 @@ class RmVideo < Formula
   # neither, so `install.sh` — whose last step hands off to it — died at the
   # finish line on a clean machine, and `rm-share` was in the bin map but not
   # here, so brew shipped six of eight commands while the docs promised seven.
-  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-library rm-demo rm-share rm-setup rm-compose rm-cut rm-insert rm-align-audio rm-render-alignment rm-render-hyperframes rm-render-pip rm-adopt rm-resync rm-retime-pip rm-reconcile rm-visual-beats rm-fal].freeze
+  ENTRIES = %w[rm-video rm-studio rm-transcribe rm-voice rm-mux rm-export-cut rm-library rm-demo rm-share rm-setup rm-compose rm-cut rm-insert rm-align-audio rm-render-alignment rm-render-hyperframes rm-render-pip rm-adopt rm-resync rm-retime-pip rm-reconcile rm-visual-beats rm-fal].freeze
 
   def install
     # `--trust-lockfile`: pnpm 11 verifies every lockfile entry against its

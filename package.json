@@ -21,6 +21,7 @@
     "rm-insert": "./bin/rm-insert.mjs",
     "rm-library": "./bin/rm-library.mjs",
     "rm-mux": "./bin/rm-mux.mjs",
+    "rm-export-cut": "./bin/rm-export-cut.mjs",
     "rm-setup": "./bin/rm-setup.mjs",
     "rm-share": "./bin/rm-share.mjs",
     "rm-studio": "./bin/rm-studio.mjs",

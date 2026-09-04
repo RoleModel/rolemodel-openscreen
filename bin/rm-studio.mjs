@@ -4963,6 +4963,43 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, folder: found.folder });
     }
 
+    /*
+     * The cut, as files: each clip its own video, and the clips joined. The
+     * work is a job — a minute of footage is seconds of ffmpeg per part — and
+     * the script does the cutting, so the parts and the join agree on shape.
+     * The cut in the request is saved first when one is sent, so what is
+     * exported is what is on screen and not the last save.
+     */
+    if (p === "/api/edit/export" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.project ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const found = await findCut(id, body.folder);
+      if (!found) return json(res, 404, { error: "no cut to export" });
+      const mode = ["parts", "joined", "both"].includes(body.mode) ? body.mode : "both";
+      if (body.cut) {
+        try {
+          await writeCut(found.dir, body.cut);
+        } catch (error) {
+          return json(res, 400, { error: error.message });
+        }
+      }
+      const outDir = join(mediaDir(id), "Exports", found.folder);
+      const label = `export ${found.folder} (${mode})`;
+      const existing = jobs.list().find((job) => job.running && job.label === label);
+      if (existing) return json(res, 200, { job: existing, alreadyRunning: true, out: relative(mediaDir(id), outDir) });
+      return json(res, 200, {
+        out: relative(mediaDir(id), outDir),
+        step: {
+          label,
+          project: id,
+          bin: "node",
+          args: [join(TOOLKIT, "bin", "rm-export-cut.mjs"), "--cut", join(found.dir, "cut.json"), "--media", mediaDir(id), "--out", outDir, "--mode", mode, "--name", found.folder],
+          cwd: mediaDir(id),
+        },
+      });
+    }
+
     if (p.startsWith("/api/edit/cache/") && (req.method === "GET" || req.method === "HEAD")) {
       const rest = p.slice("/api/edit/cache/".length).split("/");
       const id = decodeURIComponent(rest.shift() ?? "");
