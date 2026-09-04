@@ -8,16 +8,6 @@
       <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
       <input data-el="scrub" type="range" min="0" max="20000" step="20" value="0" class="form-control" />
       <span data-el="clock" class="v">0 ms</span>
-      <select data-el="ratio" class="form-control creator__ratio" aria-label="PNG shape">
-         <option value="16/9" selected>16:9</option>
-         <option value="1/1">1:1</option>
-         <option value="4/3">4:3</option>
-         <option value="3/2">3:2</option>
-         <option value="21/9">21:9</option>
-         <option value="9/16">9:16</option>
-         <option value="4/5">4:5</option>
-         <option value="3/4">3:4</option>
-      </select>
    </div>
    <div class="client" data-region="main">Presets</div>
    <div data-el="presets" class="grid creator__presets" data-region="main"></div>
@@ -28,15 +18,11 @@
    <p class="hint" data-region="main">This string is the whole design. Paste it into the Framer component's Look control, or into this box to load one.</p>
    <textarea data-el="lookText" class="form-control creator__looktext" rows="3" spellcheck="false" data-region="main"></textarea>
    <pre data-el="markup" class="cmd-note" data-region="main"></pre>
-   <div data-region="footer">
+   <!-- Buttons only in the footer, like every other panel. Settings — the PNG's
+        width and shape, the composition to insert into — live in the rail. -->
+   <div class="grid" data-region="footer">
       <button data-el="copyLook" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy look</button>
       <button data-el="copyFramer" class="btn ghost" type="button"><rm-icon name="code"></rm-icon>Copy Framer component</button>
-      <select data-el="pngSize" class="form-control creator__pngsize" aria-label="PNG size">
-         <option value="1280">1280 wide</option>
-         <option value="1920" selected>1920 wide</option>
-         <option value="2560">2560 wide</option>
-         <option value="3840">3840 wide</option>
-      </select>
       <button data-el="png" class="btn ghost" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
       <button data-el="save" class="btn btn--primary" type="button"><rm-icon name="bookmark-02"></rm-icon>Save look</button>
    </div>
@@ -50,16 +36,20 @@
    </button>
 </template>
 
-<!-- One gradient stop: a colour and where it sits. -->
+<!-- One gradient stop: the brand colour picker, and where it sits. -->
 <template data-row="creator-stop">
    <div class="creator__stop">
       <span data-el="swatch" class="creator__swatch"></span>
-      <input data-el="hex" class="form-control creator__hex" type="text" aria-label="Colour" maxlength="7" />
+      <span data-el="pick" class="creator__pick"></span>
+      <span data-el="hex" class="v creator__hexout"></span>
+      <button data-el="remove" class="btn ghost btn--small" type="button" aria-label="Remove stop">×</button>
       <input data-el="pos" class="form-control" type="range" min="0" max="100" step="1" aria-label="Position" />
       <span data-el="readout" class="v"></span>
-      <button data-el="remove" class="btn ghost btn--small" type="button" aria-label="Remove stop">×</button>
    </div>
 </template>
+
+<!-- The stops list: one stop per row, unlike the two-up dial grid. -->
+<template data-row="creator-stops"><div class="creator__stops"></div></template>
 
 <template data-row="creator-toggle">
    <label data-el="label" class="form-label"></label><input data-el="input" type="checkbox" class="creator__check" />
