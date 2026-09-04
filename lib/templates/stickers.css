@@ -117,3 +117,42 @@
   font-weight: var(--op-font-weight-semi-bold);
   color: var(--op-color-neutral-on-plus-max);
 }
+
+/* Comments under the working sticker. */
+.stickers__comments {
+  margin-block-start: var(--op-space-small);
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.stickers__thread {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.stickers__comment {
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  border-radius: var(--op-radius-small);
+  background: var(--sunk);
+}
+
+.stickers__commenthead {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.stickers__commenthead .btn { margin-inline-start: auto; }
+
+.stickers__commentbody {
+  margin: var(--op-space-3x-small) 0 0;
+  white-space: pre-wrap;
+}
+
+.stickers__addcomment {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  justify-items: start;
+}
+
+.stickers__addcomment .form-control { width: 100%; }
