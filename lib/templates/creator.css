@@ -83,3 +83,17 @@
 .creator__check {
   justify-self: start;
 }
+
+.creator__picture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.creator__picturename {
+  flex: 1 1 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
