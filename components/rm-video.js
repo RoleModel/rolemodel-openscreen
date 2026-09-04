@@ -2521,6 +2521,160 @@ class RMLook extends RMElement {
 }
 define('rm-look', RMLook)
 
+/* ── rm-showcase ─────────────────────────────────────────────────────────── */
+
+/*
+ * A piece of footage, or a still, presented: on a look, inside a frame, in 3D.
+ *
+ *   <rm-showcase media="Footage/demo.mp4" look="c=…" pad="8" radius="2"
+ *                tx="8" ty="-14" tz="0" persp="120" zoom="1" x="0" y="0"
+ *                shadow="0.6" frame="glass" start="4"></rm-showcase>
+ *
+ * The backdrop is an <rm-look>, so a showcase seeks with the scene the way the
+ * look does. A video seeks too: `start` is where in the clip the scene's zero
+ * falls, and every rmseek sets currentTime from it, so a rendered frame at
+ * 2400ms is always the same frame — the rule every component here follows.
+ *
+ * The 3D is CSS: a perspective on the stage, rotations on the card. A renderer
+ * that screenshots the page gets exactly what the Studio shows.
+ */
+const SHOWCASE_SCHEMA = [
+  { key: 'pad', label: 'Margin', type: 'range', min: 0, max: 30, step: 0.5, def: 8, group: 'frame' },
+  { key: 'radius', label: 'Corners', type: 'range', min: 0, max: 8, step: 0.1, def: 1.6, group: 'frame' },
+  { key: 'frame', label: 'Frame', type: 'select', options: ['none', 'glass', 'dark', 'light'], def: 'glass', group: 'frame' },
+  { key: 'shadow', label: 'Shadow', type: 'range', min: 0, max: 1, step: 0.01, def: 0.6, group: 'frame' },
+  { key: 'fit', label: 'Fit', type: 'select', options: ['cover', 'contain'], def: 'cover', group: 'frame' },
+  { key: 'tx', label: 'Tilt X', type: 'range', min: -45, max: 45, step: 0.5, def: 6, group: 'camera' },
+  { key: 'ty', label: 'Tilt Y', type: 'range', min: -45, max: 45, step: 0.5, def: -12, group: 'camera' },
+  { key: 'tz', label: 'Roll', type: 'range', min: -30, max: 30, step: 0.5, def: 0, group: 'camera' },
+  { key: 'persp', label: 'Perspective', type: 'range', min: 40, max: 400, step: 1, def: 140, group: 'camera' },
+  { key: 'zoom', label: 'Zoom', type: 'range', min: 0.4, max: 2.5, step: 0.01, def: 1, group: 'camera' },
+  { key: 'x', label: 'Shift X', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
+  { key: 'y', label: 'Shift Y', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
+  { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
+]
+const SHOWCASE_GROUPS = [
+  ['media', 'Media'],
+  ['frame', 'Frame'],
+  ['camera', 'Camera'],
+]
+const showcaseDefaults = () => Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.key, f.def]))
+
+const SHOWCASE_VIDEO = /\.(mp4|mov|webm|m4v)(\?|#|$)/i
+
+class RMShowcase extends RMElement {
+  static fields = ['media', 'look', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
+
+  disconnectedCallback() {
+    this._unseek?.()
+    this._unseek = null
+  }
+
+  render() {
+    const v = (f) => {
+      const raw = this.attr(f.key, String(f.def))
+      if (f.type !== 'range') return f.options.includes(raw) ? raw : f.def
+      const n = Number(raw)
+      return Number.isFinite(n) ? Math.min(f.max, Math.max(f.min, n)) : f.def
+    }
+    const s = Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.key, v(f)]))
+    const media = assetUrl(this, this.attr('media'))
+    const look = this.attr('look')
+    const isVideo = SHOWCASE_VIDEO.test(media)
+    const frame = {
+      none: 'border: 0;',
+      glass: 'border: 1px solid rgba(255,255,255,0.28); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);',
+      dark: 'border: 0.6cqw solid rgba(0,0,0,0.85);',
+      light: 'border: 0.6cqw solid rgba(255,255,255,0.92);',
+    }[s.frame]
+    const shadow = s.shadow > 0 ? `0 ${2.5 * s.shadow}cqw ${6 * s.shadow}cqw rgba(0,0,0,${0.55 * s.shadow}), 0 ${0.6 * s.shadow}cqw ${1.4 * s.shadow}cqw rgba(0,0,0,${0.3 * s.shadow})` : 'none'
+    const transform = `translate(${s.x}%, ${s.y}%) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
+
+    /*
+     * Rebuilt only when the media changes; a dial moving is a style change on
+     * nodes that already exist, so a video keeps its buffer and its frame.
+     */
+    const same = this._built && this._media === media && this._isVideo === isVideo
+    if (!same) {
+      this._unseek?.()
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { position:absolute; display:block; inset:0; width:100%; height:100%; container-type:inline-size; }
+          .stage { position:absolute; inset:0; overflow:hidden; }
+          .stage rm-look { position:absolute; inset:0; }
+          .room { position:absolute; inset:0; transform-style:preserve-3d; }
+          .card { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); transform-style:preserve-3d; backface-visibility:hidden; }
+          .card > img, .card > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
+          .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
+        </style>
+        <div class="stage">
+          <rm-look></rm-look>
+          <div class="room"><div class="card">${
+            media
+              ? isVideo
+                ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
+                : `<img src="${this.esc(media)}" alt="" />`
+              : '<div class="empty">Choose a picture or a clip</div>'
+          }</div></div>
+        </div>`
+      this._built = true
+      this._media = media
+      this._isVideo = isVideo
+      if (isVideo) {
+        const video = this.shadowRoot.querySelector('video')
+        const seek = (ms) => {
+          if (video.readyState < HTMLMediaElement.HAVE_METADATA) return
+          const t = Number(this.getAttribute('start') || 0) + Math.max(0, ms - this.startMs()) / 1000
+          const limit = Number.isFinite(video.duration) ? video.duration : Infinity
+          const time = Math.max(0, Math.min(t, limit))
+          if (Math.abs(video.currentTime - time) > 0.025) video.currentTime = time
+        }
+        const onSeek = (e) => seek(e.detail)
+        root.addEventListener('rmseek', onSeek)
+        video.addEventListener('loadedmetadata', () => seek(RM.t), { once: true })
+        // A frame is ready when the seek has landed, not when the file arrived —
+        // or when there is a frame at all, since a seek to where the clip already
+        // is fires nothing. Bounded, so a broken file cannot hold a render forever.
+        RM.waitFor(
+          new Promise((r) => {
+            for (const ev of ['seeked', 'loadeddata', 'error']) video.addEventListener(ev, r, { once: true })
+            setTimeout(r, 15000)
+          }),
+        )
+        this._unseek = () => root.removeEventListener('rmseek', onSeek)
+      }
+    }
+    const lookEl = this.shadowRoot.querySelector('rm-look')
+    if (look) {
+      if (lookEl.getAttribute('look') !== look) lookEl.setAttribute('look', look)
+      lookEl.hidden = false
+    } else lookEl.hidden = true
+    const room = this.shadowRoot.querySelector('.room')
+    room.style.perspective = `${s.persp}cqw`
+    const card = this.shadowRoot.querySelector('.card')
+    card.style.cssText = `inset:${s.pad}%; border-radius:${s.radius}cqw; box-shadow:${shadow}; transform:${transform}; ${frame}`
+    const pic = card.firstElementChild
+    if (pic && pic.tagName !== 'DIV') pic.style.objectFit = s.fit
+    if (this._isVideo) {
+      const video = this.shadowRoot.querySelector('video')
+      if (video?.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        const t = s.start + Math.max(0, RM.t - this.startMs()) / 1000
+        if (Math.abs(video.currentTime - t) > 0.025) video.currentTime = Math.min(t, video.duration || t)
+      }
+    }
+  }
+}
+define('rm-showcase', RMShowcase)
+
+/** The showcase as an attribute string: only what differs from the defaults. */
+function encodeShowcase(state) {
+  const parts = []
+  if (state.media) parts.push(`media="${state.media.replace(/"/g, '&quot;')}"`)
+  if (state.look) parts.push(`look="${state.look.replace(/"/g, '&quot;')}"`)
+  for (const f of SHOWCASE_SCHEMA) if (String(state[f.key]) !== String(f.def)) parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  return parts.join(' ')
+}
+
 /**
  * One frame of a look as a PNG data URL, at any size, for export.
  *
@@ -2765,6 +2919,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, showcaseDefaults, encodeShowcase }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 
