@@ -2553,8 +2553,9 @@ const SHOWCASE_SCHEMA = [
   { key: 'device', label: 'Device', type: 'select', options: ['none', 'browser', 'phone', 'macbook'], def: 'none', group: 'frame' },
   { key: 'pad', label: 'Margin', type: 'range', min: 0, max: 30, step: 0.5, def: 8, group: 'frame' },
   { key: 'radius', label: 'Corners', type: 'range', min: 0, max: 8, step: 0.1, def: 1.6, group: 'frame' },
-  { key: 'frame', label: 'Frame', type: 'select', options: ['none', 'glass', 'dark', 'light'], def: 'glass', group: 'frame' },
-  { key: 'shadow', label: 'Shadow', type: 'range', min: 0, max: 1, step: 0.01, def: 0.6, group: 'frame' },
+  { key: 'w', label: 'Size (%)', type: 'range', min: 10, max: 100, step: 1, def: 100, group: 'frame' },
+  { key: 'frame', label: 'Frame', type: 'select', options: ['none', 'glass', 'dark', 'light'], def: 'none', group: 'frame' },
+  { key: 'shadow', label: 'Shadow', type: 'range', min: 0, max: 1, step: 0.01, def: 0, group: 'frame' },
   { key: 'fit', label: 'Fit', type: 'select', options: ['cover', 'contain'], def: 'cover', group: 'frame' },
   { key: 'tx', label: 'Tilt X', type: 'range', min: -45, max: 45, step: 0.5, def: 6, group: 'camera' },
   { key: 'ty', label: 'Tilt Y', type: 'range', min: -45, max: 45, step: 0.5, def: -12, group: 'camera' },
@@ -2693,7 +2694,7 @@ class RMShowcase extends RMElement {
           .screen > img, .screen > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
           .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
           /* none: the screen is the card */
-          .none .screen { inset:0; }
+          .none .screen { inset:0; background:transparent; }
           /* browser: a drawn chrome bar over the page, on a slab */
           .browser { --chrome: var(--op-color-neutral-plus-two, #2b2b2b); --chrome-ink: rgba(255,255,255,0.10); --edge: var(--op-color-neutral-plus-one, #1c1c1c); }
           .browser.light { --chrome: var(--op-color-neutral-minus-seven, #ececec); --chrome-ink: rgba(0,0,0,0.08); --edge: var(--op-color-neutral-minus-four, #bdbdbd); }
@@ -2727,12 +2728,40 @@ class RMShowcase extends RMElement {
       this._device = device
       if (isVideo) {
         const video = this.shadowRoot.querySelector('video')
-        const seek = (ms) => {
-          if (video.readyState < HTMLMediaElement.HAVE_METADATA) return
+        /*
+         * A seek per frame is the jerk. Setting currentTime sixty times a
+         * second stalls the decoder on every call, and the picture stutters.
+         * A run of small forward steps is the scene playing, so the video
+         * plays with it and is only pulled back when it drifts; a jump, or a
+         * step backwards, or silence, is a scrub, so it pauses and seeks.
+         */
+        let lastMs = null
+        let lastWall = 0
+        let still = 0
+        const target = (ms) => {
           const t = Number(this.getAttribute('start') || 0) + Math.max(0, ms - this.startMs()) / 1000
           const limit = Number.isFinite(video.duration) ? video.duration : Infinity
-          const time = Math.max(0, Math.min(t, limit))
-          if (Math.abs(video.currentTime - time) > 0.025) video.currentTime = time
+          return Math.max(0, Math.min(t, limit))
+        }
+        const seek = (ms) => {
+          if (video.readyState < HTMLMediaElement.HAVE_METADATA) return
+          const time = target(ms)
+          const now = performance.now()
+          const running = lastMs != null && ms > lastMs && ms - lastMs < 120 && now - lastWall < 120
+          lastMs = ms
+          lastWall = now
+          clearTimeout(still)
+          if (running) {
+            if (video.paused) video.play().catch(() => {})
+            if (Math.abs(video.currentTime - time) > 0.25) video.currentTime = time
+            still = setTimeout(() => {
+              video.pause()
+              lastMs = null
+            }, 200)
+          } else {
+            if (!video.paused) video.pause()
+            if (Math.abs(video.currentTime - time) > 0.025) video.currentTime = time
+          }
         }
         const onSeek = (e) => seek(e.detail)
         root.addEventListener('rmseek', onSeek)
@@ -2746,7 +2775,15 @@ class RMShowcase extends RMElement {
             setTimeout(r, 15000)
           }),
         )
-        this._unseek = () => root.removeEventListener('rmseek', onSeek)
+        this._unseek = () => {
+          clearTimeout(still)
+          root.removeEventListener('rmseek', onSeek)
+        }
+        /* The picture's own shape, for a bare card sized below the full stage. */
+        video.addEventListener('loadedmetadata', () => this.style.setProperty('--media-ar', String(video.videoWidth / video.videoHeight || 16 / 9)), { once: true })
+      } else {
+        const img = this.shadowRoot.querySelector('img')
+        img?.addEventListener('load', () => this.style.setProperty('--media-ar', String(img.naturalWidth / img.naturalHeight || 16 / 9)), { once: true })
       }
     }
     /*
@@ -2781,8 +2818,15 @@ class RMShowcase extends RMElement {
     place.style.setProperty('--out-dur', s.exit === 'none' || s.exit === 'stay' ? '1ms' : `${s.eout}s`)
     const card = this.shadowRoot.querySelector('.card')
     card.classList.toggle('light', light)
-    const w = ar ? `min(${avail}cqw, ${avail * ar}cqh)` : `${avail}cqw`
-    card.style.cssText = ar ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform};` : `--w:${w}; width:100%; height:100%; transform:${transform};`
+    /* A device has its own shape. A bare card fills the margin, or, sized
+       below 100, takes the picture's shape at that share of the width. */
+    const scale = s.w / 100
+    const w = ar ? `min(${avail * scale}cqw, ${avail * scale * ar}cqh)` : s.w < 100 ? `min(${avail * scale}cqw, calc(${avail}cqh * var(--media-ar, 1.7778)))` : `${avail}cqw`
+    card.style.cssText = ar
+      ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform};`
+      : s.w < 100
+        ? `--w:${w}; width:${w}; aspect-ratio:var(--media-ar, 16/9); transform:${transform};`
+        : `--w:${w}; width:100%; height:100%; transform:${transform};`
     /*
      * The frame and the shadow belong to the outermost drawn edge: the screen for
      * a bare card, the body for a device; the deepest slice carries the shadow so
@@ -2803,7 +2847,7 @@ class RMShowcase extends RMElement {
     if (pic) pic.style.objectFit = s.fit
     if (this._isVideo) {
       const video = this.shadowRoot.querySelector('video')
-      if (video?.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      if (video?.readyState >= HTMLMediaElement.HAVE_METADATA && video.paused) {
         const t = s.start + Math.max(0, RM.t - this.startMs()) / 1000
         if (Math.abs(video.currentTime - t) > 0.025) video.currentTime = Math.min(t, video.duration || t)
       }
