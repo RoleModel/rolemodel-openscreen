@@ -2565,8 +2565,10 @@ const SHOWCASE_SCHEMA = [
   { key: 'tz', label: 'Roll', type: 'range', min: -30, max: 30, step: 0.5, def: 0, group: 'camera' },
   { key: 'persp', label: 'Perspective', type: 'range', min: 40, max: 400, step: 1, def: 140, group: 'camera' },
   { key: 'zoom', label: 'Zoom', type: 'range', min: 0.4, max: 2.5, step: 0.01, def: 1, group: 'camera' },
-  { key: 'x', label: 'Shift X', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
-  { key: 'y', label: 'Shift Y', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
+  { key: 'x', label: 'X', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
+  { key: 'y', label: 'Y', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
+  { key: 'z', label: 'Depth', type: 'range', min: -100, max: 100, step: 0.5, def: 0, group: 'camera' },
+  { key: 'op', label: 'Opacity (%)', type: 'range', min: 0, max: 100, step: 1, def: 100, group: 'frame' },
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
   { key: 'move', label: 'Camera move', type: 'select', options: ['none', 'pan-left', 'pan-right', 'zoom-in', 'zoom-out', 'zoom-pan', 'drift'], def: 'none', group: 'scene' },
   { key: 'enter', label: 'Enter', type: 'select', options: ['none', 'fade', 'rise', 'slide', 'zoom', 'tilt'], def: 'rise', group: 'motion' },
@@ -2825,7 +2827,7 @@ class RMShowcase extends RMElement {
       light: 'border: 0.6cqw solid rgba(255,255,255,0.92);',
     }[s.frame]
     const shadow = s.shadow > 0 ? `0 ${2.5 * s.shadow}cqw ${6 * s.shadow}cqw rgba(0,0,0,${0.55 * s.shadow}), 0 ${0.6 * s.shadow}cqw ${1.4 * s.shadow}cqw rgba(0,0,0,${0.3 * s.shadow})` : 'none'
-    const transform = `translate(${s.x}%, ${s.y}%) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
+    const transform = `translate(${s.x}%, ${s.y}%) translateZ(${s.z}cqw) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
     const ar = SHOWCASE_DEVICES[device].ar
     const avail = 100 - 2 * s.pad
     const room = this.shadowRoot.querySelector('.room')
@@ -2848,10 +2850,10 @@ class RMShowcase extends RMElement {
     const scale = s.w / 100
     const w = ar ? `min(${avail * scale}cqw, ${avail * scale * ar}cqh)` : s.w < 100 ? `min(${avail * scale}cqw, calc(${avail}cqh * var(--media-ar, 1.7778)))` : `${avail}cqw`
     card.style.cssText = ar
-      ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform};`
+      ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform}; opacity:${s.op / 100};`
       : s.w < 100
-        ? `--w:${w}; width:${w}; aspect-ratio:var(--media-ar, 16/9); transform:${transform};`
-        : `--w:${w}; width:100%; height:100%; transform:${transform};`
+        ? `--w:${w}; width:${w}; aspect-ratio:var(--media-ar, 16/9); transform:${transform}; opacity:${s.op / 100};`
+        : `--w:${w}; width:100%; height:100%; transform:${transform}; opacity:${s.op / 100};`
     /*
      * The frame and the shadow belong to the outermost drawn edge: the screen for
      * a bare card, the body for a device; the deepest slice carries the shadow so
