@@ -10,6 +10,15 @@
          <div data-el="workName" class="stickers__workname"></div>
          <div data-el="workNote" class="path"></div>
          <p data-el="status" class="hint" hidden></p>
+         <!-- Comments on the working sticker: the team's, and the page's visitors'. -->
+         <div data-el="comments" class="stickers__comments" hidden>
+            <div class="client">Comments <span data-el="commentCount" class="stickers__soft"></span></div>
+            <div data-el="thread" class="stickers__thread"></div>
+            <form data-el="commentForm" class="stickers__addcomment">
+               <textarea data-el="commentBody" class="form-control" rows="2" placeholder="Say something about this sticker" maxlength="2000" required></textarea>
+               <button data-el="commentSend" class="btn ghost btn--small" type="submit">Add comment</button>
+            </form>
+         </div>
       </div>
    </div>
 
@@ -39,6 +48,7 @@
       <button data-el="cut" class="btn ghost" type="button"><rm-icon name="scissor-01"></rm-icon>Cut out</button>
       <button data-el="trace" class="btn ghost" type="button"><rm-icon name="vector"></rm-icon>Vectorize</button>
       <button data-el="affinity" class="btn ghost" type="button"><rm-icon name="shapes"></rm-icon>Open in Affinity</button>
+      <button data-el="reveal" class="btn ghost" type="button"><rm-icon name="folder-01"></rm-icon>Show folder</button>
       <button data-el="build" class="btn ghost" type="button"><rm-icon name="tag-01"></rm-icon>Build sheet</button>
       <button data-el="publish" class="btn btn--primary" type="button"><rm-icon name="globe-02"></rm-icon>Publish sheet</button>
    </div>
@@ -71,5 +81,13 @@
          <a data-el="link" class="stickers__link" target="_blank" rel="noopener" hidden>Open the page</a>
          <button data-el="affinity" class="btn ghost btn--small" type="button"><rm-icon name="shapes"></rm-icon>Edit in Affinity</button>
       </div>
+   </div>
+</template>
+
+<!-- One comment. -->
+<template data-row="stickers-comment">
+   <div class="stickers__comment">
+      <div class="stickers__commenthead"><b data-el="who"></b><time data-el="when" class="path"></time><button data-el="remove" class="btn ghost btn--icon btn--small" type="button" aria-label="Remove comment" title="Remove comment">×</button></div>
+      <p data-el="body" class="stickers__commentbody"></p>
    </div>
 </template>

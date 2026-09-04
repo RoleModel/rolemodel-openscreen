@@ -59,6 +59,8 @@ import {
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
 import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, vectorize as stickerVectorize } from "../lib/stickers.mjs";
+import { deleteStickerComment, insertStickerComment, listStickerComments } from "../lib/db.mjs";
+import { setStickerSettings, stickerSettings } from "../lib/settings.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
@@ -6179,6 +6181,65 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    /* Where the Stickers folder is, in Finder — for Affinity's Export dialog. */
+    if (p === "/api/stickers/reveal" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      await mkdir(stickersDir(id), { recursive: true });
+      const r = await capture("open", [stickersDir(id)]);
+      return r.ok ? json(res, 200, { ok: true, dir: stickersDir(id) }) : json(res, 500, { error: "Finder did not open" });
+    }
+
+    /* The comments setting: the Neon Data API URL the published pages talk to. */
+    if (p === "/api/stickers/settings" && req.method === "GET") return json(res, 200, await stickerSettings());
+    if (p === "/api/stickers/settings" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const dataApi = String(body.dataApi ?? "").trim().replace(/\/+$/, "");
+      if (dataApi && !/^https:\/\/[^\s/]+\.neon\.tech\/[^\s]+\/rest\/v1$/.test(dataApi)) return json(res, 400, { error: "that is not a Neon Data API URL — it ends in /rest/v1" });
+      await setStickerSettings({ dataApi: dataApi || null });
+      return json(res, 200, { dataApi: dataApi || null });
+    }
+
+    /*
+     * Comments on a sticker, keyed by project and file name so they follow
+     * the sticker onto any sheet. The Studio reads and writes as studio_app;
+     * the published page does the same through the Data API as anonymous.
+     */
+    if (p === "/api/stickers/comments" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const sticker = url.searchParams.get("sticker");
+      try {
+        const client = await styleClient();
+        return json(res, 200, { comments: await listStickerComments({ databaseUrl: client.databaseUrl, project: id, sticker: sticker || null }) });
+      } catch (err) {
+        return json(res, 200, { comments: [], problem: String(err.message) });
+      }
+    }
+    if (p === "/api/stickers/comments" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const sticker = String(body.sticker ?? "").trim();
+      const words = String(body.body ?? "").trim();
+      if (!id || !sticker || !words) return json(res, 400, { error: "a sticker and a comment are required" });
+      try {
+        const client = await styleClient();
+        return json(res, 200, { comment: await insertStickerComment({ databaseUrl: client.databaseUrl, project: id, sticker, body: words.slice(0, 2000), by: client.by }) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+    if (p === "/api/stickers/comments" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      try {
+        const client = await styleClient();
+        return json(res, 200, await deleteStickerComment({ databaseUrl: client.databaseUrl, id: String(body.id) }));
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     /*
      * Several stickers, combined into one new file and opened in Affinity —
      * without making a sheet. Kept under Stickers/Combined, transparent, laid
@@ -8718,7 +8779,8 @@ async function fetchVoiceList() {
            shop or a teammate who wants the files, not the page. */
         const zipped = await capture("zip", ["-q", "-j", join(site, `${name}.zip`), join(site, "sheet.svg"), ...items.map((it) => join(site, it.file))]);
         if (!zipped.ok) return json(res, 500, { error: `could not zip the sheet: ${zipped.err.trim().slice(0, 160)}` });
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items }), "utf8");
+        const { dataApi } = await stickerSettings();
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs"]);
