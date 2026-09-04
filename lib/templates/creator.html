@@ -41,8 +41,6 @@
 <template data-row="creator-stop">
    <div class="creator__stop">
       <span data-el="pick" class="creator__pick"></span>
-      <span data-el="swatch" class="creator__swatch" hidden></span>
-      <span data-el="hex" class="v creator__hexout"></span>
       <button data-el="remove" class="btn ghost btn--small" type="button" aria-label="Remove stop">×</button>
       <input data-el="pos" class="form-control" type="range" min="0" max="100" step="1" aria-label="Position" />
       <span data-el="readout" class="v"></span>
@@ -63,6 +61,24 @@
    </div>
 </template>
 
+<!-- A yes/no dial is a switch, like every other yes/no in the rail. -->
 <template data-row="creator-toggle">
-   <label data-el="label" class="form-label"></label><input data-el="input" type="checkbox" class="creator__check" />
+   <label data-el="label" class="form-label"></label>
+   <div class="switch switch--small creator__check">
+      <input data-el="input" type="checkbox" />
+      <label data-el="track"></label>
+   </div>
+</template>
+
+<!-- A section heading with the switch that turns its whole group on. The dials
+     under it stay hidden until the switch is on: a rail of forty controls is a
+     wall, a rail of the six you asked for is a tool. -->
+<template data-row="creator-sec">
+   <div class="sec creator__sec">
+      <span data-el="title"></span>
+      <div class="switch switch--small creator__check">
+         <input data-el="input" type="checkbox" />
+         <label data-el="track"></label>
+      </div>
+   </div>
 </template>
