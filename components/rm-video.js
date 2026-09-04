@@ -2565,7 +2565,9 @@ const SHOWCASE_SCHEMA = [
   { key: 'y', label: 'Shift Y', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
   { key: 'enter', label: 'Enter', type: 'select', options: ['none', 'fade', 'rise', 'slide', 'zoom', 'tilt'], def: 'rise', group: 'motion' },
-  { key: 'exit', label: 'Exit', type: 'select', options: ['none', 'fade', 'sink', 'slide', 'zoom'], def: 'fade', group: 'motion' },
+  { key: 'ein', label: 'Enter over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.6, group: 'motion' },
+  { key: 'exit', label: 'Exit', type: 'select', options: ['stay', 'none', 'fade', 'sink', 'slide', 'zoom'], def: 'fade', group: 'motion' },
+  { key: 'eout', label: 'Exit over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.4, group: 'motion' },
 ]
 const SHOWCASE_GROUPS = [
   ['motion', 'Motion'],
@@ -2678,6 +2680,7 @@ class RMShowcase extends RMElement {
           @keyframes sc-in-slide { from { --sc-in-o:0; --sc-in-x:-10%; } to { --sc-in-o:1; --sc-in-x:0%; } }
           @keyframes sc-in-zoom  { from { --sc-in-o:0; --sc-in-s:0.82; } to { --sc-in-o:1; --sc-in-s:1; } }
           @keyframes sc-in-tilt  { from { --sc-in-o:0; --sc-in-r:18deg; --sc-in-y:5%; } to { --sc-in-o:1; --sc-in-r:0deg; --sc-in-y:0%; } }
+          @keyframes sc-out-stay  { from { --sc-out-o:1; } to { --sc-out-o:1; } }
           @keyframes sc-out-none  { from { --sc-out-o:1; } to { --sc-out-o:0; } }
           @keyframes sc-out-fade  { from { --sc-out-o:1; } to { --sc-out-o:0; } }
           @keyframes sc-out-sink  { from { --sc-out-o:1; --sc-out-y:0%; } to { --sc-out-o:0; --sc-out-y:6%; } }
@@ -2772,11 +2775,10 @@ class RMShowcase extends RMElement {
     const place = this.shadowRoot.querySelector('.place')
     place.style.inset = `${s.pad}%`
     place.style.animationName = `sc-in-${s.enter}, sc-out-${s.exit}`
-    /* "none" still hides the layer outside its window; it just does not move. */
-    if (s.enter === 'none') place.style.setProperty('--in-dur', '1ms')
-    else place.style.removeProperty('--in-dur')
-    if (s.exit === 'none') place.style.setProperty('--out-dur', '1ms')
-    else place.style.removeProperty('--out-dur')
+    /* How long each takes is the layer's own. "none" still hides the layer
+       outside its window, it just does not move; "stay" never leaves at all. */
+    place.style.setProperty('--in-dur', s.enter === 'none' ? '1ms' : `${s.ein}s`)
+    place.style.setProperty('--out-dur', s.exit === 'none' || s.exit === 'stay' ? '1ms' : `${s.eout}s`)
     const card = this.shadowRoot.querySelector('.card')
     card.classList.toggle('light', light)
     const w = ar ? `min(${avail}cqw, ${avail * ar}cqh)` : `${avail}cqw`
