@@ -2242,7 +2242,7 @@ const LOOK_MAX_WIDTH = 2560
 const LOOK_SETTLE_MS = 180
 const LOOK_FRAGMENT = [
   '#extension GL_OES_standard_derivatives : enable',
-  `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];uniform vec2 m;uniform float ms;`,
+  `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];uniform vec2 m;uniform float ms;uniform float mt;`,
   'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
   // indices into u[] by schema position
   ...LOOK_SCHEMA.map((f, i) => `#define U_${f.key.toUpperCase()} u[${i}]`),
@@ -2270,7 +2270,9 @@ const LOOK_FRAGMENT = [
   // was thousands of instructions and took seconds to compile. They work on
   // the ramp position now, which is what the eye reads anyway.
   'vec3 scene(vec2 uv){vec2 p=uv;float asp=r.x/r.y;',
-  ' if(U_GL>.5){float f=fract(p.x*U_GLC)-.5;p.x+=f*U_GLA*(1./U_GLC)*1.6;}',
+  // Each strip is a cylindrical lens: the offset is a smooth S across the strip,
+  // zero at the edges and the centre, so nothing tears where strips meet.
+  ' if(U_GL>.5){float f=fract(p.x*U_GLC)-.5;float lens=f*(1.-4.*f*f);p.x+=lens*U_GLA*(1./U_GLC)*2.6;}',
   ' float x=field(p);vec3 col;',
   ' if(U_AB>0.){float o=U_AB*.06;col=vec3(ramp(x+o).r,ramp(x).g,ramp(x-o).b);}else{col=ramp(x);}',
   ' if(U_SF>0.){float o=U_SF*.12;col=(col*2.+ramp(x+o)+ramp(x-o))*.25;}',
@@ -2288,7 +2290,7 @@ const LOOK_FRAGMENT = [
   // The pointer's ripple: rings spreading from where the hand was, fading with
   // distance and, through ms, with time since it moved. Zero when nobody has.
   'void main(){vec2 uv=v;vec2 fc=gl_FragCoord.xy;',
-  ' if(ms>0.001){vec2 dm=uv-m;dm.x*=r.x/r.y;float dd=length(dm)+1e-4;uv-=(dm/dd)*sin(dd*36.0-t*7.0)*0.022*ms*exp(-dd*3.5);}',
+  ' if(ms>0.001){vec2 dm=uv-m;dm.x*=r.x/r.y;float dd=length(dm)+1e-4;float w=sin(dd*90.0-mt*14.0);uv-=(dm/dd)*w*0.006*ms*exp(-dd*9.0)*exp(-mt*1.4);}',
   ' if(U_PX>0.5){vec2 cell=vec2(U_PX);uv=(floor(fc/cell)+.5)*cell/r;}',
   // ASCII reads the scene once, at the cell centre; every other pixel reads it once, where it is.
   ' vec2 asCell=vec2(U_ASZ,U_ASZ*1.85/U_ASR);',
@@ -2391,6 +2393,7 @@ function lookProgram(canvas, look, { assets = null } = {}) {
   gl.uniform1f(uniform('imageAspect'), 1)
   gl.uniform2f(uniform('m'), 0.5, 0.5)
   gl.uniform1f(uniform('ms'), 0)
+  gl.uniform1f(uniform('mt'), 0)
 
   const imageTex = gl.createTexture()
   gl.activeTexture(gl.TEXTURE0)
@@ -2451,9 +2454,10 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
   /** Where the pointer is, in the shader's 0–1 space, and how strong the ripple is now. */
-  const setPointer = (x, y, strength) => {
+  const setPointer = (x, y, strength, age = 0) => {
     gl.uniform2f(uniform('m'), x, y)
     gl.uniform1f(uniform('ms'), strength)
+    gl.uniform1f(uniform('mt'), age)
   }
   return { gl, draw, setLook, setImage, clearImage, setPointer, dispose }
 }
@@ -2526,29 +2530,51 @@ class RMLook extends RMElement {
      */
     let ripple = 0
     let rippleRaf = 0
+    let age = 0
+    let lastTick = 0
+    let rx = 0.5
+    let ry = 0.5
+    let cx = 0.5
+    let cy = 0.5
     const settleRipple = () => {
-      ripple *= 0.93
+      const now = performance.now()
+      const dt = Math.min(0.1, (now - lastTick) / 1000)
+      lastTick = now
+      age += dt
+      ripple *= 0.985
+      /* The centre trails the hand, so a fast sweep leaves a wake behind it. */
+      cx += (rx - cx) * 0.18
+      cy += (ry - cy) * 0.18
       if (ripple < 0.01) {
         ripple = 0
-        prog.setPointer(0.5, 0.5, 0)
+        prog.setPointer(0.5, 0.5, 0, 0)
         draw()
         rippleRaf = 0
         return
       }
-      prog.setPointer(rx, ry, ripple)
+      prog.setPointer(cx, cy, ripple, age)
       draw()
       /* A timer, not a frame callback: the components redraw on seek, and the
          verify suite holds them to it; this is a hand's after-image, not time. */
       rippleRaf = setTimeout(settleRipple, 16)
     }
-    let rx = 0.5
-    let ry = 0.5
     const onMove = (e) => {
       const b = canvas.getBoundingClientRect()
-      rx = (e.clientX - b.left) / b.width
-      ry = 1 - (e.clientY - b.top) / b.height
-      ripple = Number(this.getAttribute('ripple') ?? 0.7)
-      if (!rippleRaf) rippleRaf = setTimeout(settleRipple, 16)
+      const nx = (e.clientX - b.left) / b.width
+      const ny = 1 - (e.clientY - b.top) / b.height
+      /* Strength builds with how far the hand moved, up to the dial's ceiling. */
+      const moved = Math.hypot(nx - rx, ny - ry)
+      const ceiling = Number(this.getAttribute('ripple') ?? 0.7)
+      ripple = Math.min(ceiling, ripple + moved * 6)
+      rx = nx
+      ry = ny
+      if (!rippleRaf) {
+        cx = nx
+        cy = ny
+        age = 0
+        lastTick = performance.now()
+        rippleRaf = setTimeout(settleRipple, 16)
+      }
     }
     this.addEventListener('pointermove', onMove)
     this._imageSource = null
@@ -3167,15 +3193,18 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
             }
             pic.src = src
         }
-        const r = u("r"), t = u("t"), m = u("m"), ms = u("ms")
+        const r = u("r"), t = u("t"), m = u("m"), ms = u("ms"), mt = u("mt")
         const start = performance.now()
         let raf = 0
-        // The ripple: where the pointer was, and how strong it still is. The
-        // strength fades after the hand stops, and the loop runs while it does.
-        let mx = 0.5, my = 0.5, strength = 0
+        // The ripple has momentum: its centre trails the hand, its strength
+        // builds with how far the hand moved and fades slowly, and its rings
+        // spread with their own age. The loop runs while any of it is alive.
+        let tx = 0.5, ty = 0.5, cx = 0.5, cy = 0.5, strength = 0, age = 0, lastTick = 0
         const running = () => animate && !isCanvas && decoded.an
         const draw = (now: number) => {
             raf = 0
+            const dt = lastTick ? Math.min(0.1, (now - lastTick) / 1000) : 0
+            lastTick = now
             const ratio = Math.min(window.devicePixelRatio || 1, 2)
             const w = Math.max(1, Math.round(canvas.clientWidth * ratio))
             const h = Math.max(1, Math.round(canvas.clientHeight * ratio))
@@ -3183,18 +3212,24 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
             gl.viewport(0, 0, w, h)
             gl.uniform2f(r, w, h)
             gl.uniform1f(t, running() ? ((now - start) / 1000) * speed * Number(decoded.sp) : 0)
-            gl.uniform2f(m, mx, my)
+            if (strength > 0) { age += dt; cx += (tx - cx) * 0.18; cy += (ty - cy) * 0.18 }
+            gl.uniform2f(m, cx, cy)
             gl.uniform1f(ms, strength)
+            gl.uniform1f(mt, age)
             gl.drawArrays(gl.TRIANGLES, 0, 6)
-            strength = strength < 0.01 ? 0 : strength * 0.93
+            strength = strength < 0.01 ? 0 : strength * 0.985
             if (running() || strength > 0) raf = frame(draw)
         }
         const onMove = (e: PointerEvent) => {
             if (isCanvas || ripple <= 0) return
             const b = canvas.getBoundingClientRect()
-            mx = (e.clientX - b.left) / b.width
-            my = 1 - (e.clientY - b.top) / b.height
-            strength = ripple
+            const nx = (e.clientX - b.left) / b.width
+            const ny = 1 - (e.clientY - b.top) / b.height
+            const moved = Math.hypot(nx - tx, ny - ty)
+            if (strength === 0) { cx = nx; cy = ny; age = 0 }
+            strength = Math.min(ripple, strength + moved * 6)
+            tx = nx
+            ty = ny
             if (!raf) raf = frame(draw)
         }
         canvas.addEventListener("pointermove", onMove)
