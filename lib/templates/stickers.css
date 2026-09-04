@@ -37,7 +37,7 @@
 
 .stickers__grid,
 .stickers__sheets {
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr));
 }
 
 .stickers__card {
@@ -85,4 +85,35 @@
   display: inline-block;
   margin-block-start: var(--op-space-2x-small);
   color: var(--op-color-primary-base);
+}
+
+/* The drop zone: a dashed field that lights up while something hangs over it. */
+.stickers__drop {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-flow: row;
+  justify-items: center;
+  gap: var(--op-space-2x-small);
+  padding: var(--op-space-medium);
+  border: var(--op-border-width-large) dashed var(--line);
+  border-radius: var(--op-radius-medium);
+  color: var(--op-color-neutral-on-plus-max-alt);
+  text-align: center;
+  cursor: pointer;
+}
+
+.stickers__drop--over {
+  border-color: var(--op-color-primary-base);
+  background: var(--op-color-primary-plus-seven);
+}
+
+/* Its own class: .path spans two grid columns wherever it sits, which split this zone. */
+.stickers__drophint {
+  font-family: var(--m);
+  font-size: var(--op-font-x-small);
+}
+
+.stickers__droptitle {
+  font-weight: var(--op-font-weight-semi-bold);
+  color: var(--op-color-neutral-on-plus-max);
 }
