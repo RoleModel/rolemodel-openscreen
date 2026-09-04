@@ -6180,6 +6180,43 @@ const server = createServer(async (req, res) => {
     }
 
     /*
+     * Several stickers, combined into one new file and opened in Affinity —
+     * without making a sheet. Kept under Stickers/Combined, transparent, laid
+     * out in a row of cells, so Affinity has every object in one document.
+     */
+    if (p === "/api/stickers/combine" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const rels = Array.isArray(body.items) ? body.items.map(String) : [];
+      if (rels.length < 2) return json(res, 400, { error: "tick two or more stickers to combine" });
+      try {
+        const items = await Promise.all(
+          rels.map(async (rel) => {
+            const file = stickerFile(id, rel);
+            const raw = await readFile(file);
+            if (/\.svg$/i.test(file)) return { svg: raw.toString("utf8") };
+            const ext = extname(file).toLowerCase();
+            return { bytes: raw, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" };
+          }),
+        );
+        const cols = Math.min(rels.length, Math.max(1, Number(body.columns) || Math.ceil(Math.sqrt(rels.length))));
+        const svg = sheetSvg({ items, columns: cols, size: Number(body.size) || 400, gap: 40, margin: 40, title: "combined", ground: "none" });
+        const dir = join(stickersDir(id), "Combined");
+        await mkdir(dir, { recursive: true });
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+        const dest = await uniqueFile(dir, `combined-${stamp}`, ".svg");
+        await writeFile(dest, svg, "utf8");
+        const app = process.env.AFFINITY_APP || "Affinity";
+        const r = await capture("open", ["-a", app, dest]);
+        if (!r.ok) return json(res, 500, { error: `could not open ${app}: ${r.err.trim().slice(0, 160) || "is it installed?"}` });
+        return json(res, 200, { ok: true, rel: relative(mediaDir(id), dest), app });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
      * Affinity. The project's SVG is the working copy: Affinity opens it, and
      * saves back into it, so there is nothing to write back — the page polls
      * the hash and reloads the picture when it moves.
