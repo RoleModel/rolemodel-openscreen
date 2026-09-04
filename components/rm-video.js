@@ -2567,7 +2567,7 @@ const SHOWCASE_SCHEMA = [
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
   { key: 'enter', label: 'Enter', type: 'select', options: ['none', 'fade', 'rise', 'slide', 'zoom', 'tilt'], def: 'rise', group: 'motion' },
   { key: 'ein', label: 'Enter over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.6, group: 'motion' },
-  { key: 'exit', label: 'Exit', type: 'select', options: ['stay', 'none', 'fade', 'sink', 'slide', 'zoom'], def: 'fade', group: 'motion' },
+  { key: 'exit', label: 'Exit', type: 'select', options: ['stay', 'none', 'fade', 'sink', 'slide', 'zoom'], def: 'stay', group: 'motion' },
   { key: 'eout', label: 'Exit over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.4, group: 'motion' },
 ]
 const SHOWCASE_GROUPS = [
