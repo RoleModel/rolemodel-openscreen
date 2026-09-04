@@ -9057,7 +9057,20 @@ async function fetchVoiceList() {
           ".json": "application/json" }[extname(file).toLowerCase()] ??
         MIME[extname(file).toLowerCase()] ??
         "application/octet-stream";
-      res.writeHead(200, { "content-type": type, "content-length": s2.size });
+      /*
+       * Always revalidated, never assumed fresh. With no cache headers at all a
+       * browser kept an old rm-video.js for as long as it liked, and a Studio
+       * upgraded underneath it showed none of the new components — devices that
+       * "did not show up" were a component the page had never downloaded. The
+       * validator is cheap: a matching one costs a 304 and no bytes.
+       */
+      const etag = `"${s2.size.toString(16)}-${Math.floor(s2.mtimeMs).toString(16)}"`;
+      const headers = { "content-type": type, "cache-control": "no-cache", etag, "last-modified": s2.mtime.toUTCString() };
+      if (req.headers["if-none-match"] === etag) {
+        res.writeHead(304, headers);
+        return res.end();
+      }
+      res.writeHead(200, { ...headers, "content-length": s2.size });
       return createReadStream(file).pipe(res);
     }
 
