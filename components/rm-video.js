@@ -2237,7 +2237,7 @@ const LOOK_MAX_WIDTH = 1024
 /** How long after the last change a frame still counts as "moving". */
 const LOOK_SETTLE_MS = 180
 const LOOK_FRAGMENT = [
-  `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];`,
+  `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];uniform vec2 m;uniform float ms;`,
   'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
   // indices into u[] by schema position
   ...LOOK_SCHEMA.map((f, i) => `#define U_${f.key.toUpperCase()} u[${i}]`),
@@ -2280,7 +2280,10 @@ const LOOK_FRAGMENT = [
   ' return col;}',
   'float b2(vec2 p){vec2 q=mod(p,2.);if(q.y<1.)return q.x<1.?0.:2.;return q.x<1.?3.:1.;}',
   'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}float b8(vec2 p){return 4.*b4(mod(p,4.))+b2(floor(p/4.));}',
+  // The pointer's ripple: rings spreading from where the hand was, fading with
+  // distance and, through ms, with time since it moved. Zero when nobody has.
   'void main(){vec2 uv=v;vec2 fc=gl_FragCoord.xy;',
+  ' if(ms>0.001){vec2 dm=uv-m;dm.x*=r.x/r.y;float dd=length(dm)+1e-4;uv-=(dm/dd)*sin(dd*36.0-t*7.0)*0.022*ms*exp(-dd*3.5);}',
   ' if(U_PX>0.5){vec2 cell=vec2(U_PX);uv=(floor(fc/cell)+.5)*cell/r;}',
   // ASCII reads the scene once, at the cell centre; every other pixel reads it once, where it is.
   ' vec2 asCell=vec2(U_ASZ,U_ASZ*1.85/U_ASR);',
@@ -2380,6 +2383,8 @@ function lookProgram(canvas, look, { assets = null } = {}) {
   setLook(look)
   gl.uniform1f(uniform('hasImage'), 0)
   gl.uniform1f(uniform('imageAspect'), 1)
+  gl.uniform2f(uniform('m'), 0.5, 0.5)
+  gl.uniform1f(uniform('ms'), 0)
 
   const imageTex = gl.createTexture()
   gl.activeTexture(gl.TEXTURE0)
@@ -2439,7 +2444,12 @@ function lookProgram(canvas, look, { assets = null } = {}) {
   const dispose = () => {
     gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
-  return { gl, draw, setLook, setImage, clearImage, dispose }
+  /** Where the pointer is, in the shader's 0–1 space, and how strong the ripple is now. */
+  const setPointer = (x, y, strength) => {
+    gl.uniform2f(uniform('m'), x, y)
+    gl.uniform1f(uniform('ms'), strength)
+  }
+  return { gl, draw, setLook, setImage, clearImage, setPointer, dispose }
 }
 
 /**
@@ -2488,6 +2498,38 @@ class RMLook extends RMElement {
     const observer = new ResizeObserver(draw)
     observer.observe(canvas)
     root.addEventListener('rmseek', draw)
+    /*
+     * The ripple, for a hand over the preview. Interaction only: a render never
+     * has a pointer, so a frame at any time is still the same frame. Strength
+     * fades on its own clock after the hand stops.
+     */
+    let ripple = 0
+    let rippleRaf = 0
+    const settleRipple = () => {
+      ripple *= 0.93
+      if (ripple < 0.01) {
+        ripple = 0
+        prog.setPointer(0.5, 0.5, 0)
+        draw()
+        rippleRaf = 0
+        return
+      }
+      prog.setPointer(rx, ry, ripple)
+      draw()
+      /* A timer, not a frame callback: the components redraw on seek, and the
+         verify suite holds them to it; this is a hand's after-image, not time. */
+      rippleRaf = setTimeout(settleRipple, 16)
+    }
+    let rx = 0.5
+    let ry = 0.5
+    const onMove = (e) => {
+      const b = canvas.getBoundingClientRect()
+      rx = (e.clientX - b.left) / b.width
+      ry = 1 - (e.clientY - b.top) / b.height
+      ripple = Number(this.getAttribute('ripple') ?? 0.7)
+      if (!rippleRaf) rippleRaf = setTimeout(settleRipple, 16)
+    }
+    this.addEventListener('pointermove', onMove)
     this._imageSource = null
     this._loadImage(imageSource)
     const onLost = (e) => {
@@ -2500,6 +2542,8 @@ class RMLook extends RMElement {
     canvas.addEventListener('webglcontextlost', onLost)
     this._dispose = () => {
       clearTimeout(this._settle)
+      clearTimeout(rippleRaf)
+      this.removeEventListener('pointermove', onMove)
       observer.disconnect()
       root.removeEventListener('rmseek', draw)
       canvas.removeEventListener('webglcontextlost', onLost)
@@ -3033,7 +3077,7 @@ const compile = (gl: WebGLRenderingContext, type: number, src: string) => {
  * @framerIntrinsicHeight 540
  */
 export default function RoleModelLook(props: { look?: string; animate?: boolean; speed?: number; image?: any; style?: React.CSSProperties }) {
-    const { look = "", animate = true, speed = 1, image, style } = props
+    const { look = "", animate = true, speed = 1, ripple = 0.7, image, style } = props
     const ref = useRef<HTMLCanvasElement>(null)
     const isCanvas = RenderTarget.current() === RenderTarget.canvas
     const imageSrc = typeof image === "string" ? image : image?.src
@@ -3100,29 +3144,47 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
             }
             pic.src = src
         }
-        const r = u("r"), t = u("t")
+        const r = u("r"), t = u("t"), m = u("m"), ms = u("ms")
         const start = performance.now()
         let raf = 0
+        // The ripple: where the pointer was, and how strong it still is. The
+        // strength fades after the hand stops, and the loop runs while it does.
+        let mx = 0.5, my = 0.5, strength = 0
+        const running = () => animate && !isCanvas && decoded.an
         const draw = (now: number) => {
+            raf = 0
             const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
             const w = Math.max(1, Math.round(canvas.clientWidth * ratio))
             const h = Math.max(1, Math.round(canvas.clientHeight * ratio))
             if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
             gl.viewport(0, 0, w, h)
             gl.uniform2f(r, w, h)
-            gl.uniform1f(t, animate && !isCanvas && decoded.an ? ((now - start) / 1000) * speed * Number(decoded.sp) : 0)
+            gl.uniform1f(t, running() ? ((now - start) / 1000) * speed * Number(decoded.sp) : 0)
+            gl.uniform2f(m, mx, my)
+            gl.uniform1f(ms, strength)
             gl.drawArrays(gl.TRIANGLES, 0, 6)
-            if (animate && !isCanvas && decoded.an) raf = frame(draw)
+            strength = strength < 0.01 ? 0 : strength * 0.93
+            if (running() || strength > 0) raf = frame(draw)
         }
+        const onMove = (e: PointerEvent) => {
+            if (isCanvas || ripple <= 0) return
+            const b = canvas.getBoundingClientRect()
+            mx = (e.clientX - b.left) / b.width
+            my = 1 - (e.clientY - b.top) / b.height
+            strength = ripple
+            if (!raf) raf = frame(draw)
+        }
+        canvas.addEventListener("pointermove", onMove)
         const ro = new ResizeObserver(() => draw(performance.now()))
         ro.observe(canvas)
         draw(performance.now())
         return () => {
             unframe(raf)
+            canvas.removeEventListener("pointermove", onMove)
             ro.disconnect()
             gl.getExtension("WEBGL_lose_context")?.loseContext()
         }
-    }, [look, animate, speed, imageSrc, isCanvas])
+    }, [look, animate, speed, ripple, imageSrc, isCanvas])
 
     return <canvas ref={ref} style={{ width: "100%", height: "100%", display: "block", background: "black", ...style }} />
 }
@@ -3131,6 +3193,7 @@ addPropertyControls(RoleModelLook, {
     look: { type: ControlType.String, title: "Look", displayTextArea: true, placeholder: "Paste a look from the Studio", description: "Creator → Copy look." },
     animate: { type: ControlType.Boolean, title: "Animate", defaultValue: true },
     speed: { type: ControlType.Number, title: "Speed", defaultValue: 1, min: 0.1, max: 3, step: 0.05 },
+    ripple: { type: ControlType.Number, title: "Ripple", defaultValue: 0.7, min: 0, max: 1, step: 0.05, description: "How much the picture ripples under the pointer. 0 turns it off." },
     image: { type: ControlType.ResponsiveImage, title: "Picture", description: "Optional. Drawn through the look." },
 })
 `
