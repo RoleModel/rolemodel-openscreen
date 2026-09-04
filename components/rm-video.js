@@ -2038,7 +2038,7 @@ const LOOK_SCHEMA = [
   { key: 'w', group: 'gradient', label: 'Warp', type: 'range', min: 0, max: 2, step: 0.01, def: 0.3 },
   { key: 'fl', group: 'gradient', label: 'Flow', type: 'range', min: 0, max: 2, step: 0.01, def: 0.2 },
   { key: 'sc', group: 'gradient', label: 'Scale', type: 'range', min: 0.2, max: 4, step: 0.05, def: 1.3 },
-  { key: 'd', group: 'gradient', label: 'Detail', type: 'range', min: 1, max: 6, step: 1, def: 2 },
+  { key: 'd', group: 'gradient', label: 'Detail', type: 'range', min: 1, max: 4, step: 1, def: 2 },
   { key: 'ct', group: 'gradient', label: 'Contrast', type: 'range', min: 0.5, max: 2, step: 0.01, def: 1.1 },
   { key: 'seed', group: 'gradient', label: 'Seed', type: 'range', min: 0, max: 100, step: 1, def: 7 },
   // waves
@@ -2218,6 +2218,10 @@ const LOOK_PRESETS = [
  * number of turns per loop and a video of it joins to itself.
  */
 const LOOK_UNIFORMS = LOOK_SCHEMA.length
+/** Widest backing store the live element draws; it is upscaled by the browser. */
+const LOOK_MAX_WIDTH = 1024
+/** How long after the last change a frame still counts as "moving". */
+const LOOK_SETTLE_MS = 180
 const LOOK_FRAGMENT = [
   `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];`,
   'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
@@ -2226,7 +2230,7 @@ const LOOK_FRAGMENT = [
   'const float TAU=6.28318530718;',
   'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
   'float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}',
-  'float fbm(vec2 p,float oct){float s=0.,a=.5,n=0.;for(int i=0;i<6;i++){if(float(i)>=oct)break;s+=a*vnoise(p);n+=a;p=p*2.03+vec2(17.1,9.7);a*=.5;}return n>0.?s/n:0.;}',
+  'float fbm(vec2 p,float oct){float s=0.,a=.5,n=0.;for(int i=0;i<4;i++){if(float(i)>=oct)break;s+=a*vnoise(p);n+=a;p=p*2.03+vec2(17.1,9.7);a*=.5;}return n>0.?s/n:0.;}',
   // phase of a loop: whole turns so frame 0 == frame loop
   'float ph(float k){return TAU*floor(k+.5)*(t/loop);}',
   'vec3 ramp(float x){x=clamp(x,0.,1.);vec3 c=stop[0];for(int i=1;i<6;i++){if(i>=nstop)break;float a=pos[i-1],b=pos[i];float f=b>a?clamp((x-a)/(b-a),0.,1.):step(a,x);c=mix(c,stop[i],f);}return c;}',
@@ -2242,11 +2246,15 @@ const LOOK_FRAGMENT = [
   ' else{float rad=length(q-cc);x=fract((atan(q.y-cc.y,q.x-cc.x)-ang+rad*U_W*3.-ph(1.)*.5)/TAU);}',
   ' return clamp((x-.5)*U_CT+.5,0.,1.);}',
   // the scene at a point, before the screen-space effects
+  // One field() per pixel, always. Aberration and softness used to re-evaluate
+  // the noise up to eight more times; GLSL inlines every call, so the program
+  // was thousands of instructions and took seconds to compile. They work on
+  // the ramp position now, which is what the eye reads anyway.
   'vec3 scene(vec2 uv){vec2 p=uv;float asp=r.x/r.y;',
-  ' if(U_GL>.5){float s=floor(p.x*U_GLC);float f=fract(p.x*U_GLC)-.5;p.x+=f*U_GLA*(1./U_GLC)*1.6;}',
-  ' vec3 col;',
-  ' if(U_AB>0.){float o=U_AB*.012;col=vec3(ramp(field(p+vec2(o,0.))).r,ramp(field(p)).g,ramp(field(p-vec2(o,0.))).b);}else{col=ramp(field(p));}',
-  ' if(U_SF>0.){vec3 acc=col;float o=U_SF*.03;acc+=ramp(field(p+vec2(o,0.)))+ramp(field(p-vec2(o,0.)))+ramp(field(p+vec2(0.,o)))+ramp(field(p-vec2(0.,o)));col=acc/5.;}',
+  ' if(U_GL>.5){float f=fract(p.x*U_GLC)-.5;p.x+=f*U_GLA*(1./U_GLC)*1.6;}',
+  ' float x=field(p);vec3 col;',
+  ' if(U_AB>0.){float o=U_AB*.06;col=vec3(ramp(x+o).r,ramp(x).g,ramp(x-o).b);}else{col=ramp(x);}',
+  ' if(U_SF>0.){float o=U_SF*.12;col=(col*2.+ramp(x+o)+ramp(x-o))*.25;}',
   ' if(hasImage>.5){vec4 s=texture2D(imageTex,coverUV(p));vec3 photo=mix(col,s.rgb,s.a);if(U_IMGM<.5){col=mix(col,photo,U_IMGX);}else{float l=dot(photo,vec3(.299,.587,.114));col=mix(col,ramp(l),U_IMGX);}}',
   ' if(U_BL>.5){vec2 q=vec2((p.x-.5)*asp,p.y-.5);float acc=0.;vec3 tint=vec3(0.);for(int i=0;i<8;i++){if(float(i)>=U_BLC)break;float k=float(i);vec2 c=vec2(sin(ph(1.)*(1.+mod(k,3.))*.5+k*2.1),cos(ph(1.)*(1.+mod(k+1.,2.))*.5+k*1.3))*.32*U_BLSP+vec2(hash(vec2(k,U_SEED))-.5,hash(vec2(U_SEED,k))-.5)*.6;float dd=length(q-c);float m=1.-smoothstep(U_BLS*.5*(1.-U_BLSM*.9),U_BLS*.5,dd);acc+=m;tint+=ramp(k/max(1.,U_BLC-1.))*m;}col=mix(col,tint/max(acc,1e-3),clamp(acc,0.,1.)*.9);}',
   ' if(U_LT>.5){vec2 q=vec2((p.x-.5)*asp,p.y-.5);vec2 lc=vec2((U_LTX-.5)*asp,U_LTY-.5);float dd=length(q-lc);float li=0.;',
@@ -2260,8 +2268,11 @@ const LOOK_FRAGMENT = [
   'float b4(vec2 p){return 4.*b2(mod(p,2.))+b2(floor(p/2.));}float b8(vec2 p){return 4.*b4(mod(p,4.))+b2(floor(p/4.));}',
   'void main(){vec2 uv=v;vec2 fc=gl_FragCoord.xy;',
   ' if(U_PX>0.5){vec2 cell=vec2(U_PX);uv=(floor(fc/cell)+.5)*cell/r;}',
+  // ASCII reads the scene once, at the cell centre; every other pixel reads it once, where it is.
+  ' vec2 asCell=vec2(U_ASZ,U_ASZ*1.85/U_ASR);',
+  ' if(U_AS>.5){uv=(floor(fc/asCell)+.5)*asCell/r;}',
   ' vec3 col=scene(uv);',
-  ' if(U_AS>.5){vec2 cell=vec2(U_ASZ,U_ASZ*U_ASR/1.85*1.85/U_ASR*U_ASR/1.85);cell=vec2(U_ASZ,U_ASZ*1.85/U_ASR);vec2 id=floor(fc/cell);vec2 centre=(id+.5)*cell/r;vec3 c=scene(centre);float l=dot(c,vec3(.299,.587,.114));if(U_ASI>.5)l=1.-l;float gi=floor(clamp(l,0.,.999)*10.);vec2 inCell=fract(fc/cell);float glyph=texture2D(glyphTex,vec2((gi+inCell.x)/10.,inCell.y)).r;vec3 ink=U_ASC<.5?c:vec3(.92);vec3 ground=U_ASC<.5?c*U_ASB:vec3(.06)*U_ASB;col=mix(ground,ink,glyph);}',
+  ' if(U_AS>.5){float l=dot(col,vec3(.299,.587,.114));if(U_ASI>.5)l=1.-l;float gi=floor(clamp(l,0.,.999)*10.);vec2 inCell=fract(fc/asCell);float glyph=texture2D(glyphTex,vec2((gi+inCell.x)/10.,inCell.y)).r;vec3 ink=U_ASC<.5?col:vec3(.92);vec3 ground=U_ASC<.5?col*U_ASB:vec3(.06)*U_ASB;col=mix(ground,ink,glyph);}',
   ' if(U_HF>.5){float l=dot(col,vec3(.299,.587,.114));float an=radians(U_HFA);mat2 rot=mat2(cos(an),-sin(an),sin(an),cos(an));vec2 g=rot*fc/U_HFS;float m;if(U_HFM<.5){vec2 cc=fract(g)-.5;float rad=sqrt(1.-l)*.7;m=1.-smoothstep(rad-.08,rad+.08,length(cc)*2.);}else{m=step(fract(g.y),1.-l);}col=mix(col,mix(col,hfInk,m),U_HFMIX);}',
   ' if(U_DT>.5){float th=U_DT<1.5?b2(fc)/4.:(U_DT<2.5?b4(fc)/16.:b8(fc)/64.);float levels=max(2.,U_DL)-1.;vec3 q=floor(col*levels+th)/levels;col=mix(col,q,U_DST);}',
   ' if(U_PL>.5){vec2 g=fract(v*vec2(U_PLC,U_PLR));float lw=U_PLW*.5;float line=step(g.x,lw)+step(1.-lw,g.x)+step(g.y,lw)+step(1.-lw,g.y);col=mix(col,plInk,clamp(line,0.,1.)*U_PLO);}',
@@ -2373,10 +2384,23 @@ function lookProgram(canvas, look, { assets = null } = {}) {
 
   const resolution = uniform('r')
   const time = uniform('t')
-  const draw = (ms, { width, height } = {}) => {
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
-    const w = width ?? Math.max(1, Math.round(canvas.clientWidth * ratio))
-    const h = height ?? Math.max(1, Math.round(canvas.clientHeight * ratio))
+  /*
+   * The backing store is capped: a background is soft by nature, and drawing
+   * 1.8 million pixels of fbm per slider tick is what made the page unusable.
+   * `quick` halves it again while a dial is moving; the full frame follows once
+   * the hand stops.
+   */
+  const draw = (ms, { width, height, quick = false } = {}) => {
+    let w = width
+    let h = height
+    if (w == null || h == null) {
+      const cw = Math.max(1, canvas.clientWidth)
+      const ch = Math.max(1, canvas.clientHeight)
+      const ratio = Math.min(window.devicePixelRatio || 1, 1) * (quick ? 0.5 : 1)
+      const cap = Math.min(1, LOOK_MAX_WIDTH / (cw * ratio))
+      w = Math.max(1, Math.round(cw * ratio * cap))
+      h = Math.max(1, Math.round(ch * ratio * cap))
+    }
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
@@ -2430,7 +2454,14 @@ class RMLook extends RMElement {
       this._prog.setLook(look)
       this.shadowRoot.querySelector('.asset').style.background = look.stops[0].c
       if (imageSource !== this._imageSource) this._loadImage(imageSource)
-      this._prog.draw(RM.t)
+      // A change on the heels of another is a dial moving: draw small now, and
+      // the full frame once the hand rests.
+      const now = Date.now()
+      const moving = now - (this._changedAt ?? 0) < LOOK_SETTLE_MS
+      this._changedAt = now
+      this._prog.draw(RM.t, { quick: moving })
+      clearTimeout(this._settle)
+      if (moving) this._settle = setTimeout(() => this._prog?.draw(RM.t), LOOK_SETTLE_MS + 20)
       return
     }
     this._dispose?.()
@@ -2454,6 +2485,7 @@ class RMLook extends RMElement {
     }
     canvas.addEventListener('webglcontextlost', onLost)
     this._dispose = () => {
+      clearTimeout(this._settle)
       observer.disconnect()
       root.removeEventListener('rmseek', draw)
       canvas.removeEventListener('webglcontextlost', onLost)
@@ -2495,13 +2527,27 @@ define('rm-look', RMLook)
  * Off-screen and disposed at once: a browser caps live WebGL contexts, and an
  * export must not cost the preview its context.
  */
+/*
+ * One off-screen canvas and one compiled program, kept, for every export and
+ * thumbnail. Twelve thumbnails used to mean twelve shader compiles at page
+ * load — seconds of a frozen page. Now the program compiles once and each
+ * thumbnail is new uniforms and a draw.
+ */
+let lookOffscreen = null
 async function renderLook({ look, width, height, ms = 0, image = null }) {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
   const decoded = typeof look === 'string' ? decodeLook(look) : look
-  const prog = lookProgram(canvas, decoded)
-  if (!prog) throw new Error('WebGL is not available here')
+  if (!lookOffscreen) {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const prog = lookProgram(canvas, decoded)
+    if (!prog) throw new Error('WebGL is not available here')
+    lookOffscreen = { canvas, prog }
+    canvas.addEventListener('webglcontextlost', () => (lookOffscreen = null))
+  }
+  const { canvas, prog } = lookOffscreen
+  prog.setLook(decoded)
+  prog.clearImage()
   const source = image || decoded.img
   if (source) {
     await new Promise((resolve) => {
@@ -2516,9 +2562,7 @@ async function renderLook({ look, width, height, ms = 0, image = null }) {
     })
   }
   prog.draw(ms, { width, height })
-  const url = canvas.toDataURL('image/png')
-  prog.dispose()
-  return url
+  return canvas.toDataURL('image/png')
 }
 
 /**
