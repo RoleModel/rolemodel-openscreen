@@ -5,6 +5,13 @@
       <!-- Layers are appended after the look, as its siblings: the scene gives
            slotted children their stacking, and a wrapper would keep them out. -->
       <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
+      <!-- The selection, drawn over the stage: an outline on the selected layer
+           with corner handles. Drag the box to move it, a corner to size it, and
+           click any layer to select it. -->
+      <div data-el="gizmo" class="showcase__gizmo" hidden>
+         <i class="showcase__handle showcase__handle--nw" data-corner="nw"></i><i class="showcase__handle showcase__handle--ne" data-corner="ne"></i>
+         <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
+      </div>
    </div>
    <div class="ctl" data-region="main">
       <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
@@ -13,8 +20,15 @@
    </div>
    <!-- The layers, in time order. One is selected; the rail and the footage
         cards work on that one. -->
+   <!-- The timeline: a row per layer, a bar for when it is on screen. Drag the
+        bar to move it in time, drag an end to trim it, click to select. The
+        ruler seeks. -->
    <div class="client" data-region="main">Layers <span data-el="layerCount" class="showcase__soft"></span></div>
-   <div data-el="layerList" class="showcase__layers" data-region="main"></div>
+   <div data-el="tl" class="showcase__tl" data-region="main">
+      <div class="showcase__tlhead"><span class="showcase__tllabel"></span><div data-el="ruler" class="showcase__ruler"></div></div>
+      <div data-el="rows" class="showcase__rows"></div>
+      <div data-el="playhead" class="showcase__playhead"></div>
+   </div>
    <!-- Scenes saved from this page, reopened for editing. Save scene in the
         rail with the same name writes over the one you opened. -->
    <div class="client" data-region="main">Saved scenes <span data-el="sceneCount" class="showcase__soft"></span></div>
@@ -66,20 +80,12 @@
    </button>
 </template>
 
-<!-- One layer: what it shows, when, and how it comes and goes. -->
-<template data-row="showcase-layer">
-   <div class="card showcase__layer">
-      <button data-el="pick" class="showcase__layerpick" type="button">
-         <div data-el="art" class="thumb showcase__layerart"></div>
-         <div class="showcase__layerbody">
-            <div data-el="name" class="showcase__layername"></div>
-            <div data-el="when" class="path"></div>
-         </div>
-      </button>
-      <div class="showcase__layertools">
-         <button data-el="up" class="btn ghost btn--icon btn--small" type="button" aria-label="Earlier" title="Earlier"><rm-icon name="arrow-up-01"></rm-icon></button>
-         <button data-el="down" class="btn ghost btn--icon btn--small" type="button" aria-label="Later" title="Later"><rm-icon name="arrow-down-01"></rm-icon></button>
-         <button data-el="remove" class="btn ghost btn--icon btn--small" type="button" aria-label="Remove layer" title="Remove layer"><rm-icon name="delete-02"></rm-icon></button>
+<!-- One row of the timeline: the layer's name, and its bar. -->
+<template data-row="showcase-track">
+   <div class="showcase__track">
+      <button data-el="pick" class="showcase__tllabel showcase__tlname" type="button"><span data-el="name"></span><span data-el="remove" class="showcase__tlremove" role="button" aria-label="Remove layer" title="Remove layer">×</span></button>
+      <div data-el="lane" class="showcase__lane">
+         <div data-el="bar" class="showcase__bar"><i class="showcase__trim showcase__trim--l" data-trim="l"></i><span data-el="when" class="showcase__barwhen"></span><i class="showcase__trim showcase__trim--r" data-trim="r"></i></div>
       </div>
    </div>
 </template>
