@@ -108,6 +108,10 @@
             <button data-el="add" class="btn ghost" type="button">Add at playhead</button>
          </span>
          <span data-el="stat" class="hint"></span>
+         <!-- Out of the editor and onto disk: every clip as its own file, or the
+              clips joined as one video. Both save the cut first. -->
+         <button data-el="exportParts" class="btn ghost" type="button" title="Each clip as its own video, in Exports/<cut>/parts">Export parts</button>
+         <button data-el="exportVideo" class="btn ghost" type="button" title="The clips joined as one video, in Exports/<cut>">Export video</button>
          <button data-el="save" class="btn ghost" type="button" disabled>Save cut</button>
       </div>
       <!-- Focusable, so a selected clip can be deleted from the keyboard: click
