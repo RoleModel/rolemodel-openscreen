@@ -6236,12 +6236,24 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { error: String(err.message) });
       }
     }
+    /*
+     * What the Stickers folder holds right now, as one hash. Affinity 3 saves
+     * its own .af files and will not write back to an SVG, so the round trip
+     * is File → Export into this folder; the page polls this and reloads when
+     * anything here changes, whatever it was named. With `rel`, one file's hash.
+     */
     if (p === "/api/stickers/hash" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       try {
-        const file = stickerFile(id, url.searchParams.get("rel"));
-        const bytes = await readFile(file).catch(() => null);
-        return json(res, 200, { hash: bytes ? createHash("sha256").update(bytes).digest("hex") : null });
+        const rel = url.searchParams.get("rel");
+        if (rel) {
+          const bytes = await readFile(stickerFile(id, rel)).catch(() => null);
+          return json(res, 200, { hash: bytes ? createHash("sha256").update(bytes).digest("hex") : null });
+        }
+        const dir = stickersDir(id);
+        const names = (await readdir(dir).catch(() => [])).filter((f) => /\.(png|svg|webp|jpe?g)$/i.test(f)).sort();
+        const stats = await Promise.all(names.map((f) => stat(join(dir, f)).then((x) => `${f}:${x.size}:${Math.floor(x.mtimeMs)}`).catch(() => f)));
+        return json(res, 200, { hash: createHash("sha256").update(stats.join("\n")).digest("hex") });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
