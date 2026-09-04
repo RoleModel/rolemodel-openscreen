@@ -2,13 +2,19 @@
 <template data-panel="showcase">
    <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Save a PNG, or send it into a composition.</p>
    <div class="wpprev showcase__stage" data-region="main">
-      <rm-scene assets="/brand/imagery"><rm-showcase data-el="show" at="0" for="8000"></rm-showcase></rm-scene>
+      <!-- Layers are appended after the look, as its siblings: the scene gives
+           slotted children their stacking, and a wrapper would keep them out. -->
+      <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
    </div>
    <div class="ctl" data-region="main">
       <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
       <input data-el="scrub" type="range" min="0" max="8000" step="20" value="0" class="form-control" />
       <span data-el="clock" class="v">0 ms</span>
    </div>
+   <!-- The layers, in time order. One is selected; the rail and the footage
+        cards work on that one. -->
+   <div class="client" data-region="main">Layers <span data-el="layerCount" class="showcase__soft"></span></div>
+   <div data-el="layerList" class="showcase__layers" data-region="main"></div>
    <div class="client" data-region="main">Templates</div>
    <div data-el="templates" class="grid showcase__templates" data-region="main"></div>
    <div class="client" data-region="main">Footage <span data-el="mediaCount" class="showcase__soft"></span></div>
@@ -17,6 +23,10 @@
    <pre data-el="markup" class="cmd-note" data-region="main"></pre>
    <!-- Buttons only. The dials are the rail's. -->
    <div class="grid" data-region="footer">
+      <button data-el="addLayer" class="btn ghost" type="button"><rm-icon name="plus-sign"></rm-icon>Add layer</button>
+      <!-- A picture or clip from this machine, straight onto the selected layer. -->
+      <button data-el="addImage" class="btn ghost" type="button"><rm-icon name="upload-04"></rm-icon>Add image</button>
+      <input data-el="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
       <button data-el="copyTag" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy tag</button>
       <button data-el="png" class="btn btn--primary" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
    </div>
@@ -49,4 +59,22 @@
          <span data-el="device" class="kind"></span>
       </div>
    </button>
+</template>
+
+<!-- One layer: what it shows, when, and how it comes and goes. -->
+<template data-row="showcase-layer">
+   <div class="card showcase__layer">
+      <button data-el="pick" class="showcase__layerpick" type="button">
+         <div data-el="art" class="thumb showcase__layerart"></div>
+         <div class="showcase__layerbody">
+            <div data-el="name" class="showcase__layername"></div>
+            <div data-el="when" class="path"></div>
+         </div>
+      </button>
+      <div class="showcase__layertools">
+         <button data-el="up" class="btn ghost btn--icon btn--small" type="button" aria-label="Earlier" title="Earlier"><rm-icon name="arrow-up-01"></rm-icon></button>
+         <button data-el="down" class="btn ghost btn--icon btn--small" type="button" aria-label="Later" title="Later"><rm-icon name="arrow-down-01"></rm-icon></button>
+         <button data-el="remove" class="btn ghost btn--icon btn--small" type="button" aria-label="Remove layer" title="Remove layer"><rm-icon name="delete-02"></rm-icon></button>
+      </div>
+   </div>
 </template>

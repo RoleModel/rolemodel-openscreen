@@ -6043,7 +6043,10 @@ const server = createServer(async (req, res) => {
     if (p === "/api/showcase/png" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const tag = String(body.tag ?? "").trim();
-      if (!/^<rm-showcase[\s>][\s\S]*<\/rm-showcase>$/.test(tag)) return json(res, 400, { error: "a showcase tag is required" });
+      /* A look and any number of showcases, and nothing else: the string is
+         put on a page, so it is checked as markup, not trusted as it. */
+      const tags = tag.match(/<\/?[a-z][\w-]*/g) ?? [];
+      if (!tags.length || !tags.every((t) => /^<\/?rm-(showcase|look)$/.test(t)) || !/<rm-showcase[\s>]/.test(tag)) return json(res, 400, { error: "a showcase tag is required" });
       const width = Math.min(4096, Math.max(320, Number(body.width) || 1920));
       const [sw, sh] = String(body.shape ?? "16/9").split("/").map(Number);
       const height = Math.round(width * ((sh > 0 && sw > 0 ? sh / sw : 9 / 16)));
