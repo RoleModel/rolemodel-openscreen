@@ -59,8 +59,7 @@ import {
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
 import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, vectorize as stickerVectorize } from "../lib/stickers.mjs";
-import { deleteStickerComment, insertStickerComment, listStickerComments } from "../lib/db.mjs";
-import { setStickerSettings, stickerSettings } from "../lib/settings.mjs";
+import { stickerSettings } from "../lib/settings.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
@@ -221,6 +220,17 @@ const STYLE_DIR = join(LIB, "Style");
 /* The Creator's previews and exported PNGs that belong to no project. */
 const LOOKS_DIR = join(LIB, "Looks");
 const SHOWCASE_DIR = join(LIB, "Showcase");
+/** Neon's Data API address for a database URL: the endpoint, minus its pooler, under the apirest host. */
+function dataApiFor(databaseUrl) {
+  try {
+    const u = new URL(String(databaseUrl ?? ""));
+    const [endpoint, ...rest] = u.hostname.split(".");
+    if (!endpoint?.startsWith("ep-") || !u.hostname.endsWith(".neon.tech")) return null;
+    return `https://${endpoint.replace(/-pooler$/, "")}.apirest.${rest.join(".")}${u.pathname.replace(/\/+$/, "")}/rest/v1`;
+  } catch {
+    return null;
+  }
+}
 
 /*
  * The team's pictures, from the database, kept for a minute.
@@ -6210,55 +6220,6 @@ const server = createServer(async (req, res) => {
       return r.ok ? json(res, 200, { ok: true, dir: stickersDir(id) }) : json(res, 500, { error: "Finder did not open" });
     }
 
-    /* The comments setting: the Neon Data API URL the published pages talk to. */
-    if (p === "/api/stickers/settings" && req.method === "GET") return json(res, 200, await stickerSettings());
-    if (p === "/api/stickers/settings" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      const dataApi = String(body.dataApi ?? "").trim().replace(/\/+$/, "");
-      if (dataApi && !/^https:\/\/[^\s/]+\.neon\.tech\/[^\s]+\/rest\/v1$/.test(dataApi)) return json(res, 400, { error: "that is not a Neon Data API URL — it ends in /rest/v1" });
-      await setStickerSettings({ dataApi: dataApi || null });
-      return json(res, 200, { dataApi: dataApi || null });
-    }
-
-    /*
-     * Comments on a sticker, keyed by project and file name so they follow
-     * the sticker onto any sheet. The Studio reads and writes as studio_app;
-     * the published page does the same through the Data API as anonymous.
-     */
-    if (p === "/api/stickers/comments" && req.method === "GET") {
-      const id = String(url.searchParams.get("project") ?? "");
-      const sticker = url.searchParams.get("sticker");
-      try {
-        const client = await styleClient();
-        return json(res, 200, { comments: await listStickerComments({ databaseUrl: client.databaseUrl, project: id, sticker: sticker || null }) });
-      } catch (err) {
-        return json(res, 200, { comments: [], problem: String(err.message) });
-      }
-    }
-    if (p === "/api/stickers/comments" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      const id = String(body.projectId ?? "");
-      const sticker = String(body.sticker ?? "").trim();
-      const words = String(body.body ?? "").trim();
-      if (!id || !sticker || !words) return json(res, 400, { error: "a sticker and a comment are required" });
-      try {
-        const client = await styleClient();
-        return json(res, 200, { comment: await insertStickerComment({ databaseUrl: client.databaseUrl, project: id, sticker, body: words.slice(0, 2000), by: client.by }) });
-      } catch (err) {
-        return json(res, 400, { error: String(err.message) });
-      }
-    }
-    if (p === "/api/stickers/comments" && req.method === "DELETE") {
-      const body = JSON.parse(await text(req));
-      if (!body.id) return json(res, 400, { error: "an id is required" });
-      try {
-        const client = await styleClient();
-        return json(res, 200, await deleteStickerComment({ databaseUrl: client.databaseUrl, id: String(body.id) }));
-      } catch (err) {
-        return json(res, 400, { error: String(err.message) });
-      }
-    }
-
     /*
      * Several stickers, combined into one new file and opened in Affinity —
      * without making a sheet. Kept under Stickers/Combined, transparent, laid
@@ -8798,7 +8759,12 @@ async function fetchVoiceList() {
            shop or a teammate who wants the files, not the page. */
         const zipped = await capture("zip", ["-q", "-j", join(site, `${name}.zip`), join(site, "sheet.svg"), ...items.map((it) => join(site, it.file))]);
         if (!zipped.ok) return json(res, 500, { error: `could not zip the sheet: ${zipped.err.trim().slice(0, 160)}` });
-        const { dataApi } = await stickerSettings();
+        /*
+         * Comments live on the page, through Neon's Data API, as the anonymous
+         * role. Its address is the team database's own endpoint under the API
+         * host, so nothing is pasted anywhere; a setting can still override it.
+         */
+        const dataApi = (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
         await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
