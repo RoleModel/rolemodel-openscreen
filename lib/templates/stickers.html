@@ -1,0 +1,66 @@
+<!-- Stickers: a picture made into a sticker, cut out, traced, laid on a sheet, published. -->
+<template data-panel="stickers">
+   <p class="lede" data-region="main">Pick a picture, or describe one. Make it a sticker, cut the background out, trace it to vector, and fix it up in Affinity. Tick the ones you want on a sheet, build the sheet, and publish it as a page.</p>
+   <p data-el="keyNote" class="hint" data-region="main" hidden>There is no fal key yet. Add one under Restyle and come back.</p>
+
+   <div class="client" data-region="main">Working on</div>
+   <div class="stickers__work" data-region="main">
+      <div data-el="preview" class="stickers__preview"><span data-el="previewEmpty" class="hint">Nothing picked. Choose a picture below, or write a prompt in the rail and press Make sticker.</span><img data-el="previewImg" alt="" hidden /></div>
+      <div class="stickers__workbody">
+         <div data-el="workName" class="stickers__workname"></div>
+         <div data-el="workNote" class="path"></div>
+         <p data-el="status" class="hint" hidden></p>
+      </div>
+   </div>
+
+   <div class="client" data-region="main">Stickers <span data-el="stickerCount" class="stickers__soft"></span></div>
+   <p data-el="stickersEmpty" class="hint" data-region="main">No stickers in this project yet. Each step you run lands one here.</p>
+   <div data-el="stickers" class="grid stickers__grid" data-region="main"></div>
+
+   <div class="client" data-region="main">Sheets <span data-el="sheetCount" class="stickers__soft"></span></div>
+   <p data-el="sheetsEmpty" class="hint" data-region="main">Tick stickers above and press Build sheet.</p>
+   <div data-el="sheets" class="grid stickers__sheets" data-region="main"></div>
+
+   <div class="client" data-region="main">Pictures to start from <span data-el="sourceCount" class="stickers__soft"></span></div>
+   <div data-el="sources" class="grid stickers__grid" data-region="main"></div>
+
+   <div class="grid" data-region="footer">
+      <button data-el="make" class="btn ghost" type="button"><rm-icon name="magic-wand-01"></rm-icon>Make sticker</button>
+      <button data-el="cut" class="btn ghost" type="button"><rm-icon name="scissor-01"></rm-icon>Cut out</button>
+      <button data-el="trace" class="btn ghost" type="button"><rm-icon name="vector"></rm-icon>Vectorize</button>
+      <button data-el="affinity" class="btn ghost" type="button"><rm-icon name="shapes"></rm-icon>Open in Affinity</button>
+      <button data-el="upload" class="btn ghost" type="button"><rm-icon name="cloud-upload"></rm-icon>Upload picture</button>
+      <input data-el="file" type="file" accept="image/*" hidden />
+      <button data-el="build" class="btn ghost" type="button"><rm-icon name="tag-01"></rm-icon>Build sheet</button>
+      <button data-el="publish" class="btn btn--primary" type="button"><rm-icon name="globe-02"></rm-icon>Publish sheet</button>
+   </div>
+</template>
+
+<!-- A sticker in the project: tick it for the sheet, click it to work on it. -->
+<template data-row="stickers-card">
+   <div class="card card--media stickers__card">
+      <label class="stickers__tick"><input data-el="tick" type="checkbox" aria-label="On the sheet" /></label>
+      <button data-el="pick" class="thumb stickers__thumb" type="button" aria-label="Work on this"></button>
+      <div class="card__body"><div data-el="name" class="path stickers__name"></div><span data-el="kind" class="kind"></span></div>
+   </div>
+</template>
+
+<!-- A picture to start from: a project still or a library image. -->
+<template data-row="stickers-source">
+   <button class="card card--media stickers__card" type="button">
+      <div data-el="art" class="thumb stickers__thumb"></div>
+      <div class="card__body"><div data-el="name" class="path stickers__name"></div><span data-el="kind" class="kind"></span></div>
+   </button>
+</template>
+
+<!-- A built sheet, with where it was published. -->
+<template data-row="stickers-sheet">
+   <div class="card card--media stickers__card">
+      <button data-el="pick" class="thumb stickers__thumb stickers__thumb--sheet" type="button" aria-label="Open the sheet"></button>
+      <div class="card__body">
+         <div data-el="name" class="path stickers__name"></div>
+         <div data-el="note" class="path"></div>
+         <a data-el="link" class="stickers__link" target="_blank" rel="noopener" hidden>Open the page</a>
+      </div>
+   </div>
+</template>

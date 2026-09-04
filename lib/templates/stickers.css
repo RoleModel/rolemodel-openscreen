@@ -1,0 +1,88 @@
+/* Stickers: one block; every class is its element. */
+
+.stickers__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.stickers__work {
+  display: grid;
+  grid-template-columns: minmax(12rem, 20rem) 1fr;
+  gap: var(--op-space-medium);
+  align-items: start;
+}
+
+.stickers__preview {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--op-radius-medium);
+  border: var(--op-border-width) solid var(--line);
+  background: repeating-conic-gradient(var(--op-color-neutral-plus-six) 0 25%, var(--op-color-neutral-plus-seven) 0 50%) 0 0 / 24px 24px;
+  display: grid;
+  place-items: center;
+  padding: var(--op-space-x-small);
+  overflow: hidden;
+}
+
+.stickers__preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.stickers__workname {
+  font-weight: var(--op-font-weight-semi-bold);
+  overflow-wrap: anywhere;
+}
+
+.stickers__grid,
+.stickers__sheets {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+.stickers__card {
+  position: relative;
+  padding: 0;
+  text-align: start;
+}
+
+.stickers__card--on {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+.stickers__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background-color: var(--op-color-neutral-plus-six);
+  background-image: var(--pic), repeating-conic-gradient(var(--op-color-neutral-plus-five) 0 25%, transparent 0 50%);
+  background-size: contain, 16px 16px;
+  background-position: center, 0 0;
+  background-repeat: no-repeat, repeat;
+}
+
+.stickers__thumb--sheet {
+  background-size: contain, 16px 16px;
+}
+
+.stickers__tick {
+  position: absolute;
+  inset-block-start: var(--op-space-x-small);
+  inset-inline-start: var(--op-space-x-small);
+  z-index: 2;
+}
+
+.stickers__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stickers__link {
+  display: inline-block;
+  margin-block-start: var(--op-space-2x-small);
+  color: var(--op-color-primary-base);
+}
