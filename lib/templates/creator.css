@@ -1,18 +1,12 @@
 /* Creator: the look designer. One block; every class is its element. */
 
-.creator__ratio,
-.creator__pngsize {
-  flex: none;
-  inline-size: auto;
-}
-
 .creator__soft {
   font-weight: var(--op-font-weight-normal);
   color: var(--op-color-neutral-on-plus-max-alt);
 }
 
 .creator__presets {
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(32rem, 1fr));
 }
 
 .creator__preset {
@@ -47,13 +41,18 @@
   resize: vertical;
 }
 
+.creator__stops {
+  display: grid;
+  gap: var(--op-space-x-small);
+}
+
 /* A stop is two lines in a narrow rail: the colour, then where it sits. */
 .creator__stop {
   display: grid;
-  grid-template-columns: 1.4rem 1fr auto;
+  grid-template-columns: 1.4rem 1fr auto auto;
   grid-template-areas:
-    'swatch hex remove'
-    'pos pos readout';
+    'swatch pick hex remove'
+    'pos pos pos readout';
   gap: var(--op-space-2x-small) var(--op-space-x-small);
   align-items: center;
   padding-block-end: var(--op-space-x-small);
@@ -61,9 +60,10 @@
 }
 
 .creator__stop > .creator__swatch { grid-area: swatch; }
-.creator__stop > .creator__hex { grid-area: hex; }
+.creator__stop > .creator__pick { grid-area: pick; display: contents; }
+.creator__stop > .creator__hexout { grid-area: hex; font-family: var(--m); font-size: var(--op-font-x-small); }
 .creator__stop > [type='range'] { grid-area: pos; }
-.creator__stop > .v { grid-area: readout; }
+.creator__stop > .v:not(.creator__hexout) { grid-area: readout; }
 .creator__stop > .btn { grid-area: remove; }
 
 .creator__swatch {
@@ -71,11 +71,6 @@
   height: 1.4rem;
   border-radius: 50%;
   border: var(--op-border-width) solid var(--line);
-}
-
-.creator__hex {
-  font-family: var(--m);
-  font-size: var(--op-font-x-small);
 }
 
 .creator__check {
