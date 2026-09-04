@@ -9,6 +9,8 @@
       <input data-el="scrub" type="range" min="0" max="8000" step="20" value="0" class="form-control" />
       <span data-el="clock" class="v">0 ms</span>
    </div>
+   <div class="client" data-region="main">Templates</div>
+   <div data-el="templates" class="grid showcase__templates" data-region="main"></div>
    <div class="client" data-region="main">Footage <span data-el="mediaCount" class="showcase__soft"></span></div>
    <p data-el="mediaEmpty" class="hint" data-region="main">Pick a project to see its clips and stills here, or upload a picture from the rail.</p>
    <div data-el="media" class="grid showcase__media" data-region="main"></div>
@@ -36,4 +38,15 @@
       <span data-el="name" class="path showcase__picturename"></span>
       <input data-el="file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
    </div>
+</template>
+
+<!-- A template: a device, a backdrop and a camera, named. -->
+<template data-row="showcase-template">
+   <button class="card showcase__template" type="button">
+      <div class="card__body">
+         <div data-el="name" class="showcase__templatename"></div>
+         <div data-el="note" class="path"></div>
+         <span data-el="device" class="kind"></span>
+      </div>
+   </button>
 </template>
