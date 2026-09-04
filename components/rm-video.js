@@ -2233,10 +2233,15 @@ const LOOK_PRESETS = [
  */
 const LOOK_UNIFORMS = LOOK_SCHEMA.length
 /** Widest backing store the live element draws; it is upscaled by the browser. */
-const LOOK_MAX_WIDTH = 1024
+/*
+ * The widest a live look is drawn. 1024 read as soft on a Retina stage; a
+ * still and a video render size their own canvas and are not held to this.
+ */
+const LOOK_MAX_WIDTH = 2560
 /** How long after the last change a frame still counts as "moving". */
 const LOOK_SETTLE_MS = 180
 const LOOK_FRAGMENT = [
+  '#extension GL_OES_standard_derivatives : enable',
   `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];uniform vec2 m;uniform float ms;`,
   'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
   // indices into u[] by schema position
@@ -2290,7 +2295,7 @@ const LOOK_FRAGMENT = [
   ' if(U_AS>.5){uv=(floor(fc/asCell)+.5)*asCell/r;}',
   ' vec3 col=scene(uv);',
   ' if(U_AS>.5){float l=dot(col,vec3(.299,.587,.114));if(U_ASI>.5)l=1.-l;float gi=floor(clamp(l,0.,.999)*10.);vec2 inCell=fract(fc/asCell);float glyph=texture2D(glyphTex,vec2((gi+inCell.x)/10.,inCell.y)).r;vec3 ink=U_ASC<.5?col:vec3(.92);vec3 ground=U_ASC<.5?col*U_ASB:vec3(.06)*U_ASB;col=mix(ground,ink,glyph);}',
-  ' if(U_HF>.5){float l=dot(col,vec3(.299,.587,.114));float an=radians(U_HFA);mat2 rot=mat2(cos(an),-sin(an),sin(an),cos(an));vec2 g=rot*fc/U_HFS;float m;if(U_HFM<.5){vec2 cc=fract(g)-.5;float rad=sqrt(1.-l)*.7;m=1.-smoothstep(rad-.08,rad+.08,length(cc)*2.);}else{m=step(fract(g.y),1.-l);}col=mix(col,mix(col,hfInk,m),U_HFMIX);}',
+  ' if(U_HF>.5){float l=dot(col,vec3(.299,.587,.114));float an=radians(U_HFA);mat2 rot=mat2(cos(an),-sin(an),sin(an),cos(an));vec2 g=rot*fc/U_HFS;float m;if(U_HFM<.5){vec2 cc=fract(g)-.5;float rad=sqrt(1.-l)*.7;float dd=length(cc)*2.;float e=max(fwidth(dd),.004);m=1.-smoothstep(rad-e,rad+e,dd);}else{m=step(fract(g.y),1.-l);}col=mix(col,mix(col,hfInk,m),U_HFMIX);}',
   ' if(U_DT>.5){float th=U_DT<1.5?b2(fc)/4.:(U_DT<2.5?b4(fc)/16.:b8(fc)/64.);float levels=max(2.,U_DL)-1.;vec3 q=floor(col*levels+th)/levels;col=mix(col,q,U_DST);}',
   ' if(U_PL>.5){vec2 g=fract(v*vec2(U_PLC,U_PLR));float lw=U_PLW*.5;float line=step(g.x,lw)+step(1.-lw,g.x)+step(g.y,lw)+step(1.-lw,g.y);col=mix(col,plInk,clamp(line,0.,1.)*U_PLO);}',
   ' if(U_G>0.){float n=hash(floor(fc/max(.5,U_GS))+floor(t*24.)*.37)-.5;if(U_GBM<.5){col+=n*U_G;}else if(U_GBM<1.5){col=mix(col,col*(1.+n*2.),U_G);}else{col=mix(col,col+n*(1.-abs(col-.5)*2.),U_G);}}',
@@ -2334,6 +2339,7 @@ const lookGlyphs = () => {
  */
 function lookProgram(canvas, look, { assets = null } = {}) {
   const gl = canvas.getContext('webgl', { alpha: false, antialias: false, preserveDrawingBuffer: true })
+  gl?.getExtension('OES_standard_derivatives')
   const vertex = gl && compileShader(gl, gl.VERTEX_SHADER, SHADER_VERTEX)
   const fragment = gl && compileShader(gl, gl.FRAGMENT_SHADER, LOOK_FRAGMENT)
   const program = gl?.createProgram()
@@ -2415,7 +2421,7 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     if (w == null || h == null) {
       const cw = Math.max(1, canvas.clientWidth)
       const ch = Math.max(1, canvas.clientHeight)
-      const ratio = Math.min(window.devicePixelRatio || 1, 1) * (quick ? 0.5 : 1)
+      const ratio = Math.min(window.devicePixelRatio || 1, 2) * (quick ? 0.5 : 1)
       const cap = Math.min(1, LOOK_MAX_WIDTH / (cw * ratio))
       w = Math.max(1, Math.round(cw * ratio * cap))
       h = Math.max(1, Math.round(ch * ratio * cap))
@@ -2494,7 +2500,22 @@ class RMLook extends RMElement {
     const prog = lookProgram(canvas, look)
     if (!prog) return
     this._prog = prog
-    const draw = () => prog.draw(RM.t)
+    /*
+     * Full resolution when the clock rests, half while it runs. A seek every
+     * frame is playback or a scrub; drawing four million pixels of shader per
+     * frame for that is what made the page drag, and a half-size frame in
+     * motion reads the same. The full frame follows once the seeks stop.
+     */
+    let lastDraw = 0
+    let settleDraw = 0
+    const draw = () => {
+      const now = performance.now()
+      const moving = now - lastDraw < 100
+      lastDraw = now
+      prog.draw(RM.t, { quick: moving })
+      clearTimeout(settleDraw)
+      if (moving) settleDraw = setTimeout(() => prog.draw(RM.t), 200)
+    }
     const observer = new ResizeObserver(draw)
     observer.observe(canvas)
     root.addEventListener('rmseek', draw)
@@ -2542,6 +2563,7 @@ class RMLook extends RMElement {
     canvas.addEventListener('webglcontextlost', onLost)
     this._dispose = () => {
       clearTimeout(this._settle)
+      clearTimeout(settleDraw)
       clearTimeout(rippleRaf)
       this.removeEventListener('pointermove', onMove)
       observer.disconnect()
@@ -3087,6 +3109,7 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
         if (!canvas) return
         const gl = canvas.getContext("webgl", { alpha: false, antialias: false })
         if (!gl) return
+        gl.getExtension("OES_standard_derivatives")
         const vs = compile(gl, gl.VERTEX_SHADER, VERTEX)
         const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT)
         const program = gl.createProgram()!
@@ -3153,7 +3176,7 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
         const running = () => animate && !isCanvas && decoded.an
         const draw = (now: number) => {
             raf = 0
-            const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+            const ratio = Math.min(window.devicePixelRatio || 1, 2)
             const w = Math.max(1, Math.round(canvas.clientWidth * ratio))
             const h = Math.max(1, Math.round(canvas.clientHeight * ratio))
             if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
