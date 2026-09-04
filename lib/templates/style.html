@@ -158,5 +158,8 @@
 
 <!-- The picture, large. -->
 <template data-row="style-lightbox">
-   <dialog class="stylegen__lightbox"><img data-el="img" class="stylegen__lightboximg" alt="" /></dialog>
+   <dialog class="stylegen__lightbox">
+      <button data-el="close" class="btn ghost btn--small stylegen__lightboxclose" type="button" aria-label="Close">×</button>
+      <img data-el="img" class="stylegen__lightboximg" alt="" />
+   </dialog>
 </template>

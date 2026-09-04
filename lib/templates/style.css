@@ -180,15 +180,37 @@
   touch-action: none;
 }
 
+/*
+ * The lightbox is the picture, whole. A dialog's own max size is the viewport
+ * less a margin and it scrolls what does not fit, so a wide picture in the
+ * 60rem dialog above was cut off at the sides. Here the dialog is exactly as
+ * big as the picture, and the picture is fitted to the viewport.
+ */
 .stylegen__lightbox {
+  position: relative;
   background: transparent;
+  max-width: none;
+  max-height: none;
+  width: fit-content;
+  overflow: visible;
 }
 
 .stylegen__lightboximg {
+  display: block;
+  width: auto;
+  height: auto;
   max-width: 92vw;
   max-height: 90vh;
-  display: block;
+  object-fit: contain;
   border-radius: var(--op-radius-large);
+}
+
+.stylegen__lightboxclose {
+  position: absolute;
+  inset-block-start: var(--op-space-x-small);
+  inset-inline-end: var(--op-space-x-small);
+  background: var(--op-color-neutral-plus-max);
+  color: var(--op-color-neutral-on-plus-max);
 }
 
 .stylegen__swatch {
