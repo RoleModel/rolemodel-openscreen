@@ -2539,6 +2539,7 @@ define('rm-look', RMLook)
  * that screenshots the page gets exactly what the Studio shows.
  */
 const SHOWCASE_SCHEMA = [
+  { key: 'device', label: 'Device', type: 'select', options: ['none', 'browser', 'phone', 'macbook'], def: 'none', group: 'frame' },
   { key: 'pad', label: 'Margin', type: 'range', min: 0, max: 30, step: 0.5, def: 8, group: 'frame' },
   { key: 'radius', label: 'Corners', type: 'range', min: 0, max: 8, step: 0.1, def: 1.6, group: 'frame' },
   { key: 'frame', label: 'Frame', type: 'select', options: ['none', 'glass', 'dark', 'light'], def: 'glass', group: 'frame' },
@@ -2562,6 +2563,32 @@ const showcaseDefaults = () => Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.
 
 const SHOWCASE_VIDEO = /\.(mp4|mov|webm|m4v)(\?|#|$)/i
 
+/*
+ * The devices. Each is drawn, not photographed, for the reason rm-browser
+ * gives: a real device carries a wallpaper, a clock and a battery, none of
+ * them ours. `ar` is the shell's shape; the screen sits inside it.
+ */
+const SHOWCASE_DEVICES = {
+  none: { ar: null },
+  browser: { ar: 16 / 10 },
+  phone: { ar: 9 / 19.5 },
+  macbook: { ar: 1.5 },
+}
+
+/*
+ * Templates: a device, a backdrop and a camera in one press. `look` names a
+ * Creator preset, resolved when the template is applied, so the backdrops stay
+ * in one list.
+ */
+const SHOWCASE_TEMPLATES = [
+  { name: 'Browser, tilted', note: 'A web app on a dark look, leaning back', device: 'browser', look: 'Graphite', frame: 'dark', pad: 9, radius: 1.4, shadow: 0.7, tx: 8, ty: -14, tz: 0, zoom: 1, x: 0, y: 0, persp: 140 },
+  { name: 'MacBook hero', note: 'Straight on, a little from above', device: 'macbook', look: 'Academy dusk', frame: 'none', pad: 7, radius: 1, shadow: 0.8, tx: 6, ty: 0, tz: 0, zoom: 1, x: 0, y: 2, persp: 160 },
+  { name: 'Phone, floating', note: 'A portrait clip, turned toward the light', device: 'phone', look: 'Amber paper', frame: 'none', pad: 6, radius: 1, shadow: 0.85, tx: 6, ty: -18, tz: -6, zoom: 1, x: 0, y: 0, persp: 120 },
+  { name: 'Flat card', note: 'No device, no tilt: the clip with rounded corners', device: 'none', look: 'Graphite', frame: 'glass', pad: 8, radius: 1.6, shadow: 0.6, tx: 0, ty: 0, tz: 0, zoom: 1, x: 0, y: 0, persp: 140 },
+  { name: 'Glass, dramatic', note: 'A glass card swung far into the room', device: 'none', look: 'Academy dusk', frame: 'glass', pad: 10, radius: 2, shadow: 0.9, tx: 14, ty: 22, tz: -4, zoom: 1.1, x: -4, y: 0, persp: 90 },
+  { name: 'Browser, light', note: 'A light browser on paper, barely tilted', device: 'browser', look: 'Amber paper', frame: 'light', pad: 10, radius: 1.2, shadow: 0.5, tx: 3, ty: -6, tz: 0, zoom: 1, x: 0, y: 0, persp: 200 },
+]
+
 class RMShowcase extends RMElement {
   static fields = ['media', 'look', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
 
@@ -2581,45 +2608,69 @@ class RMShowcase extends RMElement {
     const media = assetUrl(this, this.attr('media'))
     const look = this.attr('look')
     const isVideo = SHOWCASE_VIDEO.test(media)
-    const frame = {
-      none: 'border: 0;',
-      glass: 'border: 1px solid rgba(255,255,255,0.28); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);',
-      dark: 'border: 0.6cqw solid rgba(0,0,0,0.85);',
-      light: 'border: 0.6cqw solid rgba(255,255,255,0.92);',
-    }[s.frame]
-    const shadow = s.shadow > 0 ? `0 ${2.5 * s.shadow}cqw ${6 * s.shadow}cqw rgba(0,0,0,${0.55 * s.shadow}), 0 ${0.6 * s.shadow}cqw ${1.4 * s.shadow}cqw rgba(0,0,0,${0.3 * s.shadow})` : 'none'
-    const transform = `translate(${s.x}%, ${s.y}%) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
+    const device = SHOWCASE_DEVICES[s.device] ? s.device : 'none'
+    const light = s.frame === 'light'
 
     /*
-     * Rebuilt only when the media changes; a dial moving is a style change on
-     * nodes that already exist, so a video keeps its buffer and its frame.
+     * Rebuilt when the media or the device changes; a dial moving is a style
+     * change on nodes that already exist, so a video keeps its buffer and its
+     * frame.
      */
-    const same = this._built && this._media === media && this._isVideo === isVideo
+    const same = this._built && this._media === media && this._isVideo === isVideo && this._device === device
     if (!same) {
       this._unseek?.()
+      const pic = media
+        ? isVideo
+          ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
+          : `<img src="${this.esc(media)}" alt="" />`
+        : '<div class="empty">Choose a picture or a clip</div>'
+      const shell = {
+        none: `<div class="body"><div class="screen">${pic}</div></div>`,
+        browser: `<div class="body"><div class="bar"><i></i><i></i><i></i><span class="url"></span></div><div class="screen">${pic}</div></div>`,
+        phone: `<div class="body"><div class="screen">${pic}</div><div class="island"></div></div>`,
+        macbook: `<div class="body"><div class="lid"><div class="screen">${pic}</div><div class="cam"></div></div><div class="base"><div class="notch"></div></div></div>`,
+      }[device]
       this.shadowRoot.innerHTML = `
         <style>
-          :host { position:absolute; display:block; inset:0; width:100%; height:100%; container-type:inline-size; }
+          :host { position:absolute; display:block; inset:0; width:100%; height:100%; container-type:size; }
           .stage { position:absolute; inset:0; overflow:hidden; }
           .stage rm-look { position:absolute; inset:0; }
           .room { position:absolute; inset:0; transform-style:preserve-3d; }
-          .card { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); transform-style:preserve-3d; backface-visibility:hidden; }
-          .card > img, .card > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
+          .place { position:absolute; display:grid; place-items:center; }
+          .card { position:relative; transform-style:preserve-3d; backface-visibility:hidden; }
+          /* The shell measures itself: inside .body, 1cqw is 1% of the card. */
+          .body { position:absolute; inset:0; container-type:inline-size; }
+          .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
+          .screen > img, .screen > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
           .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
+          /* none: the screen is the card */
+          .none .screen { inset:0; }
+          /* browser: a drawn chrome bar over the page */
+          .browser .body { --chrome:var(--op-color-neutral-plus-two, #2b2b2b); --chrome-ink:rgba(255,255,255,0.10); }
+          .browser.light .body { --chrome:var(--op-color-neutral-minus-seven, #ececec); --chrome-ink:rgba(0,0,0,0.08); }
+          .browser .bar { position:absolute; inset:0 0 auto 0; height:7cqw; background:var(--chrome); display:flex; align-items:center; gap:1cqw; padding:0 2cqw; box-sizing:border-box; }
+          .browser .bar i { width:1.4cqw; height:1.4cqw; border-radius:50%; background:var(--chrome-ink); }
+          .browser .bar .url { flex:1; height:3.4cqw; margin-inline-start:2cqw; border-radius:1.2cqw; background:var(--chrome-ink); }
+          .browser .screen { inset:7cqw 0 0 0; }
+          /* phone: a dark shell, a screen inset, an island */
+          .phone .body { background:var(--op-color-neutral-plus-max, #0d0d0d); }
+          .phone .screen { inset:3cqw; }
+          .phone .island { position:absolute; top:5.5cqw; left:50%; width:28cqw; height:7cqw; border-radius:4cqw; background:var(--op-color-neutral-plus-max, #000); transform:translateX(-50%); }
+          /* macbook: a lid with a screen and a camera, over an aluminium base */
+          .macbook .lid { position:absolute; inset:0 0 9% 0; background:var(--op-color-neutral-plus-max, #141414); border-radius:3cqw 3cqw 0 0; }
+          .macbook .screen { inset:2.2cqw 2.2cqw 2.6cqw 2.2cqw; }
+          .macbook .cam { position:absolute; top:0.9cqw; left:50%; width:0.8cqw; height:0.8cqw; border-radius:50%; background:var(--op-color-neutral-plus-three, #2a2a2a); transform:translateX(-50%); }
+          .macbook .base { position:absolute; left:-5cqw; right:-5cqw; bottom:0; height:9%; background:linear-gradient(var(--op-color-neutral-minus-six, #dcdcdc), var(--op-color-neutral-minus-three, #a6a6a6) 70%, var(--op-color-neutral-minus-one, #7d7d7d)); border-radius:0 0 3cqw 3cqw / 0 0 100% 100%; }
+          .macbook .notch { position:absolute; top:0; left:50%; width:16cqw; height:32%; border-radius:0 0 2cqw 2cqw; background:var(--op-color-neutral-minus-two, #8f8f8f); transform:translateX(-50%); }
         </style>
         <div class="stage">
           <rm-look></rm-look>
-          <div class="room"><div class="card">${
-            media
-              ? isVideo
-                ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
-                : `<img src="${this.esc(media)}" alt="" />`
-              : '<div class="empty">Choose a picture or a clip</div>'
-          }</div></div>
+          <div class="room"><div class="place"><div class="card ${device}${light ? ' light' : ''}">${shell}</div></div></div>
         </div>`
       this._built = true
       this._media = media
       this._isVideo = isVideo
+      this._device = device
       if (isVideo) {
         const video = this.shadowRoot.querySelector('video')
         const seek = (ms) => {
@@ -2649,12 +2700,34 @@ class RMShowcase extends RMElement {
       if (lookEl.getAttribute('look') !== look) lookEl.setAttribute('look', look)
       lookEl.hidden = false
     } else lookEl.hidden = true
-    const room = this.shadowRoot.querySelector('.room')
-    room.style.perspective = `${s.persp}cqw`
+
+    const frame = {
+      none: 'border: 0;',
+      glass: 'border: 1px solid rgba(255,255,255,0.28); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);',
+      dark: 'border: 0.6cqw solid rgba(0,0,0,0.85);',
+      light: 'border: 0.6cqw solid rgba(255,255,255,0.92);',
+    }[s.frame]
+    const shadow = s.shadow > 0 ? `0 ${2.5 * s.shadow}cqw ${6 * s.shadow}cqw rgba(0,0,0,${0.55 * s.shadow}), 0 ${0.6 * s.shadow}cqw ${1.4 * s.shadow}cqw rgba(0,0,0,${0.3 * s.shadow})` : 'none'
+    const transform = `translate(${s.x}%, ${s.y}%) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
+    const ar = SHOWCASE_DEVICES[device].ar
+    const avail = 100 - 2 * s.pad
+    this.shadowRoot.querySelector('.room').style.perspective = `${s.persp}cqw`
+    this.shadowRoot.querySelector('.place').style.inset = `${s.pad}%`
     const card = this.shadowRoot.querySelector('.card')
-    card.style.cssText = `inset:${s.pad}%; border-radius:${s.radius}cqw; box-shadow:${shadow}; transform:${transform}; ${frame}`
-    const pic = card.firstElementChild
-    if (pic && pic.tagName !== 'DIV') pic.style.objectFit = s.fit
+    card.classList.toggle('light', light)
+    card.style.cssText = ar
+      ? `width:min(${avail}cqw, ${avail * ar}cqh); aspect-ratio:${ar}; transform:${transform};`
+      : `width:100%; height:100%; transform:${transform};`
+    /* The frame and the shadow belong to the outermost drawn edge: the screen
+       for a bare card, the body for a device. A MacBook's base hangs outside. */
+    const edge = this.shadowRoot.querySelector(device === 'none' ? '.screen' : '.body')
+    const radius = { none: `${s.radius}cqw`, browser: `${s.radius}cqw`, phone: '13cqw', macbook: '0' }[device]
+    edge.style.cssText = device === 'none' ? `inset:0; border-radius:${radius}; box-shadow:${shadow}; ${frame}` : `border-radius:${radius}; ${device === 'macbook' ? '' : `box-shadow:${shadow}; ${frame}`}`
+    if (device === 'macbook') this.shadowRoot.querySelector('.lid').style.boxShadow = shadow
+    if (device === 'phone') this.shadowRoot.querySelector('.screen').style.borderRadius = '10cqw'
+    if (device === 'browser') this.shadowRoot.querySelector('.screen').style.borderRadius = `0 0 ${s.radius}cqw ${s.radius}cqw`
+    const pic = this.shadowRoot.querySelector('.screen > img, .screen > video')
+    if (pic) pic.style.objectFit = s.fit
     if (this._isVideo) {
       const video = this.shadowRoot.querySelector('video')
       if (video?.readyState >= HTMLMediaElement.HAVE_METADATA) {
@@ -2919,7 +2992,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, showcaseDefaults, encodeShowcase }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 

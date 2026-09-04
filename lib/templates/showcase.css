@@ -50,3 +50,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.showcase__templates {
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.showcase__template {
+  text-align: start;
+  cursor: pointer;
+}
+
+.showcase__template--on {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+.showcase__templatename {
+  font-weight: var(--op-font-weight-semi-bold);
+}
