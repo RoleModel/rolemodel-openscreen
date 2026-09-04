@@ -2624,11 +2624,18 @@ class RMShowcase extends RMElement {
           ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
           : `<img src="${this.esc(media)}" alt="" />`
         : '<div class="empty">Choose a picture or a clip</div>'
+      /*
+       * Depth is a stack of slices behind the shell, each a step further back in
+       * Z and a shade darker, so a tilted device shows an edge rather than a
+       * paper-thin card. Sizes are in --u, a hundredth of the card's width, set
+       * on the card, so the shell keeps its proportions at any size.
+       */
+      const slices = (n, cls) => Array.from({ length: n }, (_, i) => `<div class="${cls}" style="--i:${i + 1}"></div>`).join('')
       const shell = {
         none: `<div class="body"><div class="screen">${pic}</div></div>`,
-        browser: `<div class="body"><div class="bar"><i></i><i></i><i></i><span class="url"></span></div><div class="screen">${pic}</div></div>`,
-        phone: `<div class="body"><div class="screen">${pic}</div><div class="island"></div></div>`,
-        macbook: `<div class="body"><div class="lid"><div class="screen">${pic}</div><div class="cam"></div></div><div class="base"><div class="notch"></div></div></div>`,
+        browser: `${slices(8, 'side')}<div class="body"><div class="bar"><i></i><i></i><i></i><span class="url"></span></div><div class="screen">${pic}</div></div>`,
+        phone: `${slices(10, 'side')}<div class="body"><div class="screen">${pic}</div><div class="island"></div></div>`,
+        macbook: `${slices(4, 'side side--lid')}${slices(8, 'side side--base')}<div class="body"><div class="lid"><div class="screen">${pic}</div><div class="cam"></div></div><div class="base"><div class="notch"></div></div></div>`,
       }[device]
       this.shadowRoot.innerHTML = `
         <style>
@@ -2636,32 +2643,37 @@ class RMShowcase extends RMElement {
           .stage { position:absolute; inset:0; overflow:hidden; }
           .stage rm-look { position:absolute; inset:0; }
           .room { position:absolute; inset:0; transform-style:preserve-3d; }
-          .place { position:absolute; display:grid; place-items:center; }
-          .card { position:relative; transform-style:preserve-3d; backface-visibility:hidden; }
-          /* The shell measures itself: inside .body, 1cqw is 1% of the card. */
-          .body { position:absolute; inset:0; container-type:inline-size; }
+          .place { position:absolute; display:grid; place-items:center; transform-style:preserve-3d; }
+          .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100); }
+          .body { position:absolute; inset:0; transform-style:preserve-3d; }
+          .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
           .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
           .screen > img, .screen > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
           .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
           /* none: the screen is the card */
           .none .screen { inset:0; }
-          /* browser: a drawn chrome bar over the page */
-          .browser .body { --chrome:var(--op-color-neutral-plus-two, #2b2b2b); --chrome-ink:rgba(255,255,255,0.10); }
-          .browser.light .body { --chrome:var(--op-color-neutral-minus-seven, #ececec); --chrome-ink:rgba(0,0,0,0.08); }
-          .browser .bar { position:absolute; inset:0 0 auto 0; height:7cqw; background:var(--chrome); display:flex; align-items:center; gap:1cqw; padding:0 2cqw; box-sizing:border-box; }
-          .browser .bar i { width:1.4cqw; height:1.4cqw; border-radius:50%; background:var(--chrome-ink); }
-          .browser .bar .url { flex:1; height:3.4cqw; margin-inline-start:2cqw; border-radius:1.2cqw; background:var(--chrome-ink); }
-          .browser .screen { inset:7cqw 0 0 0; }
+          /* browser: a drawn chrome bar over the page, on a slab */
+          .browser { --chrome: var(--op-color-neutral-plus-two, #2b2b2b); --chrome-ink: rgba(255,255,255,0.10); --edge: var(--op-color-neutral-plus-one, #1c1c1c); }
+          .browser.light { --chrome: var(--op-color-neutral-minus-seven, #ececec); --chrome-ink: rgba(0,0,0,0.08); --edge: var(--op-color-neutral-minus-four, #bdbdbd); }
+          .browser .body { overflow:hidden; background:var(--chrome); }
+          .browser .bar { position:absolute; inset:0 0 auto 0; height:calc(var(--u) * 4.6); background:var(--chrome); display:flex; align-items:center; gap:calc(var(--u) * 0.9); padding:0 calc(var(--u) * 1.6); box-sizing:border-box; }
+          .browser .bar i { width:calc(var(--u) * 1.1); height:calc(var(--u) * 1.1); border-radius:50%; background:var(--chrome-ink); flex:none; }
+          .browser .bar .url { width:34%; height:calc(var(--u) * 2.4); margin-inline-start:calc(var(--u) * 1.6); border-radius:calc(var(--u) * 0.8); background:var(--chrome-ink); }
+          .browser .screen { inset:calc(var(--u) * 4.6) 0 0 0; }
           /* phone: a dark shell, a screen inset, an island */
-          .phone .body { background:var(--op-color-neutral-plus-max, #0d0d0d); }
-          .phone .screen { inset:3cqw; }
-          .phone .island { position:absolute; top:5.5cqw; left:50%; width:28cqw; height:7cqw; border-radius:4cqw; background:var(--op-color-neutral-plus-max, #000); transform:translateX(-50%); }
+          .phone { --edge: var(--op-color-neutral-plus-two, #262626); }
+          .phone .body { background:var(--op-color-neutral-plus-max, #0d0d0d); overflow:hidden; }
+          .phone .screen { inset:calc(var(--u) * 2.6); border-radius:calc(var(--u) * 7); }
+          .phone .island { position:absolute; top:calc(var(--u) * 5); left:50%; width:calc(var(--u) * 26); height:calc(var(--u) * 6.5); border-radius:calc(var(--u) * 4); background:var(--op-color-neutral-plus-max, #000); transform:translateX(-50%); }
           /* macbook: a lid with a screen and a camera, over an aluminium base */
-          .macbook .lid { position:absolute; inset:0 0 9% 0; background:var(--op-color-neutral-plus-max, #141414); border-radius:3cqw 3cqw 0 0; }
-          .macbook .screen { inset:2.2cqw 2.2cqw 2.6cqw 2.2cqw; }
-          .macbook .cam { position:absolute; top:0.9cqw; left:50%; width:0.8cqw; height:0.8cqw; border-radius:50%; background:var(--op-color-neutral-plus-three, #2a2a2a); transform:translateX(-50%); }
-          .macbook .base { position:absolute; left:-5cqw; right:-5cqw; bottom:0; height:9%; background:linear-gradient(var(--op-color-neutral-minus-six, #dcdcdc), var(--op-color-neutral-minus-three, #a6a6a6) 70%, var(--op-color-neutral-minus-one, #7d7d7d)); border-radius:0 0 3cqw 3cqw / 0 0 100% 100%; }
-          .macbook .notch { position:absolute; top:0; left:50%; width:16cqw; height:32%; border-radius:0 0 2cqw 2cqw; background:var(--op-color-neutral-minus-two, #8f8f8f); transform:translateX(-50%); }
+          .macbook { --edge: var(--op-color-neutral-plus-two, #2a2a2a); }
+          .macbook .side--lid { inset:0 0 9% 0; border-radius:calc(var(--u) * 3) calc(var(--u) * 3) 0 0; --step:-0.18; }
+          .macbook .side--base { inset:auto calc(var(--u) * -5) 0 calc(var(--u) * -5); height:9%; border-radius:0 0 calc(var(--u) * 3) calc(var(--u) * 3) / 0 0 100% 100%; background: var(--op-color-neutral-minus-two, #8a8a8a); --step:-0.32; }
+          .macbook .lid { position:absolute; inset:0 0 9% 0; background:var(--op-color-neutral-plus-max, #141414); border-radius:calc(var(--u) * 3) calc(var(--u) * 3) 0 0; overflow:hidden; }
+          .macbook .screen { inset:calc(var(--u) * 2.2) calc(var(--u) * 2.2) calc(var(--u) * 2.6) calc(var(--u) * 2.2); }
+          .macbook .cam { position:absolute; top:calc(var(--u) * 0.9); left:50%; width:calc(var(--u) * 0.8); height:calc(var(--u) * 0.8); border-radius:50%; background:var(--op-color-neutral-plus-three, #2a2a2a); transform:translateX(-50%); }
+          .macbook .base { position:absolute; left:calc(var(--u) * -5); right:calc(var(--u) * -5); bottom:0; height:9%; background:linear-gradient(var(--op-color-neutral-minus-six, #dcdcdc), var(--op-color-neutral-minus-three, #a6a6a6) 70%, var(--op-color-neutral-minus-one, #7d7d7d)); border-radius:0 0 calc(var(--u) * 3) calc(var(--u) * 3) / 0 0 100% 100%; }
+          .macbook .notch { position:absolute; top:0; left:50%; width:calc(var(--u) * 16); height:32%; border-radius:0 0 calc(var(--u) * 2) calc(var(--u) * 2); background:var(--op-color-neutral-minus-two, #8f8f8f); transform:translateX(-50%); }
         </style>
         <div class="stage">
           <rm-look></rm-look>
@@ -2715,16 +2727,23 @@ class RMShowcase extends RMElement {
     this.shadowRoot.querySelector('.place').style.inset = `${s.pad}%`
     const card = this.shadowRoot.querySelector('.card')
     card.classList.toggle('light', light)
-    card.style.cssText = ar
-      ? `width:min(${avail}cqw, ${avail * ar}cqh); aspect-ratio:${ar}; transform:${transform};`
-      : `width:100%; height:100%; transform:${transform};`
-    /* The frame and the shadow belong to the outermost drawn edge: the screen
-       for a bare card, the body for a device. A MacBook's base hangs outside. */
+    const w = ar ? `min(${avail}cqw, ${avail * ar}cqh)` : `${avail}cqw`
+    card.style.cssText = ar ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform};` : `--w:${w}; width:100%; height:100%; transform:${transform};`
+    /*
+     * The frame and the shadow belong to the outermost drawn edge: the screen for
+     * a bare card, the body for a device; the deepest slice carries the shadow so
+     * it falls from the back of the slab. A MacBook's base hangs outside its lid.
+     */
+    const radius = { none: `${s.radius}cqw`, browser: `${s.radius}cqw`, phone: 'calc(var(--u) * 9)', macbook: '0' }[device]
     const edge = this.shadowRoot.querySelector(device === 'none' ? '.screen' : '.body')
-    const radius = { none: `${s.radius}cqw`, browser: `${s.radius}cqw`, phone: '13cqw', macbook: '0' }[device]
-    edge.style.cssText = device === 'none' ? `inset:0; border-radius:${radius}; box-shadow:${shadow}; ${frame}` : `border-radius:${radius}; ${device === 'macbook' ? '' : `box-shadow:${shadow}; ${frame}`}`
-    if (device === 'macbook') this.shadowRoot.querySelector('.lid').style.boxShadow = shadow
-    if (device === 'phone') this.shadowRoot.querySelector('.screen').style.borderRadius = '10cqw'
+    edge.style.cssText = device === 'none' ? `inset:0; border-radius:${radius}; box-shadow:${shadow}; ${frame}` : device === 'macbook' ? '' : `border-radius:${radius}; ${frame}`
+    const sides = [...this.shadowRoot.querySelectorAll('.side')]
+    for (const side of sides) {
+      if (!side.classList.contains('side--lid') && !side.classList.contains('side--base')) side.style.borderRadius = radius
+      side.style.boxShadow = ''
+    }
+    const deepest = sides.filter((x) => !x.classList.contains('side--lid')).at(-1)
+    if (deepest) deepest.style.boxShadow = shadow
     if (device === 'browser') this.shadowRoot.querySelector('.screen').style.borderRadius = `0 0 ${s.radius}cqw ${s.radius}cqw`
     const pic = this.shadowRoot.querySelector('.screen > img, .screen > video')
     if (pic) pic.style.objectFit = s.fit
