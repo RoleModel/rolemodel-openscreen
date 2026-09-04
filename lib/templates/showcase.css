@@ -67,3 +67,62 @@
 .showcase__templatename {
   font-weight: var(--op-font-weight-semi-bold);
 }
+
+/* The layer list: a row per layer, the selected one outlined. */
+.showcase__layers {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.showcase__layer {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  padding: var(--op-space-2x-small);
+}
+
+.showcase__layer--on {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+.showcase__layerpick {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.showcase__layerart {
+  flex: none;
+  width: 6rem;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--op-radius-small);
+  background-color: var(--sunk);
+  background-image: var(--pic);
+  background-size: cover;
+  background-position: center;
+}
+
+.showcase__layerbody {
+  min-width: 0;
+}
+
+.showcase__layername {
+  font-weight: var(--op-font-weight-semi-bold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase__layertools {
+  display: flex;
+  gap: var(--op-space-3x-small);
+  flex: none;
+}

@@ -118,6 +118,17 @@ for (const [name, syntax, initial] of [
   ['--rm-in-y', '<length>', '0px'],
   ['--rm-out-y', '<length>', '0px'],
   ['--rm-in-s', '<number>', '1'],
+  // The showcase's enter and exit, kept apart for the same reason: two
+  // animations on one property fight, and the later one wins.
+  ['--sc-in-o', '<number>', '1'],
+  ['--sc-out-o', '<number>', '1'],
+  ['--sc-in-x', '<length-percentage>', '0%'],
+  ['--sc-in-y', '<length-percentage>', '0%'],
+  ['--sc-in-s', '<number>', '1'],
+  ['--sc-in-r', '<angle>', '0deg'],
+  ['--sc-out-x', '<length-percentage>', '0%'],
+  ['--sc-out-y', '<length-percentage>', '0%'],
+  ['--sc-out-s', '<number>', '1'],
 ]) {
   // Registered so they interpolate as numbers rather than flipping at 50%.
   // Registration is document-global, which is why it happens here once rather
@@ -2553,8 +2564,11 @@ const SHOWCASE_SCHEMA = [
   { key: 'x', label: 'Shift X', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
   { key: 'y', label: 'Shift Y', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
+  { key: 'enter', label: 'Enter', type: 'select', options: ['none', 'fade', 'rise', 'slide', 'zoom', 'tilt'], def: 'rise', group: 'motion' },
+  { key: 'exit', label: 'Exit', type: 'select', options: ['none', 'fade', 'sink', 'slide', 'zoom'], def: 'fade', group: 'motion' },
 ]
 const SHOWCASE_GROUPS = [
+  ['motion', 'Motion'],
   ['media', 'Media'],
   ['frame', 'Frame'],
   ['camera', 'Camera'],
@@ -2643,7 +2657,32 @@ class RMShowcase extends RMElement {
           .stage { position:absolute; inset:0; overflow:hidden; }
           .stage rm-look { position:absolute; inset:0; }
           .room { position:absolute; inset:0; transform-style:preserve-3d; }
-          .place { position:absolute; display:grid; place-items:center; transform-style:preserve-3d; }
+          /*
+           * Enter and exit, on the scene clock. The same device as TIMING: two
+           * paused animations whose negative delay is the scene time, so the
+           * frame at 2400ms is the same frame every time. Before its start the layer
+           * is at its first keyframe (hidden); after its end, at its last.
+           */
+          .place { position:absolute; display:grid; place-items:center; transform-style:preserve-3d;
+                   --in-dur: var(--duration-slow, 640ms); --out-dur: var(--duration-base, 400ms);
+                   animation-duration: var(--in-dur), var(--out-dur);
+                   animation-delay: calc(var(--at) - var(--t)), calc(var(--at) + var(--hold) - var(--out-dur) - var(--t));
+                   animation-timing-function: var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)), var(--ease-exit, cubic-bezier(0.55, 0, 1, 0.45));
+                   animation-fill-mode: both, both; animation-play-state: paused, paused;
+                   /* Enter and exit each own their variables; the layer combines them. */
+                   opacity: calc(var(--sc-in-o) * var(--sc-out-o));
+                   transform: perspective(120cqw) rotateX(var(--sc-in-r)) translate(calc(var(--sc-in-x) + var(--sc-out-x)), calc(var(--sc-in-y) + var(--sc-out-y))) scale(calc(var(--sc-in-s) * var(--sc-out-s))); }
+          @keyframes sc-in-none  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
+          @keyframes sc-in-fade  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
+          @keyframes sc-in-rise  { from { --sc-in-o:0; --sc-in-y:8%; } to { --sc-in-o:1; --sc-in-y:0%; } }
+          @keyframes sc-in-slide { from { --sc-in-o:0; --sc-in-x:-10%; } to { --sc-in-o:1; --sc-in-x:0%; } }
+          @keyframes sc-in-zoom  { from { --sc-in-o:0; --sc-in-s:0.82; } to { --sc-in-o:1; --sc-in-s:1; } }
+          @keyframes sc-in-tilt  { from { --sc-in-o:0; --sc-in-r:18deg; --sc-in-y:5%; } to { --sc-in-o:1; --sc-in-r:0deg; --sc-in-y:0%; } }
+          @keyframes sc-out-none  { from { --sc-out-o:1; } to { --sc-out-o:0; } }
+          @keyframes sc-out-fade  { from { --sc-out-o:1; } to { --sc-out-o:0; } }
+          @keyframes sc-out-sink  { from { --sc-out-o:1; --sc-out-y:0%; } to { --sc-out-o:0; --sc-out-y:6%; } }
+          @keyframes sc-out-slide { from { --sc-out-o:1; --sc-out-x:0%; } to { --sc-out-o:0; --sc-out-x:10%; } }
+          @keyframes sc-out-zoom  { from { --sc-out-o:1; --sc-out-s:1; } to { --sc-out-o:0; --sc-out-s:1.12; } }
           .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100); }
           .body { position:absolute; inset:0; transform-style:preserve-3d; }
           .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
@@ -2707,11 +2746,17 @@ class RMShowcase extends RMElement {
         this._unseek = () => root.removeEventListener('rmseek', onSeek)
       }
     }
+    /*
+     * No look means no backdrop at all. Hidden by display, not by the hidden
+     * attribute: the look's own :host sets display, and in its tree that beat
+     * the attribute — every layer in a scene drew the default look over the
+     * layers before it.
+     */
     const lookEl = this.shadowRoot.querySelector('rm-look')
     if (look) {
       if (lookEl.getAttribute('look') !== look) lookEl.setAttribute('look', look)
-      lookEl.hidden = false
-    } else lookEl.hidden = true
+      lookEl.style.display = ''
+    } else lookEl.style.display = 'none'
 
     const frame = {
       none: 'border: 0;',
@@ -2724,7 +2769,14 @@ class RMShowcase extends RMElement {
     const ar = SHOWCASE_DEVICES[device].ar
     const avail = 100 - 2 * s.pad
     this.shadowRoot.querySelector('.room').style.perspective = `${s.persp}cqw`
-    this.shadowRoot.querySelector('.place').style.inset = `${s.pad}%`
+    const place = this.shadowRoot.querySelector('.place')
+    place.style.inset = `${s.pad}%`
+    place.style.animationName = `sc-in-${s.enter}, sc-out-${s.exit}`
+    /* "none" still hides the layer outside its window; it just does not move. */
+    if (s.enter === 'none') place.style.setProperty('--in-dur', '1ms')
+    else place.style.removeProperty('--in-dur')
+    if (s.exit === 'none') place.style.setProperty('--out-dur', '1ms')
+    else place.style.removeProperty('--out-dur')
     const card = this.shadowRoot.querySelector('.card')
     card.classList.toggle('light', light)
     const w = ar ? `min(${avail}cqw, ${avail * ar}cqh)` : `${avail}cqw`
