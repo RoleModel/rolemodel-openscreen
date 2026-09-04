@@ -50,6 +50,8 @@
 <template data-row="stickers-card">
    <div class="card card--media stickers__card">
       <label class="stickers__tick"><input data-el="tick" type="checkbox" aria-label="On the sheet" /></label>
+      <!-- Two presses to remove: the first asks, the second within a moment does it. -->
+      <button data-el="remove" class="btn ghost btn--icon btn--small stickers__remove" type="button" aria-label="Remove this sticker" title="Remove this sticker from the project">×</button>
       <button data-el="pick" class="thumb stickers__thumb" type="button" aria-label="Work on this"></button>
       <div class="card__body"><div data-el="name" class="path stickers__name"></div><span data-el="kind" class="kind"></span></div>
    </div>

@@ -6210,6 +6210,22 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    /* A sticker, gone from the project. Only files under Stickers/ can go this way. */
+    if (p === "/api/stickers/file" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      try {
+        const file = stickerFile(id, body.rel);
+        if (!(await stat(file).catch(() => null))?.isFile()) return json(res, 404, { error: "no such sticker" });
+        await rm(file);
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     /* Where the Stickers folder is, in Finder — for Affinity's Export dialog. */
     if (p === "/api/stickers/reveal" && req.method === "POST") {
       const body = JSON.parse(await text(req));

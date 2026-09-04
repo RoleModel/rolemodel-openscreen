@@ -124,3 +124,16 @@
   gap: var(--op-space-2x-small);
   margin-block-start: var(--op-space-2x-small);
 }
+
+.stickers__remove {
+  position: absolute;
+  inset-block-start: var(--op-space-x-small);
+  inset-inline-end: var(--op-space-x-small);
+  z-index: 2;
+  background: var(--op-color-neutral-plus-six);
+}
+
+.stickers__remove--sure {
+  background: var(--op-color-alerts-danger-base);
+  color: var(--op-color-alerts-danger-on-base);
+}
