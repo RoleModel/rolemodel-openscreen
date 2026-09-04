@@ -129,6 +129,9 @@ for (const [name, syntax, initial] of [
   ['--sc-out-x', '<length-percentage>', '0%'],
   ['--sc-out-y', '<length-percentage>', '0%'],
   ['--sc-out-s', '<number>', '1'],
+  ['--cam-x', '<length-percentage>', '0%'],
+  ['--cam-y', '<length-percentage>', '0%'],
+  ['--cam-s', '<number>', '1'],
 ]) {
   // Registered so they interpolate as numbers rather than flipping at 50%.
   // Registration is document-global, which is why it happens here once rather
@@ -2565,12 +2568,14 @@ const SHOWCASE_SCHEMA = [
   { key: 'x', label: 'Shift X', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
   { key: 'y', label: 'Shift Y', type: 'range', min: -50, max: 50, step: 0.5, def: 0, group: 'camera' },
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
+  { key: 'move', label: 'Camera move', type: 'select', options: ['none', 'pan-left', 'pan-right', 'zoom-in', 'zoom-out', 'zoom-pan', 'drift'], def: 'none', group: 'scene' },
   { key: 'enter', label: 'Enter', type: 'select', options: ['none', 'fade', 'rise', 'slide', 'zoom', 'tilt'], def: 'rise', group: 'motion' },
   { key: 'ein', label: 'Enter over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.6, group: 'motion' },
   { key: 'exit', label: 'Exit', type: 'select', options: ['stay', 'none', 'fade', 'sink', 'slide', 'zoom'], def: 'stay', group: 'motion' },
   { key: 'eout', label: 'Exit over (s)', type: 'range', min: 0.1, max: 3, step: 0.05, def: 0.4, group: 'motion' },
 ]
 const SHOWCASE_GROUPS = [
+  ['scene', 'Scene'],
   ['motion', 'Motion'],
   ['media', 'Media'],
   ['frame', 'Frame'],
@@ -2607,7 +2612,7 @@ const SHOWCASE_TEMPLATES = [
 ]
 
 class RMShowcase extends RMElement {
-  static fields = ['media', 'look', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
+  static fields = ['media', 'look', 'mat', 'mfor', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
 
   disconnectedCallback() {
     this._unseek?.()
@@ -2659,7 +2664,22 @@ class RMShowcase extends RMElement {
           :host { position:absolute; display:block; inset:0; width:100%; height:100%; container-type:size; }
           .stage { position:absolute; inset:0; overflow:hidden; }
           .stage rm-look { position:absolute; inset:0; }
-          .room { position:absolute; inset:0; transform-style:preserve-3d; }
+          /*
+           * The camera: one move over the whole scene, on the scene clock. Every
+           * layer carries the same move with the same timing, so a pan carries
+           * all of them together, as one picture. Linear pans, eased zooms.
+           */
+          .room { position:absolute; inset:0; transform-style:preserve-3d;
+                  transform: translate(var(--cam-x), var(--cam-y)) scale(var(--cam-s));
+                  animation-duration: var(--mfor, 8000ms); animation-delay: calc(var(--mat, 0ms) - var(--t));
+                  animation-timing-function: var(--cam-ease, linear); animation-fill-mode: both; animation-play-state: paused; }
+          @keyframes cam-none      { from { --cam-x:0%; } to { --cam-x:0%; } }
+          @keyframes cam-pan-left  { from { --cam-x:14%; } to { --cam-x:-14%; } }
+          @keyframes cam-pan-right { from { --cam-x:-14%; } to { --cam-x:14%; } }
+          @keyframes cam-zoom-in   { from { --cam-s:1; } to { --cam-s:1.4; } }
+          @keyframes cam-zoom-out  { from { --cam-s:1.4; } to { --cam-s:1; } }
+          @keyframes cam-zoom-pan  { 0% { --cam-s:1; --cam-x:0%; } 45% { --cam-s:1.35; --cam-x:0%; } 100% { --cam-s:1.35; --cam-x:-16%; } }
+          @keyframes cam-drift     { from { --cam-s:1.05; --cam-x:5%; --cam-y:2%; } to { --cam-s:1.25; --cam-x:-5%; --cam-y:-2%; } }
           /*
            * Enter and exit, on the scene clock. The same device as TIMING: two
            * paused animations whose negative delay is the scene time, so the
@@ -2808,7 +2828,12 @@ class RMShowcase extends RMElement {
     const transform = `translate(${s.x}%, ${s.y}%) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
     const ar = SHOWCASE_DEVICES[device].ar
     const avail = 100 - 2 * s.pad
-    this.shadowRoot.querySelector('.room').style.perspective = `${s.persp}cqw`
+    const room = this.shadowRoot.querySelector('.room')
+    room.style.perspective = `${s.persp}cqw`
+    room.style.animationName = `cam-${s.move}`
+    room.style.setProperty('--mat', `${Number(this.getAttribute('mat') || 0)}ms`)
+    room.style.setProperty('--mfor', `${Math.max(1, Number(this.getAttribute('mfor')) || Number(this.getAttribute('for')) || 8000)}ms`)
+    room.style.setProperty('--cam-ease', s.move.startsWith('zoom') || s.move === 'drift' ? 'cubic-bezier(0.4, 0, 0.6, 1)' : 'linear')
     const place = this.shadowRoot.querySelector('.place')
     place.style.inset = `${s.pad}%`
     place.style.animationName = `sc-in-${s.enter}, sc-out-${s.exit}`
