@@ -24,7 +24,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, cp, link, lstat, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync, watch as watchFile } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
@@ -58,6 +58,7 @@ import {
 } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
+import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, vectorize as stickerVectorize } from "../lib/stickers.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
@@ -6075,6 +6076,177 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, where: projectId ? `${relative(mediaDir(projectId), dest)} in the project` : `Showcase/${basename(dest)} in the library`, rel: projectId ? relative(mediaDir(projectId), dest) : null, file: basename(dest) });
     }
 
+
+    /*
+     * ── Stickers ──────────────────────────────────────────────────────────
+     *
+     * A picture becomes a sticker in steps — made, cut out, traced — each a
+     * fal call whose result is kept in the project's Stickers folder. Sheets
+     * lay stickers out as one SVG and a page, and a sheet can be published to
+     * shared storage. Affinity edits a sticker's SVG in place, in the project.
+     */
+    const stickersDir = (id) => join(mediaDir(id), "Stickers");
+    const stickerFile = (id, rel) => {
+      const root = stickersDir(id);
+      const file = resolve(root, String(rel ?? "").replace(/^Stickers\//, ""));
+      if (!file.startsWith(root + sep)) throw new Error("that is not a sticker of this project");
+      return file;
+    };
+    const uniqueFile = async (dir, stem, ext) => {
+      let dest = join(dir, `${stem}${ext}`);
+      for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${stem}-${n}${ext}`);
+      return dest;
+    };
+    /* A result lands in the project: fetched from fal's CDN, which promises nothing about staying there. */
+    const keepSticker = async (id, url, stem, ext) => {
+      const r = await fetch(url, { signal: AbortSignal.timeout(90_000) });
+      if (!r.ok) throw new Error(`could not fetch the result (${r.status})`);
+      await mkdir(stickersDir(id), { recursive: true });
+      const dest = await uniqueFile(stickersDir(id), safeName(stem, "sticker").slice(0, 60), ext);
+      await writeFile(dest, Buffer.from(await r.arrayBuffer()));
+      return relative(mediaDir(id), dest);
+    };
+    const stickerList = async (id) => {
+      const dir = stickersDir(id);
+      const names = (await readdir(dir).catch(() => [])).filter((f) => /\.(png|svg|webp|jpe?g)$/i.test(f)).sort();
+      const files = await Promise.all(names.map(async (f) => ({ rel: `Stickers/${f}`, name: f, kind: /\.svg$/i.test(f) ? "vector" : "raster", mtime: (await stat(join(dir, f))).mtime.toISOString() })));
+      const sheetsDir = join(projectDir(id), "stickers");
+      const sheets = await Promise.all(
+        (await readdir(sheetsDir).catch(() => [])).filter((f) => f.endsWith(".json")).map((f) => readFile(join(sheetsDir, f), "utf8").then(JSON.parse).catch(() => null)),
+      );
+      return { files, sheets: sheets.filter(Boolean) };
+    };
+
+    if (p === "/api/stickers" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { ...(await stickerList(id)), models: { sticker: STICKER_MODELS.map(({ id: mid, label }) => ({ id: mid, label })), cutout: CUTOUT_MODELS, vectorize: VECTORIZE_MODELS }, hasKey: Boolean((await falSettings()).key) });
+    }
+
+    /* A picture from this machine, into the project and up to fal. */
+    if (p === "/api/stickers/upload" && req.method === "POST") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const name = safeName(basename(String(url.searchParams.get("name") ?? "picture")), "picture");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const body = await bytes(req);
+      await mkdir(stickersDir(id), { recursive: true });
+      const ext = extname(name).toLowerCase() || ".png";
+      const dest = await uniqueFile(stickersDir(id), basename(name, extname(name)).slice(0, 60), ext);
+      await writeFile(dest, body);
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { rel: relative(mediaDir(id), dest) });
+    }
+
+    /*
+     * One step. The source is a project file (uploaded to fal first, since
+     * fal fetches by URL) or a URL fal already has. The result is kept in
+     * Stickers/ and named after the source and the step.
+     */
+    if (p === "/api/stickers/run" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const step = String(body.step ?? "");
+      if (!["generate", "cutout", "vectorize"].includes(step)) return json(res, 400, { error: "step is generate, cutout or vectorize" });
+      try {
+        const key = await styleKey();
+        let imageUrl = null;
+        let stem = safeName(String(body.name ?? "sticker"), "sticker");
+        if (body.rel) {
+          const file = requestedPath({ projectId: id, rel: String(body.rel) });
+          if (!file.startsWith(mediaDir(id) + sep)) return json(res, 403, { error: "that file is outside this project" });
+          const bytes = await readFile(file);
+          const ext = extname(file).toLowerCase();
+          const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml" }[ext] ?? "application/octet-stream";
+          imageUrl = await falUpload({ key, bytes, contentType: type, name: basename(file) });
+          stem = basename(file, ext).replace(/-(sticker|cutout|vector)(-\d+)?$/i, "");
+        } else if (body.imageUrl) imageUrl = String(body.imageUrl);
+        let out;
+        if (step === "generate") out = await makeSticker({ key, model: String(body.model ?? "telegram"), prompt: String(body.prompt ?? ""), imageUrl });
+        else if (step === "cutout") {
+          if (!imageUrl) return json(res, 400, { error: "pick a picture to cut out" });
+          out = await stickerCutOut({ key, model: String(body.model ?? CUTOUT_MODELS[0].id), imageUrl });
+        } else {
+          if (!imageUrl) return json(res, 400, { error: "pick a picture to trace" });
+          out = await stickerVectorize({ key, model: String(body.model ?? VECTORIZE_MODELS[0].id), endpoint: body.endpoint, imageUrl });
+        }
+        const suffix = { generate: "-sticker", cutout: "-cutout", vectorize: "-vector" }[step];
+        const rel = await keepSticker(id, out.url, `${stem}${suffix}`, step === "vectorize" ? ".svg" : ".png");
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { rel, url: out.url, endpoint: out.endpoint });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * Affinity. The project's SVG is the working copy: Affinity opens it, and
+     * saves back into it, so there is nothing to write back — the page polls
+     * the hash and reloads the picture when it moves.
+     */
+    if (p === "/api/stickers/affinity" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      try {
+        const file = stickerFile(id, body.rel);
+        if (!(await stat(file).catch(() => null))?.isFile()) return json(res, 404, { error: "no such sticker" });
+        const app = process.env.AFFINITY_APP || "Affinity";
+        const r = await capture("open", ["-a", app, file]);
+        if (!r.ok) return json(res, 500, { error: `could not open ${app}: ${r.err.trim().slice(0, 160) || "is it installed?"}` });
+        const hash = createHash("sha256").update(await readFile(file)).digest("hex");
+        return json(res, 200, { ok: true, hash, app });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+    if (p === "/api/stickers/hash" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      try {
+        const file = stickerFile(id, url.searchParams.get("rel"));
+        const bytes = await readFile(file).catch(() => null);
+        return json(res, 200, { hash: bytes ? createHash("sha256").update(bytes).digest("hex") : null });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * A sheet: chosen stickers laid out as one SVG, kept beside the stickers,
+     * with a note of what went into it so it can be rebuilt and published.
+     */
+    if (p === "/api/stickers/sheet" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      /* Dashes for spaces: the name is a folder on the web as well as a file. */
+      const name = safeName(String(body.name ?? "sheet"), "sheet").replace(/\s+/g, "-").slice(0, 60);
+      const rels = Array.isArray(body.items) ? body.items.map(String) : [];
+      if (!rels.length) return json(res, 400, { error: "tick at least one sticker" });
+      try {
+        const items = await Promise.all(
+          rels.map(async (rel) => {
+            const file = stickerFile(id, rel);
+            const bytes = await readFile(file);
+            if (/\.svg$/i.test(file)) return { svg: bytes.toString("utf8") };
+            const ext = extname(file).toLowerCase();
+            return { bytes, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" };
+          }),
+        );
+        const svg = sheetSvg({ items, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, title: name });
+        const dir = join(stickersDir(id), "Sheets");
+        await mkdir(dir, { recursive: true });
+        const dest = join(dir, `${name}.svg`);
+        await writeFile(dest, svg, "utf8");
+        const record = { name, items: rels, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, rel: relative(mediaDir(id), dest), madeAt: new Date().toISOString(), published: body.keepPublished ?? null };
+        await mkdir(join(projectDir(id), "stickers"), { recursive: true });
+        await writeFile(join(projectDir(id), "stickers", `${name}.json`), `${JSON.stringify(record, null, 2)}\n`, "utf8");
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { sheet: record });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/looks/png" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
@@ -8459,6 +8631,52 @@ async function fetchVoiceList() {
       // rclone reports a reduced expiry as a NOTICE; the caller says it out loud.
       return { url: linkUrl, expiry: /Reducing expiry to (\S+)/.exec(r.err ?? "")?.[1] ?? null };
     };
+
+
+    /*
+     * Publish a sticker sheet: a folder with the page, the sheet and every
+     * sticker, copied to shared storage under the public bucket, and its
+     * address. A public base is required — a presigned page could not reach
+     * its own pictures.
+     */
+    if (p === "/api/stickers/publish" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      const remote = String(body.remote ?? "");
+      const name = safeName(String(body.name ?? ""), "").replace(/\s+/g, "-").slice(0, 60);
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      if (!REMOTE_NAME.test(remote)) return json(res, 400, { error: "choose a storage destination" });
+      if (!name) return json(res, 400, { error: "build the sheet first" });
+      const recordFile = join(projectDir(id), "stickers", `${name}.json`);
+      const record = await readFile(recordFile, "utf8").then(JSON.parse).catch(() => null);
+      if (!record) return json(res, 404, { error: "that sheet has not been built" });
+      const pub = (await storagePublicBases())[remote];
+      if (!pub?.base || !pub?.bucket) return json(res, 400, { error: `set a public bucket and base URL on ${remote} in Storage first` });
+      try {
+        const site = join(projectDir(id), "stickers", "site", name);
+        await rm(site, { recursive: true, force: true });
+        await mkdir(site, { recursive: true });
+        const items = [];
+        for (const rel of record.items) {
+          const file = join(mediaDir(id), rel);
+          const out = basename(file);
+          await copyFile(file, join(site, out));
+          items.push({ name: basename(file, extname(file)), file: out });
+        }
+        await copyFile(join(mediaDir(id), record.rel), join(site, "sheet.svg"));
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", items }), "utf8");
+        const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
+        if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
+        const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs"]);
+        if (!copy.ok) return json(res, 500, { error: copy.err.trim().split("\n").pop() || "rclone could not copy the sheet" });
+        const pageUrl = `${pub.base.replace(/\/+$/, "")}/stickers/${encodeURIComponent(id)}/${encodeURIComponent(name)}/index.html`;
+        record.published = { remote, url: pageUrl, at: new Date().toISOString() };
+        await writeFile(recordFile, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+        return json(res, 200, { url: pageUrl, sheet: record });
+      } catch (err) {
+        return json(res, 500, { error: String(err.message) });
+      }
+    }
 
     /*
      * A link for one project asset, without the caller having to know which
