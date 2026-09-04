@@ -6232,12 +6232,13 @@ const server = createServer(async (req, res) => {
             return { bytes, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" };
           }),
         );
-        const svg = sheetSvg({ items, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, title: name });
+        const svg = sheetSvg({ items, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, title: name, ground: body.ground === "none" ? "none" : "dots" });
         const dir = join(stickersDir(id), "Sheets");
         await mkdir(dir, { recursive: true });
         const dest = join(dir, `${name}.svg`);
         await writeFile(dest, svg, "utf8");
-        const record = { name, items: rels, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, rel: relative(mediaDir(id), dest), madeAt: new Date().toISOString(), published: body.keepPublished ?? null };
+        const previous = await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null);
+        const record = { name, items: rels, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, ground: body.ground === "none" ? "none" : "dots", rel: relative(mediaDir(id), dest), madeAt: new Date().toISOString(), published: previous?.published ?? null };
         await mkdir(join(projectDir(id), "stickers"), { recursive: true });
         await writeFile(join(projectDir(id), "stickers", `${name}.json`), `${JSON.stringify(record, null, 2)}\n`, "utf8");
         await reindex(id, { force: true }).catch(() => {});
@@ -8664,12 +8665,32 @@ async function fetchVoiceList() {
           items.push({ name: basename(file, extname(file)), file: out });
         }
         await copyFile(join(mediaDir(id), record.rel), join(site, "sheet.svg"));
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", items }), "utf8");
+        /* Everything in one zip too — the sheet and each sticker — for a print
+           shop or a teammate who wants the files, not the page. */
+        const zipped = await capture("zip", ["-q", "-j", join(site, `${name}.zip`), join(site, "sheet.svg"), ...items.map((it) => join(site, it.file))]);
+        if (!zipped.ok) return json(res, 500, { error: `could not zip the sheet: ${zipped.err.trim().slice(0, 160)}` });
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs"]);
         if (!copy.ok) return json(res, 500, { error: copy.err.trim().split("\n").pop() || "rclone could not copy the sheet" });
-        const pageUrl = `${pub.base.replace(/\/+$/, "")}/stickers/${encodeURIComponent(id)}/${encodeURIComponent(name)}/index.html`;
+        /*
+         * Where the page answers. A public base can map to the bucket named in
+         * Storage, or to the account's bucket with that name as a folder inside
+         * it — R2 does both, and the endpoint alone does not say. Ask the page
+         * itself: whichever form answers is the address.
+         */
+        const base = pub.base.replace(/\/+$/, "");
+        const tail = `stickers/${encodeURIComponent(id)}/${encodeURIComponent(name)}/index.html`;
+        const candidates = [`${base}/${tail}`, `${base}/${pub.bucket.split("/").map(encodeURIComponent).join("/")}/${tail}`];
+        let pageUrl = candidates[0];
+        for (const candidate of candidates) {
+          const head = await fetch(candidate, { method: "HEAD", signal: AbortSignal.timeout(10_000) }).catch(() => null);
+          if (head?.ok) {
+            pageUrl = candidate;
+            break;
+          }
+        }
         record.published = { remote, url: pageUrl, at: new Date().toISOString() };
         await writeFile(recordFile, `${JSON.stringify(record, null, 2)}\n`, "utf8");
         return json(res, 200, { url: pageUrl, sheet: record });
