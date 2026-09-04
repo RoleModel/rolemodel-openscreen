@@ -58,7 +58,7 @@ import {
 } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
-import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, vectorize as stickerVectorize } from "../lib/stickers.mjs";
+import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, vectorize as stickerVectorize } from "../lib/stickers.mjs";
 import { deleteStickerComment, insertStickerComment, listStickerComments } from "../lib/db.mjs";
 import { setStickerSettings, stickerSettings } from "../lib/settings.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
@@ -6157,10 +6157,15 @@ const server = createServer(async (req, res) => {
         if (body.rel) {
           const file = requestedPath({ projectId: id, rel: String(body.rel) });
           if (!file.startsWith(mediaDir(id) + sep)) return json(res, 403, { error: "that file is outside this project" });
-          const bytes = await readFile(file);
+          let bytes = await readFile(file);
           const ext = extname(file).toLowerCase();
-          const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml" }[ext] ?? "application/octet-stream";
-          imageUrl = await falUpload({ key, bytes, contentType: type, name: basename(file) });
+          let type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "application/octet-stream";
+          /* fal's models read rasters; an SVG goes up as a PNG drawn from it. */
+          if (ext === ".svg") {
+            bytes = await svgToPng(bytes.toString("utf8"));
+            type = "image/png";
+          }
+          imageUrl = await falUpload({ key, bytes, contentType: type, name: basename(file, ext) + (ext === ".svg" ? ".png" : ext) });
           stem = basename(file, ext).replace(/-(sticker|cutout|vector)(-\d+)?$/i, "");
         } else if (body.imageUrl) imageUrl = String(body.imageUrl);
         let out;
