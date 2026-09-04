@@ -2323,26 +2323,36 @@ function lookProgram(canvas, look, { assets = null } = {}) {
   gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
   const uniform = (name) => gl.getUniformLocation(program, name)
 
-  const values = LOOK_SCHEMA.map((f) => {
-    const val = look[f.key]
-    if (f.type === 'select') return f.options.indexOf(val)
-    if (f.type === 'color') return 0
-    return Number(val)
-  })
-  gl.uniform1fv(uniform('u'), new Float32Array(values))
-  const stops = look.stops
-  const stopArr = new Float32Array(18)
-  const posArr = new Float32Array(6)
-  stops.forEach((s, i) => {
-    stopArr.set(lookRGB(s.c), i * 3)
-    posArr[i] = s.p
-  })
-  gl.uniform3fv(uniform('stop'), stopArr)
-  gl.uniform1fv(uniform('pos'), posArr)
-  gl.uniform1i(uniform('nstop'), stops.length)
-  gl.uniform3fv(uniform('hfInk'), new Float32Array(lookRGB(look.hfc)))
-  gl.uniform3fv(uniform('plInk'), new Float32Array(lookRGB(look.plcol)))
-  gl.uniform1f(uniform('loop'), Math.max(1, Number(look.loop)))
+  /*
+   * The dials, as uniforms. Called again for every change to the look, which
+   * is what makes a slider cheap: the program compiles once per element and a
+   * tick only rewrites numbers.
+   */
+  let current = look
+  const setLook = (next) => {
+    current = next
+    const values = LOOK_SCHEMA.map((f) => {
+      const val = next[f.key]
+      if (f.type === 'select') return f.options.indexOf(val)
+      if (f.type === 'color') return 0
+      return Number(val)
+    })
+    gl.uniform1fv(uniform('u'), new Float32Array(values))
+    const stops = next.stops
+    const stopArr = new Float32Array(18)
+    const posArr = new Float32Array(6)
+    stops.forEach((s, i) => {
+      stopArr.set(lookRGB(s.c), i * 3)
+      posArr[i] = s.p
+    })
+    gl.uniform3fv(uniform('stop'), stopArr)
+    gl.uniform1fv(uniform('pos'), posArr)
+    gl.uniform1i(uniform('nstop'), stops.length)
+    gl.uniform3fv(uniform('hfInk'), new Float32Array(lookRGB(next.hfc)))
+    gl.uniform3fv(uniform('plInk'), new Float32Array(lookRGB(next.plcol)))
+    gl.uniform1f(uniform('loop'), Math.max(1, Number(next.loop)))
+  }
+  setLook(look)
   gl.uniform1f(uniform('hasImage'), 0)
   gl.uniform1f(uniform('imageAspect'), 1)
 
@@ -2373,7 +2383,7 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     }
     gl.viewport(0, 0, w, h)
     gl.uniform2f(resolution, w, h)
-    const seconds = (look.an ? ms / 1000 : 0) * Number(look.sp)
+    const seconds = (current.an ? ms / 1000 : 0) * Number(current.sp)
     gl.uniform1f(time, seconds)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
@@ -2385,10 +2395,13 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     gl.uniform1f(uniform('imageAspect'), picture.naturalWidth / Math.max(1, picture.naturalHeight))
     gl.uniform1f(uniform('hasImage'), 1)
   }
+  const clearImage = () => {
+    gl.uniform1f(uniform('hasImage'), 0)
+  }
   const dispose = () => {
     gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
-  return { gl, draw, setImage, dispose }
+  return { gl, draw, setLook, setImage, clearImage, dispose }
 }
 
 /**
@@ -2406,33 +2419,37 @@ class RMLook extends RMElement {
   }
 
   render() {
-    this._dispose?.()
     const look = decodeLook(this.attr('look'))
     const imageSource = assetUrl(this, this.attr('image') || look.img)
+    /*
+     * Built once, updated after. A slider fires dozens of attribute changes a
+     * second, and each used to rebuild the shadow root and recompile the shader
+     * — the whole panel dragged. Now a change is new uniforms and one draw.
+     */
+    if (this._prog && this.shadowRoot.querySelector('canvas')) {
+      this._prog.setLook(look)
+      this.shadowRoot.querySelector('.asset').style.background = look.stops[0].c
+      if (imageSource !== this._imageSource) this._loadImage(imageSource)
+      this._prog.draw(RM.t)
+      return
+    }
+    this._dispose?.()
     this.shadowRoot.innerHTML = `<style>:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${look.stops[0].c};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset"><canvas aria-hidden="true"></canvas></div>`
     const canvas = this.shadowRoot.querySelector('canvas')
     const prog = lookProgram(canvas, look)
     if (!prog) return
+    this._prog = prog
     const draw = () => prog.draw(RM.t)
     const observer = new ResizeObserver(draw)
     observer.observe(canvas)
     root.addEventListener('rmseek', draw)
-    let settle = () => {}
-    if (imageSource) {
-      RM.waitFor(new Promise((resolve) => (settle = resolve)))
-      const picture = new Image()
-      picture.crossOrigin = 'anonymous'
-      picture.onload = () => {
-        prog.setImage(picture)
-        draw()
-        settle()
-      }
-      picture.onerror = () => settle()
-      picture.src = imageSource
-    }
+    this._imageSource = null
+    this._loadImage(imageSource)
     const onLost = (e) => {
       e.preventDefault()
+      this._dispose?.()
       this._dispose = null
+      this._prog = null
       this.render()
     }
     canvas.addEventListener('webglcontextlost', onLost)
@@ -2441,8 +2458,33 @@ class RMLook extends RMElement {
       root.removeEventListener('rmseek', draw)
       canvas.removeEventListener('webglcontextlost', onLost)
       prog.dispose()
+      this._prog = null
     }
     draw()
+  }
+
+  /** The picture, as a texture; the frame waits for it the way rm-haze does. */
+  _loadImage(imageSource) {
+    this._imageSource = imageSource
+    const prog = this._prog
+    if (!prog) return
+    if (!imageSource) {
+      prog.clearImage()
+      prog.draw(RM.t)
+      return
+    }
+    let settle = () => {}
+    RM.waitFor(new Promise((resolve) => (settle = resolve)))
+    const picture = new Image()
+    picture.crossOrigin = 'anonymous'
+    picture.onload = () => {
+      if (this._imageSource !== imageSource) return settle()
+      prog.setImage(picture)
+      prog.draw(RM.t)
+      settle()
+    }
+    picture.onerror = () => settle()
+    picture.src = imageSource
   }
 }
 define('rm-look', RMLook)
