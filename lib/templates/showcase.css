@@ -1,0 +1,52 @@
+/* Showcase: the 3D presenter. One block; every class is its element. */
+
+.showcase__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.showcase__stage {
+  perspective-origin: center;
+}
+
+.showcase__media {
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.showcase__card {
+  padding: 0;
+  text-align: start;
+  cursor: pointer;
+}
+
+.showcase__card--on {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+.showcase__thumb {
+  aspect-ratio: 16 / 9;
+  background-color: var(--sunk);
+  background-image: var(--pic);
+  background-size: cover;
+  background-position: center;
+}
+
+.showcase__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase__picture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.showcase__picturename {
+  flex: 1 1 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

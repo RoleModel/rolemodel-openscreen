@@ -209,6 +209,7 @@ const ADDED_DIR = join(LIB, "Brand");
 const STYLE_DIR = join(LIB, "Style");
 /* The Creator's previews and exported PNGs that belong to no project. */
 const LOOKS_DIR = join(LIB, "Looks");
+const SHOWCASE_DIR = join(LIB, "Showcase");
 
 /*
  * The team's pictures, from the database, kept for a minute.
@@ -5988,6 +5989,44 @@ const server = createServer(async (req, res) => {
      * still in the open project — or in the library's Looks folder when no
      * project is open. Like a converted clip: beside the work, never over a file.
      */
+    /*
+     * A showcase, as a PNG. Drawn by the still renderer, not the browser: the
+     * card is CSS 3D over a WebGL look, and a canvas cannot read either. The
+     * footage it shows is in the library, so the renderer is told where /media
+     * and /added really are.
+     */
+    if (p === "/api/showcase/png" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const tag = String(body.tag ?? "").trim();
+      if (!/^<rm-showcase[\s>][\s\S]*<\/rm-showcase>$/.test(tag)) return json(res, 400, { error: "a showcase tag is required" });
+      const width = Math.min(4096, Math.max(320, Number(body.width) || 1920));
+      const [sw, sh] = String(body.shape ?? "16/9").split("/").map(Number);
+      const height = Math.round(width * ((sh > 0 && sw > 0 ? sh / sw : 9 / 16)));
+      const stem = safeName(String(body.name ?? "showcase"), "showcase").slice(0, 60);
+      const projectId = body.projectId && (await readManifest(projectDir(String(body.projectId))).catch(() => null)) ? String(body.projectId) : null;
+      const dir = projectId ? join(mediaDir(projectId), "Stills") : SHOWCASE_DIR;
+      await mkdir(dir, { recursive: true });
+      let dest = join(dir, `${stem}.png`);
+      for (let n = 2; await stat(dest).catch(() => null); n++) dest = join(dir, `${stem}-${n}.png`);
+      const resolveFile = (pathname) => {
+        if (pathname.startsWith("/media/")) {
+          const [, , id, ...rest] = pathname.split("/");
+          const file = join(mediaDir(id), rest.join("/"));
+          return file.startsWith(mediaDir(id)) ? file : null;
+        }
+        if (pathname.startsWith("/added/")) return join(ADDED_DIR, basename(pathname.slice("/added/".length)));
+        if (pathname.startsWith("/brand/")) return resolve(TOOLKIT, `.${pathname}`);
+        return null;
+      };
+      try {
+        await renderStill({ body: tag, out: dest, atMs: Math.max(0, Number(body.atMs) || 0), width, height, resolveFile });
+      } catch (err) {
+        return json(res, 500, { error: `could not draw it: ${String(err.message).slice(0, 200)}` });
+      }
+      if (projectId) await reindex(projectId, { force: true }).catch(() => {});
+      return json(res, 200, { ok: true, where: projectId ? `${relative(mediaDir(projectId), dest)} in the project` : `Showcase/${basename(dest)} in the library`, rel: projectId ? relative(mediaDir(projectId), dest) : null, file: basename(dest) });
+    }
+
     if (p === "/api/looks/png" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
