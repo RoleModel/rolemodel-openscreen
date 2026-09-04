@@ -15,9 +15,10 @@
 
    <!-- Many at once: drop pictures here, or click to choose several. Each lands in
         the project's Stickers folder and is ready for a step. -->
-   <div data-el="drop" class="stickers__drop" data-region="main" role="button" tabindex="0">
-      <rm-icon name="cloud-upload"></rm-icon>
-      <div class="stickers__droptitle">Drop pictures here</div>
+   <div data-el="drop" class="stickers__drop margin-top-lg" data-region="main" role="button" tabindex="0">
+      
+      <div class="stickers__droptitle"><rm-icon name="cloud-upload"></rm-icon>
+      Drop pictures here</div>
       <div class="stickers__drophint">or click to choose several · PNG, JPG, WebP, SVG</div>
       <div data-el="dropStatus" class="hint" hidden></div>
       <input data-el="files" type="file" accept="image/*,.svg" multiple hidden />
@@ -68,6 +69,7 @@
          <div data-el="name" class="path stickers__name"></div>
          <div data-el="note" class="path"></div>
          <a data-el="link" class="stickers__link" target="_blank" rel="noopener" hidden>Open the page</a>
+         <button data-el="affinity" class="btn ghost btn--small" type="button"><rm-icon name="shapes"></rm-icon>Edit in Affinity</button>
       </div>
    </div>
 </template>
