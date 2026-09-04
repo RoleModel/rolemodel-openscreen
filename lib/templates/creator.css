@@ -56,10 +56,10 @@
 /* A stop is two lines in a narrow rail: the colour, then where it sits. */
 .creator__stop {
   display: grid;
-  grid-template-columns: 1.4rem 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   grid-template-areas:
-    'swatch pick hex remove'
-    'pos pos pos readout';
+    'pick hex remove'
+    'pos pos readout';
   gap: var(--op-space-2x-small) var(--op-space-x-small);
   align-items: center;
   padding-block-end: var(--op-space-x-small);
@@ -67,7 +67,7 @@
 }
 
 .creator__stop > .creator__swatch { grid-area: swatch; }
-.creator__stop > .creator__pick { grid-area: pick; display: contents; }
+.creator__stop > .creator__pick { grid-area: pick; }
 .creator__stop > .creator__hexout { grid-area: hex; font-family: var(--m); font-size: var(--op-font-x-small); }
 .creator__stop > [type='range'] { grid-area: pos; }
 .creator__stop > .v:not(.creator__hexout) { grid-area: readout; }
@@ -96,4 +96,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The lazy picker: a swatch that opens the brand menu on the first click. */
+.creator__pickwrap {
+  position: relative;
+  display: inline-grid;
+}
+
+.creator__pickbtn {
+  width: 2.2rem;
+  height: 1.6rem;
+  border-radius: var(--op-radius-small);
+  border: var(--op-border-width) solid var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+
+.creator__pickmenu {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 100%;
+  z-index: 5;
+  margin-block-start: var(--op-space-2x-small);
 }
