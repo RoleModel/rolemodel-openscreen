@@ -28,10 +28,11 @@
    </div>
 </template>
 
-<!-- A preset or a saved look: a live thumbnail of the look itself. -->
+<!-- A preset or a saved look: a still of the look, rendered once. Not a live
+     element — twelve shaders redrawing on every frame is what made the page drag. -->
 <template data-row="creator-preset">
    <button class="card creator__preset" type="button">
-      <div class="thumb creator__thumb"><rm-look data-el="art" at="0" for="60000"></rm-look></div>
+      <div class="thumb creator__thumb"><img data-el="art" class="creator__thumbimg" alt="" /></div>
       <div class="card__body"><input data-el="name" class="creator__name" type="text" aria-label="Name" readonly /></div>
    </button>
 </template>
