@@ -15,14 +15,14 @@
    <p data-el="savedEmpty" class="hint" data-region="main">Nothing saved yet. Press Save look and it is kept for the team.</p>
    <div data-el="saved" class="grid creator__presets" data-region="main"></div>
    <div class="client" data-region="main">The look</div>
-   <p class="hint" data-region="main">This string is the whole design. Paste it into the Framer component's Look control, or into this box to load one.</p>
+   <p class="hint" data-region="main">This string is the whole design. Add to Framer puts a RoleModelLook component on the canvas with it filled in; paste one into this box to load it.</p>
    <textarea data-el="lookText" class="form-control creator__looktext" rows="3" spellcheck="false" data-region="main"></textarea>
    <pre data-el="markup" class="cmd-note" data-region="main"></pre>
    <!-- Buttons only in the footer, like every other panel. Settings — the PNG's
         width and shape, the composition to insert into — live in the rail. -->
    <div class="grid" data-region="footer">
       <button data-el="copyLook" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy look</button>
-      <button data-el="copyFramer" class="btn ghost" type="button"><rm-icon name="code"></rm-icon>Copy Framer component</button>
+      <button data-el="toFramer" class="btn ghost" type="button"><rm-icon name="code"></rm-icon>Add to Framer</button>
       <button data-el="png" class="btn ghost" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
       <button data-el="save" class="btn btn--primary" type="button"><rm-icon name="bookmark-02"></rm-icon>Save look</button>
    </div>
@@ -51,6 +51,17 @@
 
 <!-- The stops list: one stop per row, unlike the two-up dial grid. -->
 <template data-row="creator-stops"><div class="creator__stops"></div></template>
+
+<!-- The picture: an upload, kept in the library's added assets like a brand mark. -->
+<template data-row="creator-picture">
+   <label data-el="label" class="form-label">Picture</label>
+   <div class="creator__picture">
+      <button data-el="pick" class="btn ghost btn--small" type="button"><rm-icon name="upload-04"></rm-icon>Upload</button>
+      <span data-el="name" class="path creator__picturename"></span>
+      <button data-el="clear" class="btn ghost btn--small" type="button" hidden>Clear</button>
+      <input data-el="file" type="file" accept="image/*" hidden />
+   </div>
+</template>
 
 <template data-row="creator-toggle">
    <label data-el="label" class="form-label"></label><input data-el="input" type="checkbox" class="creator__check" />

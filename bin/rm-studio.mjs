@@ -57,6 +57,7 @@ import {
   updateStyleImage,
 } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
+import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
@@ -104,6 +105,8 @@ import {
 	currentProject,
 	reviewerName,
 	setReviewerName,
+	framerSettings,
+	setFramerSettings,
 	setSharingSettings,
 	setStyleTemplate,
 	sharingProblem,
@@ -5998,6 +6001,26 @@ const server = createServer(async (req, res) => {
         await writeFile(dest, bytes);
         if (projectId) await reindex(projectId, { force: true }).catch(() => {});
         return json(res, 200, { ok: true, where: projectId ? `${relative(mediaDir(projectId), dest)} in the project` : `Looks/${basename(dest)} in the library`, rel: projectId ? relative(mediaDir(projectId), dest) : null, file: basename(dest) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * A look, onto the Framer canvas. The browser sends the component source
+     * along with the look, because the shader lives there; the bridge makes the
+     * code file once and adds an instance with the look in its control.
+     */
+    if (p === "/api/looks/framer" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const look = String(body.look ?? "").trim();
+      if (!look) return json(res, 400, { error: "a look is required" });
+      try {
+        const settings = await framerSettings();
+        const projectUrl = String(body.projectUrl ?? settings.projectUrl ?? DEFAULT_FRAMER_PROJECT);
+        const placed = await placeLook({ look, source: body.source ? String(body.source) : null, projectUrl, sessionId: settings.sessionId });
+        await setFramerSettings({ projectUrl, sessionId: placed.sessionId });
+        return json(res, 200, { ok: true, id: placed.id, projectUrl });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
