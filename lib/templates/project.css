@@ -90,6 +90,30 @@ dialog.media-name-dialog {
   margin: 0;
 }
 
+/* The batch convert's checklist: every file of the kind, ticked by default. */
+.move-asset__list {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  max-height: 14rem;
+  overflow: auto;
+  padding: var(--op-space-x-small);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+}
+
+.move-asset__item {
+  display: flex;
+  gap: var(--op-space-x-small);
+  align-items: center;
+  min-width: 0;
+}
+
+.move-asset__item .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .move-asset__actions {
   display: flex;
   gap: var(--op-space-2x-small);
