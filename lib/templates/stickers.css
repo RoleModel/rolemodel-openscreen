@@ -156,3 +156,10 @@
 }
 
 .stickers__addcomment .form-control { width: 100%; }
+
+.stickers__sheettools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-2x-small);
+  margin-block-start: var(--op-space-2x-small);
+}

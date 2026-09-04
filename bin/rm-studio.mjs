@@ -6181,6 +6181,20 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    /* A sheet and its stickers as one zip, streamed: for a print shop or a teammate. */
+    if (p === "/api/stickers/zip" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const name = safeName(String(url.searchParams.get("name") ?? ""), "").replace(/\s+/g, "-").slice(0, 60);
+      const record = name ? await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null) : null;
+      if (!record) return json(res, 404, { error: "that sheet has not been built" });
+      const files = [join(mediaDir(id), record.rel), ...record.items.map((rel) => join(mediaDir(id), rel))];
+      const archive = spawn("zip", ["-q", "-j", "-", ...files], { stdio: ["ignore", "pipe", "pipe"], env: jobs.childEnv() });
+      res.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${name}.zip"` });
+      archive.stdout.pipe(res);
+      archive.on("error", () => res.destroy());
+      return;
+    }
+
     /* Where the Stickers folder is, in Finder — for Affinity's Export dialog. */
     if (p === "/api/stickers/reveal" && req.method === "POST") {
       const body = JSON.parse(await text(req));
