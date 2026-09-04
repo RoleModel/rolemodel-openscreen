@@ -6168,6 +6168,22 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    /*
+     * Show the picture in Finder. The library file is the one the Studio
+     * serves at /style/<file>; a teammate's picture is fetched into it first,
+     * so there is always a file to point at.
+     */
+    if (p === "/api/style/reveal" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      if (!body.id) return json(res, 400, { error: "an id is required" });
+      const row = (await styleRows()).find((r) => r.id === body.id);
+      const file = row ? await styleFileFor(row) : null;
+      if (!file) return json(res, 404, { error: "no copy of that picture on this disk" });
+      const r = await capture("open", ["-R", file]);
+      if (!r.ok) return json(res, 500, { error: r.err.trim().slice(0, 200) || "Finder did not open" });
+      return json(res, 200, { file });
+    }
+
     if (p === "/api/style/images" && req.method === "DELETE") {
       const body = JSON.parse(await text(req));
       if (!body.id) return json(res, 400, { error: "an id is required" });
