@@ -6132,7 +6132,7 @@ const server = createServer(async (req, res) => {
     if (p === "/api/stickers" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
-      return json(res, 200, { ...(await stickerList(id)), models: { sticker: STICKER_MODELS.map(({ id: mid, label }) => ({ id: mid, label })), cutout: CUTOUT_MODELS, vectorize: VECTORIZE_MODELS }, hasKey: Boolean((await falSettings()).key) });
+      return json(res, 200, { ...(await stickerList(id)), models: { sticker: STICKER_MODELS.map(({ id: mid, label, ref }) => ({ id: mid, label, ref: Boolean(ref) })), cutout: CUTOUT_MODELS, vectorize: VECTORIZE_MODELS }, hasKey: Boolean((await falSettings()).key) });
     }
 
     /* A picture from this machine, into the project and up to fal. */
