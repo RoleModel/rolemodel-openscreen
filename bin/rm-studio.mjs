@@ -8781,7 +8781,7 @@ async function fetchVoiceList() {
          * host, so nothing is pasted anywhere; a setting can still override it.
          */
         const dataApi = (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null }), "utf8");
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 } }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         /*
