@@ -1,6 +1,6 @@
 {
   "name": "rolemodel-openscreen",
-  "version": "0.1.127",
+  "version": "0.1.128",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
