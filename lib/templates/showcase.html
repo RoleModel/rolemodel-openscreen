@@ -1,6 +1,6 @@
 <!-- Showcase: footage or a still, presented — on a look, in a frame, in 3D. -->
 <template data-panel="showcase">
-   <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Save a PNG, or send it into a composition.</p>
+   <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Keyframe any placement dial: put the playhead somewhere, change a dial, and the change is a key. Save a PNG, or send it into a composition.</p>
    <div class="wpprev showcase__stage" data-region="main">
       <!-- Layers are appended after the look, as its siblings: the scene gives
            slotted children their stacking, and a wrapper would keep them out. -->
@@ -86,6 +86,19 @@
       <button data-el="pick" class="showcase__tllabel showcase__tlname" type="button"><span data-el="name"></span><span data-el="remove" class="showcase__tlremove" role="button" aria-label="Remove layer" title="Remove layer">×</span></button>
       <div data-el="lane" class="showcase__lane">
          <div data-el="bar" class="showcase__bar"><i class="showcase__trim showcase__trim--l" data-trim="l"></i><span data-el="when" class="showcase__barwhen"></span><i class="showcase__trim showcase__trim--r" data-trim="r"></i></div>
+         <!-- The layer's keyframes, diamonds on the bar's lower edge. -->
+         <div data-el="keys" class="showcase__keys"></div>
       </div>
    </div>
+</template>
+
+<!-- The keyframe controls for the selected layer, in the rail's Motion group. -->
+<template data-row="showcase-keys">
+   <div class="showcase__keyrow">
+      <button data-el="add" class="btn ghost btn--small" type="button"><rm-icon name="plus-sign"></rm-icon>Add key here</button>
+      <button data-el="del" class="btn ghost btn--small" type="button" hidden>Delete key</button>
+      <button data-el="clear" class="btn ghost btn--small" type="button" hidden>Clear keys</button>
+   </div>
+   <p data-el="info" class="hint showcase__keyinfo"></p>
+   <div data-el="easeRow" class="showcase__keyrow" hidden><label data-el="easeLabel" class="form-label">Ease to next</label><select data-el="ease" class="wide form-control"></select></div>
 </template>

@@ -234,3 +234,78 @@
   border-inline-start: 2px solid var(--op-color-primary-base);
   pointer-events: none;
 }
+
+/*
+ * Keyframes: the selected track grows a strip under its bar, and the layer's
+ * keys sit there as diamonds. The one under the playhead is lit: that is the
+ * key the dials write to.
+ */
+.showcase__track--on { height: 3.3rem; }
+
+.showcase__track--on .showcase__bar { inset-block: 5px 19px; }
+
+.showcase__keys {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.showcase__track--on .showcase__keys { display: block; }
+
+.showcase__key {
+  display: block;
+  position: absolute;
+  bottom: 4px;
+  width: 11px;
+  height: 11px;
+  translate: -50% 0;
+  rotate: 45deg;
+  background: var(--op-color-neutral-plus-one);
+  border: 1px solid var(--op-color-neutral-on-plus-max);
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.showcase__key--on {
+  background: var(--op-color-primary-base);
+  border-color: var(--op-color-primary-on-base);
+  scale: 1.25;
+}
+
+/* The key mark on a dial's label: hollow, filled when this moment is keyed. */
+.showcase__keybtn {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 6px;
+  padding: 0;
+  border: 1px solid currentcolor;
+  background: none;
+  rotate: 45deg;
+  opacity: 0.45;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.showcase__keybtn--keyed { opacity: 0.9; }
+
+.showcase__keybtn--on {
+  background: var(--op-color-primary-base);
+  border-color: var(--op-color-primary-base);
+  opacity: 1;
+}
+
+.showcase__keyrow {
+  display: flex;
+  gap: var(--op-space-2x-small);
+  align-items: center;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+}
+
+.showcase__keyinfo {
+  grid-column: 1 / -1;
+  margin: 0;
+}

@@ -142,6 +142,27 @@ for (const [name, syntax, initial] of [
     /* already registered, or an engine without @property — animation still runs, just stepped */
   }
 }
+/*
+ * The showcase's keyframed properties. These inherit: the keyframe animation
+ * runs on the layer's stage, and the card and the room below it read the values.
+ */
+for (const [name, syntax, initial] of [
+  ['--k-x', '<length-percentage>', '0%'],
+  ['--k-y', '<length-percentage>', '0%'],
+  ['--k-z', '<length>', '0px'],
+  ['--k-s', '<number>', '1'],
+  ['--k-rx', '<angle>', '0deg'],
+  ['--k-ry', '<angle>', '0deg'],
+  ['--k-rz', '<angle>', '0deg'],
+  ['--k-o', '<number>', '1'],
+  ['--k-b', '<length>', '0px'],
+]) {
+  try {
+    CSS.registerProperty({ name, syntax, initialValue: initial, inherits: true })
+  } catch {
+    /* as above */
+  }
+}
 
 const TIMING = `
   :host {
@@ -2660,6 +2681,7 @@ const SHOWCASE_SCHEMA = [
   { key: 'x', label: 'X', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
   { key: 'y', label: 'Y', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
   { key: 'z', label: 'Depth', type: 'range', min: -100, max: 100, step: 0.5, def: 0, group: 'camera' },
+  { key: 'blur', label: 'Focus blur', type: 'range', min: 0, max: 8, step: 0.1, def: 0, group: 'camera' },
   { key: 'op', label: 'Opacity (%)', type: 'range', min: 0, max: 100, step: 1, def: 100, group: 'frame' },
   { key: 'start', label: 'Clip start (s)', type: 'range', min: 0, max: 600, step: 0.1, def: 0, group: 'media' },
   { key: 'move', label: 'Camera move', type: 'select', options: ['none', 'pan-left', 'pan-right', 'zoom-in', 'zoom-out', 'zoom-pan', 'drift'], def: 'none', group: 'scene' },
@@ -2676,6 +2698,100 @@ const SHOWCASE_GROUPS = [
   ['camera', 'Camera'],
 ]
 const showcaseDefaults = () => Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.key, f.def]))
+
+/*
+ * Keyframes. A layer may carry `keys`: moments in its own time, each with the
+ * values the card has at that moment, and how it eases to the next. Between
+ * two keys the browser interpolates — the keys become one @keyframes rule on
+ * the layer's clock, so the frame at 2400ms is the same frame every time, in
+ * the Studio and in a render. Without keys the dials are the values, as before.
+ *
+ * Wire form, on the tag: frames apart by `;`, pairs by space —
+ *   keys="t=0 x=0 s=1 e=out; t=2 x=20 s=1.2"
+ * t is seconds from the layer's start; e is the ease out of that key.
+ */
+const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
+const KEY_EASES = {
+  linear: 'linear',
+  ease: 'ease',
+  in: 'cubic-bezier(0.42, 0, 1, 1)',
+  out: 'cubic-bezier(0, 0, 0.58, 1)',
+  'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)',
+  snap: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  hold: 'steps(1, end)',
+}
+const KEY_UNIT = { x: '%', y: '%', z: 'cqw', zoom: '', tx: 'deg', ty: 'deg', tz: 'deg', op: '', blur: 'cqw' }
+const KEY_VAR = { x: '--k-x', y: '--k-y', z: '--k-z', zoom: '--k-s', tx: '--k-rx', ty: '--k-ry', tz: '--k-rz', op: '--k-o', blur: '--k-b' }
+const keyValue = (k, v) => (k === 'op' ? String(v / 100) : `${v}${KEY_UNIT[k]}`)
+
+function parseKeys(text) {
+  if (!text) return []
+  const keys = []
+  for (const part of String(text).split(';')) {
+    const k = { t: 0, ease: 'out' }
+    let any = false
+    for (const pair of part.trim().split(/\s+/)) {
+      const [name, raw] = pair.split('=')
+      if (raw === undefined) continue
+      if (name === 't') k.t = Math.max(0, Number(raw) || 0)
+      else if (name === 'e') k.ease = raw in KEY_EASES ? raw : 'out'
+      else if (KEY_PROPS.includes(name) && Number.isFinite(Number(raw))) k[name] = Number(raw)
+      else continue
+      any = true
+    }
+    if (any) keys.push(k)
+  }
+  return keys.sort((a, b) => a.t - b.t)
+}
+function encodeKeys(keys) {
+  return (keys ?? [])
+    .map((k) => [`t=${+k.t.toFixed(3)}`, ...KEY_PROPS.filter((p) => k[p] !== undefined).map((p) => `${p}=${+Number(k[p]).toFixed(3)}`), `e=${k.ease ?? 'out'}`].join(' '))
+    .join('; ')
+}
+
+/* One cubic bezier, solved for y at x — the browser's curve, in JS, so the
+   Studio can show the value under the playhead between two keys. */
+function bezierAt(spec, x) {
+  if (spec === 'linear') return x
+  if (spec.startsWith('steps')) return x >= 1 ? 1 : 0
+  const m = spec === 'ease' ? [0.25, 0.1, 0.25, 1] : spec.slice(spec.indexOf('(') + 1).match(/[-\d.]+/g).map(Number)
+  const [p1x, p1y, p2x, p2y] = m
+  const bx = (t) => 3 * (1 - t) * (1 - t) * t * p1x + 3 * (1 - t) * t * t * p2x + t * t * t
+  const by = (t) => 3 * (1 - t) * (1 - t) * t * p1y + 3 * (1 - t) * t * t * p2y + t * t * t
+  let lo = 0
+  let hi = 1
+  let t = x
+  for (let i = 0; i < 24; i++) {
+    const v = bx(t)
+    if (Math.abs(v - x) < 1e-4) break
+    if (v < x) lo = t
+    else hi = t
+    t = (lo + hi) / 2
+  }
+  return by(t)
+}
+/* The values a layer has at `t` seconds into its window, from its keys and its dials. */
+function keysAt(keys, t, base) {
+  const out = {}
+  for (const p of KEY_PROPS) {
+    const have = keys.filter((k) => k[p] !== undefined)
+    if (!have.length) {
+      out[p] = base[p]
+      continue
+    }
+    if (t <= have[0].t) out[p] = have[0][p]
+    else if (t >= have.at(-1).t) out[p] = have.at(-1)[p]
+    else {
+      const i = have.findIndex((k) => k.t > t)
+      const a = have[i - 1]
+      const b = have[i]
+      const f = bezierAt(KEY_EASES[a.ease] ?? KEY_EASES.out, (t - a.t) / (b.t - a.t))
+      out[p] = a[p] + (b[p] - a[p]) * f
+    }
+  }
+  return out
+}
 
 const SHOWCASE_VIDEO = /\.(mp4|mov|webm|m4v)(\?|#|$)/i
 
@@ -2706,7 +2822,7 @@ const SHOWCASE_TEMPLATES = [
 ]
 
 class RMShowcase extends RMElement {
-  static fields = ['media', 'look', 'mat', 'mfor', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
+  static fields = ['media', 'look', 'mat', 'mfor', 'keys', ...SHOWCASE_SCHEMA.map((f) => f.key), 'at', 'for']
 
   disconnectedCallback() {
     this._unseek?.()
@@ -2801,7 +2917,12 @@ class RMShowcase extends RMElement {
           @keyframes sc-out-sink  { from { --sc-out-o:1; --sc-out-y:0%; } to { --sc-out-o:0; --sc-out-y:6%; } }
           @keyframes sc-out-slide { from { --sc-out-o:1; --sc-out-x:0%; } to { --sc-out-o:0; --sc-out-x:10%; } }
           @keyframes sc-out-zoom  { from { --sc-out-o:1; --sc-out-s:1; } to { --sc-out-o:0; --sc-out-s:1.12; } }
-          .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100); }
+          /* Placement reads the keyframed variables, set on the layer: still
+             values from the dials, or the running animation between keys. */
+          .room { filter: blur(var(--k-b)); }
+          .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100);
+                  transform: translate(var(--k-x), var(--k-y)) translateZ(var(--k-z)) scale(var(--k-s)) rotateX(var(--k-rx)) rotateY(var(--k-ry)) rotateZ(var(--k-rz));
+                  opacity: var(--k-o); }
           .body { position:absolute; inset:0; transform-style:preserve-3d; }
           .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
           .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
@@ -2919,7 +3040,50 @@ class RMShowcase extends RMElement {
       light: 'border: 0.6cqw solid rgba(255,255,255,0.92);',
     }[s.frame]
     const shadow = s.shadow > 0 ? `0 ${2.5 * s.shadow}cqw ${6 * s.shadow}cqw rgba(0,0,0,${0.55 * s.shadow}), 0 ${0.6 * s.shadow}cqw ${1.4 * s.shadow}cqw rgba(0,0,0,${0.3 * s.shadow})` : 'none'
-    const transform = `translate(${s.x}%, ${s.y}%) translateZ(${s.z}cqw) scale(${s.zoom}) rotateX(${s.tx}deg) rotateY(${s.ty}deg) rotateZ(${s.tz}deg)`
+    /*
+     * The placement, as variables on the layer. With keys, a @keyframes rule
+     * on the layer's clock drives the variables between them: the first key's
+     * values before it, the last key's after, the dials for anything no key
+     * names. Rebuilt only when the keys change, so a slider elsewhere does not
+     * restart the animation.
+     */
+    const keysText = this.attr('keys')
+    const keys = parseKeys(keysText)
+    const still = keysAt(keys, 0, s)
+    /* On the stage, inside the shadow tree: a @keyframes name is only known to
+       the tree its rule is written in, so the host could not run it. */
+    const stage = this.shadowRoot.querySelector('.stage')
+    for (const p of KEY_PROPS) stage.style.setProperty(KEY_VAR[p], keyValue(p, keys.length ? still[p] : s[p]))
+    if (keysText !== this._keysText) {
+      this._keysText = keysText
+      let sheet = this.shadowRoot.querySelector('style.keys')
+      if (!sheet) {
+        sheet = document.createElement('style')
+        sheet.className = 'keys'
+        this.shadowRoot.prepend(sheet)
+      }
+      const named = KEY_PROPS.filter((p) => keys.some((k) => k[p] !== undefined))
+      if (keys.length >= 2 && named.length) {
+        this._kid = this._kid || `k${Math.random().toString(36).slice(2, 8)}`
+        const t0 = keys[0].t
+        const span = Math.max(0.001, keys.at(-1).t - t0)
+        const frames = keys
+          .map((k, i) => {
+            const at = keysAt(keys, k.t, s)
+            const decl = named.map((p) => `${KEY_VAR[p]}: ${keyValue(p, at[p])};`).join(' ')
+            const ease = i < keys.length - 1 ? `animation-timing-function: ${KEY_EASES[k.ease] ?? KEY_EASES.out};` : ''
+            return `${(((k.t - t0) / span) * 100).toFixed(3)}% { ${decl} ${ease} }`
+          })
+          .join('\n')
+        sheet.textContent = `@keyframes ${this._kid} { ${frames} }`
+        stage.style.animation = `${this._kid} ${span}s linear both paused`
+        stage.style.animationDelay = `calc(var(--at) + ${t0}s - var(--t))`
+      } else {
+        sheet.textContent = ''
+        stage.style.animation = ''
+        stage.style.animationDelay = ''
+      }
+    }
     const ar = SHOWCASE_DEVICES[device].ar
     const avail = 100 - 2 * s.pad
     const room = this.shadowRoot.querySelector('.room')
@@ -2942,10 +3106,10 @@ class RMShowcase extends RMElement {
     const scale = s.w / 100
     const w = ar ? `min(${avail * scale}cqw, ${avail * scale * ar}cqh)` : s.w < 100 ? `min(${avail * scale}cqw, calc(${avail}cqh * var(--media-ar, 1.7778)))` : `${avail}cqw`
     card.style.cssText = ar
-      ? `--w:${w}; width:${w}; aspect-ratio:${ar}; transform:${transform}; opacity:${s.op / 100};`
+      ? `--w:${w}; width:${w}; aspect-ratio:${ar};`
       : s.w < 100
-        ? `--w:${w}; width:${w}; aspect-ratio:var(--media-ar, 16/9); transform:${transform}; opacity:${s.op / 100};`
-        : `--w:${w}; width:100%; height:100%; transform:${transform}; opacity:${s.op / 100};`
+        ? `--w:${w}; width:${w}; aspect-ratio:var(--media-ar, 16/9);`
+        : `--w:${w}; width:100%; height:100%;`
     /*
      * The frame and the shadow belong to the outermost drawn edge: the screen for
      * a bare card, the body for a device; the deepest slice carries the shadow so
@@ -2981,6 +3145,7 @@ function encodeShowcase(state) {
   if (state.media) parts.push(`media="${state.media.replace(/"/g, '&quot;')}"`)
   if (state.look) parts.push(`look="${state.look.replace(/"/g, '&quot;')}"`)
   for (const f of SHOWCASE_SCHEMA) if (String(state[f.key]) !== String(f.def)) parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  if (state.keys?.length) parts.push(`keys="${encodeKeys(state.keys)}"`)
   return parts.join(' ')
 }
 
@@ -3257,7 +3422,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 
