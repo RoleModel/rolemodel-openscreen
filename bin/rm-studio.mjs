@@ -8714,6 +8714,13 @@ async function fetchVoiceList() {
      * nothing — then the public base when the object lives in the public
      * bucket, then the presign rclone can do.
      */
+    /*
+     * The bucket a remote's projects live in: the public bucket set for it in
+     * Storage, or "openscreen", the bucket everything was sent to before there
+     * was a setting. Projects and links use the same answer, so a link always
+     * points where the project went.
+     */
+    const bucketFor = async (remote) => (await storagePublicBases())[remote]?.bucket || "openscreen";
     const mintLink = async (remote, rel) => {
       const clean = String(rel ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
       const target = remotePath(remote, clean);
@@ -8834,7 +8841,7 @@ async function fetchVoiceList() {
       const names = listed.out.split("\n").map((x) => x.trim().replace(/:$/, "")).filter((n) => REMOTE_NAME.test(n));
       let failure = null;
       for (const name of names) {
-        const made = await mintLink(name, `openscreen/projects/${id}/media/${rel}`);
+        const made = await mintLink(name, `${await bucketFor(name)}/projects/${id}/media/${rel}`);
         if (made.url) return json(res, 200, { ...made, remote: name });
         if (!made.missing) failure = made;
       }
@@ -8858,7 +8865,7 @@ async function fetchVoiceList() {
       const dir = projectDir(id);
       const manifest = await readManifest(dir).catch(() => null);
       if (!manifest) return json(res, 404, { error: "that project is no longer in this library" });
-      const destination = remotePath(remote, `openscreen/projects/${id}`);
+      const destination = remotePath(remote, `${await bucketFor(remote)}/projects/${id}`);
       if (!destination) return json(res, 400, { error: "that storage destination is not valid" });
       const active = projectTransfers.get(id);
       if (active?.state === "sending") return json(res, 202, active);
