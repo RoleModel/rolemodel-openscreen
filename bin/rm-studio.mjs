@@ -6185,7 +6185,7 @@ const server = createServer(async (req, res) => {
           out = await stickerCutOut({ key, model: String(body.model ?? CUTOUT_MODELS[0].id), imageUrl });
         } else {
           if (!imageUrl) return json(res, 400, { error: "pick a picture to trace" });
-          out = await stickerVectorize({ key, model: String(body.model ?? VECTORIZE_MODELS[0].id), endpoint: body.endpoint, imageUrl });
+          out = await stickerVectorize({ key, model: String(body.model ?? VECTORIZE_MODELS[0].id), endpoint: body.endpoint, imageUrl, prompt: String(body.prompt ?? "") });
         }
         const suffix = { generate: "-sticker", cutout: "-cutout", vectorize: "-vector" }[step];
         const rel = await keepSticker(id, out.url, `${stem}${suffix}`, step === "vectorize" ? ".svg" : ".png");
