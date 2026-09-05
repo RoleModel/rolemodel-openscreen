@@ -8784,7 +8784,13 @@ async function fetchVoiceList() {
         await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
-        const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs"]);
+        /*
+         * No cache header from R2 means a browser keeps the page for hours by
+         * its own rule, so a republished sheet looked unchanged. Every file is
+         * told to be checked each time; the stickers rarely change, the page
+         * does.
+         */
+        const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs", "--header-upload", "Cache-Control: no-cache"]);
         if (!copy.ok) return json(res, 500, { error: copy.err.trim().split("\n").pop() || "rclone could not copy the sheet" });
         /*
          * Where the page answers. A public base can map to the bucket named in
