@@ -71,7 +71,7 @@
  * room there is.
  */
 .panel-config .ctl {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
 }
 
 .panel-config .ctl > .form-label,

@@ -71,7 +71,7 @@ dialog.media-name-dialog {
   border-radius: var(--op-radius-medium);
   box-shadow: var(--op-shadow-large);
   color: var(--ink);
-  inline-size: min(28rem, calc(100vw - var(--op-space-large)));
+  inline-size: min(72rem, calc(100vw - var(--op-space-large)));
   margin: auto;
   padding: var(--op-space-medium);
 }

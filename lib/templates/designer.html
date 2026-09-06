@@ -9,11 +9,11 @@
 <template data-row="designer-group"><div class="ctl"></div></template>
 
 <template data-row="designer-text">
-   <label data-el="label" class="form-label"></label><input data-el="input" class="wide form-control" />
+   <label data-el="label" class="form-label"></label><input data-el="input" class="form-control" />
 </template>
 
 <template data-row="designer-textarea">
-   <label data-el="label" class="form-label"></label><textarea data-el="input" class="wide form-control" rows="3"></textarea>
+   <label data-el="label" class="form-label"></label><textarea data-el="input" class="form-control" rows="3"></textarea>
 </template>
 
 <template data-row="designer-range">
@@ -21,7 +21,9 @@
 </template>
 
 <template data-row="designer-select">
-   <label data-el="label" class="form-label"></label><select data-el="input" class="wide form-control"></select>
+<div class="form-group">
+   <label data-el="label" class="form-label"></label><select data-el="input" class="form-control">
+   </select>
 </template>
 
 <!-- The colour row's menu is built by colorMenu(); the caller slots it
