@@ -8441,13 +8441,20 @@ async function fetchVoiceList() {
         const site = join(projectDir(id), "stickers", "site", name);
         await rm(site, { recursive: true, force: true });
         await mkdir(site, { recursive: true });
+        /* A sticker deleted since the sheet was built is left out, and the
+           record forgets it, so a republish never fails on a file that is gone. */
         const items = [];
+        const kept = [];
         for (const rel of record.items) {
           const file = join(mediaDir(id), rel);
+          if (!(await stat(file).catch(() => null))) continue;
           const out = basename(file);
           await copyFile(file, join(site, out));
           items.push({ name: basename(file, extname(file)), file: out });
+          kept.push(rel);
         }
+        if (!items.length) return json(res, 400, { error: "none of the sheet's stickers exist any more — build the sheet again" });
+        record.items = kept;
         await copyFile(join(mediaDir(id), record.rel), join(site, "sheet.svg"));
         /* Everything in one zip too — the sheet and each sticker — for a print
            shop or a teammate who wants the files, not the page. */
