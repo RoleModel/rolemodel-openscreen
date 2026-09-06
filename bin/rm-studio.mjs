@@ -6188,7 +6188,9 @@ const server = createServer(async (req, res) => {
           out = await stickerVectorize({ key, model: String(body.model ?? VECTORIZE_MODELS[0].id), endpoint: body.endpoint, imageUrl, prompt: String(body.prompt ?? "") });
         }
         const suffix = { generate: "-sticker", cutout: "-cutout", vectorize: "-vector" }[step];
-        const rel = await keepSticker(id, out.url, `${stem}${suffix}`, step === "vectorize" ? ".svg" : ".png");
+        /* A vector answer keeps its shape whichever step made it. */
+        const ext = step === "vectorize" || /\.svg(\?|#|$)/i.test(out.url) ? ".svg" : ".png";
+        const rel = await keepSticker(id, out.url, `${stem}${suffix}`, ext);
         await reindex(id, { force: true }).catch(() => {});
         return json(res, 200, { rel, url: out.url, endpoint: out.endpoint });
       } catch (err) {
