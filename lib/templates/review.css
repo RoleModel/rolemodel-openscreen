@@ -1,0 +1,105 @@
+/* Review: renders to share, and the pages already out. Cards, like the Stickers page. */
+.review__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.review__grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.review__card {
+  position: relative;
+  padding: 0;
+  text-align: start;
+}
+
+.review__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-color: var(--sunk);
+  background-size: cover;
+  background-position: center;
+}
+
+.review__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review__link {
+  display: inline-block;
+  margin-block-start: var(--op-space-2x-small);
+  color: var(--op-color-primary-base);
+}
+
+.review__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  margin-block-start: var(--op-space-2x-small);
+}
+
+.review__title {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+/* The notes, read in place: a list under the card, each pinned to its moment. */
+.review__thread {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  margin-block-start: var(--op-space-x-small);
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.review__note {
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  border-radius: var(--op-radius-small);
+  background: var(--sunk);
+}
+
+.review__notehead {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  font-size: var(--op-font-x-small);
+}
+
+.review__at {
+  padding: 0 var(--op-space-2x-small);
+  border-radius: 999px;
+  background: var(--op-color-primary-plus-six);
+  color: var(--op-color-primary-base);
+  font-family: var(--m);
+  cursor: pointer;
+}
+
+.review__at:empty { display: none; }
+
+.review__when {
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-2x-small);
+}
+
+.review__notebody {
+  margin: var(--op-space-3x-small) 0 0;
+  font-size: var(--op-font-small);
+  white-space: pre-wrap;
+}
+
+.review__tidy {
+  margin-inline-start: auto;
+  background: none;
+  border: 0;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.review__tidy:hover { opacity: 1; }

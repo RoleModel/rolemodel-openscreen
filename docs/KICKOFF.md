@@ -42,18 +42,15 @@ The other three are not places to work:
 |---|---|---|
 | **rolemodel-openscreen** | The brand layer and the Studio — presets, wallpapers, narration, demo scripting, and the web UI that drives all of it. | Almost always. This is the surface. |
 | **RoleModel/openscreen** | A fork of [OpenScreen](https://github.com/getopenscreen/openscreen). Records the screen, edits the document, exports the MP4. | Rarely — only for the app itself. |
-| **RoleModel/OpenFrame** | A fork of [OpenFrame](https://github.com/yusufipk/OpenFrame). Client review: timestamped comments, versions, approval. | Rarely — only for review/sharing. |
 
-Both forks are small on purpose. Each is one new file plus a one-line change per
-call site, which is what keeps rebasing on upstream cheap. What they add:
+The fork is small on purpose: one new file plus a one-line change per call
+site, which is what keeps rebasing on upstream cheap. What it adds:
 
 - **openscreen** — `openscreen open <doc>` so a document can be handed to the
   editor; `.openscreen` registered as a document type; and this Studio hosted as
   a window in the app. Upstream has no way in from outside: its bundle declares
   no document type, `open -a Openscreen <file>` launches and discards the
   argument, and a bare path is a silent no-op.
-- **OpenFrame** — token auth, so a pipeline can deliver a video without holding a
-  browser session.
 
 ---
 
@@ -139,9 +136,9 @@ whatever is on disk. Clicking a video opens it in the editor.
 which is a window in this same app, so nothing is exported until you say so. A
 video with no document yet gets one made and branded on the way in.
 
-**Review** sends a finished video to OpenFrame and shows what is already out.
-It reports its own configuration rather than assuming: an unset token and an
-unreachable instance are different problems, and "sharing is broken" is neither.
+**Review** shares a finished video as a page of our own on the public bucket
+and shows the pages already out, with the notes people left on them. Notes are
+pinned to the moment they are about and come back into the Studio.
 
 **New video** has three tabs:
 
@@ -200,45 +197,23 @@ first thing lost re-authoring by hand.
 ## 4. Share it for review
 
 ```bash
-export OPENFRAME_URL=http://localhost:3100
-export OPENFRAME_TOKEN=…                    # from OPENFRAME_API_TOKENS on the instance
-
-rm-share --check                            # configured and reachable?
-rm-share demo.mp4 --project "Ridgeline Railing"
+rm-share <project-id> Renders/demo.mp4 --title "Estimating walkthrough"
+rm-share <project-id> --list
+rm-share <project-id> --down estimating-walkthrough
 ```
 
-Out comes a link a client opens with no account. They leave notes on the frame
-they are about, rather than emailing "around the middle, the bit with the
-railing".
+Out comes a link a client opens with no account: the video, a poster, and a
+notes panel beside it. They leave notes on the frame they are about, rather
+than emailing "around the middle, the bit with the railing". The Review page in
+the Studio does the same with a button, and shows the notes as they arrive.
 
-### Running OpenFrame
-
-```bash
-cd openframe
-docker compose up -d --build      # app + Postgres + MinIO
-```
-
-Configuration lives in `.env.docker` (not committed). The essentials:
-
-| variable | why |
-|---|---|
-| `DATABASE_URL` | Postgres, from the compose service |
-| `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | session auth for the browser |
-| `OPENFRAME_ENABLE_S3_VIDEO_UPLOADS=true` | MinIO stands in for R2 |
-| `OPENFRAME_REQUIRE_INVITE_CODE=false` | so you can register the first user |
-| `OPENFRAME_API_TOKENS` | `token:email` — what `rm-share` authenticates with |
-
-A token **acts as the user it maps to** and gets no more access than they have.
-That is what makes it safe to add; every authorisation check downstream is
-untouched.
-
-> **This laptop uses `:3100`, not the documented `:3000`** — a Rails app already
-> owns 3000 here, and it wins for `localhost`. That override is in
-> `docker-compose.override.yml`, which is deliberately not committed.
-
-Teardown: `docker compose down` keeps the data, `down -v` deletes it.
-
----
+Where it goes: the public bucket and base URL set on a storage remote under
+Storage (`https://assets.rolemodelsoftware.com/share/<project>/<slug>/`).
+Notes live in the team database's `video_comments` table. The page reaches it
+through Neon's Data API as the anonymous role, which can read and add; the
+Studio reads and tidies through Drizzle as `studio_app` (`lib/schema.mjs`,
+`lib/db.mjs`). `sql/video-comments.sql` makes the table, the grants and the
+policies; run it once as the database owner.
 
 ## Do I need Xcode?
 
@@ -266,15 +241,9 @@ Worth knowing before you promise any of it to anyone.
 
 - **The cask needs the one click above.** Until then there is no installable app,
   only a checkout.
-- **A share link only resolves for whoever can reach the instance.**
-  `localhost:3100` proves the integration and is useless to a client. A real
-  review needs OpenFrame on a host with a domain, and it wants SMTP for
-  invitations.
 - **A locally built openscreen cannot record.** The ScreenCaptureKit helper needs
   full Xcode, which is why the release is built in CI. A local build brands,
   edits and exports fine.
-- **`rm-share` refuses multipart uploads** rather than half-doing them. Large
-  videos will need that implemented; the failure is explicit, not silent.
 - **The recorder is a library, not a Studio button yet.** `lib/demo-record.mjs`
   works and is tested; nothing in the UI calls it.
 
