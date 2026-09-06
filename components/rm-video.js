@@ -2934,12 +2934,18 @@ class RMShowcase extends RMElement {
           /* none: the screen is the card */
           .none .screen { inset:0; background:transparent; }
           /* browser: a drawn chrome bar over the page, on a slab */
-          .browser { --chrome: var(--op-color-neutral-plus-two, #2b2b2b); --chrome-ink: rgba(255,255,255,0.10); --edge: var(--op-color-neutral-plus-one, #1c1c1c); }
-          .browser.light { --chrome: var(--op-color-neutral-minus-seven, #ececec); --chrome-ink: rgba(0,0,0,0.08); --edge: var(--op-color-neutral-minus-four, #bdbdbd); }
+          /* The chrome is the brand's: a deep blue-green bar, traffic lights in
+             green, orange and red, and an address pill outlined in a light
+             blue-green over a whisper of white. */
+          .browser { --chrome: var(--op-color-primary-plus-seven, #0e3b3a); --chrome-line: var(--op-color-primary-minus-three, #5fc4b6); --edge: var(--op-color-primary-plus-eight, #0a2a29); }
+          .browser.light { --chrome: var(--op-color-primary-plus-six, #12514f); --chrome-line: var(--op-color-primary-minus-four, #7fd8cb); --edge: var(--op-color-primary-plus-seven, #0d3d3b); }
           .browser .body { overflow:hidden; background:var(--chrome); }
           .browser .bar { position:absolute; inset:0 0 auto 0; height:calc(var(--u) * 4.6); background:var(--chrome); display:flex; align-items:center; gap:calc(var(--u) * 0.9); padding:0 calc(var(--u) * 1.6); box-sizing:border-box; }
-          .browser .bar i { width:calc(var(--u) * 1.1); height:calc(var(--u) * 1.1); border-radius:50%; background:var(--chrome-ink); flex:none; }
-          .browser .bar .url { width:34%; height:calc(var(--u) * 2.4); margin-inline-start:calc(var(--u) * 1.6); border-radius:calc(var(--u) * 0.8); background:var(--chrome-ink); }
+          .browser .bar i { width:calc(var(--u) * 1.1); height:calc(var(--u) * 1.1); border-radius:50%; flex:none; }
+          .browser .bar i:nth-child(1) { background:var(--op-color-primary-base, #28c840); }
+          .browser .bar i:nth-child(2) { background:var(--op-color-alerts-warning-base, #f5a623); }
+          .browser .bar i:nth-child(3) { background:var(--op-color-alerts-danger-base, #ff5f57); }
+          .browser .bar .url { width:34%; height:calc(var(--u) * 2.4); margin-inline-start:calc(var(--u) * 1.6); border-radius:calc(var(--u) * 0.8); background:rgba(255,255,255,0.05); border:calc(var(--u) * 0.12) solid var(--chrome-line); box-sizing:border-box; }
           .browser .screen { inset:calc(var(--u) * 4.6) 0 0 0; }
           /* phone: a dark shell, a screen inset, an island */
           .phone { --edge: var(--op-color-neutral-plus-two, #262626); }
