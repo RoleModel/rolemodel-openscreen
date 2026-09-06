@@ -2241,7 +2241,7 @@ const LOOK_PRESETS = [
   { name: 'Halftone print', look: 'c=fff8e9:0,3a8f5c:100&hf=1&hfs=10&hfmix=0.9&g=0' },
   { name: 'Dithered', look: 'c=04242b:0,00b871:100&dt=bayer4&dl=3&px=3&g=0' },
   { name: 'Terminal', look: 'c=0a0a0a:0,3a8f5c:100&as=1&asz=12&asc=mono&fl=0.5&g=0' },
-  { name: 'Grid paper', look: 'c=f5f5f5:0,e8e8e8:100&pl=1&plc=32&plr=32&plcol=3a70b3&plo=0.25&g=0.02' },
+  { name: 'Grid paper', look: 'c=f5f5f5:0,e8e8e8:100&pl=1&plc=64&plr=36&plw=0.03&plcol=3a70b3&plo=0.3&g=0.02' },
   { name: 'Spotlight', look: 'c=0a0a0a:0,193c67:100&lt=spot&lta=0.8&lts=0.6&lty=0.35&g=0.12' },
   { name: 'Rays', look: 'c=262626:0,7b5ea7:100&lt=rays&lta=0.5&lts=0.7&ltx=0.5&lty=0.1' },
 ]
@@ -2320,7 +2320,10 @@ const LOOK_FRAGMENT = [
   ' if(U_AS>.5){float l=dot(col,vec3(.299,.587,.114));if(U_ASI>.5)l=1.-l;float gi=floor(clamp(l,0.,.999)*10.);vec2 inCell=fract(fc/asCell);float glyph=texture2D(glyphTex,vec2((gi+inCell.x)/10.,inCell.y)).r;vec3 ink=U_ASC<.5?col:vec3(.92);vec3 ground=U_ASC<.5?col*U_ASB:vec3(.06)*U_ASB;col=mix(ground,ink,glyph);}',
   ' if(U_HF>.5){float l=dot(col,vec3(.299,.587,.114));float an=radians(U_HFA);mat2 rot=mat2(cos(an),-sin(an),sin(an),cos(an));vec2 g=rot*fc/U_HFS;float m;if(U_HFM<.5){vec2 cc=fract(g)-.5;float rad=sqrt(1.-l)*.7;float dd=length(cc)*2.;float e=max(fwidth(dd),.004);m=1.-smoothstep(rad-e,rad+e,dd);}else{m=step(fract(g.y),1.-l);}col=mix(col,mix(col,hfInk,m),U_HFMIX);}',
   ' if(U_DT>.5){float th=U_DT<1.5?b2(fc)/4.:(U_DT<2.5?b4(fc)/16.:b8(fc)/64.);float levels=max(2.,U_DL)-1.;vec3 q=floor(col*levels+th)/levels;col=mix(col,q,U_DST);}',
-  ' if(U_PL>.5){vec2 g=fract(v*vec2(U_PLC,U_PLR));float lw=U_PLW*.5;float line=step(g.x,lw)+step(1.-lw,g.x)+step(g.y,lw)+step(1.-lw,g.y);col=mix(col,plInk,clamp(line,0.,1.)*U_PLO);}',
+  /* Grid lines are measured in pixels from the nearest rule and softened over
+     one pixel, so they stay hairlines at any size; a hard step in cell space
+     drew each line as a stack of blocks. Never thinner than a pixel. */
+  ' if(U_PL>.5){vec2 cell=r/vec2(U_PLC,U_PLR);vec2 d=(.5-abs(fract(v*vec2(U_PLC,U_PLR))-.5))*cell;float hw=max(.5,U_PLW*min(cell.x,cell.y)*.5);vec2 a=1.-smoothstep(hw-.5,hw+.5,d);col=mix(col,plInk,max(a.x,a.y)*U_PLO);}',
   ' if(U_G>0.){float n=hash(floor(fc/max(.5,U_GS))+floor(t*24.)*.37)-.5;if(U_GBM<.5){col+=n*U_G;}else if(U_GBM<1.5){col=mix(col,col*(1.+n*2.),U_G);}else{col=mix(col,col+n*(1.-abs(col-.5)*2.),U_G);}}',
   ' gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
 ].join('\n')
