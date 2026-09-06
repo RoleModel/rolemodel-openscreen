@@ -145,3 +145,14 @@
   transition: opacity 180ms ease, scale 180ms ease;
   pointer-events: none;
 }
+
+/* The heading carries the tick-all pill, at the end of the line. */
+.stickers__head {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.stickers__tickall {
+  margin-inline-start: auto;
+}
