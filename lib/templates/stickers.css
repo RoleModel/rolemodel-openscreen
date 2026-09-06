@@ -137,3 +137,11 @@
   background: var(--op-color-alerts-danger-base);
   color: var(--op-color-alerts-danger-on-base);
 }
+
+/* A card on its way out: it shrinks and fades before the others close the gap. */
+.stickers__card--going {
+  opacity: 0;
+  scale: 0.8;
+  transition: opacity 180ms ease, scale 180ms ease;
+  pointer-events: none;
+}
