@@ -39,7 +39,6 @@ instance: `pnpm run forks` fetches them.
 | **the app's main process** | TypeScript | Upstream's choice. Where our Studio window and `open` verb live. |
 | **the compositor** | Rust | Upstream's choice. Frame compositing and the ffmpeg bindings. |
 | **the capture helper** | Swift (ScreenCaptureKit) | The only API that captures a window on modern macOS. **The one thing that needs full Xcode**, which is why the app is built in CI. |
-| **review** (`openframe`) | TypeScript, Next.js 16, Prisma 7, Postgres | Upstream's choice. Built with **bun**, not npm. |
 
 The split matters when you are deciding where a change goes. Anything about
 brand, narration, demo scripting or the Studio is JavaScript in the toolkit, with
@@ -120,14 +119,6 @@ cd ../openscreen && npm run dev
 ```
 
 Vite with HMR, for working on the editor itself.
-
-### The review instance
-
-```sh
-cd ../openframe && docker compose up -d --build
-```
-
-App, Postgres and MinIO. Configuration is `.env.docker`, which is not committed.
 
 ---
 
@@ -254,9 +245,8 @@ it. No sidecar means no opinion, which is every other video in the library.
 ## Working on a fork without making rebasing expensive
 
 Our diff on `openscreen` is 7 commits, 29 files, 895 lines — on top of 2260
-upstream commits. On `openframe` it is 9 files and 185 lines. Both are small on
-purpose, and keeping them small is the whole reason `git pull upstream main`
-stays a non-event. Check yours before you push:
+upstream commits. It is small on purpose, and keeping it small is the whole
+reason `git pull upstream main` stays a non-event. Check yours before you push:
 
 ```sh
 pnpm run forks          # also reports how far each is from upstream
@@ -288,7 +278,7 @@ piece and leave the rest, start here.
 | `lib/wallpaper.mjs` | recipe → canvas | a canvas (browser or node) |
 | `lib/demo-script.mjs` | parse a demo script | nothing |
 | `lib/demo-record.mjs` | capture a demo by doing it | playwright |
-| `lib/openframe.mjs` | send a video for review | fetch, a token |
+| `lib/share.mjs` | publish a video as a page with notes | rclone, a public bucket |
 | `lib/narration.mjs` | lines → audio + an exact SRT | a TTS provider |
 | `lib/theme.mjs` | apply a brand preset to a document | nothing |
 | `lib/script-parse.mjs` | markdown → speakable lines | nothing |

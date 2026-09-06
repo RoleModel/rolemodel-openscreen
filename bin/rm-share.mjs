@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 /*
- * Send a finished video for review.
+ * Share a finished video as a page.
  *
- *   rm-share <video.mp4> --project "Ridgeline Railing" [--title "..."]
- *   rm-share --check
+ *   rm-share <project-id> <video.mp4> [--title "..."] [--remote assets]
+ *   rm-share <project-id> --list
+ *   rm-share <project-id> --down <slug>
  *
- * The last mile. Everything else in the toolkit gets a video made; this gets it
- * in front of the person whose opinion decides whether it ships, with their notes
- * landing on the frame they are about rather than in a paragraph of email.
+ * The last mile. Everything else in the toolkit gets a video made; this puts it
+ * in front of the person whose opinion decides whether it ships, on a page of
+ * our own, with their notes landing on the frame they are about.
  *
- * Configuration is two variables, because a share link is outward-facing and
- * guessing where to publish is not a mistake worth making quietly:
- *
- *   OPENFRAME_URL    http://localhost:3100
- *   OPENFRAME_TOKEN  a token from OPENFRAME_API_TOKENS on that instance
+ * The page goes to the public bucket set on a storage remote in the Studio
+ * (Storage → public bucket and base URL); notes go through the team database's
+ * Data API. No instance to run, no token to hold.
  */
-import { stat } from "node:fs/promises";
-import { basename, resolve } from "node:path";
-import { openFrame, shareVideo } from "../lib/openframe.mjs";
-import { openFrameSettings } from "../lib/settings.mjs";
+import { resolve, sep } from "node:path";
+import { defaultRoot, readManifest } from "../lib/library.mjs";
+import { dataApiFor, listShares, publishShare, removeShare } from "../lib/share.mjs";
+import { sharingSettings, stickerSettings, storagePublicBases } from "../lib/settings.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => {
@@ -31,84 +30,58 @@ const die = (m) => {
 	console.error(`rm-share: ${m}`);
 	process.exit(1);
 };
+/* Words that are not flags and not a flag's value. */
+const TAKES_VALUE = new Set(["--title", "--remote", "--down"]);
+const positional = argv.filter((a, i) => !a.startsWith("--") && !TAKES_VALUE.has(argv[i - 1] ?? ""));
 
-/*
- * The same source the Studio configures, not the environment alone.
- *
- * These were two env vars, which a terminal can set and the app cannot: a GUI
- * launched from Finder inherits no shell. `openFrameSettings()` still lets the
- * environment win, so CI and a scripted run are unchanged — it just also finds
- * what the Studio's Settings page stored.
- */
-const { url: base, token, source } = await openFrameSettings();
-const from = (k) => (source[k] === "environment" ? "environment" : source[k] === "stored" ? "settings" : "unset");
+const projectId = positional[0];
+if (!projectId || flag("help")) {
+	console.log("usage: rm-share <project-id> <video> [--title ...] [--remote name]\n       rm-share <project-id> --list\n       rm-share <project-id> --down <slug>");
+	process.exit(projectId ? 0 : 1);
+}
+const LIB = defaultRoot();
+const projectDir = resolve(LIB, projectId);
+if (!(await readManifest(projectDir).catch(() => null))) die(`no project "${projectId}" in ${LIB}`);
 
-if (argv.includes("--check") || argv.includes("--help") || !argv.length) {
-	if (!argv.includes("--check")) {
-		console.log(
-			[
-				"",
-				"rm-share — send a finished video to OpenFrame for review",
-				"",
-				"  rm-share <video.mp4> --project <name> [--title <text>]",
-				"  rm-share --check                      is it configured and reachable?",
-				"",
-				"Options",
-				"  --project <name>   OpenFrame project; created if it does not exist",
-				"  --title <text>     video title (default: the file name)",
-				"  --workspace <name> workspace to put the project in",
-				"  --no-guests        require an account to view, rather than a name",
-				"",
-				"Configuration — the Studio's Settings page, or these to override it",
-				"  OPENFRAME_URL      e.g. http://localhost:3100",
-				"  OPENFRAME_TOKEN    the token half of an OPENFRAME_API_TOKENS entry",
-				"",
-			].join("\n"),
-		);
-		process.exit(0);
-	}
-	console.log("");
-	console.log(`  url    ${base ? `${base} (${from("url")})` : "unset"}`);
-	console.log(`  token  ${token ? `${token.slice(0, 8)}… (${token.length} chars, ${from("token")})` : "unset"}`);
-	if (!base || !token) die("not configured — set it on the Studio's Settings page, or export OPENFRAME_URL and OPENFRAME_TOKEN");
-	try {
-		const api = openFrame({ base, token });
-		const ws = await api.call("/api/workspaces");
-		const list = Array.isArray(ws) ? ws : (ws?.workspaces ?? []);
-		console.log(`  auth   ok — ${list.length} workspace${list.length === 1 ? "" : "s"}`);
-		console.log("");
-	} catch (err) {
-		console.log("");
-		die(err.message);
-	}
+if (flag("list")) {
+	const shares = await listShares(projectDir);
+	if (!shares.length) console.log("nothing shared from this project yet");
+	for (const sh of shares) console.log(`${sh.slug}\t${sh.at.slice(0, 10)}\t${sh.url}`);
+	process.exit(0);
+}
+if (flag("down")) {
+	const slug = String(flag("down"));
+	const record = (await listShares(projectDir)).find((x) => x.slug === slug);
+	if (!record) die(`no page "${slug}" — try --list`);
+	await removeShare({ projectDir, projectId, record });
+	console.log(`took down ${record.url}`);
 	process.exit(0);
 }
 
-const file = resolve(argv[0]);
-const projectName = flag("project");
-if (typeof projectName !== "string") die("--project <name> is required");
-if (!(await stat(file).catch(() => null))) die(`no such file: ${file}`);
-if (!base || !token) die("not configured — see rm-share --check");
+const video = positional[1];
+if (!video) die("give a video file");
+const file = resolve(video);
+const mediaDir = resolve(projectDir, "media");
+if (!file.startsWith(mediaDir + sep)) die(`the video has to live in the project's media folder: ${mediaDir}`);
 
-console.log(`\n  ${basename(file)} -> ${base}`);
-try {
-	const out = await shareVideo({
-		base,
-		token,
-		file,
-		project: projectName,
-		title: typeof flag("title") === "string" ? flag("title") : undefined,
-		workspace: typeof flag("workspace") === "string" ? flag("workspace") : undefined,
-		onStep: (what) => console.log(`  ${what}…`),
-	});
-	console.log("");
-	console.log(`  workspace  ${out.workspace}`);
-	console.log(`  project    ${out.project}`);
-	console.log(`  video      ${out.video.title}`);
-	console.log("");
-	console.log(`  share this: ${out.shareUrl}`);
-	console.log("");
-} catch (err) {
-	console.log("");
-	die(err.message);
-}
+const bases = await storagePublicBases();
+const usable = Object.entries(bases).filter(([, v]) => v?.base && v?.bucket);
+if (!usable.length) die("no storage remote has a public bucket and base URL — set one under Storage in the Studio");
+const remote = flag("remote", usable[0][0]);
+const pub = bases[remote];
+if (!pub?.base || !pub?.bucket) die(`${remote} has no public bucket and base URL`);
+const dataApi = (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
+if (!dataApi) console.error("rm-share: no team database — the page will have no notes");
+
+const record = await publishShare({
+	projectDir,
+	projectId,
+	file,
+	title: flag("title", undefined) === true ? undefined : flag("title", undefined),
+	remote,
+	publicBase: pub.base,
+	publicBucket: pub.bucket,
+	dataApi,
+	onStep: (step) => console.error(`  ${step}…`),
+});
+console.log(record.url);

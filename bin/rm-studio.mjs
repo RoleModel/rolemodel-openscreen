@@ -35,27 +35,7 @@ import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
 import { buildPrompt as buildPaperEditPrompt, coverage as paperEditCoverage, parseSelection, selectionToCutlist, validateSelection } from "../lib/paper-edit.mjs";
 import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, syncFor, writeBoard } from "../lib/board-store.mjs";
-import {
-  createStudioSkill,
-  deleteLook,
-  deleteStyleImage,
-  deleteStylePerson,
-  fetchSetting,
-  fetchStudioSkill,
-  fetchStudioSkills,
-  insertLook,
-  insertStyleImage,
-  insertStylePerson,
-  listLooks,
-  listStyleImages,
-  listStylePeople,
-  putSetting,
-  renameStylePerson,
-  stylePeopleById,
-  updateLook,
-  updateStudioSkill,
-  updateStyleImage,
-} from "../lib/db.mjs";
+import { createStudioSkill, deleteLook, deleteStyleImage, deleteStylePerson, deleteVideoComment, fetchSetting, fetchStudioSkill, fetchStudioSkills, insertLook, insertStyleImage, insertStylePerson, listLooks, listStyleImages, listStylePeople, listVideoComments, putSetting, renameStylePerson, stylePeopleById, updateLook, updateStudioSkill, updateStyleImage } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
 import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, vectorize as stickerVectorize } from "../lib/stickers.mjs";
@@ -96,7 +76,7 @@ import {
   speakerSections,
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
-import { openFrame, shareVideo } from "../lib/openframe.mjs";
+import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
 import { cacheSource } from "../lib/edit-cache.mjs";
@@ -118,11 +98,9 @@ import {
 	syncChoice,
 	docsUrl,
 	lastView,
-	openFrameSettings,
 	setAgentChoice,
 	setCurrentProject,
 	setLastView,
-	setOpenFrameSettings,
 	setFalSettings,
 	setSidebarRail,
 	sidebarRail,
@@ -221,16 +199,7 @@ const STYLE_DIR = join(LIB, "Style");
 const LOOKS_DIR = join(LIB, "Looks");
 const SHOWCASE_DIR = join(LIB, "Showcase");
 /** Neon's Data API address for a database URL: the endpoint, minus its pooler, under the apirest host. */
-function dataApiFor(databaseUrl) {
-  try {
-    const u = new URL(String(databaseUrl ?? ""));
-    const [endpoint, ...rest] = u.hostname.split(".");
-    if (!endpoint?.startsWith("ep-") || !u.hostname.endsWith(".neon.tech")) return null;
-    return `https://${endpoint.replace(/-pooler$/, "")}.apirest.${rest.join(".")}${u.pathname.replace(/\/+$/, "")}/rest/v1`;
-  } catch {
-    return null;
-  }
-}
+/* dataApiFor lives in lib/share.mjs now, shared with the CLI. */
 
 /*
  * The team's pictures, from the database, kept for a minute.
@@ -888,10 +857,6 @@ async function promoteHyperframesExport(id, root, entry) {
      scoring frames and thumbnails a different moment than the render did. */
   await rm(`${target}.poster`, { force: true }).catch(() => {});
   await copyFile(`${entry.file}.poster`, `${target}.poster`).catch(() => {});
-  /* And which OpenFrame video this render already is, so a re-send from the
-     promoted copy still lands on the same review rather than starting one. */
-  await rm(`${target}.openframe`, { force: true }).catch(() => {});
-  await copyFile(`${entry.file}.openframe`, `${target}.openframe`).catch(() => {});
   return {
     name: basename(target),
     rel: relative(mediaDir(id), target).split(sep).join("/"),
@@ -3614,75 +3579,6 @@ function pipeUntilClosed(stream, res) {
 }
 
 /*
- * Every video OpenFrame can show us, with the active version's comment count.
- *
- * One function because two callers need it: the Review page draws it, and the
- * notice poller diffs it. Written twice it would be the copy-and-drift this
- * codebase argues against everywhere else — and the drift would be silent, a
- * poller watching a slightly different set of videos than the page lists.
- *
- * The count is free: OpenFrame's videos endpoint already returns the active
- * version with `_count: { comments }`, so noticing a new comment costs one call
- * per project and no more than drawing the page did.
- */
-async function reviewSnapshot(api) {
-
-	const ws = await api.call("/api/workspaces");
-	const list = Array.isArray(ws) ? ws : (ws?.workspaces ?? []);
-	// Videos per project, so the panel can show what has already been sent
-	// rather than only offering to send more.
-	const projects = [];
-	for (const w of list.slice(0, 3)) {
-	  const page = await api.call(`/api/projects?workspaceId=${encodeURIComponent(w.id)}`);
-	  for (const proj of page?.projects ?? []) {
-	    const videos = await api.call(`/api/projects/${proj.id}/videos`).catch(() => null);
-	    projects.push({
-	      id: proj.id,
-	      name: proj.name,
-	      workspace: w.name,
-	      /*
-	       * No link composed here.
-	       *
-	       * This used to carry `watch: `${api.base}/watch/${v.id}``, which is a
-	       * URL with no share token in it — OpenFrame answers 403 and the page
-	       * says "Video not found or access denied". Only ?shareToken= gets a
-	       * viewer in, and the token is not in this listing.
-	       *
-	       * Reading it per video would be a GET each, on a listing that already
-	       * costs one call per project, to fill in a button most sessions never
-	       * press. So the ids go out and /api/review/link resolves one on click.
-	       */
-	      /*
-	       * What the listing already told us, kept.
-	       *
-	       * This used to map every video down to id and title, which is why the
-	       * Review page read as a list of names that "just sit there" — nothing
-	       * on it could tell you a client had been in. OpenFrame's videos
-	       * endpoint already returns the active version with
-	       * `_count: { comments }`, its number, its duration and a thumbnail, in
-	       * the same call. It cost nothing to ask for and was thrown away.
-	       */
-	      videos: (videos?.videos ?? videos ?? []).map((v) => {
-	        const version = (v.versions ?? [])[0] ?? null;
-	        return {
-	          id: v.id,
-	          title: v.title,
-	          projectId: proj.id,
-	          versionId: version?.id ?? null,
-	          version: version?.versionNumber ?? null,
-	          versions: v._count?.versions ?? null,
-	          comments: version?._count?.comments ?? 0,
-	          duration: version?.duration ?? null,
-	          thumbnail: version?.thumbnailUrl ?? null,
-	        };
-	      }),
-	    });
-	  }
-	}
-	return projects;
-}
-
-/*
  * Noticing that a client has been in, without being asked.
  *
  * Until now the only way to learn that a comment had arrived was to open Review
@@ -3705,49 +3601,61 @@ async function pollReviewComments() {
   if (noticePollRunning) return;
   noticePollRunning = true;
   try {
-    const { url: base, token } = await openFrameSettings();
-    if (!base || !token) return;
-    const projects = await reviewSnapshot(openFrame({ base, token }));
+    const dataApi = await shareDataApi();
+    if (!dataApi) return;
     const { seen, notices } = await reviewNotices();
     const first = Object.keys(seen).length === 0;
     const next = {};
     const fresh = [];
-    for (const proj of projects) {
-      for (const v of proj.videos ?? []) {
-        if (!v.versionId) continue;
-        const count = Number(v.comments) || 0;
-        next[v.versionId] = count;
-        const before = seen[v.versionId];
-        /* A version we have never seen is not news on the first look — only a
+    /* Every project's pages, one Data API read per project that has any. */
+    const ids = await readdir(LIB).catch(() => []);
+    for (const id of ids) {
+      const shares = await listShares(projectDir(id)).catch(() => []);
+      if (!shares.length) continue;
+      const rows = await shareNotes({ project: id });
+      for (const share of shares) {
+        const key = `${id}/${share.slug}`;
+        const count = rows.filter((r) => r.video === share.slug).length;
+        next[key] = count;
+        const before = seen[key];
+        /* A page we have never counted is not news on the first look — only a
            count that GREW while we were watching is. */
         if (first || before === undefined || count <= before) continue;
-        fresh.push({
-          id: `${v.versionId}:${count}`,
-          versionId: v.versionId,
-          videoId: v.id,
-          projectId: v.projectId,
-          project: proj.name,
-          title: v.title,
-          from: before,
-          to: count,
-          at: new Date().toISOString(),
-          seen: false,
-        });
+        fresh.push({ id: `${key}:${count}`, projectId: id, slug: share.slug, title: share.title, url: share.url, from: before, to: count, at: new Date().toISOString(), seen: false });
       }
     }
     if (fresh.length || JSON.stringify(next) !== JSON.stringify(seen)) {
-      /* Same id never twice: a poll that runs while the page is open must not
-         stack a second notice for a count it already reported. */
       const have = new Set(notices.map((n) => n.id));
       await setReviewNotices({ seen: next, notices: [...notices, ...fresh.filter((n) => !have.has(n.id))] });
     }
-    for (const n of fresh) console.log(`  review: ${n.to - n.from} new comment(s) on ${n.title} (${n.project})`);
+    for (const n of fresh) console.log(`  review: ${n.to - n.from} new note(s) on ${n.title} (${n.projectId})`);
   } catch {
-    /* OpenFrame being unreachable is not worth a line every two minutes; the
-       Review page says so plainly when somebody actually looks. */
+    /* The database being unreachable is not worth a line every two minutes. */
   } finally {
     noticePollRunning = false;
   }
+}
+
+/* The Data API the share pages and the poller both read: a setting, or derived from the team database. */
+async function shareDataApi() {
+  return (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
+}
+
+/*
+ * The notes, for the Studio: through Drizzle as studio_app when the team
+ * database is set, which is the same connection every other shared table uses;
+ * through the Data API otherwise, the way the page reads them.
+ */
+async function shareNotes({ project, video = null }) {
+  const cfg = await sharingSettings();
+  if (cfg.databaseUrl && !deploymentProblem(cfg)) {
+    try {
+      return await listVideoComments({ databaseUrl: cfg.databaseUrl, project, video });
+    } catch {
+      /* fall through to the page's road */
+    }
+  }
+  return shareComments({ dataApi: await shareDataApi(), project, video });
 }
 
 const server = createServer(async (req, res) => {
@@ -5608,15 +5516,6 @@ const server = createServer(async (req, res) => {
      * are already right when it lands.
      */
     /**
-     * Review: what OpenFrame knows about, and how to send it something.
-     *
-     * Sharing was a CLI-only capability, which meant the one step that puts a
-     * video in front of the person whose opinion decides whether it ships was
-     * the one step the Studio could not do. Configuration is reported rather
-     * than assumed: an unset token and an unreachable instance are different
-     * problems with different fixes, and "sharing does not work" is neither.
-     */
-    /**
      * The `.openscreen` documents in each project.
      *
      * Not in the catalog, and should not be: `buildCatalog` indexes media, and a
@@ -6791,34 +6690,6 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { projects: out });
     }
 
-    if (p === "/api/review") {
-      // Environment first, then the stored file — a GUI launched from Finder has
-      // no shell environment, so the environment alone made this unconfigurable
-      // from inside the app.
-      const { url: base, token, source } = await openFrameSettings();
-      if (!base || !token) {
-        return json(res, 200, {
-          configured: false,
-          missing: [!base && "url", !token && "token"].filter(Boolean),
-          source,
-        });
-      }
-      try {
-        const api = openFrame({ base, token });
-        const projects = await reviewSnapshot(api);
-        return json(res, 200, { configured: true, base: api.base, source, workspaces: null, projects });
-      } catch (err) {
-        return json(res, 200, { configured: true, base, error: err.message });
-      }
-    }
-
-    /**
-     * Store where OpenFrame is, from inside the app.
-     *
-     * Write-only, like the narration keys: a token goes in and never comes back
-     * out, because a settings panel that shows you your own credential is a
-     * settings panel that shows it to whoever is looking at your screen.
-     */
     /*
      * Slack: is it set up, and which workspace did the token reach?
      *
@@ -7002,51 +6873,6 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (p === "/api/review/settings" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      try {
-        const file = await setOpenFrameSettings({
-          ...(body.url !== undefined ? { url: String(body.url) } : {}),
-          ...(body.token !== undefined ? { token: String(body.token) } : {}),
-        });
-        return json(res, 200, { ok: true, stored: file });
-      } catch (err) {
-        // settingProblem() validates; a bad url is the user's to see, not a 500.
-        return json(res, 400, { error: err.message });
-      }
-    }
-
-    /**
-     * The share link for one video, resolved when someone asks to open it.
-     *
-     * A GET against OpenFrame, never a POST: POST rotates the token on an existing
-     * link, so a button that said "open this" would quietly break every link
-     * already sent for that video. No link yet means no link — this does not make
-     * one, because creating a share link is a thing the person should choose.
-     */
-    /**
-     * How a review is actually going, for one video.
-     *
-     * Two things the listing cannot carry. The comment count it does carry is every
-     * comment ever left, so a video whose notes are all dealt with looks identical to
-     * one nobody has touched — the unresolved count is the number that means anything.
-     * And approvals are per version, so they need the version, not the video.
-     *
-     * On demand rather than in the listing: both are a call each, and the listing
-     * already costs one per project.
-     */
-    /**
-     * A review thumbnail, fetched with the token and passed through.
-     *
-     * The page cannot load these itself. OpenFrame serves them from
-     * /api/upload/image/<file>, which resolves which video the image belongs to and
-     * then checks project access — so an anonymous <img> gets 403, and the Studio
-     * page has no OpenFrame session and should never be given the token.
-     *
-     * So the server does it. The path is taken from the listing rather than the
-     * query string: accepting an arbitrary path here would turn this into an open
-     * proxy for anything on that host, signed with our token.
-     */
     /*
      * A half-built script, kept where a restart cannot reach it.
      *
@@ -7077,37 +6903,6 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (p === "/api/review/thumb") {
-      const { url: base, token } = await openFrameSettings();
-      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured" });
-      const videoId = url.searchParams.get("video");
-      const projectId = url.searchParams.get("project");
-      if (!videoId || !projectId) return json(res, 400, { error: "need project and video" });
-      try {
-        const api = openFrame({ base, token });
-        const listing = await api.call(`/api/projects/${projectId}/videos`);
-        const video = (listing?.videos ?? []).find((v) => v.id === videoId);
-        const thumb = (video?.versions ?? [])[0]?.thumbnailUrl;
-        // Only a path this instance told us about, and only an image path.
-        if (!thumb || !/^\/api\/upload\/image\/[A-Za-z0-9._-]+$/.test(thumb)) {
-          return json(res, 404, { error: "no thumbnail" });
-        }
-        const upstream = await fetch(base.replace(/\/$/, "") + thumb, {
-          headers: { authorization: `Bearer ${token}` },
-        });
-        if (!upstream.ok) return json(res, 502, { error: `OpenFrame answered ${upstream.status}` });
-        const bytes = Buffer.from(await upstream.arrayBuffer());
-        res.writeHead(200, {
-          "content-type": upstream.headers.get("content-type") ?? "image/jpeg",
-          // Short: a new version replaces the thumbnail under the same video id.
-          "cache-control": "private, max-age=60",
-        });
-        return res.end(bytes);
-      } catch (err) {
-        return json(res, 502, { error: err.message });
-      }
-    }
-
     /*
      * What has come in since you last looked.
      *
@@ -7130,132 +6925,6 @@ const server = createServer(async (req, res) => {
         notices: notices.map((n) => (only && !only.has(n.id) ? n : { ...n, seen: true })),
       });
       return json(res, 200, { ok: true });
-    }
-
-    if (p === "/api/review/status") {
-      const { url: base, token } = await openFrameSettings();
-      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
-      const versionId = url.searchParams.get("version");
-      if (!versionId) return json(res, 400, { error: "need a version" });
-      const api = openFrame({ base, token });
-      const out = { unresolved: null, total: null, approval: null, error: null };
-      try {
-        // includeResolved, so resolved and open can be told apart. Without it the
-        // reply is already filtered and there is nothing to count.
-        const page = await api.call(`/api/versions/${versionId}/comments?includeResolved=true&limit=200&offset=0`);
-        const all = page?.comments ?? [];
-        const count = (list) => list.reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0);
-        out.total = count(all);
-        out.unresolved = count(all.filter((c) => !c.isResolved));
-      } catch (err) {
-        /*
-         * The 403 here is not a permissions problem to fix on the OpenFrame side —
-         * it is that the comments route authenticates with `auth()` alone, so it only
-         * ever sees a browser session. Six of OpenFrame's sixty-six routes use the
-         * token-aware `authFromRequest`, and they are all on the upload-and-share
-         * path. So this toolkit can create a project, upload a video and mint a share
-         * link, and cannot read one comment back.
-         *
-         * Said plainly, because "403: Access denied" reads as a misconfigured token
-         * and no amount of fiddling with the token will change it.
-         */
-        out.error = /\b403\b/.test(err.message)
-          ? "OpenFrame will not answer an API token here — its comments route only accepts a browser session. The notes exist; nothing can fetch them until that route accepts a token."
-          : err.message;
-      }
-      try {
-        const approvals = await api.call(`/api/versions/${versionId}/approvals`);
-        const requests = approvals?.requests ?? approvals?.approvals ?? (Array.isArray(approvals) ? approvals : []);
-        // The newest request is the live one; the rest are history.
-        const latest = requests[0] ?? null;
-        if (latest) {
-          out.approval = {
-            status: latest.status ?? null,
-            decisions: (latest.decisions ?? []).map((d) => d.status).filter(Boolean),
-          };
-        }
-      } catch {
-        // Approvals are a feature of the fork, not a guarantee. A instance without
-        // them should report comments and stay quiet about the rest.
-      }
-      return json(res, 200, out);
-    }
-
-    if (p === "/api/review/link") {
-      const { url: base, token } = await openFrameSettings();
-      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
-      const projectId = url.searchParams.get("project");
-      const videoId = url.searchParams.get("video");
-      if (!projectId || !videoId) return json(res, 400, { error: "need project and video" });
-      try {
-        const shareUrl = await openFrame({ base, token }).shareLink(projectId, videoId);
-        return json(res, 200, { shareUrl });
-      } catch (err) {
-        return json(res, 200, { shareUrl: null, error: err.message });
-      }
-    }
-
-    /*
-     * Remove the review copy, not the source render.
-     *
-     * Studio's library is the source of truth for a project video. A review card
-     * represents the copy sent to OpenFrame, and deleting that copy must never
-     * delete the render a person may want to re-send under a new title or version.
-     */
-    if (p === "/api/review/video" && req.method === "DELETE") {
-      const { url: base, token } = await openFrameSettings();
-      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
-      const body = JSON.parse(await text(req));
-      const projectId = String(body.projectId ?? "");
-      const videoId = String(body.videoId ?? "");
-      if (!projectId || !videoId) return json(res, 400, { error: "need project and video" });
-      try {
-        await openFrame({ base, token }).removeVideo(projectId, videoId);
-        return json(res, 200, { ok: true });
-      } catch (err) {
-        /*
-         * 401/403 here is not a bad token, and saying "Unauthorized" invites an
-         * afternoon of re-pasting one that was never the problem.
-         *
-         * It is the same wall the comments route hits, one paragraph up: only
-         * the upload-and-share routes use OpenFrame's token-aware
-         * `authFromRequest`. DELETE on a video authenticates with `auth()`, which
-         * only ever sees a browser session, so this refuses every API token that
-         * has ever been issued. Verified against the live instance: the same
-         * token that returns 200 on GET /api/projects returns 401 here.
-         */
-        if (/\b(401|403)\b/.test(err.message)) {
-          return json(res, 501, {
-            error:
-              "OpenFrame will not accept an API token on this route — deleting a video needs a browser session, so Studio cannot do it. Remove the video from the OpenFrame project page instead. The local render is untouched either way.",
-          });
-        }
-        return json(res, 502, { error: err.message });
-      }
-    }
-
-    if (p === "/api/review/send" && req.method === "POST") {
-      const body = JSON.parse(await text(req));
-      const { url: base, token } = await openFrameSettings();
-      if (!base || !token) return json(res, 400, { error: "OpenFrame is not configured — set it on the Review page" });
-
-      const file = requestedPath(body);
-      if (!(file === LIB || file.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}` });
-      const st = await stat(file).catch(() => null);
-      if (!st?.isFile()) return json(res, 404, { error: "no such file" });
-
-      try {
-        const out = await shareVideo({
-          base,
-          token,
-          file,
-          project: String(body.project || "Untitled"),
-          title: body.title ? String(body.title) : undefined,
-        });
-        return json(res, 200, out);
-      } catch (err) {
-        return json(res, 500, { error: err.message });
-      }
     }
 
     /*
@@ -8611,7 +8280,7 @@ async function fetchVoiceList() {
      *
      * Scoped that way because the browse routes below are
      * `/api/storage/<name>/<verb>`, and this used to take everything after the
-     * prefix: "openframe/ls" is not a remote name, so the guard under it
+     * prefix: "assets/ls" is not a remote name, so the guard under it
      * answered 400 and no browse route was ever reached.
      */
     const storageName = /^\/api\/storage\/[^/]+$/.test(p) ? decodeURIComponent(p.slice("/api/storage/".length)) : null;
@@ -8823,6 +8492,75 @@ async function fetchVoiceList() {
         return json(res, 200, { url: pageUrl, sheet: record });
       } catch (err) {
         return json(res, 500, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * Share pages: a finished video as a page of our own on the public bucket,
+     * with notes through the Data API. The list, publishing one, its notes,
+     * and taking one down. Records live beside the project in shares/.
+     */
+    if (p === "/api/shares" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const shares = await listShares(projectDir(id));
+      const dataApi = await shareDataApi();
+      const rows = shares.length && dataApi ? await shareNotes({ project: id }) : [];
+      const bases = await storagePublicBases();
+      const remotes = Object.entries(bases).filter(([, v]) => v?.base && v?.bucket).map(([name]) => name);
+      return json(res, 200, { shares: shares.map((sh) => ({ ...sh, notes: rows.filter((r) => r.video === sh.slug).length, latest: rows.filter((r) => r.video === sh.slug).at(-1)?.created_at ?? null })), remotes, comments: Boolean(dataApi) });
+    }
+    if (p === "/api/shares/publish" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const remote = String(body.remote ?? "");
+      if (!REMOTE_NAME.test(remote)) return json(res, 400, { error: "choose a storage destination" });
+      const pub = (await storagePublicBases())[remote];
+      if (!pub?.base || !pub?.bucket) return json(res, 400, { error: `set a public bucket and base URL on ${remote} in Storage first` });
+      const file = requestedPath({ projectId: id, rel: String(body.rel ?? "") });
+      if (!file.startsWith(mediaDir(id) + sep)) return json(res, 403, { error: "that file is outside this project" });
+      try {
+        const record = await publishShare({ projectDir: projectDir(id), projectId: id, file, title: body.title, remote, publicBase: pub.base, publicBucket: pub.bucket, dataApi: await shareDataApi(), remotePath });
+        record.rel = String(body.rel ?? "");
+        await writeFile(join(projectDir(id), "shares", `${record.slug}.json`), `${JSON.stringify(record, null, "\t")}\n`, "utf8");
+        return json(res, 200, { share: record });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+    if (p === "/api/shares/notes" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const slug = String(url.searchParams.get("video") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const dataApi = await shareDataApi();
+      if (!dataApi) return json(res, 200, { notes: [], comments: false });
+      const cfg = await sharingSettings();
+      return json(res, 200, { notes: await shareNotes({ project: id, video: slug }), comments: true, canTidy: Boolean(cfg.databaseUrl && !deploymentProblem(cfg)) });
+    }
+    /* Taking one note down, as studio_app — the page's role cannot. */
+    if (p === "/api/shares/note" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      const cfg = await sharingSettings();
+      if (!cfg.databaseUrl || deploymentProblem(cfg)) return json(res, 400, { error: "set the team database under Storage to tidy notes" });
+      try {
+        const gone = await deleteVideoComment({ databaseUrl: cfg.databaseUrl, id: String(body.id ?? "") });
+        return json(res, gone ? 200 : 404, gone ? { ok: true } : { error: "that note is already gone" });
+      } catch (err) {
+        return json(res, 502, { error: err.message });
+      }
+    }
+    if (p === "/api/shares" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const record = (await listShares(projectDir(id))).find((x) => x.slug === String(body.slug ?? ""));
+      if (!record) return json(res, 404, { error: "no such page" });
+      try {
+        await removeShare({ projectDir: projectDir(id), projectId: id, record, remotePath });
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
       }
     }
 
