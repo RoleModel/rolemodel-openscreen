@@ -822,6 +822,11 @@ button.btn:disabled {
   border-block-start: var(--op-border-width) solid var(--line);
 }
 
+.ctl .hint {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+
 .panel-actions > .status {
   margin-inline-end: auto;
   margin-block: 0;
@@ -903,6 +908,13 @@ button.btn:disabled {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+  gap: var(--op-space-small);
+}
+
+.stickers__tools {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: var(--op-space-small);
 }
 
