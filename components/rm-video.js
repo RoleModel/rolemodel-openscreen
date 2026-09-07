@@ -2066,7 +2066,7 @@ define('rm-study-field', RMStudyField)
  */
 const LOOK_SCHEMA = [
   // gradient
-  { key: 'shape', group: 'gradient', label: 'Shape', type: 'select', options: ['linear', 'radial', 'conic', 'swirl'], def: 'linear' },
+  { key: 'shape', group: 'gradient', label: 'Shape', type: 'select', options: ['linear', 'radial', 'conic', 'swirl', 'mesh'], def: 'linear' },
   { key: 'a', group: 'gradient', label: 'Angle', type: 'range', min: 0, max: 360, step: 1, def: 220 },
   { key: 'cx', group: 'gradient', label: 'Centre X', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
   { key: 'cy', group: 'gradient', label: 'Centre Y', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5 },
@@ -2132,6 +2132,22 @@ const LOOK_SCHEMA = [
   { key: 'asc', group: 'ascii', label: 'Colour', type: 'select', options: ['source', 'mono'], def: 'source' },
   { key: 'asb', group: 'ascii', label: 'Ground', type: 'range', min: 0, max: 1, step: 0.01, def: 0.2 },
   { key: 'asi', group: 'ascii', label: 'Invert', type: 'toggle', def: 0 },
+  /*
+   * Pattern: the whole picture cut into tiles.
+   *
+   * Every other effect works on the colour at a point; this one decides whether
+   * there is a tile there at all, and shows the ground where there is not. It
+   * is what takes a gradient from a backdrop to a piece of design — the same
+   * colours as a bento grid, a mosaic, a field of circles.
+   */
+  { key: 'pt', group: 'pattern', label: 'Pattern', type: 'toggle', def: 0 },
+  { key: 'ptl', group: 'pattern', label: 'Layout', type: 'select', options: ['grid', 'brick', 'mosaic', 'scatter'], def: 'grid' },
+  { key: 'pts', group: 'pattern', label: 'Block shape', type: 'select', options: ['square', 'rounded', 'circle', 'diamond', 'triangle', 'hexagon', 'star', 'plus'], def: 'rounded' },
+  { key: 'ptc', group: 'pattern', label: 'Columns', type: 'range', min: 1, max: 24, step: 1, def: 5 },
+  { key: 'ptr', group: 'pattern', label: 'Rows', type: 'range', min: 1, max: 24, step: 1, def: 5 },
+  { key: 'ptg', group: 'pattern', label: 'Gap', type: 'range', min: 0, max: 45, step: 1, def: 8 },
+  { key: 'ptrad', group: 'pattern', label: 'Corner radius', type: 'range', min: 0, max: 100, step: 1, def: 40 },
+  { key: 'ptcol', group: 'pattern', label: 'Ground', type: 'color', def: '0f0f0f' },
   // grain
   { key: 'g', group: 'grain', label: 'Grain', type: 'range', min: 0, max: 1, step: 0.01, def: 0.1 },
   { key: 'gs', group: 'grain', label: 'Grain size', type: 'range', min: 0.5, max: 4, step: 0.1, def: 1 },
@@ -2157,6 +2173,7 @@ const LOOK_GROUPS = [
   ['dither', 'Dither'],
   ['halftone', 'Halftone'],
   ['plaid', 'Grid'],
+  ['pattern', 'Pattern'],
   ['ascii', 'ASCII'],
   ['grain', 'Grain'],
   ['motion', 'Motion'],
@@ -2173,7 +2190,7 @@ const LOOK_DEFAULT_STOPS = [
   { c: 'f5f5f5', p: 1 },
 ]
 const withHash = (c) => (String(c).startsWith('#') ? String(c) : `#${c}`)
-const LOOK_MAX_STOPS = 6
+const LOOK_MAX_STOPS = 8
 
 /** The glyph ramp, darkest cell to lightest. Ten steps, one per atlas column. */
 const LOOK_ASCII_RAMP = ' .:-=+*#%@'
@@ -2242,6 +2259,12 @@ const LOOK_PRESETS = [
   { name: 'Dithered', look: 'c=04242b:0,00b871:100&dt=bayer4&dl=3&px=3&g=0' },
   { name: 'Terminal', look: 'c=0a0a0a:0,3a8f5c:100&as=1&asz=12&asc=mono&fl=0.5&g=0' },
   { name: 'Grid paper', look: 'c=f5f5f5:0,e8e8e8:100&pl=1&plc=64&plr=36&plw=0.03&plcol=3a70b3&plo=0.3&g=0.02' },
+  /* Mesh and pattern: the two ends of the new range — colour with no direction
+     at all, and colour cut into something a designer would lay out. */
+  { name: 'Mesh pools', look: 'c=00b871:0,3e62b6:34,f2f2f2:67,e89b30:100&shape=mesh&sc=1.1&g=0.05' },
+  { name: 'Bento tiles', look: 'c=00b871:0,3e62b6:50,e89b30:100&shape=mesh&pt=1&ptl=mosaic&pts=rounded&ptc=7&ptr=5&ptg=6&ptrad=30&ptcol=0f0f0f&g=0.04' },
+  { name: 'Dot field', look: 'c=3e62b6:0,00b871:60,f2f2f2:100&shape=mesh&pt=1&ptl=brick&pts=circle&ptc=10&ptr=6&ptg=14&ptcol=0f0f0f&g=0.03' },
+  { name: 'Honeycomb', look: 'c=e89b30:0,00b871:55,3e62b6:100&shape=radial&pt=1&ptl=brick&pts=hexagon&ptc=8&ptr=6&ptg=5&ptcol=141414&g=0.03' },
   { name: 'Spotlight', look: 'c=0a0a0a:0,193c67:100&lt=spot&lta=0.8&lts=0.6&lty=0.35&g=0.12' },
   { name: 'Rays', look: 'c=262626:0,7b5ea7:100&lt=rays&lta=0.5&lts=0.7&ltx=0.5&lty=0.1' },
 ]
@@ -2264,7 +2287,7 @@ const LOOK_SETTLE_MS = 180
 const LOOK_FRAGMENT = [
   '#extension GL_OES_standard_derivatives : enable',
   `precision highp float;varying vec2 v;uniform vec2 r;uniform float t;uniform float loop;uniform float u[${LOOK_UNIFORMS}];uniform vec2 m;uniform float ms;uniform float mt;`,
-  'uniform vec3 stop[6];uniform float pos[6];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;',
+  'uniform vec3 stop[8];uniform float pos[8];uniform int nstop;uniform float hasImage;uniform float imageAspect;uniform sampler2D imageTex;uniform sampler2D glyphTex;uniform vec3 hfInk;uniform vec3 plInk;uniform vec3 plGround;',
   // indices into u[] by schema position
   ...LOOK_SCHEMA.map((f, i) => `#define U_${f.key.toUpperCase()} u[${i}]`),
   'const float TAU=6.28318530718;',
@@ -2273,7 +2296,7 @@ const LOOK_FRAGMENT = [
   'float fbm(vec2 p,float oct){float s=0.,a=.5,n=0.;for(int i=0;i<4;i++){if(float(i)>=oct)break;s+=a*vnoise(p);n+=a;p=p*2.03+vec2(17.1,9.7);a*=.5;}return n>0.?s/n:0.;}',
   // phase of a loop: whole turns so frame 0 == frame loop
   'float ph(float k){return TAU*floor(k+.5)*(t/loop);}',
-  'vec3 ramp(float x){x=clamp(x,0.,1.);vec3 c=stop[0];for(int i=1;i<6;i++){if(i>=nstop)break;float a=pos[i-1],b=pos[i];float f=b>a?clamp((x-a)/(b-a),0.,1.):step(a,x);c=mix(c,stop[i],f);}return c;}',
+  'vec3 ramp(float x){x=clamp(x,0.,1.);vec3 c=stop[0];for(int i=1;i<8;i++){if(i>=nstop)break;float a=pos[i-1],b=pos[i];float f=b>a?clamp((x-a)/(b-a),0.,1.):step(a,x);c=mix(c,stop[i],f);}return c;}',
   'vec2 coverUV(vec2 uv){float ca=r.x/r.y;vec2 s=ca>imageAspect?vec2(1.,imageAspect/ca):vec2(ca/imageAspect,1.);return(uv-.5)*s+.5;}',
   // the field: where along the gradient a point is, after waves, warp and flow
   'float field(vec2 uv){vec2 p=uv;float asp=r.x/r.y;vec2 q=vec2((p.x-.5)*asp,p.y-.5);',
@@ -2283,7 +2306,18 @@ const LOOK_FRAGMENT = [
   ' if(U_SHAPE<.5){x=dot(q-cc,dir)/max(.001,length(vec2(asp,1.)))*1.2+.5;}',
   ' else if(U_SHAPE<1.5){x=length(q-cc)/.72;}',
   ' else if(U_SHAPE<2.5){x=fract((atan(q.y-cc.y,q.x-cc.x)-ang)/TAU);}',
-  ' else{float rad=length(q-cc);x=fract((atan(q.y-cc.y,q.x-cc.x)-ang+rad*U_W*3.-ph(1.)*.5)/TAU);}',
+  ' else if(U_SHAPE<3.5){float rad=length(q-cc);x=fract((atan(q.y-cc.y,q.x-cc.x)-ang+rad*U_W*3.-ph(1.)*.5)/TAU);}',
+  /*
+   * Mesh: five anchors, each holding one place along the ramp, and every point
+   * is what the nearest of them agree on. No line and no centre, so the colours
+   * meet in soft pools the way a mesh gradient does rather than in a sweep.
+   * Inverse-square weights, because linear ones wash out to a flat average.
+   */
+  ' else{float wsum=0.;float acc=0.;for(int i=0;i<5;i++){float fi=float(i);',
+  '   vec2 a=vec2(hash(vec2(sd+fi*3.7,1.7))-.5,hash(vec2(sd+fi*3.7,9.1))-.5)*vec2(asp,1.)*1.6;',
+  '   a+=vec2(cos(ph(1.)+fi*2.1),sin(ph(1.)+fi*1.7))*U_FL*.12;',
+  '   float dd=length(q-a)+.06;float w=1./(dd*dd);wsum+=w;acc+=w*(fi/4.);}',
+  '  x=wsum>0.?acc/wsum:.5;x=mix(x,fract(x+U_A/360.),0.);}',
   ' return clamp((x-.5)*U_CT+.5,0.,1.);}',
   // the scene at a point, before the screen-space effects
   // One field() per pixel, always. Aberration and softness used to re-evaluate
@@ -2323,7 +2357,37 @@ const LOOK_FRAGMENT = [
   /* Grid lines are measured in pixels from the nearest rule and softened over
      one pixel, so they stay hairlines at any size; a hard step in cell space
      drew each line as a stack of blocks. Never thinner than a pixel. */
-  ' if(U_PL>.5){vec2 cell=r/vec2(U_PLC,U_PLR);vec2 d=(.5-abs(fract(v*vec2(U_PLC,U_PLR))-.5))*cell;float hw=max(.5,U_PLW*min(cell.x,cell.y)*.5);vec2 a=1.-smoothstep(hw-.5,hw+.5,d);col=mix(col,plInk,max(a.x,a.y)*U_PLO);}',
+  /*
+   * Pattern: the picture cut into tiles, and the ground where a tile is not.
+   *
+   * A signed distance per cell, so an edge is one soft pixel wide at any size
+   * rather than a staircase. `fwidth` is not available without a derivatives
+   * extension the render path may not have, so the softness is figured from
+   * the cell's own size in pixels, which is the same thing here.
+   */
+  ' if(U_PT>.5){',
+  '  float sd=U_SEED*7.31;vec2 grid=vec2(U_PTC,U_PTR);vec2 cs=r/grid;vec2 gv=v*grid;',
+  /* brick offsets every other row by hw a cell; the others keep the lattice */
+  '  if(U_PTL>0.5&&U_PTL<1.5){gv.x+=mod(floor(gv.y),2.)*.5;}',
+  '  vec2 id=floor(gv);vec2 f=fract(gv)-.5;',
+  '  float shrink=U_PTG*.01;',
+  /* mosaic gives each cell its own size; scatter nudges it off its place too */
+  '  if(U_PTL>1.5){float hs=hash(id+sd);shrink=clamp(shrink+(hs-.5)*.30,0.,.48);}',
+  '  if(U_PTL>2.5){f+=vec2(hash(id+sd+3.1)-.5,hash(id+sd+7.7)-.5)*.22;}',
+  '  float hw=.5-shrink;float d;',
+  '  if(U_PTS<0.5){vec2 q=abs(f)-hw;d=length(max(q,0.))+min(max(q.x,q.y),0.);}',
+  '  else if(U_PTS<1.5){float rr=U_PTRAD*.01*hw;vec2 q=abs(f)-(hw-rr);d=length(max(q,0.))+min(max(q.x,q.y),0.)-rr;}',
+  '  else if(U_PTS<2.5){d=length(f)-hw;}',
+  '  else if(U_PTS<3.5){d=(abs(f.x)+abs(f.y))-hw*1.32;}',
+  '  else if(U_PTS<4.5){vec2 q=vec2(abs(f.x),-f.y);d=max(dot(q,vec2(.866,.5)),-f.y*.5-hw*.5)-hw*.72;}',
+  '  else if(U_PTS<5.5){vec2 q=abs(f);d=max(q.x*.866+q.y*.5,q.y)-hw;}',
+  '  else if(U_PTS<6.5){float an=atan(f.y,f.x);float k=abs(fract(an/TAU*5.+.5)-.5)*2.;d=length(f)-hw*mix(.40,1.,k);}',
+  '  else{vec2 q=abs(f);d=min(max(q.x-hw*.34,q.y-hw),max(q.x-hw,q.y-hw*.34));}',
+  /* One pixel of softness, in cell units, so the edge is clean at any size. */
+  '  float aa=1./max(2.,min(cs.x,cs.y));',
+  '  float m=1.-smoothstep(-aa,aa,d);',
+  '  col=mix(plGround,col,m);}',
+    ' if(U_PL>.5){vec2 cell=r/vec2(U_PLC,U_PLR);vec2 d=(.5-abs(fract(v*vec2(U_PLC,U_PLR))-.5))*cell;float hw=max(.5,U_PLW*min(cell.x,cell.y)*.5);vec2 a=1.-smoothstep(hw-.5,hw+.5,d);col=mix(col,plInk,max(a.x,a.y)*U_PLO);}',
   ' if(U_G>0.){float n=hash(floor(fc/max(.5,U_GS))+floor(t*24.)*.37)-.5;if(U_GBM<.5){col+=n*U_G;}else if(U_GBM<1.5){col=mix(col,col*(1.+n*2.),U_G);}else{col=mix(col,col+n*(1.-abs(col-.5)*2.),U_G);}}',
   ' gl_FragColor=vec4(clamp(col,0.,1.),1.);}',
 ].join('\n')
@@ -2399,8 +2463,8 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     })
     gl.uniform1fv(uniform('u'), new Float32Array(values))
     const stops = next.stops
-    const stopArr = new Float32Array(18)
-    const posArr = new Float32Array(6)
+    const stopArr = new Float32Array(LOOK_MAX_STOPS * 3)
+    const posArr = new Float32Array(LOOK_MAX_STOPS)
     stops.forEach((s, i) => {
       stopArr.set(lookRGB(s.c), i * 3)
       posArr[i] = s.p
@@ -2410,6 +2474,7 @@ function lookProgram(canvas, look, { assets = null } = {}) {
     gl.uniform1i(uniform('nstop'), stops.length)
     gl.uniform3fv(uniform('hfInk'), new Float32Array(lookRGB(next.hfc)))
     gl.uniform3fv(uniform('plInk'), new Float32Array(lookRGB(next.plcol)))
+    gl.uniform3fv(uniform('plGround'), new Float32Array(lookRGB(next.ptcol)))
     gl.uniform1f(uniform('loop'), Math.max(1, Number(next.loop)))
   }
   setLook(look)
@@ -3351,14 +3416,15 @@ export default function RoleModelLook(props: { look?: string; animate?: boolean;
         const u = (name: string) => gl.getUniformLocation(program, name)
         const decoded = decode(look)
         gl.uniform1fv(u("u"), new Float32Array(SCHEMA.map((f: any) => (f.type === "select" ? f.options.indexOf(decoded[f.key]) : f.type === "color" ? 0 : Number(decoded[f.key])))))
-        const stopArr = new Float32Array(18)
-        const posArr = new Float32Array(6)
+        const stopArr = new Float32Array(24)
+        const posArr = new Float32Array(8)
         decoded.stops.forEach((s: any, i: number) => { stopArr.set(rgb(s.c), i * 3); posArr[i] = s.p })
         gl.uniform3fv(u("stop"), stopArr)
         gl.uniform1fv(u("pos"), posArr)
         gl.uniform1i(u("nstop"), decoded.stops.length)
         gl.uniform3fv(u("hfInk"), new Float32Array(rgb(decoded.hfc)))
         gl.uniform3fv(u("plInk"), new Float32Array(rgb(decoded.plcol)))
+        gl.uniform3fv(u("plGround"), new Float32Array(rgb(decoded.ptcol)))
         gl.uniform1f(u("loop"), Math.max(1, Number(decoded.loop)))
         gl.uniform1f(u("hasImage"), 0)
         gl.uniform1f(u("imageAspect"), 1)
