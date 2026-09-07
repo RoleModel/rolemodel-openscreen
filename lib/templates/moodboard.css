@@ -1,0 +1,173 @@
+/* Mood board: a wall you arrange things on. */
+.mood__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+/*
+ * The wall. A fixed shape rather than whatever the window happens to be, so a
+ * board arranged today is the same board tomorrow and the published page can
+ * be the arrangement rather than an approximation of it.
+ */
+.mood__wall {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--sunk);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.mood__wall:focus-visible {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+.mood__wall--over {
+  border-color: var(--op-color-primary-base);
+  background: var(--op-color-primary-plus-six);
+}
+
+.mood__empty {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline: 0;
+  margin: 0;
+  text-align: center;
+  translate: 0 -50%;
+}
+
+.mood__node {
+  position: absolute;
+  margin: 0;
+  cursor: grab;
+}
+
+.mood__node--on {
+  z-index: 3;
+}
+
+.mood__node--on .mood__art {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+  outline-offset: 3px;
+}
+
+.mood__art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--op-radius-small);
+  background: var(--panel);
+  box-shadow: var(--op-shadow-medium, 0 8px 24px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+}
+
+.mood__cap {
+  display: block;
+  padding-block-start: var(--op-space-3x-small);
+  font-size: var(--op-font-2x-small);
+  line-height: var(--op-line-height-dense);
+  pointer-events: none;
+}
+
+.mood__title {
+  display: block;
+  color: var(--op-color-neutral-on-plus-max);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mood__note {
+  color: var(--op-color-neutral-on-plus-max-alt);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The corner you drag to size. Only on the one that is picked, so the wall is
+   not a field of handles. */
+.mood__size {
+  position: absolute;
+  inset-block-end: -5px;
+  inset-inline-end: -5px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 50%;
+  background: var(--op-color-primary-base);
+  border: 2px solid var(--op-color-primary-on-base);
+  cursor: nwse-resize;
+  display: none;
+}
+
+.mood__node--on .mood__size { display: block; }
+
+.mood__count:empty { display: none; }
+
+.mood__count {
+  position: absolute;
+  inset-block-start: -8px;
+  inset-inline-end: -8px;
+  min-inline-size: 1.25rem;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background: var(--op-color-primary-base);
+  color: var(--op-color-primary-on-base);
+  font-size: var(--op-font-2x-small);
+  font-weight: var(--op-font-weight-bold);
+  line-height: 1.25rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.mood__boards {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
+.mood__card--on {
+  outline: var(--op-border-width-large) solid var(--op-color-primary-base);
+}
+
+/* The notes on the picked picture, read in the rail. */
+.mood__thread {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  max-block-size: 16rem;
+  overflow: auto;
+  grid-column: 1 / -1;
+}
+
+.mood__thread-item {
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  border-radius: var(--op-radius-small);
+  background: var(--sunk);
+}
+
+.mood__thread-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--op-space-2x-small);
+  font-size: var(--op-font-x-small);
+}
+
+.mood__on {
+  color: var(--op-color-primary-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mood__when {
+  margin-inline-start: auto;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-2x-small);
+  flex: none;
+}
+
+.mood__thread-body {
+  margin: var(--op-space-3x-small) 0 0;
+  font-size: var(--op-font-small);
+  white-space: pre-wrap;
+}

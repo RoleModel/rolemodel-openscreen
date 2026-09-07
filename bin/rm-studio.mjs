@@ -76,6 +76,7 @@ import {
   speakerSections,
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
+import { boardPage, boardsDir, emptyBoard, listBoards, readBoard as readMoodBoard, writeBoard as writeMoodBoard } from "../lib/moodboard.mjs";
 import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
@@ -3669,6 +3670,26 @@ async function stickerNotes({ project, sticker = null }) {
     const q = `project=eq.${encodeURIComponent(project)}${sticker ? `&sticker=eq.${encodeURIComponent(sticker)}` : ""}&order=created_at.asc`;
     const r = await fetch(`${dataApi}/sticker_comments?${q}`, { headers });
     return r.ok ? r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+/* Notes left on published mood boards, read the way the board page writes them. */
+async function boardNotes({ project, board = null }) {
+  const dataApi = await shareDataApi();
+  if (!dataApi) return [];
+  try {
+    const tok = await fetch(`${dataApi.replace(".apirest.", ".neonauth.").replace("/rest/v1", "/auth")}/token/anonymous`).then((r) => (r.ok ? r.json() : null));
+    const headers = { Accept: "application/json", ...(tok?.token ? { Authorization: `Bearer ${tok.token}` } : {}) };
+    /* Board notes live in sticker_comments under `<board>/<file>`; see lib/moodboard.mjs. */
+    const q = `project=eq.${encodeURIComponent(project)}${board ? `&sticker=like.${encodeURIComponent(`${board}/*`)}` : ""}&order=created_at.asc`;
+    const r = await fetch(`${dataApi}/sticker_comments?${q}`, { headers });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return rows
+      .filter((x) => String(x.sticker).includes("/"))
+      .map((x) => ({ ...x, board: String(x.sticker).split("/")[0], item: String(x.sticker).slice(String(x.sticker).indexOf("/") + 1) }));
   } catch {
     return [];
   }
@@ -8661,6 +8682,149 @@ async function fetchVoiceList() {
         return json(res, 502, { error: err.message });
       }
     }
+    /*
+     * Mood boards: pictures on a canvas, each with a name and a note.
+     *
+     * The board is one JSON beside the project — a list of what is on the wall,
+     * not a scene graph — and the pictures are ordinary project media, so
+     * everything else in the Studio can already see them.
+     */
+    if (p === "/api/boards" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const boards = await listBoards(projectDir(id));
+      const dataApi = await shareDataApi();
+      const rows = boards.length && dataApi ? await boardNotes({ project: id }) : [];
+      const bases = await storagePublicBases();
+      const remotes = Object.entries(bases).filter(([, v]) => v?.base && v?.bucket).map(([name]) => name);
+      return json(res, 200, {
+        boards: boards.map((b) => ({ ...b, notes: rows.filter((r) => r.board === b.name).length })),
+        remotes,
+        comments: Boolean(dataApi),
+      });
+    }
+    if (p === "/api/boards" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? "board"), "board");
+      const already = await readMoodBoard(projectDir(id), name);
+      if (already) return json(res, 409, { error: `there is already a board called ${name}` });
+      return json(res, 200, { board: await writeMoodBoard(projectDir(id), emptyBoard(name)) });
+    }
+    if (p === "/api/boards" && req.method === "PUT") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const board = body.board ?? {};
+      const name = safeName(String(board.name ?? ""), "board");
+      if (!(await readMoodBoard(projectDir(id), name))) return json(res, 404, { error: "no such board" });
+      /* Only the shape this file knows: a stray key from a future version is
+         not worth writing back, and a number that is not one is not a place. */
+      const num = (x, d) => (Number.isFinite(Number(x)) ? Number(x) : d);
+      const kept = {
+        name,
+        title: String(board.title ?? name).slice(0, 120),
+        note: String(board.note ?? "").slice(0, 2000),
+        ratio: Math.min(3, Math.max(0.4, num(board.ratio, 16 / 9))),
+        at: new Date().toISOString(),
+        published: (await readMoodBoard(projectDir(id), name))?.published ?? null,
+        nodes: (Array.isArray(board.nodes) ? board.nodes : []).slice(0, 200).map((n) => ({
+          rel: String(n.rel ?? ""),
+          title: String(n.title ?? "").slice(0, 120),
+          note: String(n.note ?? "").slice(0, 500),
+          x: Math.min(1, Math.max(-0.5, num(n.x, 0))),
+          y: Math.min(1, Math.max(-0.5, num(n.y, 0))),
+          w: Math.min(1, Math.max(0.03, num(n.w, 0.2))),
+        })),
+      };
+      return json(res, 200, { board: await writeMoodBoard(projectDir(id), kept) });
+    }
+    if (p === "/api/boards" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? ""), "board");
+      await rm(join(boardsDir(projectDir(id)), `${name}.json`), { force: true });
+      await rm(join(boardsDir(projectDir(id)), "site", name), { recursive: true, force: true });
+      return json(res, 200, { ok: true });
+    }
+    /* A picture onto a board: pasted, dropped or chosen. Kept with the project's
+       own media, so every other panel can see it too. */
+    if (p === "/api/boards/upload" && req.method === "POST") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(basename(String(url.searchParams.get("name") ?? "picture")), "picture");
+      const dir = join(mediaDir(id), "Moodboard");
+      await mkdir(dir, { recursive: true });
+      const ext = extname(name).toLowerCase() || ".png";
+      const dest = await uniqueFile(dir, basename(name, extname(name)).slice(0, 60), ext);
+      await writeFile(dest, await bytes(req));
+      await reindex(id, { force: true }).catch(() => {});
+      return json(res, 200, { rel: relative(mediaDir(id), dest) });
+    }
+    if (p === "/api/boards/notes" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const name = String(url.searchParams.get("board") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const dataApi = await shareDataApi();
+      if (!dataApi) return json(res, 200, { notes: [], comments: false });
+      return json(res, 200, { notes: await boardNotes({ project: id, board: name }), comments: true });
+    }
+    /* Publish: the pictures and a page, on the public bucket, named for their
+       own bytes so a cache cannot serve yesterday's board. */
+    if (p === "/api/boards/publish" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? ""), "board");
+      const board = await readMoodBoard(projectDir(id), name);
+      if (!board) return json(res, 404, { error: "no such board" });
+      if (!board.nodes?.length) return json(res, 400, { error: "put something on the board first" });
+      const remote = String(body.remote ?? "");
+      if (!REMOTE_NAME.test(remote)) return json(res, 400, { error: "choose a storage destination" });
+      const pub = (await storagePublicBases())[remote];
+      if (!pub?.base || !pub?.bucket) return json(res, 400, { error: `set a public bucket and base URL on ${remote} in Storage first` });
+      try {
+        const site = join(boardsDir(projectDir(id)), "site", name);
+        await rm(site, { recursive: true, force: true });
+        await mkdir(site, { recursive: true });
+        const stamped = async (file, out) => {
+          const raw = await readFile(file);
+          const hash = createHash("sha256").update(raw).digest("hex").slice(0, 10);
+          const ext = extname(out);
+          const named = `${basename(out, ext)}.${hash}${ext}`;
+          await writeFile(join(site, named), raw);
+          await writeFile(join(site, out), raw);
+          return named;
+        };
+        const nodes = [];
+        for (const n of board.nodes) {
+          const file = join(mediaDir(id), n.rel);
+          if (!(await stat(file).catch(() => null))) continue;
+          const out = basename(file);
+          nodes.push({ ...n, file: out, src: await stamped(file, out) });
+        }
+        if (!nodes.length) return json(res, 400, { error: "none of this board's pictures exist any more" });
+        const dataApi = await shareDataApi();
+        await writeFile(
+          join(site, "index.html"),
+          boardPage({ title: board.title || name, note: board.note, nodes, ratio: board.ratio ?? 16 / 9, comments: dataApi ? { dataApi } : null, project: id, slug: name, version: String(Date.now()) }),
+          "utf8",
+        );
+        const dest = remotePath(remote, `${pub.bucket}/boards/${id}/${name}`);
+        if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
+        const copy = await capture("rclone", ["copy", site, dest, "--create-empty-src-dirs", "--header-upload", "Cache-Control: no-cache"]);
+        if (!copy.ok) return json(res, 500, { error: `rclone could not copy the board: ${(copy.err || "").trim().slice(0, 200)}` });
+        const url_ = `${String(pub.base).replace(/\/+$/, "")}/boards/${encodeURIComponent(id)}/${encodeURIComponent(name)}/index.html`;
+        board.published = { remote, url: url_, at: new Date().toISOString() };
+        await writeMoodBoard(projectDir(id), board);
+        return json(res, 200, { url: url_, board });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+
     if (p === "/api/shares" && req.method === "DELETE") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
