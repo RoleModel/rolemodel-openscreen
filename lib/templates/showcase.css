@@ -7,6 +7,15 @@
 
 .showcase__stage {
   perspective-origin: center;
+  /*
+   * The frame is the picture.
+   *
+   * A card zoomed past the stage spilled over everything under it — the Play
+   * button, the scrubber, the timeline — and the stage's own click-to-select
+   * took the press, so there was no way to stop playback with the mouse. A
+   * render only ever shows what is inside the frame, so the editor should too.
+   */
+  overflow: hidden;
 }
 
 .showcase__media {
