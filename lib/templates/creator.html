@@ -31,11 +31,14 @@
 
 <!-- A preset or a saved look: a still of the look, rendered once. Not a live
      element — twelve shaders redrawing on every frame is what made the page drag. -->
+<!-- A card you press, with the name a field you can rename in. The name is not
+     inside the button: a control inside a control is reachable by neither, and
+     a screen reader is told the button is a text box. -->
 <template data-row="creator-preset">
-   <button class="card creator__preset" type="button">
-      <div class="thumb creator__thumb"><img data-el="art" class="creator__thumbimg" alt="" /></div>
-      <div class="card__body"><input data-el="name" class="creator__name" type="text" aria-label="Name" readonly /></div>
-   </button>
+   <div class="card creator__preset">
+      <button data-el="pick" class="creator__pickall" type="button"><span class="thumb creator__thumb"><img data-el="art" class="creator__thumbimg" alt="" /></span></button>
+      <div class="card__body"><input data-el="name" class="creator__name" type="text" aria-label="Look name" readonly /></div>
+   </div>
 </template>
 
 <!-- One gradient stop: the brand colour picker, and where it sits. -->

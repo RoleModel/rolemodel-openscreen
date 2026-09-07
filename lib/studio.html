@@ -40,8 +40,8 @@
    <output class="toast" id="toast" role="status" aria-live="polite" hidden></output>
    <div class="op-page__sidebar">
       <nav class="sidebar sidebar--drawer">
-         <a class="sidebar__brand sidebar__brand--left" href="/">
-            <img height="50" width="50" src="/brand-mark.svg" />
+         <a class="sidebar__brand sidebar__brand--left" href="/" aria-label="RoleModel Studio — start again">
+            <img height="50" width="50" src="/brand-mark.svg" alt="" />
          </a>
          <h1>RoleModel Studio</h1>
          <!--
@@ -97,18 +97,25 @@
    </div>
 
    <div class="op-page__main">
-      <header class="op-page__main-header">
+      <header class="op-page__main-header" role="banner">
          <div class="op-page__header-context" id="crumbs"></div>
          <!-- Notes people left on published pages, in one place. -->
          <button class="notes__bell" id="notesBell" type="button" title="Notes" aria-label="Notes people left"><rm-icon name="comment-01"></rm-icon><b class="notes__count" id="notesCount"></b></button>
          <aside class="activity" id="activity" aria-live="polite" hidden></aside>
+         <!-- The page's one first-level heading, named for the view. Read rather
+              than seen, because the view's own title is its lede. It lives here,
+              inside a landmark, because render() empties main between views and
+              would take it away. -->
+         <h1 class="a11y__hidden" id="viewHeading">RoleModel Studio</h1>
       </header>
       <main class="op-page__main-content" id="main"></main>
       <footer class="op-page__main-footer"></footer>
 
       <div id="editor-host" class="editor-host"></div>
    </div>
-   <div class="op-page__sidebar op-page__sidebar--right"></div>
+   <!-- The dials for whatever is open. A landmark, so a reader can jump to it
+        and so its contents are not loose on the page. -->
+   <div class="op-page__sidebar op-page__sidebar--right" role="complementary" aria-label="Controls"></div>
    <!--
       Panel markup, as markup.
       ================================================================

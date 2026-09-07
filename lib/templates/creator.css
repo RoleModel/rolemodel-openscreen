@@ -97,3 +97,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The card's picture is the button; the name beneath it is its own field. */
+.creator__pickall {
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.creator__pickall .creator__thumb { display: block; }
