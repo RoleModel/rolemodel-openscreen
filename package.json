@@ -41,6 +41,8 @@
     "wallpapers": "node lib/make-wallpapers.mjs",
     "wallpapers:reset": "node lib/make-wallpapers.mjs --reset",
     "verify": "node lib/verify.mjs",
+    "axe": "node lib/axe-check.mjs",
+    "axe:strict": "node lib/axe-check.mjs --strict",
     "sync-brand": "node lib/sync-brand.mjs",
     "sync-brand:check": "node lib/sync-brand.mjs --check",
     "optics": "node lib/optics-css.mjs",
@@ -76,6 +78,7 @@
   },
   "devDependencies": {
     "@rolemodel/optics": "2.4.0",
+    "axe-core": "^4.13.0",
     "gsap": "^3.14.2",
     "wavesurfer.js": "^7.12.11"
   },
