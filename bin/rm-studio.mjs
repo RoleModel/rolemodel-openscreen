@@ -76,6 +76,7 @@ import {
   speakerSections,
 } from "../lib/demo-script.mjs";
 import { parseScript } from "../lib/script-parse.mjs";
+import { LORA_TRAINERS, generateWith, startTraining, trainingStatus, triggerFor } from "../lib/lora.mjs";
 import { boardPage, boardsDir, emptyBoard, listBoards, readBoard as readMoodBoard, writeBoard as writeMoodBoard } from "../lib/moodboard.mjs";
 import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
@@ -8701,6 +8702,8 @@ async function fetchVoiceList() {
         boards: boards.map((b) => ({ ...b, notes: rows.filter((r) => r.board === b.name).length })),
         remotes,
         comments: Boolean(dataApi),
+        trainers: LORA_TRAINERS.map(({ id, label }) => ({ id, label })),
+        hasKey: Boolean((await falSettings()).key),
       });
     }
     if (p === "/api/boards" && req.method === "POST") {
@@ -8771,6 +8774,102 @@ async function fetchVoiceList() {
       if (!dataApi) return json(res, 200, { notes: [], comments: false });
       return json(res, 200, { notes: await boardNotes({ project: id, board: name }), comments: true });
     }
+    /*
+     * Train a look from the wall.
+     *
+     * The pictures go up as one zip because that is what every trainer takes,
+     * and the ticket fal hands back is written onto the board — a run is half an
+     * hour, and the server restarts when its code changes, so the request id has
+     * to outlive this process rather than sit in a map inside it.
+     */
+    if (p === "/api/boards/train" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? ""), "board");
+      const board = await readMoodBoard(projectDir(id), name);
+      if (!board) return json(res, 404, { error: "no such board" });
+      const files = [];
+      for (const n of board.nodes ?? []) {
+        const file = join(mediaDir(id), n.rel);
+        if (await stat(file).catch(() => null)) files.push(file);
+      }
+      /* Fewer than five and the weights learn one picture rather than a look. */
+      if (files.length < 5) return json(res, 400, { error: `a look needs at least five pictures; this board has ${files.length}` });
+      try {
+        const key = await styleKey();
+        const dir = join(boardsDir(projectDir(id)), "train");
+        await mkdir(dir, { recursive: true });
+        const zip = join(dir, `${name}.zip`);
+        await rm(zip, { force: true });
+        const zipped = await capture("zip", ["-q", "-j", zip, ...files]);
+        if (!zipped.ok) return json(res, 500, { error: `could not zip the board: ${zipped.err.trim().slice(0, 160)}` });
+        const zipUrl = await falUpload({ key, bytes: await readFile(zip), contentType: "application/zip", name: `${name}.zip` });
+        const ticket = await startTraining({
+          key,
+          model: String(body.model ?? LORA_TRAINERS[0].id),
+          zipUrl,
+          trigger: triggerFor(name),
+          steps: body.steps,
+        });
+        board.training = ticket;
+        await writeMoodBoard(projectDir(id), board);
+        return json(res, 200, { training: ticket, pictures: files.length });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+    }
+    if (p === "/api/boards/train" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      const name = safeName(String(url.searchParams.get("board") ?? ""), "board");
+      const board = await readMoodBoard(projectDir(id), name);
+      if (!board) return json(res, 404, { error: "no such board" });
+      if (!board.training) return json(res, 200, { training: null, lora: board.lora ?? null });
+      try {
+        const st = await trainingStatus({ key: await styleKey(), ticket: board.training });
+        if (!st.done) return json(res, 200, { training: board.training, state: st.state, position: st.position ?? null, lora: board.lora ?? null });
+        board.lora = st.lora;
+        board.training = null;
+        await writeMoodBoard(projectDir(id), board);
+        return json(res, 200, { training: null, state: "done", lora: board.lora });
+      } catch (err) {
+        board.training = null;
+        board.trainingError = err.message;
+        await writeMoodBoard(projectDir(id), board);
+        return json(res, 200, { training: null, state: "failed", error: err.message, lora: board.lora ?? null });
+      }
+    }
+    /* Make something new in the board's own look, and put it on the wall. */
+    if (p === "/api/boards/generate" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? ""), "board");
+      const board = await readMoodBoard(projectDir(id), name);
+      if (!board?.lora?.url) return json(res, 400, { error: "train a look from this board first" });
+      try {
+        const made = await generateWith({ key: await styleKey(), lora: board.lora, prompt: String(body.prompt ?? ""), scale: body.scale, count: body.count });
+        const dir = join(mediaDir(id), "Moodboard");
+        await mkdir(dir, { recursive: true });
+        const rels = [];
+        for (const [i, u] of made.urls.entries()) {
+          const raw = Buffer.from(await fetch(u).then((r) => r.arrayBuffer()));
+          const dest = await uniqueFile(dir, safeName(`${name}-made`, "made").slice(0, 50), ".png");
+          await writeFile(dest, raw);
+          const rel = relative(mediaDir(id), dest);
+          rels.push(rel);
+          /* Onto the wall, beside what taught it, so the two can be compared. */
+          const k = (board.nodes?.length ?? 0) + i;
+          board.nodes.push({ rel, title: `Made: ${String(body.prompt ?? "").slice(0, 40) || "in this style"}`, note: "", x: 0.04 + ((k * 0.13) % 0.7), y: 0.06 + ((k * 0.09) % 0.6), w: 0.2 });
+        }
+        await writeMoodBoard(projectDir(id), board);
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { rels, prompt: made.prompt, board });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+    }
+
     /* Publish: the pictures and a page, on the public bucket, named for their
        own bytes so a cache cannot serve yesterday's board. */
     if (p === "/api/boards/publish" && req.method === "POST") {
