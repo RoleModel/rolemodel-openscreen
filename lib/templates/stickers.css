@@ -156,3 +156,8 @@
 .stickers__tickall {
   margin-inline-start: auto;
 }
+
+.stickers__clear {
+  justify-self: start;
+  margin-block-start: var(--op-space-2x-small);
+}
