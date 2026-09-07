@@ -680,3 +680,114 @@ rm-icon {
 .stepper__tick[data-state='now'] rm-icon {
   color: var(--accent);
 }
+
+/* The notes bell in the header, and the panel it opens. */
+.notes__bell {
+  position: relative;
+  margin-inline-start: auto;
+  background: none;
+  border: 0;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  cursor: pointer;
+  padding: var(--op-space-2x-small);
+  border-radius: var(--op-radius-small);
+}
+
+.notes__bell:hover { color: var(--op-color-neutral-on-plus-max); }
+
+.notes__count:empty { display: none; }
+
+.notes__count {
+  position: absolute;
+  inset-block-start: -2px;
+  inset-inline-end: -2px;
+  min-inline-size: 1rem;
+  padding-inline: 4px;
+  border-radius: 999px;
+  background: var(--op-color-primary-base);
+  color: var(--op-color-primary-on-base);
+  font-size: var(--op-font-2x-small);
+  font-weight: var(--op-font-weight-bold);
+  line-height: 1rem;
+}
+
+.notes__panel {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-end: var(--op-space-small);
+  z-index: 40;
+  inline-size: min(26rem, calc(100vw - 2rem));
+  max-block-size: min(32rem, 70vh);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--op-color-neutral-plus-max);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  box-shadow: var(--op-shadow-large, 0 12px 40px rgba(0, 0, 0, 0.45));
+  overflow: hidden;
+}
+
+.notes__head {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+  padding: var(--op-space-x-small);
+  border-block-end: var(--op-border-width) solid var(--line);
+}
+
+.notes__head b { margin-inline-end: auto; }
+
+.notes__x {
+  background: none;
+  border: 0;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-large);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notes__list { overflow: auto; }
+
+.notes__item {
+  display: block;
+  inline-size: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-block-end: var(--op-border-width) solid var(--line);
+  padding: var(--op-space-x-small);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.notes__item:hover { background: var(--sunk); }
+
+.notes__itemhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--op-space-2x-small);
+  font-size: var(--op-font-x-small);
+}
+
+.notes__on {
+  color: var(--op-color-primary-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes__when {
+  margin-inline-start: auto;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-2x-small);
+  flex: none;
+}
+
+.notes__body {
+  margin-block-start: var(--op-space-3x-small);
+  font-size: var(--op-font-small);
+  white-space: pre-wrap;
+}
+
+.notes__empty { padding: var(--op-space-small); }

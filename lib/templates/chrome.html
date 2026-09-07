@@ -203,3 +203,20 @@
       <span data-el="label" class="stepper__label"></span>
    </li>
 </template>
+
+<!-- The notes centre: everything people wrote on published pages, newest first. -->
+<template data-row="notes-panel">
+   <div class="notes__panel">
+      <div class="notes__head"><b>Notes</b><button data-el="markSeen" class="btn ghost btn--small" type="button">Mark all read</button><button data-el="close" class="notes__x" type="button" aria-label="Close">×</button></div>
+      <div data-el="list" class="notes__list"></div>
+      <p data-el="empty" class="hint notes__empty" hidden>Nothing yet. A note left on a shared page or a sticker sheet shows up here.</p>
+   </div>
+</template>
+
+<!-- One note, with what it is about and where it was left. -->
+<template data-row="notes-item">
+   <button data-el="go" class="notes__item" type="button">
+      <div class="notes__itemhead"><b data-el="who"></b><span data-el="on" class="notes__on"></span><time data-el="when" class="notes__when"></time></div>
+      <div data-el="body" class="notes__body"></div>
+   </button>
+</template>

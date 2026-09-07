@@ -3611,28 +3611,66 @@ async function pollReviewComments() {
     const ids = await readdir(LIB).catch(() => []);
     for (const id of ids) {
       const shares = await listShares(projectDir(id)).catch(() => []);
-      if (!shares.length) continue;
-      const rows = await shareNotes({ project: id });
-      for (const share of shares) {
-        const key = `${id}/${share.slug}`;
-        const count = rows.filter((r) => r.video === share.slug).length;
+      if (shares.length) {
+        const rows = await shareNotes({ project: id });
+        for (const share of shares) {
+          const key = `${id}/${share.slug}`;
+          const count = rows.filter((r) => r.video === share.slug).length;
+          next[key] = count;
+          const before = seen[key];
+          /* A page we have never counted is not news on the first look — only a
+             count that GREW while we were watching is. */
+          if (first || before === undefined || count <= before) continue;
+          fresh.push({ id: `${key}:${count}`, kind: "video", projectId: id, slug: share.slug, title: share.title, url: share.url, from: before, to: count, at: new Date().toISOString(), seen: false });
+        }
+      }
+      /*
+       * The sticker sheets too. Their notes arrive on the same road and were
+       * the half nobody was told about: a comment on a sticker reached the page
+       * and nothing else.
+       */
+      const sheets = await readdir(join(projectDir(id), "stickers")).catch(() => []);
+      const published = [];
+      for (const f of sheets.filter((x) => x.endsWith(".json"))) {
+        const rec = await readFile(join(projectDir(id), "stickers", f), "utf8").then(JSON.parse).catch(() => null);
+        if (rec?.published?.url) published.push(rec);
+      }
+      if (!published.length) continue;
+      const stickerRows = await stickerNotes({ project: id });
+      for (const rec of published) {
+        const files = new Set((rec.items ?? []).map((rel) => String(rel).split("/").pop()));
+        const key = `${id}/sheet/${rec.name}`;
+        const count = stickerRows.filter((r) => files.has(r.sticker)).length;
         next[key] = count;
         const before = seen[key];
-        /* A page we have never counted is not news on the first look — only a
-           count that GREW while we were watching is. */
         if (first || before === undefined || count <= before) continue;
-        fresh.push({ id: `${key}:${count}`, projectId: id, slug: share.slug, title: share.title, url: share.url, from: before, to: count, at: new Date().toISOString(), seen: false });
+        fresh.push({ id: `${key}:${count}`, kind: "sticker", projectId: id, slug: rec.name, title: `${rec.name} sheet`, url: rec.published.url, from: before, to: count, at: new Date().toISOString(), seen: false });
       }
     }
     if (fresh.length || JSON.stringify(next) !== JSON.stringify(seen)) {
       const have = new Set(notices.map((n) => n.id));
       await setReviewNotices({ seen: next, notices: [...notices, ...fresh.filter((n) => !have.has(n.id))] });
     }
-    for (const n of fresh) console.log(`  review: ${n.to - n.from} new note(s) on ${n.title} (${n.projectId})`);
+    for (const n of fresh) console.log(`  notes: ${n.to - n.from} new on ${n.title} (${n.projectId})`);
   } catch {
     /* The database being unreachable is not worth a line every two minutes. */
   } finally {
     noticePollRunning = false;
+  }
+}
+
+/* Notes left on published sticker sheets, read the way the sheet page writes them. */
+async function stickerNotes({ project, sticker = null }) {
+  const dataApi = await shareDataApi();
+  if (!dataApi) return [];
+  try {
+    const tok = await fetch(`${dataApi.replace(".apirest.", ".neonauth.").replace("/rest/v1", "/auth")}/token/anonymous`).then((r) => (r.ok ? r.json() : null));
+    const headers = { Accept: "application/json", ...(tok?.token ? { Authorization: `Bearer ${tok.token}` } : {}) };
+    const q = `project=eq.${encodeURIComponent(project)}${sticker ? `&sticker=eq.${encodeURIComponent(sticker)}` : ""}&order=created_at.asc`;
+    const r = await fetch(`${dataApi}/sticker_comments?${q}`, { headers });
+    return r.ok ? r.json() : [];
+  } catch {
+    return [];
   }
 }
 
@@ -6927,6 +6965,41 @@ const server = createServer(async (req, res) => {
       const { notices } = await reviewNotices();
       const unseen = notices.filter((n) => !n.seen);
       return json(res, 200, { unseen: unseen.length, notices: unseen.slice(-20).reverse() });
+    }
+
+    /*
+     * The whole of it: every note on everything this library has published,
+     * newest first, so there is one place to look rather than a badge that
+     * only says how many.
+     */
+    if (p === "/api/notifications/all" && req.method === "GET") {
+      const ids = await readdir(LIB).catch(() => []);
+      const out = [];
+      for (const id of ids) {
+        const shares = await listShares(projectDir(id)).catch(() => []);
+        if (shares.length) {
+          const bySlug = new Map(shares.map((sh) => [sh.slug, sh]));
+          for (const row of await shareNotes({ project: id })) {
+            const sh = bySlug.get(row.video);
+            if (sh) out.push({ kind: "video", projectId: id, title: sh.title, url: sh.url, on: sh.title, at: row.created_at, author: row.author, body: row.body, atMs: row.at_ms, slug: sh.slug });
+          }
+        }
+        const sheets = await readdir(join(projectDir(id), "stickers")).catch(() => []);
+        const owner = new Map();
+        for (const f of sheets.filter((x) => x.endsWith(".json"))) {
+          const rec = await readFile(join(projectDir(id), "stickers", f), "utf8").then(JSON.parse).catch(() => null);
+          if (!rec?.published?.url) continue;
+          for (const rel of rec.items ?? []) owner.set(String(rel).split("/").pop(), rec);
+        }
+        if (!owner.size) continue;
+        for (const row of await stickerNotes({ project: id })) {
+          const rec = owner.get(row.sticker);
+          if (rec) out.push({ kind: "sticker", projectId: id, title: `${rec.name} sheet`, url: rec.published.url, on: row.sticker, at: row.created_at, author: row.author, body: row.body, slug: rec.name });
+        }
+      }
+      out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      const { notices } = await reviewNotices();
+      return json(res, 200, { notes: out.slice(0, 200), unseen: notices.filter((n) => !n.seen).length });
     }
 
     if (p === "/api/notifications/seen" && req.method === "POST") {
