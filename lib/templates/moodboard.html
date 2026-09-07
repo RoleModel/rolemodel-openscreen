@@ -1,0 +1,52 @@
+<!-- Mood board: pictures on a wall, each with a name and a note. -->
+<template data-panel="moodboard">
+   <p class="lede" data-region="main">Put references on a wall. Paste a picture with ⌘V, drop one in, or choose from the project. Drag to arrange, drag a corner to size, and give each one a name and a note. Publish it and whoever has the link can say what they think.</p>
+   <p data-el="status" class="hint" data-region="main" hidden></p>
+   <p data-el="noProject" class="hint" data-region="main" hidden>Pick a project to start a board.</p>
+
+   <!-- The wall itself. Nodes are placed as fractions of it, so a board holds
+        its arrangement at any size. -->
+   <div data-el="wall" class="mood__wall" data-region="main" tabindex="0" role="application" aria-label="The board">
+      <p data-el="empty" class="hint mood__empty">Nothing on the wall yet. Paste a picture with ⌘V, or drop one here.</p>
+   </div>
+
+   <div class="client" data-region="main">Boards <span data-el="boardCount" class="mood__soft"></span></div>
+   <p data-el="boardsEmpty" class="hint" data-region="main" hidden>No boards in this project yet. New board, in the rail, starts one.</p>
+   <div data-el="boards" class="grid mood__boards" data-region="main"></div>
+
+   <div class="grid" data-region="footer">
+      <button data-el="add" class="btn ghost" type="button"><rm-icon name="image-add-02"></rm-icon>Add pictures</button>
+      <input data-el="files" type="file" accept="image/*" multiple hidden />
+      <button data-el="tidy" class="btn ghost" type="button" title="Lay everything out in rows"><rm-icon name="grid"></rm-icon>Tidy up</button>
+      <button data-el="copyLink" class="btn ghost" type="button" hidden><rm-icon name="copy-01"></rm-icon>Copy link</button>
+      <button data-el="publish" class="btn btn--primary" type="button"><rm-icon name="globe"></rm-icon>Publish board</button>
+   </div>
+</template>
+
+<!-- One picture on the wall: the image, its name and note, and the handles. -->
+<template data-row="mood-node">
+   <figure class="mood__node">
+      <img data-el="art" class="mood__art" alt="" draggable="false" />
+      <figcaption class="mood__cap"><b data-el="title" class="mood__title"></b><span data-el="note" class="mood__note"></span></figcaption>
+      <b data-el="count" class="mood__count"></b>
+      <i data-el="size" class="mood__size" title="Drag to size"></i>
+   </figure>
+</template>
+
+<!-- One saved board in the list under the wall. -->
+<template data-row="mood-board">
+   <button class="card mood__card" type="button">
+      <div class="card__body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="facts" class="path"></div>
+      </div>
+   </button>
+</template>
+
+<!-- One note somebody left, read in the Studio. -->
+<template data-row="mood-note">
+   <div class="mood__thread-item">
+      <div class="mood__thread-head"><b data-el="who"></b><span data-el="on" class="mood__on"></span><time data-el="when" class="mood__when"></time></div>
+      <p data-el="body" class="mood__thread-body"></p>
+   </div>
+</template>
