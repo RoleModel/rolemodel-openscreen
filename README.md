@@ -51,9 +51,8 @@ you are looking for where the extra pieces live:
 | repo | why it is forked |
 |---|---|
 | [RoleModel/openscreen](https://github.com/RoleModel/openscreen) | `openscreen open <doc>` so a document can be handed to the editor, `.openscreen` file associations, and hosting this Studio as a window in the app. Upstream has no way in from outside at all. |
-| [RoleModel/OpenFrame](https://github.com/RoleModel/OpenFrame) | API-token auth, so a pipeline can deliver a video for review without a browser session. |
 
-Both are small, deliberately: one new file plus a one-line change per call site.
+It is small, deliberately: one new file plus a one-line change per call site.
 That is what keeps rebasing on upstream cheap. **[docs/KICKOFF.md](docs/KICKOFF.md)
 is where to start** — it is the whole thing in order, including the parts that
 are still manual.
@@ -79,7 +78,7 @@ lib/jobs.mjs               run the pipeline and stream it back to the browser
 lib/script-parse.mjs       markdown -> speakable lines (served to the browser too)
 lib/demo-script.mjs        a demo script: prose is narration, ```do blocks are actions
 lib/demo-record.mjs        capture a demo by doing it — clicks become the script
-lib/openframe.mjs          hand a finished video to OpenFrame, get a review link
+lib/share.mjs              publish a finished video as a page with notes on it
 lib/narration.mjs          per-line TTS, measured, into audio + an exact SRT
 components/rm-video.js     custom elements for scenes — seekable, Optics-coloured
 components/gallery.html    live gallery with a scrubber
