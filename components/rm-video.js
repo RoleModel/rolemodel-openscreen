@@ -3103,7 +3103,16 @@ class RMShowcase extends RMElement {
     room.style.setProperty('--cam-ease', s.move.startsWith('zoom') || s.move === 'drift' ? 'cubic-bezier(0.4, 0, 0.6, 1)' : 'linear')
     const place = this.shadowRoot.querySelector('.place')
     place.style.inset = `${s.pad}%`
-    place.style.animationName = `sc-in-${s.enter}, sc-out-${s.exit}`
+    /*
+     * Keys own the movement.
+     *
+     * An enter that rises or tilts moves the card for its first beat, which is
+     * the same beat the first key is telling it where to be — so a keyed layer
+     * started somewhere other than where it was put and slid into place, which
+     * reads as the keys being ignored. With keys the enter and exit fade and
+     * nothing more; without them they are what they always were.
+     */
+    place.style.animationName = keys.length ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}` : `sc-in-${s.enter}, sc-out-${s.exit}`
     /* How long each takes is the layer's own. "none" still hides the layer
        outside its window, it just does not move; "stay" never leaves at all. */
     place.style.setProperty('--in-dur', s.enter === 'none' ? '1ms' : `${s.ein}s`)
