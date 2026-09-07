@@ -1682,6 +1682,9 @@ pre {
   font-size: var(--op-font-x-small);
   color: var(--info-fg);
   line-height: var(--op-line-height-loose);
+  /* A .path inside carries its own grey, which loses against this ground: the
+     note is the darkest thing these words ever sit on. */
+  --path-ink: var(--info-fg);
   margin-bottom: var(--op-space-medium);
   width: fit-content;
   max-width: var(--op-breakpoint-medium);
@@ -2530,4 +2533,28 @@ textarea.fills.form-control {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * Contrast, where the ramp put it out of reach.
+ *
+ * White on the primary green reads 3.94 and the bar for normal text is 4.5 —
+ * axe counted it on twenty-seven buttons across a dozen views. One step down
+ * the same ramp reads 4.51 and is the nearest green to the brand's own that a
+ * person can actually read.
+ */
+.btn--primary,
+.btn.btn--primary {
+  background-color: var(--op-color-primary-plus-one);
+}
+
+.btn--primary:hover,
+.btn.btn--primary:hover {
+  background-color: var(--op-color-primary-plus-two);
+}
+
+/* A path is grey on the page and unreadable on a note's own ground. */
+.note .path,
+.note code {
+  color: var(--info-fg);
 }

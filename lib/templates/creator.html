@@ -6,7 +6,7 @@
    </div>
    <div class="ctl" data-region="main">
       <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
-      <input data-el="scrub" type="range" min="0" max="20000" step="20" value="0" class="form-control" />
+      <input data-el="scrub" type="range" aria-label="Time" min="0" max="20000" step="20" value="0" class="form-control" />
       <span data-el="clock" class="v">0 ms</span>
    </div>
    <div class="client" data-region="main">Presets</div>
@@ -16,7 +16,7 @@
    <div data-el="saved" class="grid creator__presets" data-region="main"></div>
    <div class="client" data-region="main">The look</div>
    <p class="hint" data-region="main">This string is the whole design. Add to Framer puts a RoleModelLook component on the canvas with it filled in; paste one into this box to load it.</p>
-   <textarea data-el="lookText" class="form-control creator__looktext" rows="3" spellcheck="false" data-region="main"></textarea>
+   <textarea data-el="lookText" class="form-control creator__looktext" aria-label="The look, as text" rows="3" spellcheck="false" data-region="main"></textarea>
    <pre data-el="markup" class="cmd-note" data-region="main"></pre>
    <!-- Buttons only in the footer, like every other panel. Settings — the PNG's
         width and shape, the composition to insert into — live in the rail. -->
