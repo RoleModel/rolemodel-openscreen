@@ -3658,9 +3658,22 @@ async function shareNotes({ project, video = null }) {
   return shareComments({ dataApi: await shareDataApi(), project, video });
 }
 
+/*
+ * How much work is in the air.
+ *
+ * A restart in the middle of a publish would lose the upload, so the watcher
+ * waits for this to reach zero. The reload stream and the job stream are open
+ * for ever by design and are not work, so they do not count.
+ */
+let inFlight = 0;
+const FOREVER = /^\/api\/reload$|^\/api\/jobs\/.+\/events$/;
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = decodeURIComponent(url.pathname);
+  if (!FOREVER.test(p)) {
+    inFlight += 1;
+    res.on("close", () => (inFlight = Math.max(0, inFlight - 1)));
+  }
 
   try {
     if (p === "/") {
@@ -11909,16 +11922,49 @@ server.listen(PORT, async () => {
  */
 if (WATCH) {
   const { watch } = await import("node:fs");
+  /*
+   * Telling the page to reload is only half of it.
+   *
+   * The page's own code is fetched fresh, but everything the server imported —
+   * every route, every library — is the copy it read at boot. A window opened
+   * from the desktop app runs a server nobody ever restarts, so a fix could sit
+   * on disk for hours while the app quietly went on doing the old thing, and the
+   * only cure anybody knew was "quit the app". That is not a thing a person
+   * should have to know.
+   *
+   * So a change to code the server runs restarts the server. `node --watch`
+   * already does this when it was asked to, and doing it twice would fight.
+   */
+  const selfWatched = process.execArgv.some((a) => a === "--watch" || a.startsWith("--watch-path"));
+  const SERVER_CODE = /^(bin\/|lib\/[^/]+\.mjs$|components\/)/;
+  let restarting = false;
+  const restart = async () => {
+    if (restarting) return;
+    restarting = true;
+    /* Never mid-publish: a lost upload is worse than a slow reload. */
+    for (let i = 0; i < 600 && inFlight > 0; i++) await new Promise((r) => setTimeout(r, 100));
+    console.log("  studio: the code changed — starting again on the same port");
+    jobs.stopAll();
+    stopAllPreviews();
+    stopAllCutWatches();
+    await new Promise((r) => server.close(r));
+    const { spawn: spawnAgain } = await import("node:child_process");
+    spawnAgain(process.execPath, [...process.execArgv, join(TOOLKIT, "bin", "rm-studio.mjs"), ...argv], { detached: true, stdio: "inherit" }).unref();
+    process.exit(0);
+  };
   let timer = null;
-  const bump = () => {
+  let codeChanged = false;
+  const bump = (rel) => {
+    if (rel && SERVER_CODE.test(String(rel))) codeChanged = true;
     clearTimeout(timer);
     timer = setTimeout(() => {
       for (const res of reloadClients) res.write("data: reload\n\n");
-    }, 120);
+      if (codeChanged && !selfWatched) void restart();
+    }, 250);
   };
-  for (const dir of ["lib", "presets", "brand", "bin"]) {
+  for (const dir of ["lib", "presets", "brand", "bin", "components"]) {
     try {
-      watch(join(TOOLKIT, dir), { recursive: true }, bump);
+      watch(join(TOOLKIT, dir), { recursive: true }, (_e, name) => bump(name ? `${dir}/${name}` : null));
     } catch {
       /* a missing directory is not worth failing the server over */
     }
