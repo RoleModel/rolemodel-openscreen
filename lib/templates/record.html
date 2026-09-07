@@ -13,7 +13,7 @@
      directly shifted every following cell by one. -->
 <template data-row="record-capture">
    <div style="display:grid;gap:var(--op-space-x-small)">
-      <select data-el="pick"></select>
+      <select data-el="pick" aria-label="What to record"></select>
       <input data-el="typed" placeholder="exact window title" style="display:none" />
    </div>
 </template>
@@ -32,7 +32,7 @@
    <div class="form-group">
       <label class="form-label">Saved project script</label>
       <div class="row">
-         <select data-el="pick" class="form-control form-control--small"></select>
+         <select data-el="pick" class="form-control form-control--small" aria-label="A saved script to record"></select>
          <button data-el="insert" class="btn ghost btn--small" type="button"><rm-icon name="text-align-left"></rm-icon>Insert saved script</button>
          <button data-el="refresh" class="btn ghost btn--small" type="button"><rm-icon name="refresh"></rm-icon>Refresh</button>
       </div>

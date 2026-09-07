@@ -115,9 +115,12 @@
 .stylegen__badge--green { background: var(--op-color-academy-primary-base); }
 .stylegen__badge--yellow { background: var(--op-color-alerts-warning-base); color: var(--op-color-neutral-on-plus-max); }
 .stylegen__badge--purple { background: var(--op-color-primary-minus-two); }
-.stylegen__badge--blue { background: var(--op-color-alerts-info-base); }
-.stylegen__badge--orange { background: var(--op-color-alerts-notice-base); }
-.stylegen__badge--neutral { background: var(--op-color-neutral-minus-three); }
+/* Three of these read at 3.3 to 4.2 against the dark ink they were given, and
+   10px is normal text, so 4.5 is the bar. White carries the last two; the blue
+   needs a darker step under it as well. */
+.stylegen__badge--blue { background: var(--op-color-alerts-info-plus-two); color: var(--op-color-neutral-on-plus-max); }
+.stylegen__badge--orange { background: var(--op-color-alerts-notice-base); color: var(--op-color-neutral-on-plus-max); }
+.stylegen__badge--neutral { background: var(--op-color-neutral-minus-three); color: var(--op-color-neutral-on-plus-max); }
 
 .stylegen__name {
   width: 100%;
