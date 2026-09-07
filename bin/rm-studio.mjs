@@ -8445,17 +8445,35 @@ async function fetchVoiceList() {
            record forgets it, so a republish never fails on a file that is gone. */
         const items = [];
         const kept = [];
+        /*
+         * Every drawing is named for what is in it.
+         *
+         * A cache in front of the bucket kept serving the old sheet however
+         * many times a new one was uploaded — it ignores a query string and a
+         * no-cache header alike. A file whose name changes with its content has
+         * an address nothing has ever seen, so a republished sheet is the sheet
+         * the reader gets. The plain name is kept beside it for a download.
+         */
+        const stamped = async (file, out) => {
+          const bytes = await readFile(file);
+          const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 10);
+          const ext = extname(out);
+          const name_ = `${basename(out, ext)}.${hash}${ext}`;
+          await writeFile(join(site, name_), bytes);
+          await writeFile(join(site, out), bytes);
+          return name_;
+        };
         for (const rel of record.items) {
           const file = join(mediaDir(id), rel);
           if (!(await stat(file).catch(() => null))) continue;
           const out = basename(file);
-          await copyFile(file, join(site, out));
-          items.push({ name: basename(file, extname(file)), file: out });
+          const src = await stamped(file, out);
+          items.push({ name: basename(file, extname(file)), file: out, src });
           kept.push(rel);
         }
         if (!items.length) return json(res, 400, { error: "none of the sheet's stickers exist any more — build the sheet again" });
         record.items = kept;
-        await copyFile(join(mediaDir(id), record.rel), join(site, "sheet.svg"));
+        const sheetSrc = await stamped(join(mediaDir(id), record.rel), "sheet.svg");
         /* Everything in one zip too — the sheet and each sticker — for a print
            shop or a teammate who wants the files, not the page. */
         const zipped = await capture("zip", ["-q", "-j", join(site, `${name}.zip`), join(site, "sheet.svg"), ...items.map((it) => join(site, it.file))]);
@@ -8466,7 +8484,7 @@ async function fetchVoiceList() {
          * host, so nothing is pasted anywhere; a setting can still override it.
          */
         const dataApi = (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 } }), "utf8");
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", sheetSrc, zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 }, version: String(Date.now()) }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         /*
