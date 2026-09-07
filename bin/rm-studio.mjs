@@ -8800,9 +8800,31 @@ async function fetchVoiceList() {
         const key = await styleKey();
         const dir = join(boardsDir(projectDir(id)), "train");
         await mkdir(dir, { recursive: true });
+        /*
+         * A vector goes in as a picture.
+         *
+         * These models learn from pixels; an SVG is instructions for drawing
+         * them and every trainer refuses it. A board of logos and stickers is
+         * exactly the wall somebody wants a look from, so each one is drawn
+         * once, into the zip, at a size worth training on.
+         */
+        const flat = join(dir, "pictures");
+        await rm(flat, { recursive: true, force: true });
+        await mkdir(flat, { recursive: true });
+        const forTraining = [];
+        for (const file of files) {
+          const ext = extname(file).toLowerCase();
+          if (ext !== ".svg") {
+            forTraining.push(file);
+            continue;
+          }
+          const out = join(flat, `${basename(file, ext)}.png`);
+          await writeFile(out, await svgToPng(await readFile(file, "utf8")));
+          forTraining.push(out);
+        }
         const zip = join(dir, `${name}.zip`);
         await rm(zip, { force: true });
-        const zipped = await capture("zip", ["-q", "-j", zip, ...files]);
+        const zipped = await capture("zip", ["-q", "-j", zip, ...forTraining]);
         if (!zipped.ok) return json(res, 500, { error: `could not zip the board: ${zipped.err.trim().slice(0, 160)}` });
         const zipUrl = await falUpload({ key, bytes: await readFile(zip), contentType: "application/zip", name: `${name}.zip` });
         const ticket = await startTraining({
@@ -8814,7 +8836,8 @@ async function fetchVoiceList() {
         });
         board.training = ticket;
         await writeMoodBoard(projectDir(id), board);
-        return json(res, 200, { training: ticket, pictures: files.length });
+        const drawn = forTraining.filter((f) => f.startsWith(flat)).length;
+        return json(res, 200, { training: ticket, pictures: files.length, drawn });
       } catch (err) {
         return json(res, 400, { error: err.message });
       }
