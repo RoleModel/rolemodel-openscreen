@@ -2921,8 +2921,11 @@ class RMShowcase extends RMElement {
           @keyframes sc-out-slide { from { --sc-out-o:1; --sc-out-x:0%; } to { --sc-out-o:0; --sc-out-x:10%; } }
           @keyframes sc-out-zoom  { from { --sc-out-o:1; --sc-out-s:1; } to { --sc-out-o:0; --sc-out-s:1.12; } }
           /* Placement reads the keyframed variables, set on the layer: still
-             values from the dials, or the running animation between keys. */
-          .room { filter: blur(var(--k-b)); }
+             values from the dials, or the running animation between keys.
+             The focus blur is NOT here: a filter on an element flattens the 3D
+             inside it, so a card that was leaning in space collapsed into a
+             skewed flat shape the moment the property existed. It is set from
+             JS, and only when there is a blur to apply. */
           .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100);
                   transform: translate(var(--k-x), var(--k-y)) translateZ(var(--k-z)) scale(var(--k-s)) rotateX(var(--k-rx)) rotateY(var(--k-ry)) rotateZ(var(--k-rz));
                   opacity: var(--k-o); }
@@ -3063,6 +3066,17 @@ class RMShowcase extends RMElement {
        the tree its rule is written in, so the host could not run it. */
     const stage = this.shadowRoot.querySelector('.stage')
     for (const p of KEY_PROPS) stage.style.setProperty(KEY_VAR[p], keyValue(p, keys.length ? still[p] : s[p]))
+    /*
+     * Focus blur, only when it is asked for.
+     *
+     * `filter` forces transform-style: flat on the element it is set on, which
+     * takes the depth out of everything below — a tilted card stopped being a
+     * card leaning away and became a flat shape sheared sideways. So the room
+     * carries a filter only while there is a blur to show.
+     */
+    const wantsBlur = s.blur > 0 || keys.some((k) => (k.blur ?? 0) > 0)
+    const roomEl = this.shadowRoot.querySelector('.room')
+    roomEl.style.filter = wantsBlur ? 'blur(var(--k-b))' : ''
     if (keysText !== this._keysText) {
       this._keysText = keysText
       let sheet = this.shadowRoot.querySelector('style.keys')
