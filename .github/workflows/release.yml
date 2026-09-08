@@ -141,10 +141,22 @@ jobs:
           echo "asset=/tmp/$NAME.tar.gz" >> "$GITHUB_OUTPUT"
           echo "name=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
 
-      - name: Create the GitHub release
+      # Re-runnable on a tag that already shipped.
+      #
+      # `gh release create` fails outright when the release exists, and every
+      # step after it — the tap bump included — is skipped. That is exactly the
+      # shape of a re-run: the first attempt cut the release and then died at
+      # the tap for want of a token, and the retry could never get past here.
+      - name: Create or update the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes "${{ steps.build.outputs.asset }}"
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} exists — replacing its asset."
+            gh release upload "${GITHUB_REF_NAME}" "${{ steps.build.outputs.asset }}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" --generate-notes "${{ steps.build.outputs.asset }}"
+          fi
 
       - name: Compute the tarball checksum
         id: sum
