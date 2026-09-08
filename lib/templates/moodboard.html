@@ -1,13 +1,23 @@
 <!-- Mood board: pictures on a wall, each with a name and a note. -->
 <template data-panel="moodboard">
-   <p class="lede" data-region="main">Put references on a wall. Paste a picture with ⌘V, drop one in, or choose from the project. Drag to arrange, drag a corner to size, and give each one a name and a note. Publish it and whoever has the link can say what they think.</p>
+   <p class="lede" data-region="main">Put references on a wall. Paste a picture with ⌘V, drop one in, or choose from the project. Drag to arrange, drag a corner to size, and give each one a name and a note. Drag the wall to pan, pinch or ⌘-scroll to zoom, and Fit to see everything. Publish it and whoever has the link can say what they think.</p>
    <p data-el="status" class="hint" data-region="main" hidden></p>
    <p data-el="noProject" class="hint" data-region="main" hidden>Pick a project to start a board.</p>
 
    <!-- The wall itself. Nodes are placed as fractions of it, so a board holds
         its arrangement at any size. -->
    <div data-el="wall" class="mood__wall" data-region="main" tabindex="0" role="application" aria-label="The board">
+      <!-- The wall is the window; the scene is what moves inside it. Node places
+           are fractions of the scene, so panning and zooming change what you can
+           see and never what is saved. -->
+      <div data-el="scene" class="mood__scene"></div>
       <p data-el="empty" class="hint mood__empty">Nothing on the wall yet. Paste a picture with ⌘V, or drop one here.</p>
+      <div class="mood__zoom">
+         <button data-el="zoomOut" class="mood__zoombtn" type="button" aria-label="Zoom out">−</button>
+         <button data-el="zoomFit" class="mood__zoombtn mood__zoombtn--wide" type="button" title="Fit the whole board">Fit</button>
+         <button data-el="zoomIn" class="mood__zoombtn" type="button" aria-label="Zoom in">+</button>
+         <span data-el="zoomAt" class="mood__zoomat">100%</span>
+      </div>
    </div>
 
    <div class="client" data-region="main">Boards <span data-el="boardCount" class="mood__soft"></span></div>
