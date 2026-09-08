@@ -42,8 +42,10 @@ cask "rolemodel-openscreen" do
   sha256 arm:   "8c8208fa3caff8601de4158e7e9d49289e522e0ea5d557384e563f55a8046c5c",
          intel: "938f9fbcdb00d5cc3097a7b2c527724463a6ecb6e515fbc613dadcb7ae7fd562"
 
-  url "https://github.com/RoleModel/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg",
-      verified: "github.com/RoleModel/openscreen/"
+  # No `verified:`. Homebrew deprecated it and now checks the download host
+  # against `homepage` by itself, which is the same check this was spelling out
+  # by hand: both are github.com/RoleModel/openscreen.
+  url "https://github.com/RoleModel/openscreen/releases/download/v#{version}/Openscreen-macOS-#{arch}-#{version}.dmg"
   # Two `name` stanzas, because the app answers to two things: what it calls itself
   # (CFBundleDisplayName, which is what the Dock and the menu bar show) and what it
   # is a build of, which is how anyone who has heard of it will search.
