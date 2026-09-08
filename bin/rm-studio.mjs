@@ -38,7 +38,7 @@ import { TEAM_SYNC, SYNCS, applyToBoard, readBoard, readHistory, syncBoard, sync
 import { createStudioSkill, deleteLook, deleteStyleImage, deleteStylePerson, deleteVideoComment, fetchSetting, fetchStudioSkill, fetchStudioSkills, insertLook, insertStyleImage, insertStylePerson, listLooks, listStyleImages, listStylePeople, listVideoComments, putSetting, renameStylePerson, stylePeopleById, updateLook, updateStudioSkill, updateStyleImage } from "../lib/db.mjs";
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
-import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, vectorize as stickerVectorize } from "../lib/stickers.mjs";
+import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, tidyReference, vectorize as stickerVectorize } from "../lib/stickers.mjs";
 import { stickerSettings } from "../lib/settings.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
@@ -8827,15 +8827,45 @@ async function fetchVoiceList() {
         const flat = join(dir, "pictures");
         await rm(flat, { recursive: true, force: true });
         await mkdir(flat, { recursive: true });
+        /*
+         * Tidying is on unless it is turned off.
+         *
+         * A board is pasted screenshots — small crops off a sheet, some on
+         * black, some on cream, with the neighbours' colours bleeding in at the
+         * edges. Trained as they are, the weights learn the crop rather than
+         * the drawing. Each one is enlarged, set alone on the same white
+         * square, and only then handed to the trainer.
+         */
+        const tidy = body.tidy !== false;
+        const cache = join(dir, "tidy");
+        if (tidy) await mkdir(cache, { recursive: true });
+        const key2 = key;
         const forTraining = [];
+        let tidied = 0;
         for (const file of files) {
           const ext = extname(file).toLowerCase();
-          if (ext !== ".svg") {
-            forTraining.push(file);
+          let picture = file;
+          if (ext === ".svg") {
+            /*
+             * A vector goes in as a picture. These models learn from pixels; an
+             * SVG is instructions for drawing them and every trainer refuses it.
+             */
+            picture = join(flat, `${basename(file, ext)}.png`);
+            await writeFile(picture, await svgToPng(await readFile(file, "utf8")));
+          }
+          if (!tidy) {
+            forTraining.push(picture);
             continue;
           }
-          const out = join(flat, `${basename(file, ext)}.png`);
-          await writeFile(out, await svgToPng(await readFile(file, "utf8")));
+          /* Cached by the source's name and mtime, so a second run of the same
+             board costs nothing and an edited picture is done again. */
+          const st2 = await stat(file);
+          const out = join(cache, `${basename(picture, extname(picture))}-${Math.round(st2.mtimeMs)}.png`);
+          if (!(await stat(out).catch(() => null))) {
+            const clean = await tidyReference({ key: key2, bytes: await readFile(picture), name: basename(picture) });
+            await writeFile(out, clean.bytes);
+          }
+          tidied += 1;
           forTraining.push(out);
         }
         const zip = join(dir, `${name}.zip`);
@@ -8853,7 +8883,7 @@ async function fetchVoiceList() {
         board.training = ticket;
         await writeMoodBoard(projectDir(id), board);
         const drawn = forTraining.filter((f) => f.startsWith(flat)).length;
-        return json(res, 200, { training: ticket, pictures: files.length, drawn });
+        return json(res, 200, { training: ticket, pictures: files.length, drawn, tidied });
       } catch (err) {
         return json(res, 400, { error: err.message });
       }
