@@ -68,6 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
+import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
   actions as demoActions,
   describe as describeDemo,
@@ -126,6 +127,11 @@ import { transcriptFromCaptions } from "../lib/captions.mjs";
 import { adoptCut, emitCut, findDocument, planAdopt, readFraming, writeFraming } from "../lib/adopt.mjs";
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
+/* The update check's answer, kept for six hours — see /api/update. */
+let updateSeen = null;
+let updateChecked = 0;
+const UPDATE_MAX_AGE = UPDATE_TTL;
+
 jobs.setTrustedRoot(TOOLKIT);
 jobs.setNodeExecutable(process.execPath);
 // bin/shims ahead of PATH for everything we spawn. openscreen is the reason:
@@ -3778,6 +3784,43 @@ const server = createServer(async (req, res) => {
     if (p === "/api/client-stamp") return json(res, 200, { stamp: await clientStamp() });
 
     if (p === "/api/state") return json(res, 200, await state());
+
+    /*
+     * Is there a newer Studio than this one?
+     *
+     * Cached for six hours in memory rather than asked on every page load: the
+     * answer changes when somebody cuts a release, which is not often, and an
+     * idle Studio should not be a client polling GitHub. `?fresh=1` skips the
+     * cache, for the person who just cut the release and wants to see it.
+     */
+    if (p === "/api/update" && req.method === "GET") {
+      const fresh = url.searchParams.get("fresh") === "1";
+      const age = Date.now() - (updateChecked || 0);
+      if (fresh || !updateSeen || age > UPDATE_MAX_AGE) {
+        updateSeen = await checkForUpdate({ root: TOOLKIT });
+        updateChecked = Date.now();
+      }
+      return json(res, 200, updateSeen);
+    }
+
+    /*
+     * Apply it.
+     *
+     * Started as a job so its output lands in the Console like everything else
+     * — brew takes minutes and says a lot while it works, and a spinner that
+     * explains nothing is worse than the text. The command is built here, from
+     * the install kind, and never from anything the page sent: the page asks
+     * for "the update", not for a shell line.
+     */
+    if (p === "/api/update" && req.method === "POST") {
+      const found = updateSeen ?? (await checkForUpdate({ root: TOOLKIT }));
+      updateSeen = found;
+      updateChecked = Date.now();
+      if (!found.behind) return json(res, 400, { error: `Already on ${found.current} — nothing to apply.` });
+      if (!found.how.can) return json(res, 400, { error: `${found.how.why} Run \`${found.how.say}\` yourself.` });
+      const j = jobs.run({ bin: found.how.bin, args: found.how.args, label: `Update to ${found.latest}` });
+      return json(res, 200, { job: jobs.summary(j), latest: found.latest });
+    }
 
     /*
      * The capture HUD lives in OpenScreen, outside this web page, so it cannot
