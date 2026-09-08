@@ -6104,7 +6104,12 @@ const server = createServer(async (req, res) => {
     if (p === "/api/stickers" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
-      return json(res, 200, { ...(await stickerList(id)), models: { sticker: STICKER_MODELS.map(({ id: mid, label, ref }) => ({ id: mid, label, ref: Boolean(ref) })), cutout: CUTOUT_MODELS, vectorize: VECTORIZE_MODELS }, hasKey: Boolean((await falSettings()).key) });
+      /* A look trained on one of this project's mood boards is a style like any
+         other, and belongs beside them rather than on a page of its own. */
+      const trained = (await listBoards(projectDir(id)).catch(() => []))
+        .filter((b) => b.lora?.url)
+        .map((b) => ({ id: `board:${b.name}`, label: `From the board · ${b.title || b.name}`, ref: false }));
+      return json(res, 200, { ...(await stickerList(id)), models: { sticker: [...STICKER_MODELS.map(({ id: mid, label, ref }) => ({ id: mid, label, ref: Boolean(ref) })), ...trained], cutout: CUTOUT_MODELS, vectorize: VECTORIZE_MODELS }, hasKey: Boolean((await falSettings()).key) });
     }
 
     /* A picture from this machine, into the project and up to fal. */
@@ -6151,7 +6156,18 @@ const server = createServer(async (req, res) => {
           stem = basename(file, ext).replace(/-(sticker|cutout|vector)(-\d+)?$/i, "");
         } else if (body.imageUrl) imageUrl = String(body.imageUrl);
         let out;
-        if (step === "generate") out = await makeSticker({ key, model: String(body.model ?? "telegram"), prompt: String(body.prompt ?? ""), imageUrl });
+        if (step === "generate") {
+          const model = String(body.model ?? "telegram");
+          /* `board:<name>` names a look this project trained; its weights and its
+             word come off the board rather than out of the built-in list. */
+          let trained = null;
+          if (model.startsWith("board:")) {
+            const b = await readMoodBoard(projectDir(id), safeName(model.slice(6), "board"));
+            if (!b?.lora?.url) return json(res, 400, { error: "that board has no trained look any more" });
+            trained = { ...b.lora, label: b.title || b.name };
+          }
+          out = await makeSticker({ key, model, prompt: String(body.prompt ?? ""), imageUrl, trained });
+        }
         else if (step === "cutout") {
           if (!imageUrl) return json(res, 400, { error: "pick a picture to cut out" });
           out = await stickerCutOut({ key, model: String(body.model ?? CUTOUT_MODELS[0].id), imageUrl });
