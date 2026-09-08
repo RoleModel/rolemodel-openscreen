@@ -68,6 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
+import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
   actions as demoActions,
@@ -3793,6 +3794,34 @@ const server = createServer(async (req, res) => {
      * idle Studio should not be a client polling GitHub. `?fresh=1` skips the
      * cache, for the person who just cut the release and wants to see it.
      */
+    /*
+     * The prompts a project keeps — see lib/prompts.mjs for why they live with
+     * the project rather than on the machine.
+     */
+    if (p === "/api/prompts" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!id) return json(res, 200, { prompts: [] });
+      return json(res, 200, { prompts: await listPrompts(projectDir(id)) });
+    }
+    if (p === "/api/prompts" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      try {
+        const saved = await savePrompt(projectDir(id), { text: body.text, label: body.label ?? "", where: String(body.where ?? "") });
+        return json(res, 200, { saved, prompts: await listPrompts(projectDir(id)) });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+    }
+    if (p === "/api/prompts" && req.method === "DELETE") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      await removePrompt(projectDir(id), String(body.id ?? ""));
+      return json(res, 200, { prompts: await listPrompts(projectDir(id)) });
+    }
+
     if (p === "/api/update" && req.method === "GET") {
       const fresh = url.searchParams.get("fresh") === "1";
       const age = Date.now() - (updateChecked || 0);

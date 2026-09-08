@@ -67,3 +67,15 @@
    </div>
    <pre data-el="markup" class="cmd-note" data-region="main"></pre>
 </template>
+
+<!-- The prompt library. Sits under any prompt box: pick one to fill the box,
+     or keep what is in it. Kept in the designer templates because every view
+     with a prompt gets the same one. -->
+<template data-row="prompt-library">
+   <div class="prompts">
+      <label data-el="label" class="a11y__hidden">Saved prompts</label>
+      <select data-el="input" class="form-control form-control--small prompts__pick"></select>
+      <button data-el="keep" class="btn btn--small ghost" type="button" title="Keep what is in the box">Keep</button>
+      <button data-el="drop" class="btn btn--small ghost" type="button" title="Forget the chosen prompt" hidden>Forget</button>
+   </div>
+</template>
