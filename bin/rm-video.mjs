@@ -323,7 +323,32 @@ async function packagedSkillsDir() {
 	return null;
 }
 
+/*
+ * What am I running, and which copy of it?
+ *
+ * Every CLI here answered `--version` with the usage screen, which reads as a
+ * broken flag and leaves the question unanswered. It is a fair question now
+ * that the Studio offers updates: the whole point of that button is somebody
+ * wanting to know how far behind they are, and the copy on this machine had
+ * been ninety-eight versions behind for months.
+ *
+ * The path is printed beside the number because the two disagree more often
+ * than you would think — a checkout on PATH shadowing a Homebrew keg looks
+ * exactly like an update that did not take.
+ */
+async function versionCommand() {
+	const { readFile } = await import("node:fs/promises");
+	const pkg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
+	console.log(`rm-video ${pkg.version}`);
+	console.log(`  ${ROOT}`);
+}
+
 switch (cmd) {
+	case "version":
+	case "--version":
+	case "-v":
+		await versionCommand();
+		break;
 	case "root":
 		// The skill needs an absolute path to the toolkit. Under Homebrew that is
 		// inside the keg, not next to the `rm-video` symlink, so ask rather than guess:
@@ -365,6 +390,7 @@ switch (cmd) {
 				"",
 				"rm-video — RoleModel brand for OpenScreen projects",
 				"",
+				"  version                      print the version, and which copy this is",
 				"  root                         print the toolkit's install path",
 				"  presets                      list available brand presets",
 				"  skills                       install the HyperFrames skills Make a video needs",
