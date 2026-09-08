@@ -131,3 +131,16 @@
 .refshelf--faces .refshelf__art {
   inline-size: var(--shelf-art-size);
 }
+
+/* The prompt library, under a prompt box. */
+.prompts {
+  display: flex;
+  gap: var(--op-space-3x-small);
+  align-items: center;
+  grid-column: 1 / -1;
+}
+
+.prompts__pick {
+  flex: 1;
+  min-inline-size: 0;
+}
