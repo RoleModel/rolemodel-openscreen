@@ -6390,7 +6390,7 @@ const server = createServer(async (req, res) => {
      */
     /* What the sheet would cost to print, from every shop this knows. */
     /* The sheet sizes shops actually sell — see lib/vendors.mjs sheetSizes(). */
-    if (p === "/api/stickers/sheet-sizes" && req.method === "GET") return json(res, 200, { sizes: sheetSizes() });
+    if (p === "/api/stickers/sheet-sizes" && req.method === "GET") return json(res, 200, { sizes: sheetSizes(SHEET_PAGES.map((z) => ({ id: z.id, label: z.label, mm: z.hMm }))) });
 
     if (p === "/api/stickers/quotes" && req.method === "POST") {
       const b = JSON.parse(await text(req));
@@ -6403,7 +6403,7 @@ const server = createServer(async (req, res) => {
           prodigiKey: cfg.prodigiKey ?? "",
           prodigiSandbox: Boolean(cfg.prodigiSandbox),
         });
-        return json(res, 200, { ...both, products: PRODUCTS, sheetSizes: sheetSizes() });
+        return json(res, 200, { ...both, products: PRODUCTS, sheetSizes: sheetSizes(SHEET_PAGES.map((z) => ({ id: z.id, label: z.label, mm: z.hMm }))) });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -6415,10 +6415,20 @@ const server = createServer(async (req, res) => {
       if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
       const name = safeName(String(body.name ?? "sheet"), "sheet").replace(/\s+/g, "-").slice(0, 60);
       const record = await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null);
-      if (!record) return json(res, 404, { error: "build the sheet first" });
+      /*
+       * What is ticked wins.
+       *
+       * This read the sheet's saved record and nothing else, so ticking three
+       * more stickers and pressing Print PDF quietly printed the last build —
+       * the same list, and no way to tell from the file that anything had been
+       * ignored. Build sheet is not a step somebody should have to remember in
+       * order for a button to mean what it says.
+       */
+      const picked = Array.isArray(body.items) && body.items.length ? body.items.map(String) : null;
+      if (!picked && !record) return json(res, 404, { error: "tick some stickers, or build the sheet first" });
       try {
         const items = [];
-        for (const rel of record.items ?? []) {
+        for (const rel of picked ?? record.items ?? []) {
           const file = stickerFile(id, rel);
           const raw = await readFile(file).catch(() => null);
           /* A sticker deleted since the sheet was built is skipped, not fatal. */
@@ -6456,7 +6466,9 @@ const server = createServer(async (req, res) => {
             profile: String(body.profile ?? ""),
           });
           await reindex(id, { force: true }).catch(() => {});
-          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet" });
+          /* A sticker that could not be read is said out loud: three quietly
+             missing off a sheet of six is not something to find at the shop. */
+          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet", skipped: (picked ?? record?.items ?? []).length - items.length });
         }
         const out = join(dir, `${name}-cmyk.pdf`);
         const made = await sheetToCmykPdf({
