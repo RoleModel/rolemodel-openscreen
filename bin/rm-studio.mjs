@@ -68,7 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { printProblem, sheetToCmykPdf } from "../lib/print-sheet.mjs";
+import { SHEET_PAGES, cutSheetToCmykPdf, printProblem, sheetToCmykPdf } from "../lib/print-sheet.mjs";
 import { PRODUCTS, quoteAll } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
@@ -6429,6 +6429,27 @@ const server = createServer(async (req, res) => {
         }
         const dir = join(stickersDir(id), "Print");
         await mkdir(dir, { recursive: true });
+        /*
+         * Two shapes of print job. Singles are a page each, for a die-cutter.
+         * A cut sheet is the grid with a magenta cut line round every sticker
+         * and the brand along the foot — what a shop that prints sheets wants.
+         */
+        if (body.layout === "sheet") {
+          const out = join(dir, `${name}-sheet-cmyk.pdf`);
+          const made = await cutSheetToCmykPdf({
+            items,
+            out,
+            work: join(dir, ".work"),
+            page: SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "letter",
+            stickerMm: Math.min(200, Math.max(10, Number(body.sizeMm) || 50.8)),
+            bleedMm: Math.min(10, Math.max(0, Number(body.bleedMm) ?? 3)),
+            logo: await readFile(join(TOOLKIT, "brand", "logos", "rolemodel-logo.svg"), "utf8").catch(() => null),
+            title: name,
+            profile: String(body.profile ?? ""),
+          });
+          await reindex(id, { force: true }).catch(() => {});
+          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet" });
+        }
         const out = join(dir, `${name}-cmyk.pdf`);
         const made = await sheetToCmykPdf({
           items,
@@ -6469,7 +6490,7 @@ const server = createServer(async (req, res) => {
         const dest = join(dir, `${name}.svg`);
         await writeFile(dest, svg, "utf8");
         const previous = await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null);
-        const record = { name, items: rels, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, ground: body.ground === "none" ? "none" : "dots", rel: relative(mediaDir(id), dest), madeAt: new Date().toISOString(), published: previous?.published ?? null };
+        const record = { name, items: rels, columns: Number(body.columns) || 4, size: Number(body.size) || 300, gap: Number(body.gap) || 40, ground: body.ground === "none" ? "none" : "dots", rel: relative(mediaDir(id), dest), madeAt: new Date().toISOString(), published: previous?.published ?? null, quote: body.quote !== false, quoteQty: Number(body.quoteQty) || previous?.quoteQty || 250, quoteSizeMm: Number(body.quoteSizeMm) || previous?.quoteSizeMm || 76.2, quoteProduct: body.quoteProduct === "sheet" ? "sheet" : previous?.quoteProduct ?? "die-cut" };
         await mkdir(join(projectDir(id), "stickers"), { recursive: true });
         await writeFile(join(projectDir(id), "stickers", `${name}.json`), `${JSON.stringify(record, null, 2)}\n`, "utf8");
         await reindex(id, { force: true }).catch(() => {});
@@ -8743,7 +8764,27 @@ async function fetchVoiceList() {
          * host, so nothing is pasted anywhere; a setting can still override it.
          */
         const dataApi = (await stickerSettings()).dataApi || dataApiFor((await sharingSettings()).databaseUrl);
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", sheetSrc, zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 }, version: String(Date.now()) }), "utf8");
+        /*
+         * The prices go up with the sheet.
+         *
+         * Whoever decides to order is usually not whoever ran the comparison,
+         * so the page carries the numbers. Gathered at publish time rather than
+         * remembered from an earlier click, because a price shown beside a date
+         * has to be the price on that date. A comparison that fails is simply
+         * left off — a sheet that will not publish because a shop's page was
+         * slow is a worse page than one with no prices on it.
+         */
+        const cfgQ = await stickerSettings();
+        const quotes = record.quote === false
+          ? null
+          : await quoteAll({
+              sizeMm: Number(record.quoteSizeMm) || 76.2,
+              quantity: Number(record.quoteQty) || 250,
+              product: record.quoteProduct === "sheet" ? "sheet" : "die-cut",
+              prodigiKey: cfgQ.prodigiKey ?? "",
+              prodigiSandbox: Boolean(cfgQ.prodigiSandbox),
+            }).catch(() => null);
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", sheetSrc, zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 }, version: String(Date.now()), quotes }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         /*
