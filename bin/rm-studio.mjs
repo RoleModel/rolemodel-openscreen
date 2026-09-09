@@ -69,7 +69,7 @@ import {
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
 import { SHEET_PAGES, cutSheetToCmykPdf, printProblem, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
-import { PRODUCTS, quoteAll, quoteBoth, sheetSizes } from "../lib/vendors.mjs";
+import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
@@ -6396,9 +6396,12 @@ const server = createServer(async (req, res) => {
       const b = JSON.parse(await text(req));
       try {
         const cfg = await stickerSettings();
-        const both = await quoteBoth({
+        /* A curve, not a number: fifty of something is often barely cheaper
+           than a hundred, and only the columns beside each other show it. */
+        const runs = Array.isArray(b.runs) && b.runs.length ? b.runs.map(Number).filter((n) => n > 0).slice(0, 8) : RUNS;
+        const both = await quoteRunsBoth({
           sizeMm: Math.min(400, Math.max(10, Number(b.sizeMm) || 76.2)),
-          quantity: Math.min(100000, Math.max(1, Number(b.quantity) || 100)),
+          runs,
           country: String(b.country || "US").slice(0, 2).toUpperCase(),
           prodigiKey: cfg.prodigiKey ?? "",
           prodigiSandbox: Boolean(cfg.prodigiSandbox),
@@ -8765,6 +8768,27 @@ async function fetchVoiceList() {
           await writeFile(join(site, out), bytes);
           return name_;
         };
+        const printDir = join(stickersDir(id), "Print");
+        const printFiles = [];
+        for (const [file, label] of [
+          [`${name}-cmyk.pdf`, "Print PDF · one a page"],
+          [`${name}-sheet-cmyk.pdf`, "Print PDF · cut sheet"],
+        ]) {
+          const st = await stat(join(printDir, file)).catch(() => null);
+          if (!st) continue;
+          /*
+           * Stamped like the sheet is, and for the same reason: the domain in
+           * front of the bucket serves a cached copy for hours and ignores a
+           * query string, so a republished print PDF kept downloading as the
+           * old one. Byte-identical downloads of a file that had been reprinted
+           * four times is what that looks like from the outside.
+           *
+           * Dated too, because it is a copy of whatever was last printed and a
+           * link that does not say so is a link somebody trusts wrongly.
+           */
+          const src = await stamped(join(printDir, file), file);
+          printFiles.push({ file, src, label, madeAt: new Date(st.mtimeMs).toISOString().slice(0, 10) });
+        }
         for (const rel of record.items) {
           const file = join(mediaDir(id), rel);
           if (!(await stat(file).catch(() => null))) continue;
@@ -8804,22 +8828,12 @@ async function fetchVoiceList() {
          * do to somebody who pressed Publish. So whatever was last printed is
          * carried, and a sheet that has never been printed simply has no link.
          */
-        const printDir = join(stickersDir(id), "Print");
-        const printFiles = [];
-        for (const [file, label] of [
-          [`${name}-cmyk.pdf`, "Print PDF · one a page"],
-          [`${name}-sheet-cmyk.pdf`, "Print PDF · cut sheet"],
-        ]) {
-          if (!(await stat(join(printDir, file)).catch(() => null))) continue;
-          await copyFile(join(printDir, file), join(site, file));
-          printFiles.push({ file, label });
-        }
         const cfgQ = await stickerSettings();
         const quotes = record.quote === false
           ? null
-          : await quoteBoth({
+          : await quoteRunsBoth({
               sizeMm: Number(record.quoteSizeMm) || 76.2,
-              quantity: Number(record.quoteQty) || 250,
+              runs: RUNS,
               prodigiKey: cfgQ.prodigiKey ?? "",
               prodigiSandbox: Boolean(cfgQ.prodigiSandbox),
             }).catch(() => null);
