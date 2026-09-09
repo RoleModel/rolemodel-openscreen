@@ -37,6 +37,9 @@
    <div class="client" data-region="main">Pictures to start from <span data-el="sourceCount" class="stickers__soft"></span></div>
    <div data-el="sources" class="grid stickers__grid" data-region="main"></div>
 
+   <div data-el="quotesHead" class="client" data-region="main" hidden>What it would cost <span data-el="quotesAsked" class="stickers__soft"></span></div>
+   <div data-el="quotes" class="stickers__quotes" data-region="main" hidden></div>
+
    <div class="grid stickers__tools" data-region="footer">
       <button data-el="cut" class="btn ghost" type="button"><rm-icon name="scissor-01"></rm-icon>Cut out</button>
       <button data-el="trace" class="btn ghost" type="button"><rm-icon name="vector"></rm-icon>Vectorize</button>
@@ -45,6 +48,8 @@
       <button data-el="build" class="btn ghost" type="button"><rm-icon name="tag-01"></rm-icon>Build sheet</button>
       <!-- What a print shop is sent: one sticker per page, CMYK, still vector. -->
       <button data-el="printPdf" class="btn ghost" type="button" title="One sticker per page, CMYK, for a print shop"><rm-icon name="printer"></rm-icon>Print PDF</button>
+      <!-- What it would cost, from every shop this knows. -->
+      <button data-el="quote" class="btn ghost" type="button" title="Compare what printers would charge"><rm-icon name="dollar-01"></rm-icon>Compare prices</button>
       <button data-el="publish" class="btn btn--primary" type="button"><rm-icon name="globe-02"></rm-icon>Publish sheet</button>
    </div>
 </template>
@@ -84,5 +89,15 @@
             <button data-el="copy" class="btn ghost btn--small" type="button" hidden><rm-icon name="copy-01"></rm-icon>Copy link</button>
          </div>
       </div>
+   </div>
+</template>
+
+<!-- One shop's answer. `kind` says whether it was asked, read, or written down. -->
+<template data-row="quote-row">
+   <div class="stickers__quote">
+      <b data-el="name" class="stickers__quote-name"></b>
+      <span data-el="unit" class="stickers__quote-unit"></span>
+      <span data-el="detail" class="stickers__quote-detail"></span>
+      <span data-el="source" class="stickers__quote-source"></span>
    </div>
 </template>

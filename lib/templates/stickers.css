@@ -161,3 +161,42 @@
   justify-self: start;
   margin-block-start: var(--op-space-2x-small);
 }
+
+
+/* What every shop would charge, cheapest first. */
+.stickers__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.stickers__quotes {
+  display: grid;
+  gap: var(--op-space-3x-small);
+}
+
+.stickers__quote {
+  display: grid;
+  grid-template-columns: 10rem 6rem 1fr auto;
+  gap: var(--op-space-x-small);
+  align-items: baseline;
+  padding: var(--op-space-2x-small) var(--op-space-x-small);
+  border-radius: var(--op-radius-small);
+  background: var(--sunk);
+  font-size: var(--op-font-small);
+}
+
+/* The cheapest, and only the cheapest, is marked. */
+.stickers__quote--best {
+  outline: var(--op-border-width) solid var(--op-color-primary-base);
+}
+
+.stickers__quote-unit {
+  font-family: var(--m);
+  font-weight: var(--op-font-weight-bold);
+}
+
+.stickers__quote-detail,
+.stickers__quote-source {
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-x-small);
+}
