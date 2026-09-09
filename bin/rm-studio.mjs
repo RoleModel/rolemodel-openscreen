@@ -39,7 +39,7 @@ import { createStudioSkill, deleteLook, deleteStyleImage, deleteStylePerson, del
 import { deploymentProblem } from "../lib/deployment.mjs";
 import { DEFAULT_FRAMER_PROJECT, placeLook } from "../lib/framer-bridge.mjs";
 import { CUTOUT_MODELS, STICKER_MODELS, VECTORIZE_MODELS, cutOut as stickerCutOut, falUpload, makeSticker, sheetPage, sheetSvg, svgToPng, tidyReference, vectorize as stickerVectorize } from "../lib/stickers.mjs";
-import { stickerSettings } from "../lib/settings.mjs";
+import { loadEnvFile, stickerSettings } from "../lib/settings.mjs";
 import { BRAND_PALETTE, DEFAULT_STYLE, REMOVE_BG, enhance as styleEnhance, generate as styleGenerate, modelList as styleModelList, refine as styleRefine, removeBackground as styleRemoveBackground } from "../lib/style-gen.mjs";
 import { FORMATS, SIZES, ffmpegArgs, formatsFor, outputFor } from "../lib/convert.mjs";
 import { NODE_GAP_X, NODE_WIDTH, connect as graphConnect, disconnect as graphDisconnect, idFor as graphIdFor, moveNode, removeNode } from "../lib/board-graph.mjs";
@@ -134,6 +134,9 @@ import { adoptCut, emitCut, findDocument, planAdopt, readFraming, writeFraming }
 let updateSeen = null;
 let updateChecked = 0;
 const UPDATE_MAX_AGE = UPDATE_TTL;
+
+/* Keys kept in the toolkit's .env, before anything asks for one. */
+await loadEnvFile(TOOLKIT);
 
 jobs.setTrustedRoot(TOOLKIT);
 jobs.setNodeExecutable(process.execPath);
