@@ -18,6 +18,14 @@ class RmVideo < Formula
   depends_on "node"
   depends_on "pnpm" => :build
 
+  # Print PDFs only. librsvg turns a sticker into a PDF whose paths are still
+  # paths; Ghostscript is the only thing that changes such a PDF's colour to
+  # CMYK without flattening it to pixels. Recommended rather than required:
+  # everything else in the toolkit works without either, and the Studio names
+  # whichever is missing when somebody presses Print PDF.
+  depends_on "ghostscript" => :recommended
+  depends_on "librsvg" => :recommended
+
   # Every CLI in the toolkit, not just one.
   #
   # `rm-video` was the only entry point linked, which meant `rm-studio` — the
