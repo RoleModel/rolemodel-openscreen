@@ -68,8 +68,8 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { SHEET_PAGES, cutSheetToCmykPdf, printProblem, sheetToCmykPdf } from "../lib/print-sheet.mjs";
-import { PRODUCTS, quoteAll } from "../lib/vendors.mjs";
+import { SHEET_PAGES, cutSheetToCmykPdf, printProblem, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
+import { PRODUCTS, quoteAll, quoteBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
@@ -6389,19 +6389,21 @@ const server = createServer(async (req, res) => {
      * See lib/print-sheet.mjs for why it is a page each and not the grid.
      */
     /* What the sheet would cost to print, from every shop this knows. */
+    /* The sheet sizes shops actually sell — see lib/vendors.mjs sheetSizes(). */
+    if (p === "/api/stickers/sheet-sizes" && req.method === "GET") return json(res, 200, { sizes: sheetSizes() });
+
     if (p === "/api/stickers/quotes" && req.method === "POST") {
       const b = JSON.parse(await text(req));
       try {
         const cfg = await stickerSettings();
-        const r = await quoteAll({
+        const both = await quoteBoth({
           sizeMm: Math.min(400, Math.max(10, Number(b.sizeMm) || 76.2)),
           quantity: Math.min(100000, Math.max(1, Number(b.quantity) || 100)),
-          product: b.product === "sheet" ? "sheet" : "die-cut",
           country: String(b.country || "US").slice(0, 2).toUpperCase(),
           prodigiKey: cfg.prodigiKey ?? "",
           prodigiSandbox: Boolean(cfg.prodigiSandbox),
         });
-        return json(res, 200, { ...r, products: PRODUCTS });
+        return json(res, 200, { ...both, products: PRODUCTS, sheetSizes: sheetSizes() });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -6436,8 +6438,14 @@ const server = createServer(async (req, res) => {
          */
         if (body.layout === "sheet") {
           const out = join(dir, `${name}-sheet-cmyk.pdf`);
+          /*
+           * The die line is traced per sticker and each trace draws the art in
+           * a browser, so this is the slow part of the job — a few at a time,
+           * and once, before the pages are laid.
+           */
+          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round((Number(body.bleedMm) ?? 3) * 4.6) });
           const made = await cutSheetToCmykPdf({
-            items,
+            items: traced,
             out,
             work: join(dir, ".work"),
             page: SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "letter",
@@ -8774,17 +8782,34 @@ async function fetchVoiceList() {
          * left off — a sheet that will not publish because a shop's page was
          * slow is a worse page than one with no prices on it.
          */
+        /*
+         * The print files go up with the sheet when they exist.
+         *
+         * Made by Print PDF rather than at publish time: a die line is traced
+         * per sticker in a browser and that is minutes, which is not a thing to
+         * do to somebody who pressed Publish. So whatever was last printed is
+         * carried, and a sheet that has never been printed simply has no link.
+         */
+        const printDir = join(stickersDir(id), "Print");
+        const printFiles = [];
+        for (const [file, label] of [
+          [`${name}-cmyk.pdf`, "Print PDF · one a page"],
+          [`${name}-sheet-cmyk.pdf`, "Print PDF · cut sheet"],
+        ]) {
+          if (!(await stat(join(printDir, file)).catch(() => null))) continue;
+          await copyFile(join(printDir, file), join(site, file));
+          printFiles.push({ file, label });
+        }
         const cfgQ = await stickerSettings();
         const quotes = record.quote === false
           ? null
-          : await quoteAll({
+          : await quoteBoth({
               sizeMm: Number(record.quoteSizeMm) || 76.2,
               quantity: Number(record.quoteQty) || 250,
-              product: record.quoteProduct === "sheet" ? "sheet" : "die-cut",
               prodigiKey: cfgQ.prodigiKey ?? "",
               prodigiSandbox: Boolean(cfgQ.prodigiSandbox),
             }).catch(() => null);
-        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", sheetSrc, zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 }, version: String(Date.now()), quotes }), "utf8");
+        await writeFile(join(site, "index.html"), sheetPage({ title: name.replace(/[-_]+/g, " "), sheetFile: "sheet.svg", sheetSrc, zipFile: `${name}.zip`, items, comments: dataApi ? { dataApi, project: id } : null, grid: { columns: record.columns, size: record.size, gap: record.gap, margin: 60 }, version: String(Date.now()), quotes, printFiles }), "utf8");
         const dest = remotePath(remote, `${pub.bucket}/stickers/${id}/${name}`);
         if (!dest) return json(res, 400, { error: "that storage destination is not valid" });
         /*
