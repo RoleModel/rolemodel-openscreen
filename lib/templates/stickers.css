@@ -176,26 +176,50 @@
 
 .stickers__quote {
   display: grid;
-  grid-template-columns: 10rem 6rem 1fr auto;
+  grid-template-columns: 9rem 1fr 12rem;
   gap: var(--op-space-x-small);
-  align-items: baseline;
+  align-items: center;
   padding: var(--op-space-2x-small) var(--op-space-x-small);
   border-radius: var(--op-radius-small);
   background: var(--sunk);
   font-size: var(--op-font-small);
 }
 
-/* The cheapest, and only the cheapest, is marked. */
-.stickers__quote--best {
-  outline: var(--op-border-width) solid var(--op-color-primary-base);
+.stickers__quote--head {
+  background: none;
+  padding-block-end: 0;
 }
 
-.stickers__quote-unit {
+.stickers__quote-cells {
+  display: flex;
+  gap: var(--op-space-2x-small);
+}
+
+/* Each run its own column, so the curve reads left to right. */
+.stickers__cell {
+  flex: 1;
+  min-inline-size: 0;
+  text-align: end;
+}
+
+.stickers__cell-unit {
+  display: block;
   font-family: var(--m);
+}
+
+/* The run's total, under the unit price rather than jammed against it —
+   "$0.84$84" is two numbers that read as one. */
+.stickers__cell-total {
+  display: block;
+  font-size: var(--op-font-2x-small);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.stickers__cell--best .stickers__cell-unit {
+  color: var(--op-color-primary-base);
   font-weight: var(--op-font-weight-bold);
 }
 
-.stickers__quote-detail,
 .stickers__quote-source {
   color: var(--op-color-neutral-on-plus-max-alt);
   font-size: var(--op-font-x-small);

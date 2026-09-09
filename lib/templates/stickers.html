@@ -95,12 +95,26 @@
    </div>
 </template>
 
-<!-- One shop's answer. `kind` says whether it was asked, read, or written down. -->
+<!-- One shop's answer, across the runs. `kind` says whether it was asked,
+     read, or written down. -->
 <template data-row="quote-row">
    <div class="stickers__quote">
       <b data-el="name" class="stickers__quote-name"></b>
-      <span data-el="unit" class="stickers__quote-unit"></span>
-      <span data-el="detail" class="stickers__quote-detail"></span>
+      <span data-el="cells" class="stickers__quote-cells"></span>
       <span data-el="source" class="stickers__quote-source"></span>
+   </div>
+</template>
+
+<!-- One run: what one costs, and what the run costs. -->
+<template data-row="quote-cell">
+   <span class="stickers__cell"><b data-el="unit" class="stickers__cell-unit"></b><span data-el="total" class="stickers__cell-total"></span></span>
+</template>
+
+<!-- The run sizes, over the columns. -->
+<template data-row="quote-head">
+   <div class="stickers__quote stickers__quote--head">
+      <b data-el="name" class="stickers__quote-name">Printer</b>
+      <span data-el="cells" class="stickers__quote-cells"></span>
+      <span class="stickers__quote-source">Where this came from</span>
    </div>
 </template>
