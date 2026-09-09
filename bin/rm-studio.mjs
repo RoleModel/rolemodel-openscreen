@@ -6480,7 +6480,9 @@ const server = createServer(async (req, res) => {
           profile: String(body.profile ?? ""),
         });
         await reindex(id, { force: true }).catch(() => {});
-        return json(res, 200, { ...made, rel: relative(mediaDir(id), out), skipped: (record.items?.length ?? 0) - items.length });
+        /* Counted against what was actually asked for, not against the saved
+           sheet: printing two ticked stickers reported seven missing. */
+        return json(res, 200, { ...made, rel: relative(mediaDir(id), out), skipped: (picked ?? record?.items ?? []).length - items.length });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
