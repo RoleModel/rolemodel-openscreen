@@ -69,6 +69,7 @@ import {
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
 import { printProblem, sheetToCmykPdf } from "../lib/print-sheet.mjs";
+import { PRODUCTS, quoteAll } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
@@ -6387,6 +6388,25 @@ const server = createServer(async (req, res) => {
      * A sheet, as a print shop wants it: one sticker per page, CMYK, vector.
      * See lib/print-sheet.mjs for why it is a page each and not the grid.
      */
+    /* What the sheet would cost to print, from every shop this knows. */
+    if (p === "/api/stickers/quotes" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      try {
+        const cfg = await stickerSettings();
+        const r = await quoteAll({
+          sizeMm: Math.min(400, Math.max(10, Number(b.sizeMm) || 76.2)),
+          quantity: Math.min(100000, Math.max(1, Number(b.quantity) || 100)),
+          product: b.product === "sheet" ? "sheet" : "die-cut",
+          country: String(b.country || "US").slice(0, 2).toUpperCase(),
+          prodigiKey: cfg.prodigiKey ?? "",
+          prodigiSandbox: Boolean(cfg.prodigiSandbox),
+        });
+        return json(res, 200, { ...r, products: PRODUCTS });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/stickers/print" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
