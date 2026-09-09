@@ -68,6 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
+import { printProblem, sheetToCmykPdf } from "../lib/print-sheet.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
 import {
@@ -6382,6 +6383,48 @@ const server = createServer(async (req, res) => {
      * A sheet: chosen stickers laid out as one SVG, kept beside the stickers,
      * with a note of what went into it so it can be rebuilt and published.
      */
+    /*
+     * A sheet, as a print shop wants it: one sticker per page, CMYK, vector.
+     * See lib/print-sheet.mjs for why it is a page each and not the grid.
+     */
+    if (p === "/api/stickers/print" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(body.name ?? "sheet"), "sheet").replace(/\s+/g, "-").slice(0, 60);
+      const record = await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null);
+      if (!record) return json(res, 404, { error: "build the sheet first" });
+      try {
+        const items = [];
+        for (const rel of record.items ?? []) {
+          const file = stickerFile(id, rel);
+          const raw = await readFile(file).catch(() => null);
+          /* A sticker deleted since the sheet was built is skipped, not fatal. */
+          if (!raw) continue;
+          if (/\.svg$/i.test(file)) items.push({ name: rel, svg: raw.toString("utf8") });
+          else {
+            const ext = extname(file).toLowerCase();
+            items.push({ name: rel, bytes: raw, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" });
+          }
+        }
+        const dir = join(stickersDir(id), "Print");
+        await mkdir(dir, { recursive: true });
+        const out = join(dir, `${name}-cmyk.pdf`);
+        const made = await sheetToCmykPdf({
+          items,
+          out,
+          work: join(dir, ".work"),
+          sizeMm: Math.min(300, Math.max(10, Number(body.sizeMm) || 76.2)),
+          bleedMm: Math.min(20, Math.max(0, Number(body.bleedMm) ?? 3)),
+          profile: String(body.profile ?? ""),
+        });
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { ...made, rel: relative(mediaDir(id), out), skipped: (record.items?.length ?? 0) - items.length });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
     if (p === "/api/stickers/sheet" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
