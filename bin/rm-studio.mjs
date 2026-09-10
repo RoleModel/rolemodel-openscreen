@@ -6572,29 +6572,16 @@ const server = createServer(async (req, res) => {
          * and the brand along the foot — what a shop that prints sheets wants.
          */
         if (body.layout === "sheet") {
-          const out = join(dir, `${name}-sheet-cmyk.pdf`);
           /*
-           * The die line is traced per sticker and each trace draws the art in
-           * a browser, so this is the slow part of the job — a few at a time,
-           * and once, before the pages are laid.
+           * Every sheet size, in one run.
+           *
+           * Only one sheet PDF ever existed on disk, so printing a 4x6 replaced
+           * the 8.5x11 and the published page could never carry both. The trace
+           * is the slow part and it does not depend on the paper, so the second
+           * size costs a layout and a Ghostscript pass — pennies against what
+           * has already been paid.
            */
-          /*
-           * The offset is a real distance on the printed sticker, not a
-           * fraction of a bitmap. It was computed from the bleed alone, which
-           * on a 40mm sticker put the cut about half a millimetre outside the
-           * artwork — under the sticker's own white keyline, where nobody could
-           * see it and no cutter would leave a border.
-           */
-          const page = SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "4x6";
-          /*
-           * A sheet is priced by the sheet, so spilling onto a second one
-           * doubles the bill for nothing. Unless a size is asked for, the
-           * biggest that still fits them all on one is used.
-           */
-          const stickerMm =
-            body.fit === false && Number(body.sizeMm) > 0
-              ? Math.min(200, Math.max(10, Number(body.sizeMm)))
-              : fitStickerMm({ page, count: items.length });
+          const wanted = body.page === "all" || !body.page ? SHEET_PAGES.map((z) => z.id) : [SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "4x6"];
           /*
            * Nothing by default, because these stickers are drawn with their own
            * keyline and that line is the die: a shop cutting 2mm outside it
@@ -6603,23 +6590,39 @@ const server = createServer(async (req, res) => {
            */
           const offsetMm = Math.min(6, Math.max(0, Number(body.dieOffsetMm ?? 0)));
           const roundMm = Math.min(10, Math.max(0, Number(body.dieRoundMm ?? 0.5)));
-          const per = 1024 / stickerMm;
-          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per) });
-          const made = await cutSheetToCmykPdf({
-            items: traced,
-            out,
-            work: join(dir, ".work"),
-            page,
-            stickerMm,
-            bleedMm: Math.min(10, Math.max(0, Number(body.bleedMm) ?? 3)),
-            logo: await readFile(join(TOOLKIT, "brand", "logos", "rolemodel-logo.svg"), "utf8").catch(() => null),
-            title: name,
-            profile: String(body.profile ?? ""),
-          });
+          const sheets = [];
+          for (const page of wanted) {
+            /*
+             * A sheet is priced by the sheet, so spilling onto a second one
+             * doubles the bill for nothing. Unless a size is asked for, the
+             * biggest that still fits them all on one is used — and that is
+             * worked out per paper size, not once.
+             */
+            const stickerMm =
+              body.fit === false && Number(body.sizeMm) > 0
+                ? Math.min(200, Math.max(10, Number(body.sizeMm)))
+                : fitStickerMm({ page, count: items.length });
+            const per = 1024 / stickerMm;
+            /* Traced once per size, because the offset is in millimetres on the
+               printed sticker and the sticker is a different size on each. */
+            const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per) });
+            const out = join(dir, `${name}-sheet-${page}-cmyk.pdf`);
+            const made = await cutSheetToCmykPdf({
+              items: traced,
+              out,
+              work: join(dir, `.work-${page}`),
+              page,
+              stickerMm,
+              bleedMm: Math.min(10, Math.max(0, Number(body.bleedMm) ?? 3.175)),
+              logo: null,
+              title: name,
+              profile: String(body.profile ?? ""),
+            });
+            sheets.push({ ...made, page, label: SHEET_PAGES.find((z) => z.id === page)?.label ?? page, stickerMm, rel: relative(mediaDir(id), out) });
+          }
           await reindex(id, { force: true }).catch(() => {});
-          /* A sticker that could not be read is said out loud: three quietly
-             missing off a sheet of six is not something to find at the shop. */
-          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet", stickerMm, skipped: (picked ?? record?.items ?? []).length - items.length });
+          const first = sheets[0] ?? {};
+          return json(res, 200, { ...first, sheets, layout: "sheet", skipped: (picked ?? record?.items ?? []).length - items.length });
         }
         const out = join(dir, `${name}-cmyk.pdf`);
         const made = await sheetToCmykPdf({
@@ -8918,9 +8921,11 @@ async function fetchVoiceList() {
         };
         const printDir = join(stickersDir(id), "Print");
         const printFiles = [];
+        /* One entry per sheet size, so the page can carry both — plus the
+           singles. A file that was never printed simply has no link. */
         for (const [file, label] of [
           [`${name}-cmyk.pdf`, "Print PDF · one a page"],
-          [`${name}-sheet-cmyk.pdf`, "Print PDF · cut sheet"],
+          ...SHEET_PAGES.map((z) => [`${name}-sheet-${z.id}-cmyk.pdf`, `Print PDF · ${z.label} sheet`]),
         ]) {
           const st = await stat(join(printDir, file)).catch(() => null);
           if (!st) continue;
