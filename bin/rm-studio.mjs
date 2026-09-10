@@ -6467,8 +6467,16 @@ const server = createServer(async (req, res) => {
            * see it and no cutter would leave a border.
            */
           const stickerMm = Math.min(200, Math.max(10, Number(body.sizeMm) || 50.8));
-          const offsetMm = Math.min(6, Math.max(1, Number(body.dieOffsetMm) || 2));
-          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round((offsetMm / stickerMm) * 1024) });
+          /*
+           * Nothing by default, because these stickers are drawn with their own
+           * keyline and that line is the die: a shop cutting 2mm outside it
+           * leaves a border nobody asked for. The offset stays adjustable for
+           * artwork that has no keyline of its own.
+           */
+          const offsetMm = Math.min(6, Math.max(0, Number(body.dieOffsetMm ?? 0)));
+          const roundMm = Math.min(10, Math.max(0, Number(body.dieRoundMm ?? 2)));
+          const per = 1024 / stickerMm;
+          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per) });
           const made = await cutSheetToCmykPdf({
             items: traced,
             out,
