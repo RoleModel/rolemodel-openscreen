@@ -6450,6 +6450,7 @@ const server = createServer(async (req, res) => {
         const per = 1024 / stickerMm;
         const offsetPx = Math.round(offsetMm * per);
         const roundPx = Math.round(roundMm * per);
+        const bleedPx = Math.round(Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.5))) * per);
         const items = [];
         for (const rel of picked) {
           const file = stickerFile(id, rel);
@@ -6461,7 +6462,7 @@ const server = createServer(async (req, res) => {
             items.push({ name: rel, bytes: raw, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" });
             continue;
           }
-          items.push({ name: rel, svg: raw.toString("utf8"), key: `v${DIE_VERSION}:${rel}:${Math.round(st.mtimeMs)}:${offsetPx}:${roundPx}` });
+          items.push({ name: rel, svg: raw.toString("utf8"), key: `v${DIE_VERSION}:${rel}:${Math.round(st.mtimeMs)}:${offsetPx}:${roundPx}:${bleedPx}` });
         }
         /*
          * The ones already traced cost nothing; the rest go through the same
@@ -6494,7 +6495,7 @@ const server = createServer(async (req, res) => {
                     if (inkCache.size > 200) inkCache.delete(inkCache.keys().next().value);
                     if (drawn) inkCache.set(inkKey, drawn);
                   }
-                  it.die = await dieLine(it.svg, { offsetPx, roundPx, drawn });
+                  it.die = await dieLine(it.svg, { offsetPx, roundPx, bleedPx, drawn, page: pg });
                   if (dieCache.size > 400) dieCache.delete(dieCache.keys().next().value);
                   dieCache.set(it.key, it.die);
                 }
@@ -6513,7 +6514,7 @@ const server = createServer(async (req, res) => {
           page,
           stickerMm,
           bleedMm: 3.175,
-          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 2))),
+          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.5))),
           logo: null,
           title: name,
         });
@@ -6605,7 +6606,7 @@ const server = createServer(async (req, res) => {
             const per = 1024 / stickerMm;
             /* Traced once per size, because the offset is in millimetres on the
                printed sticker and the sticker is a different size on each. */
-            const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per) });
+            const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per), bleedPx: Math.round(Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.5))) * per) });
             const out = join(dir, `${name}-sheet-${page}-cmyk.pdf`);
             const made = await cutSheetToCmykPdf({
               items: traced,
@@ -6614,7 +6615,7 @@ const server = createServer(async (req, res) => {
               page,
               stickerMm,
               bleedMm: 3.175,
-              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 2))),
+              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.5))),
               logo: null,
               title: name,
               profile: String(body.profile ?? ""),
