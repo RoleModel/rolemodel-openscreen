@@ -68,7 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
+import { SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
@@ -6443,7 +6443,9 @@ const server = createServer(async (req, res) => {
       const picked = Array.isArray(b.items) && b.items.length ? b.items.map(String) : (record?.items ?? []);
       if (!picked.length) return json(res, 400, { error: "tick some stickers, or build the sheet first" });
       try {
-        const stickerMm = Math.min(200, Math.max(10, Number(b.sizeMm) || 50.8));
+        const page = SHEET_PAGES.some((x) => x.id === b.page) ? b.page : "4x6";
+        const stickerMm =
+          b.fit === false && Number(b.sizeMm) > 0 ? Math.min(200, Math.max(10, Number(b.sizeMm))) : fitStickerMm({ page, count: picked.length });
         const offsetMm = Math.min(6, Math.max(0, Number(b.dieOffsetMm ?? 0)));
         const roundMm = Math.min(10, Math.max(0, Number(b.dieRoundMm ?? 0.5)));
         const per = 1024 / stickerMm;
@@ -6509,7 +6511,7 @@ const server = createServer(async (req, res) => {
         if (!items.length) return json(res, 400, { error: "none of those stickers could be read" });
         const pages = cutSheetPages({
           items,
-          page: SHEET_PAGES.some((x) => x.id === b.page) ? b.page : "6x8",
+          page,
           stickerMm,
           bleedMm: Math.min(10, Math.max(0, Number(b.bleedMm) ?? 3.175)),
           logo: null,
@@ -6526,7 +6528,7 @@ const server = createServer(async (req, res) => {
         const fitted = mm
           ? pages[at].replace(mm[0], `width="100%" height="auto" viewBox="0 0 ${(Number(mm[1]) / 25.4) * 96} ${(Number(mm[2]) / 25.4) * 96}"`)
           : pages[at];
-        return json(res, 200, { svg: fitted, pages: pages.length, at, skipped: picked.length - items.length });
+        return json(res, 200, { svg: fitted, pages: pages.length, at, stickerMm, skipped: picked.length - items.length });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -6583,7 +6585,16 @@ const server = createServer(async (req, res) => {
            * artwork — under the sticker's own white keyline, where nobody could
            * see it and no cutter would leave a border.
            */
-          const stickerMm = Math.min(200, Math.max(10, Number(body.sizeMm) || 50.8));
+          const page = SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "4x6";
+          /*
+           * A sheet is priced by the sheet, so spilling onto a second one
+           * doubles the bill for nothing. Unless a size is asked for, the
+           * biggest that still fits them all on one is used.
+           */
+          const stickerMm =
+            body.fit === false && Number(body.sizeMm) > 0
+              ? Math.min(200, Math.max(10, Number(body.sizeMm)))
+              : fitStickerMm({ page, count: items.length });
           /*
            * Nothing by default, because these stickers are drawn with their own
            * keyline and that line is the die: a shop cutting 2mm outside it
@@ -6598,7 +6609,7 @@ const server = createServer(async (req, res) => {
             items: traced,
             out,
             work: join(dir, ".work"),
-            page: SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "letter",
+            page,
             stickerMm,
             bleedMm: Math.min(10, Math.max(0, Number(body.bleedMm) ?? 3)),
             logo: await readFile(join(TOOLKIT, "brand", "logos", "rolemodel-logo.svg"), "utf8").catch(() => null),
@@ -6608,7 +6619,7 @@ const server = createServer(async (req, res) => {
           await reindex(id, { force: true }).catch(() => {});
           /* A sticker that could not be read is said out loud: three quietly
              missing off a sheet of six is not something to find at the shop. */
-          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet", skipped: (picked ?? record?.items ?? []).length - items.length });
+          return json(res, 200, { ...made, rel: relative(mediaDir(id), out), layout: "sheet", stickerMm, skipped: (picked ?? record?.items ?? []).length - items.length });
         }
         const out = join(dir, `${name}-cmyk.pdf`);
         const made = await sheetToCmykPdf({
