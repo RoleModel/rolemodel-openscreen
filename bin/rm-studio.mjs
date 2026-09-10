@@ -6410,6 +6410,7 @@ const server = createServer(async (req, res) => {
         const both = await quoteRunsBoth({
           sizeMm: Math.min(400, Math.max(10, Number(b.sizeMm) || 76.2)),
           runs,
+          sheetSizes: SHEET_PAGES.map((z) => ({ id: z.id, label: z.label, mm: z.hMm })),
           country: String(b.country || "US").slice(0, 2).toUpperCase(),
           prodigiKey: cfg.prodigiKey ?? "",
           prodigiSandbox: Boolean(cfg.prodigiSandbox),
@@ -8970,6 +8971,7 @@ async function fetchVoiceList() {
           : await quoteRunsBoth({
               sizeMm: Number(record.quoteSizeMm) || 76.2,
               runs: RUNS,
+              sheetSizes: SHEET_PAGES.map((z) => ({ id: z.id, label: z.label, mm: z.hMm })),
               prodigiKey: cfgQ.prodigiKey ?? "",
               prodigiSandbox: Boolean(cfgQ.prodigiSandbox),
             }).catch(() => null);
