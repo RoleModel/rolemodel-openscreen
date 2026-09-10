@@ -38,6 +38,10 @@
    <div data-el="sources" class="grid stickers__grid" data-region="main"></div>
 
    <!-- What Print PDF just made, to open or save without publishing first. -->
+   <!-- The sheet as it will print, redrawn as the settings move. -->
+   <div data-el="printPreviewHead" class="client" data-region="main" hidden>Print preview <span data-el="printPreviewAt" class="stickers__soft"></span></div>
+   <div data-el="printPreview" class="stickers__preview-sheet" data-region="main" hidden></div>
+
    <p data-el="printMade" class="hint" data-region="main" hidden><a data-el="printSave" class="btn" download><rm-icon name="download-04"></rm-icon><span data-el="printSaveText">Save it</span></a> <a data-el="printOpen" class="btn ghost" target="_blank" rel="noopener">Open it</a></p>
 
    <div data-el="quotesHead" class="client" data-region="main" hidden>What it would cost <span data-el="quotesAsked" class="stickers__soft"></span></div>

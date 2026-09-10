@@ -230,3 +230,24 @@
   color: var(--op-color-neutral-on-plus-max-alt);
   font-size: var(--op-font-x-small);
 }
+
+
+/* The print preview: the sheet at whatever width there is, on the paper's
+   own shape, so what is judged is the layout and not the window. */
+.stickers__preview-sheet {
+  max-inline-size: 34rem;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  overflow: hidden;
+  background: var(--sunk);
+}
+
+.stickers__preview-sheet svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.stickers__preview-sheet--busy {
+  opacity: 0.55;
+}

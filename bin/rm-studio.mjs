@@ -68,7 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { SHEET_PAGES, cutSheetToCmykPdf, printProblem, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
+import { SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
@@ -131,6 +131,11 @@ import { adoptCut, emitCut, findDocument, planAdopt, readFraming, writeFraming }
 
 // Absolute binary paths are permitted only inside the install. See lib/jobs.mjs.
 /* The update check's answer, kept for six hours — see /api/update. */
+/* Traced die lines, so a preview can answer while a slider moves. */
+const dieCache = new Map();
+/* And the render each was traced from, which no slider changes. */
+const inkCache = new Map();
+
 let updateSeen = null;
 let updateChecked = 0;
 const UPDATE_MAX_AGE = UPDATE_TTL;
@@ -6410,6 +6415,117 @@ const server = createServer(async (req, res) => {
           prodigiSandbox: Boolean(cfg.prodigiSandbox),
         });
         return json(res, 200, { ...both, products: PRODUCTS, sheetSizes: sheetSizes(SHEET_PAGES.map((z) => ({ id: z.id, label: z.label, mm: z.hMm }))) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    /*
+     * The sheet as it will print, drawn now.
+     *
+     * The same layout the PDF uses, answered as an SVG: no Ghostscript, no
+     * CMYK, no file written. That is what makes it answer while somebody is
+     * dragging a slider — and what it costs is that the colours are the RGB
+     * ones, which for judging a layout is the right trade.
+     *
+     * Tracing is the slow part and the only slow part, so a trace is kept
+     * against the sticker's own name, when it was last written, and the two
+     * numbers that shape it. Move the paper or the gap and nothing is traced
+     * again; move the offset and only then is it.
+     */
+    if (p === "/api/stickers/print-preview" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(b.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(b.name ?? "sheet"), "sheet").replace(/\s+/g, "-").slice(0, 60);
+      const record = await readFile(join(projectDir(id), "stickers", `${name}.json`), "utf8").then(JSON.parse).catch(() => null);
+      const picked = Array.isArray(b.items) && b.items.length ? b.items.map(String) : (record?.items ?? []);
+      if (!picked.length) return json(res, 400, { error: "tick some stickers, or build the sheet first" });
+      try {
+        const stickerMm = Math.min(200, Math.max(10, Number(b.sizeMm) || 50.8));
+        const offsetMm = Math.min(6, Math.max(0, Number(b.dieOffsetMm ?? 0)));
+        const roundMm = Math.min(10, Math.max(0, Number(b.dieRoundMm ?? 2)));
+        const per = 1024 / stickerMm;
+        const offsetPx = Math.round(offsetMm * per);
+        const roundPx = Math.round(roundMm * per);
+        const items = [];
+        for (const rel of picked) {
+          const file = stickerFile(id, rel);
+          const st = await stat(file).catch(() => null);
+          if (!st) continue;
+          const raw = await readFile(file);
+          if (!/\.svg$/i.test(file)) {
+            const ext = extname(file).toLowerCase();
+            items.push({ name: rel, bytes: raw, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" });
+            continue;
+          }
+          items.push({ name: rel, svg: raw.toString("utf8"), key: `${rel}:${Math.round(st.mtimeMs)}:${offsetPx}:${roundPx}` });
+        }
+        /*
+         * The ones already traced cost nothing; the rest go through the same
+         * small pool the print path uses. Traced one after another they took
+         * two minutes for three stickers, because most of a trace is starting
+         * a browser and three browsers started in a row is three waits.
+         */
+        for (const it of items) if (it.key && dieCache.has(it.key)) it.die = dieCache.get(it.key);
+        const cold = items.filter((it) => it.key && !dieCache.has(it.key));
+        if (cold.length) {
+          /*
+           * Drawing the sticker and growing its silhouette are separate costs,
+           * and only the second depends on the offset and the radius. So the
+           * render is kept against the file alone: nudging a slider re-grows,
+           * it does not re-draw.
+           */
+          const { chromium } = await import("playwright");
+          const browser = await chromium.launch();
+          try {
+            let next = 0;
+            const lane = async () => {
+              const pg = await browser.newPage({ viewport: { width: 1024, height: 1024 }, deviceScaleFactor: 1 });
+              try {
+                while (next < cold.length) {
+                  const it = cold[next++];
+                  const inkKey = it.key.split(":").slice(0, 2).join(":");
+                  let drawn = inkCache.get(inkKey);
+                  if (!drawn) {
+                    drawn = await renderInk(it.svg, { size: 1024, page: pg });
+                    if (inkCache.size > 200) inkCache.delete(inkCache.keys().next().value);
+                    if (drawn) inkCache.set(inkKey, drawn);
+                  }
+                  it.die = await dieLine(it.svg, { offsetPx, roundPx, drawn });
+                  if (dieCache.size > 400) dieCache.delete(dieCache.keys().next().value);
+                  dieCache.set(it.key, it.die);
+                }
+              } finally {
+                await pg.close();
+              }
+            };
+            await Promise.all(Array.from({ length: Math.min(4, cold.length) }, lane));
+          } finally {
+            await browser.close();
+          }
+        }
+        if (!items.length) return json(res, 400, { error: "none of those stickers could be read" });
+        const pages = cutSheetPages({
+          items,
+          page: SHEET_PAGES.some((x) => x.id === b.page) ? b.page : "6x8",
+          stickerMm,
+          bleedMm: Math.min(10, Math.max(0, Number(b.bleedMm) ?? 3.175)),
+          logo: null,
+          title: name,
+        });
+        const at = Math.min(pages.length - 1, Math.max(0, Number(b.page1) || 0));
+        /*
+         * For the preview only, the page is given a viewBox and told to fill
+         * its box. The print SVG carries millimetres and no viewBox on purpose
+         * — that is what makes the PDF the size it says — but dropped into a
+         * panel it then renders at life size and spills out of it.
+         */
+        const mm = pages[at].match(/width="([\d.]+)mm" height="([\d.]+)mm"/);
+        const fitted = mm
+          ? pages[at].replace(mm[0], `width="100%" height="auto" viewBox="0 0 ${(Number(mm[1]) / 25.4) * 96} ${(Number(mm[2]) / 25.4) * 96}"`)
+          : pages[at];
+        return json(res, 200, { svg: fitted, pages: pages.length, at, skipped: picked.length - items.length });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
