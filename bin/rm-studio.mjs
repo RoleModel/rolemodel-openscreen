@@ -68,7 +68,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
+import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
@@ -6462,7 +6462,7 @@ const server = createServer(async (req, res) => {
             items.push({ name: rel, bytes: raw, type: { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[ext] ?? "image/png" });
             continue;
           }
-          items.push({ name: rel, svg: raw.toString("utf8"), key: `${rel}:${Math.round(st.mtimeMs)}:${offsetPx}:${roundPx}` });
+          items.push({ name: rel, svg: raw.toString("utf8"), key: `v${DIE_VERSION}:${rel}:${Math.round(st.mtimeMs)}:${offsetPx}:${roundPx}` });
         }
         /*
          * The ones already traced cost nothing; the rest go through the same
@@ -6488,7 +6488,7 @@ const server = createServer(async (req, res) => {
               try {
                 while (next < cold.length) {
                   const it = cold[next++];
-                  const inkKey = it.key.split(":").slice(0, 2).join(":");
+                  const inkKey = it.key.split(":").slice(0, 3).join(":");
                   let drawn = inkCache.get(inkKey);
                   if (!drawn) {
                     drawn = await renderInk(it.svg, { size: 1024, page: pg });
