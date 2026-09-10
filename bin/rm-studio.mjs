@@ -6459,13 +6459,22 @@ const server = createServer(async (req, res) => {
            * a browser, so this is the slow part of the job — a few at a time,
            * and once, before the pages are laid.
            */
-          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round((Number(body.bleedMm) ?? 3) * 4.6) });
+          /*
+           * The offset is a real distance on the printed sticker, not a
+           * fraction of a bitmap. It was computed from the bleed alone, which
+           * on a 40mm sticker put the cut about half a millimetre outside the
+           * artwork — under the sticker's own white keyline, where nobody could
+           * see it and no cutter would leave a border.
+           */
+          const stickerMm = Math.min(200, Math.max(10, Number(body.sizeMm) || 50.8));
+          const offsetMm = Math.min(6, Math.max(1, Number(body.dieOffsetMm) || 2));
+          const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round((offsetMm / stickerMm) * 1024) });
           const made = await cutSheetToCmykPdf({
             items: traced,
             out,
             work: join(dir, ".work"),
             page: SHEET_PAGES.some((x) => x.id === body.page) ? body.page : "letter",
-            stickerMm: Math.min(200, Math.max(10, Number(body.sizeMm) || 50.8)),
+            stickerMm,
             bleedMm: Math.min(10, Math.max(0, Number(body.bleedMm) ?? 3)),
             logo: await readFile(join(TOOLKIT, "brand", "logos", "rolemodel-logo.svg"), "utf8").catch(() => null),
             title: name,
