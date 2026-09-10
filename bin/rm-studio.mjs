@@ -6444,8 +6444,7 @@ const server = createServer(async (req, res) => {
       if (!picked.length) return json(res, 400, { error: "tick some stickers, or build the sheet first" });
       try {
         const page = SHEET_PAGES.some((x) => x.id === b.page) ? b.page : "4x6";
-        const stickerMm =
-          b.fit === false && Number(b.sizeMm) > 0 ? Math.min(200, Math.max(10, Number(b.sizeMm))) : fitStickerMm({ page, count: picked.length });
+        const stickerMm = fitStickerMm({ page, count: picked.length });
         const offsetMm = Math.min(6, Math.max(0, Number(b.dieOffsetMm ?? 0)));
         const roundMm = Math.min(10, Math.max(0, Number(b.dieRoundMm ?? 0)));
         const per = 1024 / stickerMm;
