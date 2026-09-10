@@ -6447,7 +6447,7 @@ const server = createServer(async (req, res) => {
         const stickerMm =
           b.fit === false && Number(b.sizeMm) > 0 ? Math.min(200, Math.max(10, Number(b.sizeMm))) : fitStickerMm({ page, count: picked.length });
         const offsetMm = Math.min(6, Math.max(0, Number(b.dieOffsetMm ?? 0)));
-        const roundMm = Math.min(10, Math.max(0, Number(b.dieRoundMm ?? 0.5)));
+        const roundMm = Math.min(10, Math.max(0, Number(b.dieRoundMm ?? 0)));
         const per = 1024 / stickerMm;
         const offsetPx = Math.round(offsetMm * per);
         const roundPx = Math.round(roundMm * per);
@@ -6589,7 +6589,7 @@ const server = createServer(async (req, res) => {
            * artwork that has no keyline of its own.
            */
           const offsetMm = Math.min(6, Math.max(0, Number(body.dieOffsetMm ?? 0)));
-          const roundMm = Math.min(10, Math.max(0, Number(body.dieRoundMm ?? 0.5)));
+          const roundMm = Math.min(10, Math.max(0, Number(body.dieRoundMm ?? 0)));
           const sheets = [];
           for (const page of wanted) {
             /*
