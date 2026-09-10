@@ -6509,8 +6509,10 @@ const server = createServer(async (req, res) => {
           }
         }
         if (!items.length) return json(res, 400, { error: "none of those stickers could be read" });
+        const sideOut = {};
         const pages = cutSheetPages({
           items,
+          sideOut,
           page,
           stickerMm,
           bleedMm: 3.175,
@@ -6529,7 +6531,7 @@ const server = createServer(async (req, res) => {
         const fitted = mm
           ? pages[at].replace(mm[0], `width="100%" height="auto" viewBox="0 0 ${(Number(mm[1]) / 25.4) * 96} ${(Number(mm[2]) / 25.4) * 96}"`)
           : pages[at];
-        return json(res, 200, { svg: fitted, pages: pages.length, at, stickerMm, skipped: picked.length - items.length });
+        return json(res, 200, { svg: fitted, pages: pages.length, at, stickerMm: sideOut.value ?? stickerMm, skipped: picked.length - items.length });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -6620,7 +6622,7 @@ const server = createServer(async (req, res) => {
               title: name,
               profile: String(body.profile ?? ""),
             });
-            sheets.push({ ...made, page, label: SHEET_PAGES.find((z) => z.id === page)?.label ?? page, stickerMm, rel: relative(mediaDir(id), out) });
+            sheets.push({ ...made, page, label: SHEET_PAGES.find((z) => z.id === page)?.label ?? page, stickerMm: made.sideMm ?? stickerMm, rel: relative(mediaDir(id), out) });
           }
           await reindex(id, { force: true }).catch(() => {});
           const first = sheets[0] ?? {};
