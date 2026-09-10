@@ -6514,7 +6514,7 @@ const server = createServer(async (req, res) => {
           page,
           stickerMm,
           bleedMm: 3.175,
-          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 1))),
+          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 0))),
           logo: null,
           title: name,
         });
@@ -6615,7 +6615,7 @@ const server = createServer(async (req, res) => {
               page,
               stickerMm,
               bleedMm: 3.175,
-              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 1))),
+              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 0))),
               logo: null,
               title: name,
               profile: String(body.profile ?? ""),
