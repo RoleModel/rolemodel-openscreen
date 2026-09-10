@@ -2945,7 +2945,7 @@ class RMShowcase extends RMElement {
           /*
            * The camera: one move over the whole scene, on the scene clock. Every
            * layer carries the same move with the same timing, so a pan carries
-           * all of them together, as one picture. Linear pans, eased zooms.
+           * all of them together, as one picture. Every move eases in and out.
            */
           .room { position:absolute; inset:0; transform-style:preserve-3d;
                   transform: translate(var(--cam-x), var(--cam-y)) scale(var(--cam-s));
@@ -3179,7 +3179,18 @@ class RMShowcase extends RMElement {
     room.style.animationName = `cam-${s.move}`
     room.style.setProperty('--mat', `${Number(this.getAttribute('mat') || 0)}ms`)
     room.style.setProperty('--mfor', `${Math.max(1, Number(this.getAttribute('mfor')) || Number(this.getAttribute('for')) || 8000)}ms`)
-    room.style.setProperty('--cam-ease', s.move.startsWith('zoom') || s.move === 'drift' ? 'cubic-bezier(0.4, 0, 0.6, 1)' : 'linear')
+    /*
+     * Every camera move eases, pans included.
+     *
+     * A linear pan is at full speed on its first frame and dead still on the
+     * one after its last. On the stage that reads as a hitch: the picture is
+     * still, then it is rolling sideways, then it stops — and at both ends the
+     * layer's own enter and exit are moving it the other way at the same time,
+     * so the card visibly changes direction. Eased, the pan is almost still
+     * exactly where those beats are, and the move begins and ends as a move
+     * rather than as a jump.
+     */
+    room.style.setProperty('--cam-ease', s.move === 'none' ? 'linear' : 'cubic-bezier(0.4, 0, 0.6, 1)')
     const place = this.shadowRoot.querySelector('.place')
     place.style.inset = `${s.pad}%`
     /*
