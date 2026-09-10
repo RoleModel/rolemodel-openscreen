@@ -215,9 +215,15 @@
   color: var(--op-color-neutral-on-plus-max-alt);
 }
 
+/* Green, and bold with it: colour alone is not a signal everyone receives. */
 .stickers__cell--best .stickers__cell-unit {
-  color: var(--op-color-primary-base);
+  color: var(--accent);
   font-weight: var(--op-font-weight-bold);
+}
+
+.stickers__cell--best {
+  border-radius: var(--op-radius-small);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .stickers__quote-source {
