@@ -6450,7 +6450,7 @@ const server = createServer(async (req, res) => {
         const per = 1024 / stickerMm;
         const offsetPx = Math.round(offsetMm * per);
         const roundPx = Math.round(roundMm * per);
-        const bleedPx = Math.round(Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.5))) * per);
+        const bleedPx = Math.round(Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.35))) * per);
         const items = [];
         for (const rel of picked) {
           const file = stickerFile(id, rel);
@@ -6514,7 +6514,7 @@ const server = createServer(async (req, res) => {
           page,
           stickerMm,
           bleedMm: 3.175,
-          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.5))),
+          stickerBleedMm: Math.min(6, Math.max(0, Number(b.bleedMm ?? 0.35))),
           logo: null,
           title: name,
         });
@@ -6606,7 +6606,7 @@ const server = createServer(async (req, res) => {
             const per = 1024 / stickerMm;
             /* Traced once per size, because the offset is in millimetres on the
                printed sticker and the sticker is a different size on each. */
-            const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per), bleedPx: Math.round(Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.5))) * per) });
+            const traced = body.die === false ? items : await withDieLines(items, { offsetPx: Math.round(offsetMm * per), roundPx: Math.round(roundMm * per), bleedPx: Math.round(Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.35))) * per) });
             const out = join(dir, `${name}-sheet-${page}-cmyk.pdf`);
             const made = await cutSheetToCmykPdf({
               items: traced,
@@ -6615,7 +6615,7 @@ const server = createServer(async (req, res) => {
               page,
               stickerMm,
               bleedMm: 3.175,
-              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.5))),
+              stickerBleedMm: Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.35))),
               logo: null,
               title: name,
               profile: String(body.profile ?? ""),
