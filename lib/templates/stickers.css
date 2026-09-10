@@ -251,3 +251,7 @@
 .stickers__preview-sheet--busy {
   opacity: 0.55;
 }
+
+/* A run bigger than the column asked for: the money is real, the column is not
+   what you would be buying. */
+.stickers__cell--over .stickers__cell-unit { opacity: 0.65; }
