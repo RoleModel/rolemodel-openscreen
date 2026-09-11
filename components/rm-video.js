@@ -112,7 +112,7 @@ globalThis.RM = RM
  * properties, and opacity/transform are composed from both. One property, one
  * writer.
  */
-for (const [name, syntax, initial] of [
+for (const [name, syntax, initial, inherits = false] of [
   ['--rm-in-o', '<number>', '0'],
   ['--rm-out-o', '<number>', '1'],
   ['--rm-in-y', '<length>', '0px'],
@@ -120,8 +120,10 @@ for (const [name, syntax, initial] of [
   ['--rm-in-s', '<number>', '1'],
   // The showcase's enter and exit, kept apart for the same reason: two
   // animations on one property fight, and the later one wins.
-  ['--sc-in-o', '<number>', '1'],
-  ['--sc-out-o', '<number>', '1'],
+  /* These two inherit: the fade is applied on the card, which is two elements
+     below the layer the animation runs on. See the note by .card's opacity. */
+  ['--sc-in-o', '<number>', '1', true],
+  ['--sc-out-o', '<number>', '1', true],
   ['--sc-in-x', '<length-percentage>', '0%'],
   ['--sc-in-y', '<length-percentage>', '0%'],
   ['--sc-in-s', '<number>', '1'],
@@ -137,7 +139,7 @@ for (const [name, syntax, initial] of [
   // Registration is document-global, which is why it happens here once rather
   // than inside every shadow root.
   try {
-    CSS.registerProperty({ name, syntax, initialValue: initial, inherits: false })
+    CSS.registerProperty({ name, syntax, initialValue: initial, inherits })
   } catch {
     /* already registered, or an engine without @property — animation still runs, just stepped */
   }
@@ -2945,7 +2947,7 @@ class RMShowcase extends RMElement {
           /*
            * The camera: one move over the whole scene, on the scene clock. Every
            * layer carries the same move with the same timing, so a pan carries
-           * all of them together, as one picture. Linear pans, eased zooms.
+           * all of them together, as one picture. Every move eases in and out.
            */
           .room { position:absolute; inset:0; transform-style:preserve-3d;
                   transform: translate(var(--cam-x), var(--cam-y)) scale(var(--cam-s));
@@ -2970,8 +2972,17 @@ class RMShowcase extends RMElement {
                    animation-delay: calc(var(--at) - var(--t)), calc(var(--at) + var(--hold) - var(--out-dur) - var(--t));
                    animation-timing-function: var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)), var(--ease-exit, cubic-bezier(0.55, 0, 1, 0.45));
                    animation-fill-mode: both, both; animation-play-state: paused, paused;
-                   /* Enter and exit each own their variables; the layer combines them. */
-                   opacity: calc(var(--sc-in-o) * var(--sc-out-o));
+                   /*
+                    * The fade is on the card, not here.
+                    *
+                    * An opacity below 1 makes transform-style: preserve-3d used-value
+                    * flat, so while a layer was fading the card stopped being composed
+                    * with the room's perspective and rendered without it. At the frame
+                    * the enter finished, opacity reached exactly 1, the 3D came back and
+                    * the card's tilt visibly popped — the hitch three quarters of a
+                    * second in. Enter and exit each own their variables; the card
+                    * combines them with its own.
+                    */
                    transform: perspective(120cqw) rotateX(var(--sc-in-r)) translate(calc(var(--sc-in-x) + var(--sc-out-x)), calc(var(--sc-in-y) + var(--sc-out-y))) scale(calc(var(--sc-in-s) * var(--sc-out-s))); }
           @keyframes sc-in-none  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-fade  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
@@ -2993,7 +3004,7 @@ class RMShowcase extends RMElement {
              JS, and only when there is a blur to apply. */
           .card { position:relative; transform-style:preserve-3d; --u: calc(var(--w) / 100);
                   transform: translate(var(--k-x), var(--k-y)) translateZ(var(--k-z)) scale(var(--k-s)) rotateX(var(--k-rx)) rotateY(var(--k-ry)) rotateZ(var(--k-rz));
-                  opacity: var(--k-o); }
+                  opacity: calc(var(--k-o) * var(--sc-in-o) * var(--sc-out-o)); }
           .body { position:absolute; inset:0; transform-style:preserve-3d; }
           .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
           .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
@@ -3179,7 +3190,18 @@ class RMShowcase extends RMElement {
     room.style.animationName = `cam-${s.move}`
     room.style.setProperty('--mat', `${Number(this.getAttribute('mat') || 0)}ms`)
     room.style.setProperty('--mfor', `${Math.max(1, Number(this.getAttribute('mfor')) || Number(this.getAttribute('for')) || 8000)}ms`)
-    room.style.setProperty('--cam-ease', s.move.startsWith('zoom') || s.move === 'drift' ? 'cubic-bezier(0.4, 0, 0.6, 1)' : 'linear')
+    /*
+     * Every camera move eases, pans included.
+     *
+     * A linear pan is at full speed on its first frame and dead still on the
+     * one after its last. On the stage that reads as a hitch: the picture is
+     * still, then it is rolling sideways, then it stops — and at both ends the
+     * layer's own enter and exit are moving it the other way at the same time,
+     * so the card visibly changes direction. Eased, the pan is almost still
+     * exactly where those beats are, and the move begins and ends as a move
+     * rather than as a jump.
+     */
+    room.style.setProperty('--cam-ease', s.move === 'none' ? 'linear' : 'cubic-bezier(0.4, 0, 0.6, 1)')
     const place = this.shadowRoot.querySelector('.place')
     place.style.inset = `${s.pad}%`
     /*

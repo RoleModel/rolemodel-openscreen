@@ -54,6 +54,7 @@ import {
 	takeId as takeIdFor,
 	toCutlist,
 } from "../lib/storyboard.mjs";
+import { SCENE_FORMATS, renderScene, sceneRenderProblem } from "../lib/render-scene.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
 import { clientStamp, renderStudioHTML, templateStyles } from "../lib/studio-ui.mjs";
@@ -11845,6 +11846,59 @@ async function fetchVoiceList() {
         return json(res, 400, { error: String(err.message) });
       }
     }
+
+    /* A scene as a video file — see lib/render-scene.mjs. */
+    if (p === "/api/scenes/render" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      const id = String(b.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      const name = safeName(String(b.name ?? "scene"), "scene");
+      const body = String(b.body ?? "") || (await readFile(join(projectDir(id), "scenes", `${name}.html`), "utf8").catch(() => ""));
+      if (!body.trim()) return json(res, 404, { error: "that scene has nothing in it" });
+      const stop = await sceneRenderProblem();
+      if (stop) return json(res, 400, { error: stop });
+      const fmt = SCENE_FORMATS.find((f) => f.id === b.format) ?? SCENE_FORMATS[0];
+      try {
+        const dir = join(mediaDir(id), "Renders");
+        await mkdir(dir, { recursive: true });
+        const out = join(dir, `${name}${fmt.ext}`);
+        /*
+         * A scene can show the project's own footage, which lives in the
+         * library rather than in the repo — so a path the repo does not have is
+         * looked for there before it is refused.
+         */
+        const made = await renderScene({
+          body,
+          out,
+          format: fmt.id,
+          fps: Math.min(60, Math.max(1, Number(b.fps) || 30)),
+          durationMs: Number(b.durationMs) > 0 ? Number(b.durationMs) : null,
+          width: Math.min(3840, Math.max(320, Number(b.width) || 1920)),
+          height: Math.min(2160, Math.max(240, Number(b.height) || 1080)),
+          transparent: Boolean(b.transparent),
+          brand: await loadPreset(String(b.brand ?? "rolemodel")).catch(() => undefined),
+          /* Same ground and same take as the preview, or the render is a
+             different picture from the one that was approved. Footage, like the
+             preview's, may only name one of this Studio's own routes. */
+          wallpaper: b.wallpaper || null,
+          footage:
+            typeof b.footage?.src === "string" && b.footage.src.startsWith("/media/")
+              ? { src: b.footage.src, inSec: Math.max(0, Number(b.footage.inSec) || 0), outSec: Math.max(0, Number(b.footage.outSec) || 0) }
+              : null,
+          resolveFile: (pathname) => {
+            const rel = decodeURIComponent(pathname).replace(/^\/media\/[^/]+\//, "");
+            const guess = join(mediaDir(id), rel);
+            return guess.startsWith(mediaDir(id)) && existsSync(guess) ? guess : null;
+          },
+        });
+        await reindex(id, { force: true }).catch(() => {});
+        return json(res, 200, { ...made, rel: relative(mediaDir(id), out) });
+      } catch (err) {
+        return json(res, 400, { error: String(err.message) });
+      }
+    }
+
+    if (p === "/api/scenes/formats" && req.method === "GET") return json(res, 200, { formats: SCENE_FORMATS, problem: await sceneRenderProblem() });
 
     if (p === "/api/scenes") {
       const id = new URL(req.url, "http://x").searchParams.get("project") ?? "";
