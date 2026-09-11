@@ -45,12 +45,15 @@ jobs:
       # install because every later pnpm command parses the same config.
       NODE_AUTH_TOKEN: ${{ secrets.ROLEMODEL_PACKAGE_REPO_READ_TOKEN || github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: 11.20.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          # The same Node the push workflow checks on. A release built on an
+          # older runtime than the one the code is verified against is a release
+          # nobody tested.
+          node-version: "24"
           cache: "pnpm"
           scope: "@rolemodel"
           registry-url: "https://npm.pkg.github.com"
@@ -98,7 +101,7 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # The tarball Homebrew installs is built here, not taken from GitHub's
       # source archive, because it carries one file the repo does not:
