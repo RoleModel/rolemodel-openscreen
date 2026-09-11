@@ -54,7 +54,9 @@ import {
 	takeId as takeIdFor,
 	toCutlist,
 } from "../lib/storyboard.mjs";
+import { TRUTH_KINDS, TRUTH_SECTIONS, addEntry, readTruth, truthDigest } from "../lib/brand-truth.mjs";
 import { SCENE_FORMATS, renderScene, sceneRenderProblem } from "../lib/render-scene.mjs";
+import { writeTrace, digest as traceDigest } from "../lib/trace.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
 import { clientStamp, renderStudioHTML, templateStyles } from "../lib/studio-ui.mjs";
@@ -72,7 +74,7 @@ import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
 import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
-import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate } from "../lib/update.mjs";
+import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate, currentVersion } from "../lib/update.mjs";
 import {
   actions as demoActions,
   describe as describeDemo,
@@ -3809,6 +3811,49 @@ const server = createServer(async (req, res) => {
      * The prompts a project keeps — see lib/prompts.mjs for why they live with
      * the project rather than on the machine.
      */
+    /*
+     * Brand Truth: the project's own brand source, as markdown on disk.
+     *
+     * Read as a whole because that is how it is used — a panel shows every
+     * section at once, and a skill asking what is true about this brand wants
+     * the digest, not ten directory listings.
+     */
+    if (p === "/api/brand-truth" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!id) return json(res, 200, { sections: TRUTH_SECTIONS.map((s) => ({ ...s, entries: [] })), counts: { entries: 0, current: 0, refusals: 0 }, kinds: TRUTH_KINDS });
+      const truth = await readTruth(projectDir(id));
+      return json(res, 200, { ...truth, kinds: TRUTH_KINDS });
+    }
+    /* The digest is the whole brand as one document, for anything generating work. */
+    if (p === "/api/brand-truth/digest" && req.method === "GET") {
+      const id = String(url.searchParams.get("project") ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      return json(res, 200, { digest: await truthDigest(projectDir(id)) });
+    }
+    /*
+     * Adding is the only write. A correction is an addition that names what it
+     * replaces — nothing is ever edited, so the folder keeps the argument and
+     * not only the answer.
+     */
+    if (p === "/api/brand-truth" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      const id = String(body.projectId ?? "");
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return json(res, 404, { error: "pick a project" });
+      try {
+        const saved = await addEntry(projectDir(id), {
+          section: String(body.section ?? ""),
+          claim: String(body.claim ?? ""),
+          kind: String(body.kind ?? "claim"),
+          source: String(body.source ?? ""),
+          body: String(body.body ?? ""),
+          supersedes: String(body.supersedes ?? ""),
+        });
+        const truth = await readTruth(projectDir(id));
+        return json(res, 200, { saved, ...truth, kinds: TRUTH_KINDS });
+      } catch (err) {
+        return json(res, 400, { error: err.message });
+      }
+    }
     if (p === "/api/prompts" && req.method === "GET") {
       const id = String(url.searchParams.get("project") ?? "");
       if (!id) return json(res, 200, { prompts: [] });
@@ -11891,6 +11936,33 @@ async function fetchVoiceList() {
             return guess.startsWith(mediaDir(id)) && existsSync(guess) ? guess : null;
           },
         });
+        /*
+         * The render, and the record of what made it.
+         *
+         * A file in Renders/ used to be evidence of nothing: six weeks later
+         * nobody could say which scene, which ground or which version drew it.
+         * The body is hashed rather than copied — the trace answers "is this
+         * still the thing that made it" without becoming a second copy of the
+         * work.
+         */
+        await writeTrace(out, {
+          tool: "rm-studio scenes/render",
+          version: await currentVersion(TOOLKIT).catch(() => null),
+          project: id,
+          brand: String(b.brand ?? "rolemodel"),
+          inputs: {
+            scene: name,
+            body: `sha256:${traceDigest(body)}`,
+            wallpaper: b.wallpaper || null,
+            footage: b.footage?.src ?? null,
+            format: fmt.id,
+            fps: made.fps,
+            width: made.width,
+            height: made.height,
+            durationMs: made.durationMs,
+            transparent: made.transparent,
+          },
+        }).catch(() => {});
         await reindex(id, { force: true }).catch(() => {});
         return json(res, 200, { ...made, rel: relative(mediaDir(id), out) });
       } catch (err) {

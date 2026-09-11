@@ -1,0 +1,55 @@
+<!-- Brand Truth: what is known about the brand, with a source and a date. -->
+<template data-panel="truth">
+   <p class="lede" data-region="main">Everything known about this brand, each claim with a source and a date. Nothing here is ever edited: a correction is a new entry that names the one it replaces, and the old one is kept and marked. A refusal — something the brand never does — is worth more to anything making work than a page of things you like. It is markdown in the project folder, so it can be read, diffed and reviewed without this program.</p>
+   <p data-el="status" class="hint" data-region="main" hidden></p>
+   <p data-el="noProject" class="hint" data-region="main" hidden>Pick a project to keep its brand source.</p>
+
+   <div class="client" data-region="main">The source <span data-el="counts" class="truth__soft"></span></div>
+   <p data-el="empty" class="hint" data-region="main" hidden>Nothing written yet. Add the first claim from the rail — start with what the brand refuses to do.</p>
+   <div data-el="sections" data-region="main" class="truth__sections"></div>
+
+   <div data-region="side">
+      <div class="client">Add an entry</div>
+      <div class="grid">
+         <label class="form-label" for="truth-section">Section</label>
+         <select data-el="section" id="truth-section" class="form-control"></select>
+         <label class="form-label" for="truth-kind">Kind</label>
+         <select data-el="kind" id="truth-kind" class="form-control"></select>
+         <label class="form-label" for="truth-claim">Claim</label>
+         <input data-el="claim" id="truth-claim" class="form-control" placeholder="The green is only ever on the thing you press" />
+         <label class="form-label" for="truth-source">Source</label>
+         <input data-el="source" id="truth-source" class="form-control" placeholder="Who said so, or where it is written" />
+         <label class="form-label" for="truth-body">Why</label>
+         <textarea data-el="body" id="truth-body" class="form-control" rows="4" placeholder="The reason. A claim with no reason cannot be argued with, and a brand is mostly arguments."></textarea>
+         <p data-el="replacing" class="hint" hidden></p>
+      </div>
+   </div>
+
+   <div class="grid" data-region="footer">
+      <button data-el="cancel" class="btn ghost" type="button" hidden>Not a replacement</button>
+      <button data-el="digest" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy the digest</button>
+      <button data-el="add" class="btn btn--primary" type="button"><rm-icon name="plus-sign"></rm-icon>Add it</button>
+   </div>
+</template>
+
+<!-- One section of the source, with its entries under it. -->
+<template data-row="truth-section">
+   <section class="truth__section">
+      <h2 data-el="name" class="truth__name"></h2>
+      <p data-el="blurb" class="truth__blurb"></p>
+      <div data-el="entries" class="truth__entries"></div>
+   </section>
+</template>
+
+<!-- One claim or refusal. -->
+<template data-row="truth-entry">
+   <article class="truth__entry">
+      <div class="truth__head">
+         <b data-el="claim" class="truth__claim"></b>
+         <span data-el="kind" class="kind" hidden></span>
+      </div>
+      <p data-el="meta" class="path"></p>
+      <p data-el="body" class="truth__body"></p>
+      <button data-el="replace" class="btn ghost btn--small truth__replace" type="button">Replace it</button>
+   </article>
+</template>
