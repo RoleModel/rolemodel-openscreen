@@ -1,0 +1,86 @@
+/* Brand Truth: a reading page, not a form. The entries are the thing. */
+.truth__soft {
+  font-weight: var(--op-font-weight-normal);
+  color: var(--op-color-neutral-on-plus-max-alt);
+}
+
+.truth__sections {
+  display: grid;
+  gap: var(--op-space-large);
+}
+
+.truth__section {
+  display: grid;
+  gap: var(--op-space-2x-small);
+}
+
+.truth__name {
+  margin: 0;
+  font-size: var(--op-font-medium);
+}
+
+.truth__blurb {
+  margin: 0;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-x-small);
+}
+
+.truth__entries {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  margin-block-start: var(--op-space-2x-small);
+}
+
+.truth__entry {
+  display: grid;
+  gap: var(--op-space-3x-small);
+  padding: var(--op-space-x-small);
+  border-radius: var(--op-radius-small);
+  background: var(--sunk);
+  /* A claim reads as a line of prose, so it gets a measure. */
+  max-inline-size: 70ch;
+}
+
+/*
+ * A superseded entry is history, not a mistake. It stays legible — you have to
+ * be able to read what was once true — but it must never be mistaken for the
+ * current rule, so it is dimmed and its claim is struck through.
+ */
+.truth__entry--old {
+  opacity: 0.55;
+}
+
+.truth__entry--old .truth__claim {
+  text-decoration: line-through;
+}
+
+.truth__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--op-space-2x-small);
+}
+
+.truth__claim {
+  font-size: var(--op-font-small);
+}
+
+/* A refusal is the strongest thing in the file; it is marked as such. */
+.truth__entry--refusal {
+  border-inline-start: var(--op-border-width-large) solid var(--op-color-alerts-danger-base);
+}
+
+.truth__body {
+  margin: 0;
+  color: var(--op-color-neutral-on-plus-max-alt);
+  font-size: var(--op-font-x-small);
+  white-space: pre-wrap;
+}
+
+.truth__body:empty {
+  display: none;
+}
+
+/* A row of prose with one action; the action is not the width of the prose. */
+.truth__replace {
+  justify-self: start;
+}
