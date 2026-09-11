@@ -2739,7 +2739,17 @@ const SHOWCASE_SCHEMA = [
   { key: 'device', label: 'Device', type: 'select', options: ['none', 'browser', 'phone', 'macbook'], def: 'none', group: 'frame' },
   { key: 'pad', label: 'Margin', type: 'range', min: 0, max: 30, step: 0.5, def: 8, group: 'frame' },
   { key: 'radius', label: 'Corners', type: 'range', min: 0, max: 8, step: 0.1, def: 1.6, group: 'frame' },
-  { key: 'w', label: 'Size (%)', type: 'range', min: 10, max: 100, step: 1, def: 100, group: 'frame' },
+  { key: 'w', label: 'Size (%)', type: 'range', min: 10, max: 100, step: 1, def: 100, group: 'frame', note: 'The layer size, held for the whole layer. Keyframe Scale, just below, to grow or shrink over time.' },
+  /*
+   * Scale sits beside Size, because that is where somebody looks for it.
+   *
+   * Size is the card's width in the layout and cannot be keyed: at 100 the card
+   * fills its margin and below it takes the picture's shape, so a value animated
+   * across 100 would jump between two different rules. Scale is a transform, it
+   * keys, and growing or shrinking over time is what it is for — but it lived in
+   * Camera, a group away, under a name that did not say so.
+   */
+  { key: 'zoom', label: 'Scale', type: 'range', min: 0.4, max: 2.5, step: 0.01, def: 1, group: 'frame', note: 'Size over time. Put the playhead somewhere, change this, and the change is a key.' },
   { key: 'frame', label: 'Frame', type: 'select', options: ['none', 'glass', 'dark', 'light'], def: 'none', group: 'frame' },
   { key: 'shadow', label: 'Shadow', type: 'range', min: 0, max: 1, step: 0.01, def: 0, group: 'frame' },
   { key: 'fit', label: 'Fit', type: 'select', options: ['cover', 'contain'], def: 'cover', group: 'frame' },
@@ -2747,7 +2757,6 @@ const SHOWCASE_SCHEMA = [
   { key: 'ty', label: 'Tilt Y', type: 'range', min: -45, max: 45, step: 0.5, def: -12, group: 'camera' },
   { key: 'tz', label: 'Roll', type: 'range', min: -30, max: 30, step: 0.5, def: 0, group: 'camera' },
   { key: 'persp', label: 'Perspective', type: 'range', min: 40, max: 400, step: 1, def: 140, group: 'camera' },
-  { key: 'zoom', label: 'Zoom', type: 'range', min: 0.4, max: 2.5, step: 0.01, def: 1, group: 'camera' },
   { key: 'x', label: 'X', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
   { key: 'y', label: 'Y', type: 'range', min: -150, max: 150, step: 0.5, def: 0, group: 'camera' },
   { key: 'z', label: 'Depth', type: 'range', min: -100, max: 100, step: 0.5, def: 0, group: 'camera' },
