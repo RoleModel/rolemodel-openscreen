@@ -249,18 +249,40 @@
  * keys sit there as diamonds. The one under the playhead is lit: that is the
  * key the dials write to.
  */
-.showcase__track--on { height: 3.3rem; }
+.showcase__track--on {
+  height: 3.3rem;
+}
 
-.showcase__track--on .showcase__bar { inset-block: 5px 19px; }
+/* The bar leaves a strip under it on every track, because every track now has
+   diamonds to put there; on the bar itself they sat over the words. */
+.showcase__track .showcase__bar {
+  inset-block: 2px 14px;
+}
+
+/*
+ * Every track shows its keys, not only the selected one.
+ *
+ * The keys were drawn for every layer and shown for one, so a scene's timing
+ * was invisible until you clicked through it layer by layer — and the one
+ * question a timeline is for is when things happen relative to each other. The
+ * rows all need the room now, so the height is a floor on every track rather
+ * than a size the selection grants.
+ */
+.showcase__track {
+  min-block-size: 3.3rem;
+}
 
 .showcase__keys {
   position: absolute;
   inset: 0;
-  display: none;
   pointer-events: none;
 }
 
-.showcase__track--on .showcase__keys { display: block; }
+/* The selected layer's keys are the ones the dials write to, so they stay the
+   loudest; the rest are legible without competing. */
+.showcase__track:not(.showcase__track--on) .showcase__key {
+  opacity: 0.45;
+}
 
 .showcase__key {
   display: block;
