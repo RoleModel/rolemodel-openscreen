@@ -40,7 +40,7 @@
     "presets": "node bin/rm-video.mjs presets",
     "wallpapers": "node lib/make-wallpapers.mjs",
     "wallpapers:reset": "node lib/make-wallpapers.mjs --reset",
-    "verify": "node lib/verify.mjs",
+    "verify": "node --test lib/voice-ui.test.mjs && node lib/verify.mjs",
     "axe": "node lib/axe-check.mjs",
     "axe:strict": "node lib/axe-check.mjs --strict",
     "sync-brand": "node lib/sync-brand.mjs",
