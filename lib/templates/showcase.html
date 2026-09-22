@@ -43,6 +43,9 @@
    <!-- Buttons only. The dials are the rail's. -->
    <div class="grid" data-region="footer">
       <button data-el="addLayer" class="btn ghost" type="button"><rm-icon name="plus-sign"></rm-icon>Add layer</button>
+      <!-- Words are a layer, not a property of a device: a headline beside a
+           phone has its own place, its own timing and its own exit. -->
+      <button data-el="addText" class="btn ghost" type="button"><rm-icon name="text"></rm-icon>Add text</button>
       <!-- A picture or clip from this machine, straight onto the selected layer. -->
       <button data-el="addImage" class="btn ghost" type="button"><rm-icon name="upload-04"></rm-icon>Add image</button>
       <input data-el="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />

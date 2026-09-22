@@ -626,6 +626,66 @@ class RMText extends RMElement {
 }
 define('rm-text', RMText)
 
+/*
+ * The same shape the showcase has, so the editor can build a rail for text
+ * without knowing anything about text.
+ *
+ * The Studio paints its dials by walking a schema: a list of keys with a type,
+ * a range and a group. That is why a showcase is editable and everything else
+ * is not — the showcase is the only thing that ever had one. Giving text the
+ * same table is what makes "Add text" possible at all, and it means a dial
+ * added here appears in the editor with no change there.
+ */
+const TEXT_GROUPS = [
+  ['words', 'Words'],
+  ['place', 'Place'],
+  ['type', 'Type'],
+  ['motion', 'Motion'],
+  ['lean', 'Lean'],
+]
+
+const TEXT_SCHEMA = [
+  { key: 'text', label: 'Headline', type: 'text', def: 'Text', group: 'words' },
+  { key: 'sub', label: 'Caption', type: 'text', def: '', group: 'words', note: 'Optional. A second, quieter line under the headline.' },
+
+  { key: 'x', label: 'Across (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 8, group: 'place' },
+  { key: 'y', label: 'Down (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 50, group: 'place' },
+  { key: 'anchor', label: 'Align', type: 'select', options: ['left', 'center', 'right'], def: 'left', group: 'place', note: 'Which edge Across measures from, and how the lines align.' },
+  { key: 'w', label: 'Measure', type: 'range', min: 8, max: 90, step: 1, def: 34, group: 'place', note: 'How wide the block may run before it wraps.' },
+
+  { key: 'size', label: 'Headline size', type: 'range', min: 1, max: 12, step: 0.1, def: 4.6, group: 'type' },
+  { key: 'subsize', label: 'Caption size', type: 'range', min: 0.8, max: 5, step: 0.1, def: 1.6, group: 'type' },
+  { key: 'weight', label: 'Weight', type: 'range', min: 300, max: 800, step: 100, def: 700, group: 'type' },
+  { key: 'subweight', label: 'Caption weight', type: 'range', min: 300, max: 800, step: 100, def: 400, group: 'type' },
+  { key: 'color', label: 'Ink', type: 'select', options: ['fg', 'muted', 'brand', 'on-brand'], def: 'fg', group: 'type' },
+  { key: 'subcolor', label: 'Caption ink', type: 'select', options: ['fg', 'muted', 'brand', 'on-brand'], def: 'muted', group: 'type' },
+  { key: 'track', label: 'Letter spacing', type: 'range', min: -0.08, max: 0.2, step: 0.005, def: -0.03, group: 'type' },
+  { key: 'lead', label: 'Line height', type: 'range', min: 0.9, max: 1.8, step: 0.01, def: 1.05, group: 'type' },
+  { key: 'gap', label: 'Gap', type: 'range', min: 0, max: 6, step: 0.1, def: 1.1, group: 'type', note: 'Between the headline and its caption.' },
+
+  { key: 'stagger', label: 'Arrives', type: 'select', options: ['none', 'word', 'char'], def: 'word', group: 'motion', note: 'All at once, a word at a time, or a letter at a time.' },
+  { key: 'step', label: 'Apart (ms)', type: 'range', min: 0, max: 200, step: 5, def: 60, group: 'motion' },
+  { key: 'rise', label: 'Rise (px)', type: 'range', min: 0, max: 80, step: 1, def: 26, group: 'motion' },
+  { key: 'shadow', label: 'Ink shadow', type: 'select', options: ['1', '0'], def: '1', group: 'motion', note: 'On, because type is not always over a controlled ground.' },
+
+  { key: 'tx', label: 'Lean X', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
+  { key: 'ty', label: 'Lean Y', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
+  { key: 'tz', label: 'Roll', type: 'range', min: -30, max: 30, step: 0.5, def: 0, group: 'lean' },
+  { key: 'persp', label: 'Perspective', type: 'range', min: 40, max: 400, step: 1, def: 180, group: 'lean' },
+]
+
+const textDefaults = () => Object.fromEntries(TEXT_SCHEMA.map((f) => [f.key, f.def]))
+
+/** A text layer as an attribute string: only what differs from the defaults. */
+function encodeText(state) {
+  const parts = []
+  for (const f of TEXT_SCHEMA) {
+    if (String(state[f.key] ?? f.def) === String(f.def)) continue
+    parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  }
+  return parts.join(' ')
+}
+
 /* ── rm-lower-third ──────────────────────────────────────────────────────── */
 
 class RMLowerThird extends RMElement {
@@ -3789,7 +3849,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 
