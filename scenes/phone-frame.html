@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Phone frame — titanium</title>
+<link rel="stylesheet" href="../brand/fonts/fonts.css" />
+<link rel="stylesheet" href="../brand/optics/optics.css" />
+<link rel="stylesheet" href="../brand/optics/rolemodel-scales.css" />
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; background:#0a0a0b; }
+  body { display:grid; place-items:center; min-height:100vh; }
+  #stage { width:100vw; max-width:calc(100vh * 16 / 9); position:relative; }
+  .row { position:absolute; inset:0; display:grid; grid-template-columns:1fr 1fr 1fr; }
+  .cell { position:relative; }
+</style>
+<script type="module" src="../components/rm-video.js"></script>
+</head>
+<body>
+<div id="stage">
+  <rm-scene>
+    <div class="row">
+      <div class="cell"><rm-showcase at="0" for="4000" device="phone" frame="dark" look="none" pad="16" shadow="0.8"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S02.png"
+        tx="6" ty="-38" tz="0" persp="170"></rm-showcase></div>
+      <div class="cell"><rm-showcase at="0" for="4000" device="phone" frame="dark" look="none" pad="16" shadow="0.8"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S05.png"
+        tx="4" ty="34" tz="0" persp="170"></rm-showcase></div>
+      <div class="cell"><rm-showcase at="0" for="4000" device="phone" frame="light" look="none" pad="16" shadow="0.8"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S09.png"
+        tx="8" ty="-18" tz="-3" persp="170"></rm-showcase></div>
+    </div>
+  </rm-scene>
+</div>
+<script type="module">
+  import { RM } from "../components/rm-video.js";
+  await RM.ready();
+  RM.seek(2000);
+</script>
+</body>
+</html>
