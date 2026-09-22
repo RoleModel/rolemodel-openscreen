@@ -27,7 +27,7 @@ import { copyFile, cp, link, lstat, mkdir, readFile, readdir, rename, rm, stat, 
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync, watch as watchFile } from "node:fs";
 import { pipeline } from "node:stream/promises";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
 import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
@@ -12285,7 +12285,22 @@ async function fetchVoiceList() {
    */
   let audio = null;
   if (body.audio) {
-    audio = resolve(String(body.audio));
+    /*
+     * Named by its place in the project, exactly like footage.
+     *
+     * The catalogue gives an entry a `rel` and no absolute path, so the panel
+     * built its narration menu as new Option(a.rel, a.path) with a.path
+     * undefined -- and an Option given no value takes its label. What arrived
+     * was "Audio/whatever.mp3", a project-relative name, which resolve() then
+     * measured from the working directory and found outside the library. The
+     * refusal read as a permissions problem and was a path problem.
+     *
+     * Footage was fixed for this and narration was not, though the comment
+     * above already claimed they were treated alike. Now they are: absolute
+     * stays absolute, anything else is relative to this project's media.
+     */
+    const raw = String(body.audio);
+    audio = isAbsolute(raw) ? resolve(raw) : join(mediaDir(id), raw);
     if (!(audio === LIB || audio.startsWith(LIB + sep))) return json(res, 403, { error: `outside ${LIB}: ${body.audio}` });
     if (!(await stat(audio).catch(() => null))) return json(res, 404, { error: `no such audio: ${body.audio}` });
   }
