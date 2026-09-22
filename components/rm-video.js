@@ -3226,7 +3226,10 @@ class RMShowcase extends RMElement {
            * reads as "nothing here yet" in any language and exports as part of
            * the device rather than as copy.
            */
-          .screen:empty { background:
+          /* Hidden, not removed: no torn page, but the element is still there to
+             be inspected and its src still readable in the console warning. */
+          .screen > img[data-missing] { visibility:hidden; }
+          .screen:empty, .screen[data-missing] { background:
             repeating-linear-gradient(45deg,
               rgba(255,255,255,0.028) 0 calc(var(--u) * 1.2),
               rgba(255,255,255,0) calc(var(--u) * 1.2) calc(var(--u) * 2.4)),
@@ -3341,8 +3344,28 @@ class RMShowcase extends RMElement {
        * rendered. Dropping the <img> lets .screen:empty take over, so a missing
        * picture and no picture look the same -- a phone with nothing on it.
        */
+      /*
+       * A picture that never arrives must not become a broken-image glyph --
+       * and must not vanish without trace either.
+       *
+       * Removing the <img> made the frame clean and the failure INVISIBLE: a
+       * screen that would not load looked exactly like a screen nobody had
+       * chosen yet, which is a transparent phone and no way to tell why. The
+       * element stays, hidden by CSS so no torn-page icon is drawn, marked so
+       * the screen reads as missing rather than empty, and the URL goes to the
+       * console -- because the one question worth answering here is WHICH file.
+       */
       const shot = this.shadowRoot.querySelector('img')
-      if (shot) shot.addEventListener('error', () => shot.remove(), { once: true })
+      if (shot)
+        shot.addEventListener(
+          'error',
+          () => {
+            shot.dataset.missing = ''
+            this.shadowRoot.querySelector('.screen')?.setAttribute('data-missing', '')
+            console.warn('[rm-showcase] picture did not load:', shot.currentSrc || shot.src)
+          },
+          { once: true }
+        )
       if (isVideo) {
         const video = this.shadowRoot.querySelector('video')
         /*
