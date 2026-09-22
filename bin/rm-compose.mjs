@@ -46,6 +46,17 @@ if (!segments.length) die("the composition has no segments");
 
 const outDir = resolve(flag("out", dirname(resolve(file))));
 const fps = Number(flag("fps", FPS));
+/*
+ * The master's size and how finely it is painted.
+ *
+ * 1920 at one sample a pixel was the old fixed answer, and it showed: every
+ * edge in the frame got whatever a single sample could tell it, which reads as
+ * pixellation and which no bitrate repairs. 2560 painted at 2x is four times
+ * the samples going into a frame half again as wide.
+ */
+const outWidth = Number(flag("width", 2560)) || 2560;
+const ss = Number(flag("ss", 2)) || 2;
+const crf = Number(flag("crf", 16)) || 16;
 await mkdir(outDir, { recursive: true });
 
 /**
@@ -156,7 +167,12 @@ for (const [i, seg] of segments.entries()) {
 
 	console.log(`  ${n}  scene    ${(ms / 1000).toFixed(1)}s  ${name} (${authored ? "authored" : `${(seg.elements ?? []).length} elements`})`);
 	try {
-		await run("node", [join(ROOT, "components", "render-scene.mjs"), html, "-o", mp4, "--fps", String(fps), "--ms", String(ms)], {
+		/*
+		 * Quality passes through, so a composition is not stuck at whatever the
+		 * scene renderer happens to default to. --width sets the master, --ss how
+		 * many samples go into each of its pixels, --crf how hard it is squeezed.
+		 */
+		await run("node", [join(ROOT, "components", "render-scene.mjs"), html, "-o", mp4, "--fps", String(fps), "--ms", String(ms), "--width", String(outWidth), "--ss", String(ss), "--crf", String(crf)], {
 			cwd: ROOT,
 			maxBuffer: 1 << 24,
 		});
