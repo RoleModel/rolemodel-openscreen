@@ -71,7 +71,7 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
-import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, sheetToCmykPdf, withDieLines } from "../lib/print-sheet.mjs";
+import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieCutSinglesToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
 import { MAX_AGE_MS as UPDATE_TTL, checkForUpdate, currentVersion } from "../lib/update.mjs";
@@ -6675,12 +6675,26 @@ const server = createServer(async (req, res) => {
           return json(res, 200, { ...first, sheets, layout: "sheet", skipped: (picked ?? record?.items ?? []).length - items.length });
         }
         const out = join(dir, `${name}-cmyk.pdf`);
-        const made = await sheetToCmykPdf({
+        /*
+         * A die-cutter wants each sticker alone, on the navy, with its own cut
+         * line traced from the artwork — raster cutout or vector alike.
+         */
+        const sizeMm = Math.min(300, Math.max(10, Number(body.sizeMm) || 76.2));
+        const stickerBleedMm = Math.min(6, Math.max(0, Number(body.bleedMm ?? 0.35)));
+        const offsetMm = Math.min(6, Math.max(0, Number(body.dieOffsetMm ?? 0)));
+        const roundMm = Math.min(10, Math.max(0, Number(body.dieRoundMm ?? 0)));
+        const per = 1024 / sizeMm;
+        const made = await dieCutSinglesToCmykPdf({
           items,
           out,
           work: join(dir, ".work"),
-          sizeMm: Math.min(300, Math.max(10, Number(body.sizeMm) || 76.2)),
-          bleedMm: Math.min(20, Math.max(0, Number(body.bleedMm) ?? 3)),
+          sizeMm,
+          marginMm: Math.max(6, offsetMm + 4),
+          stickerBleedMm,
+          offsetPx: Math.round(offsetMm * per),
+          roundPx: Math.round(roundMm * per),
+          bleedPx: Math.round(stickerBleedMm * per),
+          die: body.die !== false,
           profile: String(body.profile ?? ""),
         });
         await reindex(id, { force: true }).catch(() => {});
