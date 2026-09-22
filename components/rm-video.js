@@ -3336,6 +3336,21 @@ class RMShowcase extends RMElement {
       this._isVideo = isVideo
       this._device = device
       /*
+       * The shadow tree was just replaced, so the keyframe animation went with
+       * it -- and the block that writes it only runs when the KEYS change.
+       *
+       * Set the media after the layer is in the document, which is exactly what
+       * the Studio does attribute by attribute, and the order was: keys arrive
+       * and the animation is written; media arrives and the tree is rebuilt;
+       * the keys have not changed so nothing rewrites it. What survives is the
+       * inline pose from the FIRST key, and a first key at op=0 is a layer
+       * stuck invisible forever. Seventeen phones, all transparent, with the
+       * screens loaded and correct underneath.
+       *
+       * Forgetting the keys here forces them to be written onto the new tree.
+       */
+      this._keysText = null
+      /*
        * A picture that 404s must not become a broken-image glyph.
        *
        * The browser draws its own torn-page icon inside the screen, which is
