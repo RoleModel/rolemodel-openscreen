@@ -3069,7 +3069,7 @@ class RMShowcase extends RMElement {
         ? isVideo
           ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
           : `<img src="${this.esc(media)}" alt="" />`
-        : '<div class="empty">Choose a picture or a clip</div>'
+        : '' /* no picture: an empty screen, never a sentence -- see .screen--bare */
       /*
        * Depth is a stack of slices behind the shell, each a step further back in
        * Z and a shade darker, so a tilted device shows an edge rather than a
@@ -3153,7 +3153,24 @@ class RMShowcase extends RMElement {
           .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
           .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
           .screen > img, .screen > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
-          .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
+          /*
+           * A showcase with no picture is still a device.
+           *
+           * It used to render an instruction to go and pick one INTO the
+           * screen. That is an editor hint, and an editor hint has no business
+           * in a frame: a board whose media 404s stopped being a row of phones
+           * and became a row of sentences, and any render made while a picture
+           * was still loading baked the instruction into the video.
+           *
+           * So an empty screen is drawn, not written -- a faint hatch, which
+           * reads as "nothing here yet" in any language and exports as part of
+           * the device rather than as copy.
+           */
+          .screen:empty { background:
+            repeating-linear-gradient(45deg,
+              rgba(255,255,255,0.028) 0 calc(var(--u) * 1.2),
+              rgba(255,255,255,0) calc(var(--u) * 1.2) calc(var(--u) * 2.4)),
+            var(--op-color-neutral-plus-max, #0b0b0c); }
           /* none: the screen is the card */
           .none .screen { inset:0; background:transparent; }
           /* browser: a drawn chrome bar over the page, on a slab */
@@ -3255,6 +3272,17 @@ class RMShowcase extends RMElement {
       this._media = media
       this._isVideo = isVideo
       this._device = device
+      /*
+       * A picture that 404s must not become a broken-image glyph.
+       *
+       * The browser draws its own torn-page icon inside the screen, which is
+       * the same problem as the placeholder copy one line up: a device stops
+       * being a device and becomes an error report, in a frame that may be
+       * rendered. Dropping the <img> lets .screen:empty take over, so a missing
+       * picture and no picture look the same -- a phone with nothing on it.
+       */
+      const shot = this.shadowRoot.querySelector('img')
+      if (shot) shot.addEventListener('error', () => shot.remove(), { once: true })
       if (isVideo) {
         const video = this.shadowRoot.querySelector('video')
         /*
