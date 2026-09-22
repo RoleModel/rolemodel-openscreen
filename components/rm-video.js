@@ -2666,12 +2666,30 @@ function lookProgram(canvas, look, { assets = null } = {}) {
  * `image` is a picture name or URL, resolved the way every other component
  * resolves one, so a saved scene and a render both find it.
  */
+/*
+ * How many looks may hold a WebGL context at once.
+ *
+ * The cap is the browser's, not ours -- around sixteen per document, and when
+ * you ask for the seventeenth it does not refuse, it silently takes the oldest
+ * one away. That is the worst possible failure: every look drawn before this
+ * one goes black or stops updating, and nothing says why. Fourteen leaves room
+ * for the shaders, hazes and pixel reveals that take contexts of their own.
+ *
+ * Past the budget a look paints its first stop as a flat background instead.
+ * A page of thirty looks is then thirty correct-coloured panels rather than
+ * sixteen shaders and fourteen corpses.
+ */
+const LOOK_CONTEXT_BUDGET = 14
+const liveLooks = new Set()
+
 class RMLook extends RMElement {
   static fields = ['look', 'image', 'at', 'for']
 
   disconnectedCallback() {
+    liveLooks.delete(this)
     this._dispose?.()
     this._dispose = null
+    this._prog = null
   }
 
   render() {
@@ -2699,8 +2717,18 @@ class RMLook extends RMElement {
     this._dispose?.()
     this.shadowRoot.innerHTML = `<style>:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${look.stops[0].c};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset"><canvas aria-hidden="true"></canvas></div>`
     const canvas = this.shadowRoot.querySelector('canvas')
+    /*
+     * Over budget: keep the flat first stop the markup already painted and do
+     * not ask for a context we would only lose -- taking it would cost some
+     * earlier look its own.
+     */
+    if (!liveLooks.has(this) && liveLooks.size >= LOOK_CONTEXT_BUDGET) {
+      canvas.remove()
+      return
+    }
     const prog = lookProgram(canvas, look)
     if (!prog) return
+    liveLooks.add(this)
     this._prog = prog
     /*
      * Full resolution when the clock rests, half while it runs. A seek every
@@ -3288,16 +3316,29 @@ class RMShowcase extends RMElement {
       }
     }
     /*
-     * No look means no backdrop at all. Hidden by display, not by the hidden
-     * attribute: the look's own :host sets display, and in its tree that beat
-     * the attribute — every layer in a scene drew the default look over the
-     * layers before it.
+     * No look means no backdrop AND no context.
+     *
+     * This used to hide the look with display:none and leave it in the tree.
+     * Hidden is not gone: the element still connects, still compiles, and
+     * still holds a WebGL context. A browser caps how many of those a document
+     * may have at around sixteen, so a board of seventeen device showcases --
+     * the ordinary way anyone shows a whole app -- blew the cap, the oldest
+     * contexts were dropped under it, and the page glitched. "none" made it
+     * worse rather than better: it is a non-empty string, so it was TRUTHY,
+     * and a showcase asking for no backdrop drew one.
+     *
+     * So: 'none' and '' both mean none, and none means the element leaves the
+     * DOM, which runs its disconnectedCallback and gives the context back.
      */
-    const lookEl = this.shadowRoot.querySelector('rm-look')
-    if (look) {
+    const wantsLook = Boolean(look) && look !== 'none'
+    let lookEl = this.shadowRoot.querySelector('rm-look')
+    if (wantsLook) {
+      if (!lookEl) {
+        lookEl = document.createElement('rm-look')
+        this.shadowRoot.querySelector('.stage').prepend(lookEl)
+      }
       if (lookEl.getAttribute('look') !== look) lookEl.setAttribute('look', look)
-      lookEl.style.display = ''
-    } else lookEl.style.display = 'none'
+    } else if (lookEl) lookEl.remove()
 
     const frame = {
       none: 'border: 0;',
