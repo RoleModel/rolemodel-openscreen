@@ -237,13 +237,24 @@ const silentIdx = pieces.length;
 
 const graph = [];
 const labels = [];
+/*
+ * The cut is as big as the master, not as big as the old default.
+ *
+ * Every input was scaled to a hard-coded 1920x1080 here. A scene rendered at
+ * 2560 was therefore painted at 5120, downsampled to 2560, and then thrown back
+ * down to 1920 by the step that glues the pieces together -- an hour of extra
+ * sampling spent and discarded in the last thirty seconds of the job, with
+ * nothing in the output to say it had happened.
+ */
+const cutW = Math.floor(outWidth / 2) * 2;
+const cutH = Math.floor(Math.round((outWidth * SCENE_H) / SCENE_W) / 2) * 2;
 pieces.forEach((p, i) => {
 	// force_original_aspect_ratio + pad rather than a bare scale: footage that is
 	// not 16:9 would otherwise be stretched, and a stretched face is worse than
 	// bars.
 	graph.push(
-		`[${i}:v]scale=${SCENE_W}:${SCENE_H}:force_original_aspect_ratio=decrease,` +
-			`pad=${SCENE_W}:${SCENE_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p[v${i}]`,
+		`[${i}:v]scale=${cutW}:${cutH}:force_original_aspect_ratio=decrease:flags=lanczos,` +
+			`pad=${cutW}:${cutH}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p[v${i}]`,
 	);
 	if (p.hasAudio) {
 		graph.push(`[${i}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`);
