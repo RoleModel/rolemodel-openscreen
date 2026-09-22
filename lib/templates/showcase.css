@@ -97,11 +97,18 @@
   user-select: none;
   background: var(--op-color-neutral-plus-max);
   /*
-   * Capped, because a pinned 16:9 frame at full panel width is most of the
-   * screen -- and a picture that never moves but leaves no room for the
-   * timeline has only traded one thing you cannot see for another.
+   * Capped by WIDTH, not height.
+   *
+   * The frame has no shape of its own: rm-scene inside it is width:100% with
+   * the aspect ratio, and the stage takes whatever height that comes to. So a
+   * capping its height did not make the picture smaller, it CUT it: the stage
+   * clips its overflow, and the bottom of every frame went under the fold.
+   *
+   * Capping the width lets the height follow at the right shape and land under
+   * the same ceiling. 46vh of height is 46vh * 16/9 of width.
    */
-  max-block-size: 46vh;
+  max-inline-size: calc(46vh * 16 / 9);
+  margin-inline: auto;
   /* A hair of ground below it, so rows passing underneath do not appear to
      touch the frame. */
   box-shadow: 0 var(--op-space-2x-small) 0 var(--op-color-neutral-plus-max);
