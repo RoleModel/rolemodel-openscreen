@@ -2945,7 +2945,7 @@ class RMShowcase extends RMElement {
       const shell = {
         none: `<div class="body"><div class="screen">${pic}</div></div>`,
         browser: `${slices(8, 'side')}<div class="body"><div class="bar"><i></i><i></i><i></i><span class="url"></span></div><div class="screen">${pic}</div></div>`,
-        phone: `${slices(10, 'side')}<div class="body"><div class="screen">${pic}</div><div class="island"></div></div>`,
+        phone: `${slices(18, 'side')}<div class="rail rail--l"></div><div class="rail rail--r"></div><div class="body"><div class="screen">${pic}</div><div class="sheen"></div><div class="glass"></div><div class="island"><i></i></div></div>`,
         macbook: `${slices(4, 'side side--lid')}${slices(8, 'side side--base')}<div class="body"><div class="lid"><div class="screen">${pic}</div><div class="cam"></div></div><div class="base"><div class="notch"></div></div></div>`,
       }[device]
       this.shadowRoot.innerHTML = `
@@ -3035,11 +3035,73 @@ class RMShowcase extends RMElement {
           .browser .bar i:nth-child(3) { background:var(--op-color-alerts-danger-base, #ff5f57); }
           .browser .bar .url { width:34%; height:calc(var(--u) * 2.4); margin-inline-start:calc(var(--u) * 1.6); border-radius:calc(var(--u) * 0.8); background:rgba(255,255,255,0.05); border:calc(var(--u) * 0.12) solid var(--chrome-line); box-sizing:border-box; }
           .browser .screen { inset:calc(var(--u) * 4.6) 0 0 0; }
-          /* phone: a dark shell, a screen inset, an island */
-          .phone { --edge: var(--op-color-neutral-plus-two, #262626); }
-          .phone .body { background:var(--op-color-neutral-plus-max, #0d0d0d); overflow:hidden; }
-          .phone .screen { inset:calc(var(--u) * 2.6); border-radius:calc(var(--u) * 7); }
-          .phone .island { position:absolute; top:calc(var(--u) * 5); left:50%; width:calc(var(--u) * 26); height:calc(var(--u) * 6.5); border-radius:calc(var(--u) * 4); background:var(--op-color-neutral-plus-max, #000); transform:translateX(-50%); }
+          /*
+           * phone: a titanium rail, a glass bevel, a screen inset, an island.
+           *
+           * The rail is the whole trick. Eighteen slices step back in Z, each
+           * carrying the SAME metal gradient but lit by how far through the
+           * thickness it sits: dark at the two faces, bright in the middle.
+           * A flat slab of one colour reads as cardboard the moment the device
+           * leans; a lit curve reads as a milled edge, which is the difference
+           * between a mockup and a photograph.
+           */
+          .phone { --n: 18;
+                   --rad: calc(var(--u) * 12.4);
+                   --rail-grad: linear-gradient(100deg,
+                       var(--op-color-neutral-plus-six, #1d1d1f) 0%,
+                       var(--op-color-neutral-plus-two, #6f6c68) 16%,
+                       var(--op-color-neutral-minus-five, #e9e6e0) 30%,
+                       var(--op-color-neutral-minus-two, #9b9791) 44%,
+                       var(--op-color-neutral-plus-four, #3a3a3c) 60%,
+                       var(--op-color-neutral-minus-four, #cfccc6) 82%,
+                       var(--op-color-neutral-plus-six, #1d1d1f) 100%);
+                   --shell: var(--op-color-neutral-plus-max, #0b0b0c);
+                   --edge: var(--op-color-neutral-plus-five, #2b2b2d); }
+          .phone.light { --rail-grad: linear-gradient(100deg,
+                       var(--op-color-neutral-plus-three, #4a4a4d) 0%,
+                       var(--op-color-neutral-minus-four, #cfccc6) 16%,
+                       var(--op-color-neutral-minus-six, #f4f2ee) 30%,
+                       var(--op-color-neutral-minus-two, #b4b0a9) 44%,
+                       var(--op-color-neutral-plus-one, #7d7a75) 60%,
+                       var(--op-color-neutral-minus-five, #e3e0da) 82%,
+                       var(--op-color-neutral-plus-three, #4a4a4d) 100%); }
+          .phone .side { border-radius: var(--rad); background: var(--rail-grad);
+                         --f: calc(var(--i) / var(--n));
+                         filter: brightness(calc(0.30 + 1.65 * sin(var(--f) * 180deg))) saturate(0.85); }
+          .phone.light .side { filter: brightness(calc(0.52 + 0.62 * sin(var(--f) * 180deg))) saturate(0.9); }
+          .phone .body { background:var(--shell); border-radius: var(--rad); overflow:hidden; }
+          .phone .side:nth-child(1) { box-shadow: 0 calc(var(--u) * 3) calc(var(--u) * 7) rgba(0,0,0,0.55); }
+          /* the cover glass: a hair of light where it meets the rail */
+          .phone .glass { position:absolute; inset:calc(var(--u) * 1.15); border-radius:calc(var(--rad) - var(--u) * 1.15);
+                          box-shadow: inset 0 0 0 calc(var(--u) * 0.16) rgba(255,255,255,0.16),
+                                      inset 0 0 calc(var(--u) * 1.2) rgba(255,255,255,0.05);
+                          pointer-events:none; }
+          .phone .screen { inset:calc(var(--u) * 2.3); border-radius:calc(var(--rad) - var(--u) * 2.3); background:var(--op-color-neutral-plus-max, #000); }
+          /* one soft reflection across the glass, angled with the key light */
+          .phone .sheen { position:absolute; inset:calc(var(--u) * 2.3); border-radius:calc(var(--rad) - var(--u) * 2.3);
+                          background:linear-gradient(118deg, rgba(255,255,255,0) 36%, rgba(255,255,255,0.055) 46%,
+                                     rgba(255,255,255,0.012) 54%, rgba(255,255,255,0) 63%); pointer-events:none; }
+          .phone .island { position:absolute; top:calc(var(--u) * 4.2); left:50%; width:calc(var(--u) * 27); height:calc(var(--u) * 7.2);
+                           border-radius:calc(var(--u) * 4); background:var(--op-color-neutral-plus-max, #000); transform:translateX(-50%);
+                           box-shadow: inset 0 0 0 calc(var(--u) * 0.14) rgba(255,255,255,0.07); }
+          /* the front camera, because an island without a lens reads as a sticker */
+          .phone .island i { position:absolute; right:calc(var(--u) * 2.4); top:50%; width:calc(var(--u) * 2.3); height:calc(var(--u) * 2.3);
+                             border-radius:50%; transform:translateY(-50%);
+                             background: radial-gradient(circle at 34% 30%, var(--op-color-neutral-plus-four, #33404e) 0%, var(--op-color-neutral-plus-six, #141a22) 44%, var(--op-color-neutral-plus-max, #05070a) 100%);
+                             box-shadow: inset 0 0 0 calc(var(--u) * 0.2) rgba(130,160,190,0.2); }
+          /* the buttons: slabs on the rail, parked at mid-thickness so a lean
+             shows them standing proud of the edge rather than printed on the face */
+          .phone .rail { position:absolute; top:0; bottom:0; width:calc(var(--u) * 1.3); transform-style:preserve-3d;
+                         transform: translateZ(calc(var(--u) * -0.28 * var(--n) / 2)); pointer-events:none; }
+          .phone .rail--l { left:calc(var(--u) * -0.55); }
+          .phone .rail--r { right:calc(var(--u) * -0.55); }
+          .phone .rail::before, .phone .rail::after { content:''; position:absolute; left:0; right:0;
+                         background:var(--rail-grad); filter:brightness(1.05) saturate(0.8); border-radius:calc(var(--u) * 0.5);
+                         box-shadow: inset 0 0 0 calc(var(--u) * 0.1) rgba(0,0,0,0.5); }
+          .phone .rail--l::before { top:20%; height:5.4%; }                    /* action button */
+          .phone .rail--l::after  { top:29%; height:17.5%; }                   /* volume rocker */
+          .phone .rail--r::before { top:30%; height:11.5%; }                   /* side button */
+          .phone .rail--r::after  { top:0; height:0; }
           /* macbook: a lid with a screen and a camera, over an aluminium base */
           .macbook { --edge: var(--op-color-neutral-plus-two, #2a2a2a); }
           .macbook .side--lid { inset:0 0 9% 0; border-radius:calc(var(--u) * 3) calc(var(--u) * 3) 0 0; --step:-0.18; }

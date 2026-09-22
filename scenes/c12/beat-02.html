@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>C12 — Live Activity</title>
+<link rel="stylesheet" href="../../brand/fonts/fonts.css" />
+<link rel="stylesheet" href="../../brand/optics/optics.css" />
+<link rel="stylesheet" href="../../brand/optics/rolemodel-scales.css" />
+<style>
+  /* Straight from components/scene.html — the stage is fluid, not a fixed 1920px
+     box. Pinning it to pixels pushed everything off the side of the frame. */
+  :root{color-scheme:dark}
+  html,body{margin:0;background:var(--op-color-neutral-plus-max)}
+  body{display:grid;place-items:center;min-height:100vh}
+  #stage{width:100vw;max-width:calc(100vh * 16 / 9)}
+
+  /* Motion is a paused animation positioned by --t — the house technique.
+     Nothing advances on its own, so frame N is frame N on every run. */
+  .device{
+    position:absolute; right:11%; top:50%; width:17cqw;
+    animation: rise var(--duration-deliberate) var(--ease-enter) both paused;
+    animation-delay: calc(var(--at) - var(--t));
+  }
+  .device img{width:100%; display:block}
+  @keyframes rise{
+    from{opacity:0; transform:translate(0,-46%) scale(.955)}
+    to  {opacity:1; transform:translate(0,-50%) scale(1)}
+  }
+  .drift{
+    position:absolute; inset:0;
+    animation: drift 6000ms linear both paused;
+    animation-delay: calc(0ms - var(--t));
+  }
+  @keyframes drift{ from{transform:scale(1.02) translateX(.4cqw)} to{transform:scale(1) translateX(-.4cqw)} }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <rm-scene wallpaper="../../brand/wallpapers/rm-dark-dotgrid">
+      <div class="drift">
+        <div class="device" style="--at:700ms">
+          <img src="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots/02-live-activity.png" alt="">
+        </div>
+      </div>
+
+      <rm-title at="300" for="5400" align="left"
+        eyebrow="Concept 1 · Live Activity"
+        title="Forum day, on the Lock Screen"
+        sub="How much of the day is left, who made it, and what a member still owes — all of it data C12 already holds."></rm-title>
+
+      <rm-callout at="3000" for="2600" x="66" y="46" side="left" text="11 of 12 here"></rm-callout>
+    </rm-scene>
+  </div>
+
+  <script type="module">
+    import { RM } from "../../components/rm-video.js";
+    await RM.ready();
+    RM.seek(0);
+    if (!window.__hyperframes) {
+      const total = RM.duration();
+      const t0 = performance.now();
+      const tick = () => { RM.seek((performance.now() - t0) % total); requestAnimationFrame(tick); };
+      tick();
+    }
+  </script>
+</body>
+</html>

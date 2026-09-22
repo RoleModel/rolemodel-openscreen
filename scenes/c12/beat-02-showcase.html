@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>C12 — Live Activity, in a real phone</title>
+<link rel="stylesheet" href="../../brand/fonts/fonts.css" />
+<link rel="stylesheet" href="../../brand/optics/optics.css" />
+<link rel="stylesheet" href="../../brand/optics/rolemodel-scales.css" />
+<style>
+  :root{color-scheme:dark}
+  html,body{margin:0;background:var(--op-color-neutral-plus-max)}
+  body{display:grid;place-items:center;min-height:100vh}
+  #stage{width:100vw;max-width:calc(100vh * 16 / 9)}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <rm-scene wallpaper="../../brand/wallpapers/rm-dark-dotgrid">
+
+      <!-- The shell, the depth slices, the island cutout, the tilt and the
+           shadow all come from rm-showcase. The picture is the screen only. -->
+      <rm-showcase at="0"
+        media="img/live-activity.png"
+        device="phone" frame="none" fit="contain"
+        w="100" pad="10" radius="1" shadow="0.85"
+        tx="6" ty="-18" tz="-6" persp="120"
+        x="0" y="0" zoom="1"></rm-showcase>
+
+      <!--<rm-title at="300" for="5400" align="left"
+        eyebrow="Concept 1 · Live Activity"
+        title="Forum day, on the Lock Screen"
+        sub="How much of the day is left, who made it, and what a member still owes — all of it data C12 already holds."></rm-title>-->
+
+    </rm-scene>
+  </div>
+
+  <script type="module">
+    import { RM } from "../../components/rm-video.js";
+    await RM.ready();
+    RM.seek(0);
+  </script>
+</body>
+</html>
