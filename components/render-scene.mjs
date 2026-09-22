@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,11 +58,31 @@ const TYPES = {
 	".webp": "image/webp",
 	".woff2": "font/woff2",
 };
+/*
+ * The library, for /media/<project>/… — the paths a Studio scene is written in.
+ *
+ * A scene saved in the Studio names its pictures by their place in the project:
+ * /media/c12-c12/Stills/S01.png. This server only knew the repo, so every one of
+ * them 404d and the render came out with black screens inside correct phones --
+ * the shell, the tilt, the keyframes and the type all right, and nothing on the
+ * glass. Silently, because a 404 during a render is not a crash.
+ *
+ * Two roots, each with its own containment check, rather than one root and a
+ * hole in it.
+ */
+const LIBRARY = process.env.RM_LIBRARY_ROOT ?? join(homedir(), "RoleModel Library");
+const mediaFile = (rel) => {
+	const [, id, ...rest] = rel.split("/");
+	return id && rest.length ? resolve(LIBRARY, id, "media", rest.join("/")) : null;
+};
+
 const srv = createServer(async (req, res) => {
 	const rel = decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/+/, "");
-	const file = resolve(ROOT, rel);
-	// Never serve outside the repo, even if a scene asks for ../../etc/passwd.
-	if (!file.startsWith(ROOT) || !(await stat(file).then((s2) => s2.isFile()).catch(() => false))) {
+	const fromLibrary = rel.startsWith("media/") ? mediaFile(rel) : null;
+	const file = fromLibrary ?? resolve(ROOT, rel);
+	// Never serve outside the repo or the library, even if a scene asks for ../../etc/passwd.
+	const root = fromLibrary ? LIBRARY : ROOT;
+	if (!file.startsWith(root) || !(await stat(file).then((s2) => s2.isFile()).catch(() => false))) {
 		res.writeHead(404);
 		return res.end();
 	}

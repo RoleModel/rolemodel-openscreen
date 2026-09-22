@@ -21,7 +21,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { composeDocument, FPS, SCENE_H, SCENE_W, sceneDurationMs, sceneHtml } from "../lib/compose.mjs";
+import { composeDocument, FPS, markupDurationMs, SCENE_H, SCENE_W, sceneDurationMs, sceneHtml } from "../lib/compose.mjs";
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -133,13 +133,16 @@ for (const [i, seg] of segments.entries()) {
 	else if (typeof seg.body === "string") authored = seg.body;
 
 	/*
-	 * An authored scene must say how long it runs.
+	 * How long the scene runs.
 	 *
-	 * Duration is read off `at`/`for` when the elements are structured data; in
-	 * free markup there is nothing to read, and guessing produces a card that cuts
-	 * mid-sentence. The default is the same floor sceneDurationMs uses.
+	 * Structured elements carry `at` and `for` as fields; authored markup carries
+	 * them as attributes on the same tags, which is how the runtime times them.
+	 * This used to read only the first and give the second a flat four seconds,
+	 * so a seventeen-beat walkthrough composed as a four-second card -- the first
+	 * beat, and nothing after it. An explicit `ms` still wins, and markup with no
+	 * timing at all still falls back rather than measuring an empty scan.
 	 */
-	const ms = seg.ms ?? (authored ? 4000 : sceneDurationMs(seg.elements ?? []));
+	const ms = seg.ms ?? (authored ? (markupDurationMs(authored) ?? 4000) : sceneDurationMs(seg.elements ?? []));
 	const name = seg.name || `scene-${n}`;
 	const html = join(ROOT, "components", `.compose-${n}.html`);
 	const mp4 = join(outDir, `${name}.mp4`);
