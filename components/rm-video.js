@@ -519,6 +519,113 @@ class RMTitle extends RMElement {
 }
 define('rm-title', RMTitle)
 
+/* -- rm-text ------------------------------------------------------------- */
+
+/**
+ * A free-placed line of type.
+ *
+ * rm-title is a CARD: it owns the whole frame and centres itself in it. That is
+ * the right shape for an opening and the wrong one for a headline that has to
+ * sit beside a device, lean with it, and leave before the camera pushes in.
+ * Every scene that needed one ended up hand-writing a div and its keyframes --
+ * which is how a scene stops being made of components and starts being a file
+ * only its author can edit.
+ *
+ * So: x and y place it, w measures it, the type dials set it, and the same
+ * paused enter/exit every other component runs carries it on the scene clock.
+ * Words or characters arrive in order by giving each its own --lead, which is
+ * the stagger the brand already uses between an eyebrow and its title -- one
+ * clock, staggered, rather than one animation per word on clocks that drift.
+ */
+class RMText extends RMElement {
+  static fields = ['text', 'sub', 'x', 'y', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'at', 'for']
+
+  render() {
+    const pick = (key, list, def) => (list.includes(this.attr(key, def)) ? this.attr(key, def) : def)
+    const num = (key, def) => {
+      const n = Number(this.attr(key, String(def)))
+      return Number.isFinite(n) ? n : def
+    }
+    const anchor = pick('anchor', ['left', 'center', 'right'], 'left')
+    const mode = pick('stagger', ['none', 'word', 'char'], 'word')
+    const x = num('x', 8)
+    const y = num('y', 50)
+    const w = num('w', 34)
+    const size = num('size', 4.6)
+    const subsize = num('subsize', 1.6)
+    const weight = num('weight', 700)
+    const subweight = num('subweight', 400)
+    const track = num('track', -0.03)
+    const lead = num('lead', 1.05)
+    const gap = num('gap', 1.1)
+    const step = num('step', 60)
+    const rise = num('rise', 26)
+    const tx = num('tx', 0)
+    const ty = num('ty', 0)
+    const tz = num('tz', 0)
+    const persp = num('persp', 180)
+    const shadow = this.attr('shadow', '1') !== '0'
+
+    /* A role name resolves to the brand's token; anything else is passed
+       through, so a one-off accent does not need a token to exist first. */
+    const roles = { fg: 'var(--fg)', muted: 'var(--muted)', brand: 'var(--brand-text)', 'on-brand': 'var(--on-brand)' }
+    const ink = (v, def) => roles[v] ?? (v || def)
+    const color = ink(this.attr('color', 'fg'), 'var(--fg)')
+    const subcolor = ink(this.attr('subcolor', 'muted'), 'var(--muted)')
+
+    /* Returns [markup, partCount] so the caption can start its own stagger
+       after the headline has finished, not on top of it. */
+    const split = (raw, base) => {
+      const text = String(raw)
+      if (mode === 'none') return [`<span class="anim" style="--lead:${base}ms">${this.esc(text)}</span>`, 1]
+      const bits = mode === 'char' ? [...text] : text.split(/(\s+)/)
+      let i = 0
+      const out = bits
+        .map((b) => {
+          if (b === '' || /^\s+$/.test(b)) return this.esc(b)
+          const at = base + i * step
+          i += 1
+          return `<span class="anim" style="--lead:${at}ms">${this.esc(b)}</span>`
+        })
+        .join('')
+      return [out, i]
+    }
+
+    const [head, headParts] = split(this.attr('text', 'Text'), 0)
+    const subText = this.attr('sub')
+    const subBase = Math.round(headParts * step * 0.5) + 180
+    const sub = subText ? split(subText, subBase)[0] : ''
+
+    const shift = anchor === 'center' ? '-50%' : anchor === 'right' ? '-100%' : '0%'
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        /* The layer covers the frame and paints nothing: only the block at
+           x/y is real, so two of these can sit over each other without one
+           swallowing the other's clicks in the Studio. */
+        :host { position:absolute; display:block; inset:0; width:100%; height:100%;
+                container-type:size; pointer-events:none; --rise:${rise}px; }
+        .at { position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
+              transform: perspective(${persp}cqw) translate(${shift}, -50%)
+                         rotateX(${tx}deg) rotateY(${ty}deg) rotateZ(${tz}deg);
+              text-align:${anchor}; white-space:pre-wrap; }
+        /* inline-block, because the rise is a transform and a transform does
+           nothing to an inline box. */
+        .anim { display:inline-block; }
+        .head { margin:0; font-size:${size}cqw; font-weight:${weight}; line-height:${lead};
+                letter-spacing:${track}em; color:${color};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+        .sub { margin:${gap}cqw 0 0 0; font-size:${subsize}cqw; font-weight:${subweight}; line-height:1.4;
+               letter-spacing:0; color:${subcolor};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+      </style>
+      <div class="at">
+        <p class="head">${head}</p>
+        ${sub ? `<p class="sub">${sub}</p>` : ''}
+      </div>`
+  }
+}
+define('rm-text', RMText)
+
 /* ── rm-lower-third ──────────────────────────────────────────────────────── */
 
 class RMLowerThird extends RMElement {

@@ -7,48 +7,31 @@
 <link rel="stylesheet" href="../../brand/optics/optics.css" />
 <link rel="stylesheet" href="../../brand/optics/rolemodel-scales.css" />
 <style>
-  /* Straight from components/scene.html — the stage is fluid, not a fixed 1920px
-     box. Pinning it to pixels pushed everything off the side of the frame. */
   :root{color-scheme:dark}
   html,body{margin:0;background:var(--op-color-neutral-plus-max)}
   body{display:grid;place-items:center;min-height:100vh}
   #stage{width:100vw;max-width:calc(100vh * 16 / 9)}
-
-  /* Motion is a paused animation positioned by --t — the house technique.
-     Nothing advances on its own, so frame N is frame N on every run. */
-  .device{
-    position:absolute; right:11%; top:50%; width:17cqw;
-    animation: rise var(--duration-deliberate) var(--ease-enter) both paused;
-    animation-delay: calc(var(--at) - var(--t));
-  }
-  .device img{width:100%; display:block}
-  @keyframes rise{
-    from{opacity:0; transform:translate(0,-46%) scale(.955)}
-    to  {opacity:1; transform:translate(0,-50%) scale(1)}
-  }
-  .drift{
-    position:absolute; inset:0;
-    animation: drift 6000ms linear both paused;
-    animation-delay: calc(0ms - var(--t));
-  }
-  @keyframes drift{ from{transform:scale(1.02) translateX(.4cqw)} to{transform:scale(1) translateX(-.4cqw)} }
 </style>
 </head>
 <body>
   <div id="stage">
     <rm-scene wallpaper="../../brand/wallpapers/rm-dark-dotgrid">
-      <div class="drift">
-        <div class="device" style="--at:700ms">
-          <img src="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots/02-live-activity.png" alt="">
-        </div>
-      </div>
 
-      <rm-title at="300" for="5400" align="left"
-        eyebrow="Concept 1 · Live Activity"
-        title="Forum day, on the Lock Screen"
-        sub="How much of the day is left, who made it, and what a member still owes — all of it data C12 already holds."></rm-title>
+      <!-- The phone is a showcase, so the milled rail, the glass bevel, the
+           island and the lean all come from the component rather than from a
+           picture that already has a shell drawn into it. Feed it the CHROMELESS
+           screen: a framed picture inside a frame is a phone in a phone. -->
+      <rm-showcase at="0" for="5640" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S02.png"
+        pad="16" shadow="0.8" tx="6" ty="-38" persp="170" x="24" zoom="1"></rm-showcase>
 
-      <rm-callout at="3000" for="2600" x="66" y="46" side="left" text="11 of 12 here"></rm-callout>
+      <!-- And the words are a layer, placed where they belong, leaving before
+           the push-in. This is what used to be a div and four keyframes. -->
+      <rm-text at="200" for="3040"
+        x="7" y="47" anchor="left" w="32"
+        text="Forum day, live" sub="on the Lock Screen"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
     </rm-scene>
   </div>
 
