@@ -77,11 +77,36 @@
   font-weight: var(--op-font-weight-semi-bold);
 }
 
-/* The stage's selection: an outline with four corner handles, over the scene. */
+/*
+ * The stage's selection: an outline with four corner handles, over the scene.
+ *
+ * And it sticks. The panel is one scrolling column -- stage, transport,
+ * timeline, layer list, saved scenes -- so reaching the timeline scrolled the
+ * picture off the top, and you were editing a film you could not see. The one
+ * thing that must never leave the screen is the thing being edited.
+ *
+ * Sticky rather than fixed: it still sits in the flow, still scrolls away at
+ * the very bottom where the scene list has nothing to do with the frame, and
+ * needs no height reserved for it. The transport rides along underneath, since
+ * a picture you cannot scrub is only half of watching it.
+ */
 .showcase__stage {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 4;
   user-select: none;
+  background: var(--op-color-neutral-plus-max);
+  /*
+   * Capped, because a pinned 16:9 frame at full panel width is most of the
+   * screen -- and a picture that never moves but leaves no room for the
+   * timeline has only traded one thing you cannot see for another.
+   */
+  max-block-size: 46vh;
+  /* A hair of ground below it, so rows passing underneath do not appear to
+     touch the frame. */
+  box-shadow: 0 var(--op-space-2x-small) 0 var(--op-color-neutral-plus-max);
 }
+
 
 .showcase__gizmo {
   position: absolute;
