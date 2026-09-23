@@ -94,6 +94,12 @@
       <input data-el="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
       <button data-el="copyTag" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy tag</button>
       <button data-el="png" class="btn btn--primary" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
+      <select data-el="renderSize" class="form-control" aria-label="Video resolution">
+         <option value="1920x1080">1080p · high quality</option>
+         <option value="3840x2160">4K · high quality</option>
+      </select>
+      <button data-el="render" class="btn btn--primary" type="button"><rm-icon name="video-01"></rm-icon>Render video</button>
+      <a data-el="renderSave" class="btn" download hidden><rm-icon name="download-04"></rm-icon><span data-el="renderSaveText">Save video</span></a>
    </div>
    </template>
 
