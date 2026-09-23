@@ -3188,6 +3188,9 @@ class RMShowcase extends RMElement {
                     * combines them with its own.
                     */
                    transform: perspective(120cqw) rotateX(var(--sc-in-r)) translate(calc(var(--sc-in-x) + var(--sc-out-x)), calc(var(--sc-in-y) + var(--sc-out-y))) scale(calc(var(--sc-in-s) * var(--sc-out-s))); }
+          /* The enter's equivalent of sc-out-stay: present the whole time. For a
+             layer whose own keys say when it is visible. */
+          @keyframes sc-in-stay  { from { --sc-in-o:1; } to { --sc-in-o:1; } }
           @keyframes sc-in-none  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-fade  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-rise  { from { --sc-in-o:0; --sc-in-y:8%; } to { --sc-in-o:1; --sc-in-y:0%; } }
@@ -3558,7 +3561,26 @@ class RMShowcase extends RMElement {
      * reads as the keys being ignored. With keys the enter and exit fade and
      * nothing more; without them they are what they always were.
      */
-    place.style.animationName = keys.length ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}` : `sc-in-${s.enter}, sc-out-${s.exit}`
+    /*
+     * Whoever names opacity owns it.
+     *
+     * A keyed layer was always given sc-in-fade, on the assumption that keys
+     * move things and the component still handles appearing. But a key can say
+     * op, and then there are two fades multiplying: the keys ramping up over
+     * their own first span and a 640ms enter climbing underneath them. The
+     * layer arrives late and soft, after its own move has finished and after
+     * the cut has already happened -- which reads as the phone lagging the
+     * frame rather than as a fade.
+     *
+     * So: keys that name op get a hold at both ends and decide it themselves.
+     * Keys that do not still get the fade, because something has to.
+     */
+    const keysOwnOpacity = keys.some((k) => k.op !== undefined)
+    place.style.animationName = keysOwnOpacity
+      ? "sc-in-stay, sc-out-stay"
+      : keys.length
+        ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}`
+        : `sc-in-${s.enter}, sc-out-${s.exit}`
     /* How long each takes is the layer's own. "none" still hides the layer
        outside its window, it just does not move; "stay" never leaves at all. */
     place.style.setProperty('--in-dur', s.enter === 'none' ? '1ms' : `${s.ein}s`)
