@@ -12883,7 +12883,19 @@ if (WATCH) {
    * already does this when it was asked to, and doing it twice would fight.
    */
   const selfWatched = process.execArgv.some((a) => a === "--watch" || a.startsWith("--watch-path"));
-  const SERVER_CODE = /^(bin\/|lib\/[^/]+\.mjs$|components\/)/;
+  /*
+   * Code the server runs, and nothing else.
+   *
+   * `components/` used to match every file under it, and a job's own scratch
+   * file lives there: rm-compose writes components/.compose-01.html so the
+   * markup sits beside rm-video.js and its relative imports resolve. Writing
+   * it looked like a code change, so the server restarted, and the restart
+   * killed the job that had just written it. A composition died in zero
+   * seconds, by its own hand, reporting only "signal SIGTERM".
+   *
+   * A leading dot means scratch by convention, so a dotfile is never code.
+   */
+  const SERVER_CODE = /^(bin\/[^/.][^/]*|lib\/[^/.][^/]*\.mjs|components\/[^/.][^/]*\.(mjs|js|css))$/;
   let restarting = false;
   const restart = async () => {
     if (restarting) return;
@@ -12891,7 +12903,7 @@ if (WATCH) {
     /* Never mid-publish: a lost upload is worse than a slow reload. */
     for (let i = 0; i < 600 && inFlight > 0; i++) await new Promise((r) => setTimeout(r, 100));
     console.log("  studio: the code changed — starting again on the same port");
-    jobs.stopAll();
+    jobs.stopAll("Studio restarted itself because its own code changed");
     stopAllPreviews();
     stopAllCutWatches();
     await new Promise((r) => server.close(r));

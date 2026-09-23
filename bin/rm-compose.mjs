@@ -17,6 +17,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { writeSync } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +34,15 @@ const flag = (n, d) => {
 	return i !== -1 && argv[i + 1] ? argv[i + 1] : d;
 };
 const die = (m) => {
-	console.error(`rm-compose: ${m}`);
+	/*
+	 * Written straight to the file descriptor, not through console.error.
+	 *
+	 * When stderr is a pipe — which it always is under Studio — console.error
+	 * queues the write and process.exit throws the queue away. The reason for
+	 * dying is exactly the text that went missing, so the job showed an exit
+	 * and no explanation. writeSync is on the page before the exit happens.
+	 */
+	writeSync(2, `rm-compose: ${m}\n`);
 	process.exit(1);
 };
 
