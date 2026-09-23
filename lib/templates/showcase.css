@@ -410,3 +410,9 @@
   grid-column: 1 / -1;
   margin: 0;
 }
+
+
+/* The voice picker sits with the transport, inside the sticky viewer. */
+.showcase__voice {
+  margin-block-start: var(--op-space-2x-small);
+}

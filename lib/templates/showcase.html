@@ -25,6 +25,18 @@
          <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control" />
          <span data-el="clock" class="v">0 ms</span>
       </div>
+      <!--
+         The voice, on the same clock as the picture.
+         Cutting to narration without hearing it is guesswork: you are placing
+         a beat against words you have to remember. Picking a track here puts
+         it under the playhead -- it plays with Play, and scrubbing drags it
+         with you.
+      -->
+      <div class="ctl showcase__voice">
+         <label class="form-label" for="showcase-voice">Voice</label>
+         <select data-el="voice" id="showcase-voice" class="form-control"></select>
+         <span data-el="voiceClock" class="v showcase__soft"></span>
+      </div>
    </div>
    <!-- The layers, in time order. One is selected; the rail and the footage
         cards work on that one. -->
