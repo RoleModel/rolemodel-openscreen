@@ -55,6 +55,7 @@
     "sync-tap:check": "node lib/sync-tap.mjs --check",
     "forks": "node lib/forks.mjs",
     "forks:check": "node lib/forks.mjs --check",
+    "forks:upgrade": "node lib/forks-upgrade.mjs",
     "icon": "node lib/make-icon.mjs",
     "sync-docs": "node lib/sync-docs.mjs",
     "sync-docs:check": "node lib/sync-docs.mjs --check",
