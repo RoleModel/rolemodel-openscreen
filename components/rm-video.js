@@ -686,6 +686,58 @@ function encodeText(state) {
   return parts.join(' ')
 }
 
+/* -- rm-audio ------------------------------------------------------------ */
+
+/**
+ * A sound layer.
+ *
+ * Narration used to live beside a scene rather than inside it: a flag on the
+ * compose command and a dropdown in the editor that no file remembered. So a
+ * scene could not say how long it was meant to be, reopening it lost the
+ * voice, and the only way to see whether the words fitted the pictures was to
+ * render it and listen.
+ *
+ * A scene is a list of layers on one clock. Sound is one of those layers. It
+ * paints nothing, which is why this renders nothing -- a frame is painted and
+ * audio is muxed, and the two only ever meet at the clock. What it does carry
+ * is `src` and its own `at`, so the scene states where the words start, the
+ * editor can draw them, and the render can find them without being told twice.
+ *
+ * It is deliberately silent in the browser. A component that played itself
+ * would fight the editor's own scrubbing, and it would sing during a render,
+ * where every frame is a still and the clock does not run in real time.
+ */
+class RMAudio extends RMElement {
+  static fields = ['src', 'gain', 'at', 'for']
+
+  render() {
+    /* Nothing to draw, and nothing to lay out: a sound layer must not take a
+       box in the stage or it would push the pictures around. */
+    this.shadowRoot.innerHTML = '<style>:host { display:none; }</style>'
+  }
+}
+define('rm-audio', RMAudio)
+
+const AUDIO_GROUPS = [['sound', 'Sound']]
+
+const AUDIO_SCHEMA = [
+  { key: 'src', label: 'File', type: 'text', def: '', group: 'sound', note: 'A file in this project, named the way the project names it.' },
+  { key: 'gain', label: 'Level', type: 'range', min: 0, max: 2, step: 0.05, def: 1, group: 'sound', note: '1 is the file as recorded.' },
+]
+
+const audioDefaults = () => Object.fromEntries(AUDIO_SCHEMA.map((f) => [f.key, f.def]))
+
+/** A sound layer as an attribute string: only what differs from the defaults. */
+function encodeAudio(state) {
+  const parts = []
+  for (const f of AUDIO_SCHEMA) {
+    if (String(state[f.key] ?? f.def) === String(f.def)) continue
+    parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  }
+  return parts.join(' ')
+}
+
+
 /* ── rm-lower-third ──────────────────────────────────────────────────────── */
 
 class RMLowerThird extends RMElement {
@@ -3921,7 +3973,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, RMAudio, AUDIO_SCHEMA, AUDIO_GROUPS, audioDefaults, encodeAudio, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 

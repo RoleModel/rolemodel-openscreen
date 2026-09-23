@@ -20,22 +20,30 @@
             <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
          </div>
       </div>
+      <!--
+         Play and the clock on one row, the ruler on the next.
+         The scrubber used to sit BETWEEN them, which made it a different width
+         from the waveform under it: the same moment was 104px apart in the two
+         places that claim to show time. On its own row it spans what the
+         waveform spans, so a column of sound and a position on the scrubber
+         are the same place.
+      -->
       <div class="ctl showcase__transport">
          <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
-         <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control" />
          <span data-el="clock" class="v">0 ms</span>
       </div>
+      <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control showcase__scrub" />
       <!--
-         The voice, on the same clock as the picture.
-         Cutting to narration without hearing it is guesswork: you are placing
-         a beat against words you have to remember. Picking a track here puts
-         it under the playhead -- it plays with Play, and scrubbing drags it
-         with you.
+         The voice, drawn on the same clock as the picture.
+         Cutting to narration you cannot see is guesswork: you are placing a
+         beat against words you have to remember. The sound layer's shape is
+         drawn here at the scene's own scale, so a pause in the speech is a gap
+         you can put a cut in. Click or drag it to seek. It plays with Play,
+         and scrubbing drags it with you.
       -->
-      <div class="ctl showcase__voice">
-         <label class="form-label" for="showcase-voice">Voice</label>
-         <select data-el="voice" id="showcase-voice" class="form-control"></select>
-         <span data-el="voiceClock" class="v showcase__soft"></span>
+      <div class="showcase__wave" data-el="waveBox" hidden>
+         <canvas data-el="wave" class="showcase__waveform"></canvas>
+         <span data-el="voiceClock" class="v showcase__soft showcase__wave-clock"></span>
       </div>
    </div>
    <!-- The layers, in time order. One is selected; the rail and the footage
@@ -66,6 +74,7 @@
       <!-- Words are a layer, not a property of a device: a headline beside a
            phone has its own place, its own timing and its own exit. -->
       <button data-el="addText" class="btn ghost" type="button"><rm-icon name="text"></rm-icon>Add text</button>
+      <button data-el="addSound" class="btn ghost" type="button"><rm-icon name="audio-wave-01"></rm-icon>Add sound</button>
       <!-- A picture or clip from this machine, straight onto the selected layer. -->
       <button data-el="addImage" class="btn ghost" type="button"><rm-icon name="upload-04"></rm-icon>Add image</button>
       <input data-el="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />

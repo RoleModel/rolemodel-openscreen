@@ -110,6 +110,13 @@
   margin-block: var(--op-space-2x-small) 0;
 }
 
+/* Full width, so it and the waveform below it measure the same span. */
+.showcase__scrub {
+  display: block;
+  inline-size: 100%;
+  margin-block-start: var(--op-space-2x-small);
+}
+
 .showcase__stage {
   user-select: none;
   background: var(--op-color-neutral-plus-max);
@@ -412,7 +419,46 @@
 }
 
 
-/* The voice picker sits with the transport, inside the sticky viewer. */
-.showcase__voice {
+/*
+ * The shape of the sound, under the transport and inside the sticky viewer.
+ *
+ * Its width is the scrubber's width because both are the viewer's full width,
+ * not because anything here worked it out. The first try put the scrubber in a
+ * row between Play and the clock, and the two rulers came out 104px apart at
+ * the left and 58px at the right -- a strip that says a different time from
+ * the control above it is a ruler that lies, and nothing about it looks wrong.
+ */
+.showcase__wave {
+  position: relative;
   margin-block-start: var(--op-space-2x-small);
+  /*
+   * Declared on the BOX, not on the canvas.
+   *
+   * A 2D context takes a colour string, so the theme has to be handed over
+   * through properties and resolved by putting them on a real element. That
+   * element has to inherit them, and nothing inherits from a canvas -- put
+   * here they reach both the canvas and the hidden span that resolves them.
+   */
+  --wave-ink: var(--op-color-primary-base);
+  --wave-dim: var(--op-color-neutral-plus-four);
+  /* The timeline's playhead is the brand green, which is the one colour that
+     cannot be a playhead HERE: the sound is drawn in it. Ink it is. */
+  --wave-head: var(--op-color-neutral-on-plus-max);
+}
+
+.showcase__waveform {
+  display: block;
+  inline-size: 100%;
+  block-size: var(--op-space-4x-large);
+  cursor: pointer;
+  touch-action: none;
+  border-radius: var(--op-radius-small);
+  background: var(--op-color-neutral-plus-seven);
+}
+
+.showcase__wave-clock {
+  position: absolute;
+  inset-block-start: var(--op-space-2x-small);
+  inset-inline-end: var(--op-space-x-small);
+  pointer-events: none;
 }

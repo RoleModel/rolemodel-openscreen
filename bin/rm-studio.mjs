@@ -29,7 +29,7 @@ import { createReadStream, createWriteStream, existsSync, watch as watchFile } f
 import { pipeline } from "node:stream/promises";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { installWallpapersIntoFork } from "../lib/wallpaper-install.mjs";
-import { readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
+import { markupAudio, readComponentCatalogue, sceneHtml } from "../lib/compose.mjs";
 import { AGENTS, agentStep } from "../lib/agents.mjs";
 import { cutlistToDocument } from "../lib/cutlist.mjs";
 import { FIRST_QUESTION, buildTurnPrompt, interviewState, parseTurn, planToBrief, readTurn } from "../lib/interview.mjs";
@@ -88,7 +88,7 @@ import { boardPage, boardsDir, emptyBoard, listBoards, readBoard as readMoodBoar
 import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
-import { cacheSource } from "../lib/edit-cache.mjs";
+import { cacheSource, peaksFor } from "../lib/edit-cache.mjs";
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -5128,6 +5128,35 @@ const server = createServer(async (req, res) => {
           cwd: mediaDir(id),
         },
       });
+    }
+
+    /*
+     * The shape of a sound file, for drawing.
+     *
+     * A scene's narration is a layer now, and a layer has to be visible to be
+     * placed. Peaks are the only artefact that lets the editor draw one: a
+     * number pair per hundredth of a second, which redraws at any width and
+     * takes the theme's colour, where a waveform PNG could do neither.
+     *
+     * Built on the first ask and kept, because ffmpeg reading a two-minute
+     * take is a second the editor should spend once, not on every open.
+     */
+    if (p === "/api/peaks" && req.method === "GET") {
+      const id = url.searchParams.get("project") ?? "";
+      const rel = url.searchParams.get("rel") ?? "";
+      if (!(await readManifest(projectDir(id)).catch(() => null))) return void json(res, 404, { error: "no such project" });
+      const root = resolve(mediaDir(id));
+      const file = resolve(root, rel);
+      /* Resolved back inside the project before ffmpeg is pointed at it: the
+         name comes from a page, and a page can say `..` as easily as a folder. */
+      if (!rel || !file.startsWith(root + sep)) return void json(res, 403, { error: "that file is outside this project" });
+      if (!(await stat(file).catch(() => null))) return void json(res, 404, { error: `no such file: ${rel}` });
+      try {
+        const data = await peaksFor(file, join(mediaDir(id), ".edit-cache"));
+        return void json(res, 200, data);
+      } catch (e) {
+        return void json(res, 500, { error: `could not read ${rel}: ${e.message}` });
+      }
     }
 
     if (p.startsWith("/api/edit/cache/") && (req.method === "GET" || req.method === "HEAD")) {
@@ -12284,6 +12313,31 @@ async function fetchVoiceList() {
    * A capture is usually silent, so this is the audio in most compositions.
    */
   let audio = null;
+  /*
+   * A scene that carries its own sound says so, and nothing has to be typed.
+   *
+   * The narration used to be named only here, at compose time, by whoever was
+   * composing -- so a scene cut to a voice-over had no record of which one,
+   * and the way to find out was to render it and listen. A scene with an
+   * rm-audio layer answers for itself. An explicit choice still wins, because
+   * someone naming a file on this screen means it.
+   */
+  if (!body.audio) {
+    for (const seg of segments) {
+      /* Either shape a segment's markup arrives in: inline, or a file the
+         renderer will read. A scene saved in a project is the second one. */
+      const markup = typeof seg.body === "string"
+        ? seg.body
+        : seg.bodyFile
+          ? await readFile(resolve(String(seg.bodyFile)), "utf8").catch(() => "")
+          : "";
+      const named = markup ? markupAudio(markup) : null;
+      if (named) {
+        body.audio = named;
+        break;
+      }
+    }
+  }
   if (body.audio) {
     /*
      * Named by its place in the project, exactly like footage.
