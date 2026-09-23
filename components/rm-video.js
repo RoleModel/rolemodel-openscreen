@@ -606,22 +606,32 @@ class RMText extends RMElement {
            swallowing the other's clicks in the Studio. */
         :host { position:absolute; display:block; inset:0; width:100%; height:100%;
                 container-type:size; pointer-events:none; --rise:${rise}px; }
+        /*
+         * pre-wrap belongs on the words, not on the box that holds them.
+         *
+         * On the box it also preserved the TEMPLATE's own indentation: the
+         * newline and eight spaces between </p> and the caption became a real
+         * blank line. The space after a headline measured 53px of which the
+         * Gap dial owned 10, so turning Gap down did almost nothing and the
+         * layer looked as though it had a mind of its own.
+         *
+         * On the paragraphs it still does the job it was added for -- a line
+         * break typed into a headline is kept -- and the markup's own shape
+         * stops being content.
+         */
         .at { position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
               transform: perspective(${persp}cqw) translate(${shift}, -50%)
                          rotateX(${tx}deg) rotateY(${ty}deg) rotateZ(${tz}deg);
-              text-align:${anchor}; white-space:pre-wrap; }
+              text-align:${anchor}; }
         /* inline-block, because the rise is a transform and a transform does
            nothing to an inline box. */
         .anim { display:inline-block; }
-        .head { margin:0; font-size:${size}cqw; font-weight:${weight}; line-height:${lead};
+        .head { margin:0; white-space:pre-wrap; font-size:${size}cqw; font-weight:${weight}; line-height:${lead};
                 letter-spacing:${track}em; color:${color};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
-        .sub { margin:${gap}cqw 0 0 0; font-size:${subsize}cqw; font-weight:${subweight}; line-height:1.4;
+        .sub { margin:${gap}cqw 0 0 0; white-space:pre-wrap; font-size:${subsize}cqw; font-weight:${subweight}; line-height:1.4;
                letter-spacing:0; color:${subcolor};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
       </style>
-      <div class="at">
-        <p class="head">${head}</p>
-        ${sub ? `<p class="sub">${sub}</p>` : ''}
-      </div>`
+      <div class="at"><p class="head">${head}</p>${sub ? `<p class="sub">${sub}</p>` : ''}</div>`
   }
 }
 define('rm-text', RMText)
@@ -647,6 +657,10 @@ const TEXT_GROUPS = [
 const TEXT_SCHEMA = [
   { key: 'text', label: 'Headline', type: 'text', def: 'Text', group: 'words' },
   { key: 'sub', label: 'Caption', type: 'text', def: '', group: 'words', note: 'Optional. A second, quieter line under the headline.' },
+  /* Beside the caption it measures, not buried under Type: the space after a
+     headline is noticed while looking at the caption, and that is where the
+     hand goes to fix it. */
+  { key: 'gap', label: 'Space below the headline', type: 'range', min: 0, max: 6, step: 0.1, def: 1.1, group: 'words', note: 'How far the caption sits under the headline.' },
 
   { key: 'x', label: 'Across (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 8, group: 'place' },
   { key: 'y', label: 'Down (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 50, group: 'place' },
@@ -661,7 +675,7 @@ const TEXT_SCHEMA = [
   { key: 'subcolor', label: 'Caption ink', type: 'select', options: ['fg', 'muted', 'brand', 'on-brand'], def: 'muted', group: 'type' },
   { key: 'track', label: 'Letter spacing', type: 'range', min: -0.08, max: 0.2, step: 0.005, def: -0.03, group: 'type' },
   { key: 'lead', label: 'Line height', type: 'range', min: 0.9, max: 1.8, step: 0.01, def: 1.05, group: 'type' },
-  { key: 'gap', label: 'Gap', type: 'range', min: 0, max: 6, step: 0.1, def: 1.1, group: 'type', note: 'Between the headline and its caption.' },
+
 
   { key: 'stagger', label: 'Arrives', type: 'select', options: ['none', 'word', 'char'], def: 'word', group: 'motion', note: 'All at once, a word at a time, or a letter at a time.' },
   { key: 'step', label: 'Apart (ms)', type: 'range', min: 0, max: 200, step: 5, def: 60, group: 'motion' },
