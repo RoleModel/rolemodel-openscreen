@@ -90,10 +90,27 @@
  * needs no height reserved for it. The transport rides along underneath, since
  * a picture you cannot scrub is only half of watching it.
  */
-.showcase__stage {
+/*
+ * The viewer sticks, not the frame.
+ *
+ * Sticking the frame alone left Play and the scrubber behind on the way down:
+ * you could watch the film and not drive it, which is half of being able to
+ * see it. The picture and the controls that move it are one thing, so they
+ * scroll as one thing.
+ */
+.showcase__viewer {
   position: sticky;
   top: 0;
   z-index: 4;
+  background: var(--op-color-neutral-plus-max);
+  padding-block-end: var(--op-space-2x-small);
+}
+
+.showcase__transport {
+  margin-block: var(--op-space-2x-small) 0;
+}
+
+.showcase__stage {
   user-select: none;
   background: var(--op-color-neutral-plus-max);
   /*
@@ -109,9 +126,6 @@
    */
   max-inline-size: calc(46vh * 16 / 9);
   margin-inline: auto;
-  /* A hair of ground below it, so rows passing underneath do not appear to
-     touch the frame. */
-  box-shadow: 0 var(--op-space-2x-small) 0 var(--op-color-neutral-plus-max);
 }
 
 

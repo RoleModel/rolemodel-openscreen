@@ -1,22 +1,30 @@
 <!-- Showcase: footage or a still, presented — on a look, in a frame, in 3D. -->
 <template data-panel="showcase">
    <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Keyframe any placement dial: put the playhead somewhere, change a dial, and the change is a key. Drag a layer&rsquo;s name up or down to restack it &mdash; a lower layer is drawn on top. Save a PNG, or send it into a composition.</p>
-   <div class="wpprev showcase__stage" data-region="main">
-      <!-- Layers are appended after the look, as its siblings: the scene gives
-           slotted children their stacking, and a wrapper would keep them out. -->
-      <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
-      <!-- The selection, drawn over the stage: an outline on the selected layer
-           with corner handles. Drag the box to move it, a corner to size it, and
-           click any layer to select it. -->
-      <div data-el="gizmo" class="showcase__gizmo" hidden>
-         <i class="showcase__handle showcase__handle--nw" data-corner="nw"></i><i class="showcase__handle showcase__handle--ne" data-corner="ne"></i>
-         <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
+   <!--
+      The viewer: the frame and the transport under it, as one block.
+      Sticking the frame alone left its Play and scrubber behind on the way
+      down, so you could see the film and not drive it. What must stay on
+      screen is the picture AND the controls that move it.
+   -->
+   <div class="showcase__viewer" data-region="main">
+      <div class="wpprev showcase__stage">
+         <!-- Layers are appended after the look, as its siblings: the scene gives
+              slotted children their stacking, and a wrapper would keep them out. -->
+         <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
+         <!-- The selection, drawn over the stage: an outline on the selected layer
+              with corner handles. Drag the box to move it, a corner to size it, and
+              click any layer to select it. -->
+         <div data-el="gizmo" class="showcase__gizmo" hidden>
+            <i class="showcase__handle showcase__handle--nw" data-corner="nw"></i><i class="showcase__handle showcase__handle--ne" data-corner="ne"></i>
+            <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
+         </div>
       </div>
-   </div>
-   <div class="ctl" data-region="main">
-      <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
-      <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control" />
-      <span data-el="clock" class="v">0 ms</span>
+      <div class="ctl showcase__transport">
+         <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
+         <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control" />
+         <span data-el="clock" class="v">0 ms</span>
+      </div>
    </div>
    <!-- The layers, in time order. One is selected; the rail and the footage
         cards work on that one. -->
@@ -52,28 +60,28 @@
       <button data-el="copyTag" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy tag</button>
       <button data-el="png" class="btn btn--primary" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
    </div>
-</template>
+   </template>
 
-<!-- One clip or still from the project. -->
-<template data-row="showcase-card">
+   <!-- One clip or still from the project. -->
+   <template data-row="showcase-card">
    <button class="card card--media showcase__card" type="button">
       <div class="thumbwrap"><div data-el="art" class="thumb showcase__thumb"></div></div>
       <div class="card__body"><div data-el="name" class="path showcase__name"></div><span data-el="kind" class="kind"></span></div>
    </button>
-</template>
+   </template>
 
-<!-- A picture from this machine, kept with the added brand assets. -->
-<template data-row="showcase-picture">
+   <!-- A picture from this machine, kept with the added brand assets. -->
+   <template data-row="showcase-picture">
    <label data-el="label" class="form-label">Picture</label>
    <div class="showcase__picture">
       <button data-el="pick" class="btn ghost btn--small" type="button"><rm-icon name="upload-04"></rm-icon>Upload</button>
       <span data-el="name" class="path showcase__picturename"></span>
       <input data-el="file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
    </div>
-</template>
+   </template>
 
-<!-- A template: a device, a backdrop and a camera, named. -->
-<template data-row="showcase-template">
+   <!-- A template: a device, a backdrop and a camera, named. -->
+   <template data-row="showcase-template">
    <button class="card showcase__template" type="button">
       <div class="card__body">
          <div data-el="name" class="showcase__templatename"></div>
@@ -81,10 +89,10 @@
          <span data-el="device" class="kind"></span>
       </div>
    </button>
-</template>
+   </template>
 
-<!-- One row of the timeline: the layer's name, and its bar. -->
-<template data-row="showcase-track">
+   <!-- One row of the timeline: the layer's name, and its bar. -->
+   <template data-row="showcase-track">
    <div class="showcase__track">
       <button data-el="pick" class="showcase__tllabel showcase__tlname" type="button"><span data-el="name"></span><span data-el="remove" class="showcase__tlremove" role="button" aria-label="Remove layer" title="Remove layer">×</span></button>
       <div data-el="lane" class="showcase__lane">
@@ -93,10 +101,10 @@
          <div data-el="keys" class="showcase__keys"></div>
       </div>
    </div>
-</template>
+   </template>
 
-<!-- The keyframe controls for the selected layer, in the rail's Motion group. -->
-<template data-row="showcase-keys">
+   <!-- The keyframe controls for the selected layer, in the rail's Motion group. -->
+   <template data-row="showcase-keys">
    <div class="showcase__keyrow">
       <button data-el="add" class="btn ghost btn--small" type="button"><rm-icon name="plus-sign"></rm-icon>Add key here</button>
       <button data-el="del" class="btn ghost btn--small" type="button" hidden>Delete key</button>
@@ -104,4 +112,4 @@
    </div>
    <p data-el="info" class="hint showcase__keyinfo"></p>
    <div data-el="easeRow" class="showcase__keyrow" hidden><label data-el="easeLabel" class="form-label">Ease to next</label><select data-el="ease" class="wide form-control"></select></div>
-</template>
+   </template>
