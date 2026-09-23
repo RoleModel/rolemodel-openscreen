@@ -32,8 +32,14 @@
                  alone means knowing a Timeline view exists and guessing which
                  composition it will land on. -->
             <button data-el="edit" class="btn ghost" type="button" hidden><rm-icon name="scissor-01"></rm-icon>Edit timeline</button>
+            <select data-el="renderQuality" class="form-control form-control--small" aria-label="Render quality">
+               <option value="looks">1080p · high quality</option>
+               <option value="delivery">1080p · delivery</option>
+               <option value="4k">4K · delivery</option>
+               <option value="draft">1080p · draft</option>
+            </select>
             <button data-el="render" class="btn ghost" type="button"
-               title="Render straight to MP4 without opening the editor. Uses the composition's own frame rate.">
+               title="Render straight to MP4 without opening the editor. Uses the composition's own frame rate and the quality selected here.">
                <rm-icon name="video-replay"></rm-icon>Render
             </button>
             <button data-el="remove" class="btn ghost btn--icon del" type="button" aria-label="Delete"><rm-icon name="delete-01"></rm-icon></button>

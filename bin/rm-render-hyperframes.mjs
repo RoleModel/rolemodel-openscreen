@@ -25,9 +25,21 @@ import { ensureClock } from "../lib/assembly-clock.mjs";
 const args = process.argv.slice(2);
 const value = (flag) => args[args.indexOf(flag) + 1] ?? "";
 const output = value("--output");
+const quality = value("--quality") || "looks";
+const resolution = value("--resolution");
+const qualities = new Set(["draft", "looks", "delivery"]);
+const resolutions = new Set(["", "4k"]);
 
 if (!output) {
   console.error("rm-render-hyperframes: --output is required");
+  process.exit(2);
+}
+if (!qualities.has(quality)) {
+  console.error("rm-render-hyperframes: --quality must be draft, looks, or delivery");
+  process.exit(2);
+}
+if (!resolutions.has(resolution)) {
+  console.error("rm-render-hyperframes: --resolution must be 4k when supplied");
   process.exit(2);
 }
 
@@ -59,7 +71,7 @@ async function reconcile() {
 try {
   await reconcile();
   await run(["check"]);
-  await run(["render", "--output", output, "--quality", "draft"]);
+  await run(["render", "--output", output, "--quality", quality, ...(resolution ? ["--resolution", resolution] : [])]);
   const artifact = await stat(output).catch(() => null);
   if (!artifact?.isFile() || artifact.size === 0) {
     throw new Error(`the render finished without writing ${output} — check the output above for the frame that failed`);

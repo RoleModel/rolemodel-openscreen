@@ -4594,7 +4594,7 @@ const server = createServer(async (req, res) => {
             project: id,
             ...ownStep("rm-render-hyperframes", ["--output", join(hyperframesExportDir(outDir), `${slug}.mp4`)]),
             cwd: outDir,
-            note: "run this after Claude has written index.html; the result is a draft MP4 with the selected audio",
+            note: "run this after Claude has written index.html; the result is a high-quality MP4 with the selected audio",
           }
         : null;
       return json(res, 200, {
@@ -5385,11 +5385,11 @@ const server = createServer(async (req, res) => {
      * ffmpeg already has on disk in the right form. It also recompiles, which is
      * why merely checking a composition disturbs a render.
      *
-     * rm-render-pip needs none of it: it serves the folder itself, asks the page
-     * once for its layout, and lets ffmpeg build the footage layer. Roughly
-     * twice as fast, and nothing about it touches the editor. A composition is
-     * something you should be able to render because it is finished, not because
-     * you happen to have a timeline editor open.
+     * The checked renderer runs without opening the editor, reconciles derived
+     * timing first, and supports a fast draft, a high-quality review encode, or
+     * a supersampled 4K delivery. A composition is something you should be able
+     * to render because it is finished, not because you happen to have a
+     * timeline editor open.
      *
      * A step rather than a started job, like every other long task here: the
      * Console stream is where a render belongs.
@@ -5398,6 +5398,15 @@ const server = createServer(async (req, res) => {
       const body = JSON.parse(await text(req));
       const id = String(body.projectId ?? "");
       const folder = basename(String(body.folder ?? ""));
+      const quality = String(body.quality ?? "looks");
+      const renderChoices = {
+        draft: { quality: "draft", suffix: "draft" },
+        looks: { quality: "looks", suffix: "1080p" },
+        delivery: { quality: "delivery", suffix: "1080p-delivery" },
+        "4k": { quality: "delivery", resolution: "4k", suffix: "4k" },
+      };
+      const choice = renderChoices[quality];
+      if (!choice) return json(res, 400, { error: "pick a render quality" });
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
       const renders = resolve(mediaDir(id), "Renders");
@@ -5405,14 +5414,21 @@ const server = createServer(async (req, res) => {
       if (!folder || folder === "." || folder === ".." || !root.startsWith(`${renders}${sep}`) || !(await stat(join(root, "index.html")).catch(() => null))?.isFile()) {
         return json(res, 404, { error: "that motion project is not in this project" });
       }
+      await prepareHyperframesExportDir(root);
+      const output = join(hyperframesExportDir(root), `${folder}-${choice.suffix}.mp4`);
       /* No --fps: the composition's own data-fps decides, so the export cannot
-         disagree with the piece. */
+         disagree with the piece. Quality and resolution are export choices;
+         neither rewrites the composition. */
       return json(res, 200, {
         folder,
         renderStep: {
           label: `render ${folder}`,
           project: id,
-          ...ownStep("rm-render-pip", [id, folder]),
+          ...ownStep("rm-render-hyperframes", [
+            "--output", output,
+            "--quality", choice.quality,
+            ...(choice.resolution ? ["--resolution", choice.resolution] : []),
+          ]),
           cwd: root,
         },
       });
