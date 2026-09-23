@@ -3188,9 +3188,21 @@ class RMShowcase extends RMElement {
                     * combines them with its own.
                     */
                    transform: perspective(120cqw) rotateX(var(--sc-in-r)) translate(calc(var(--sc-in-x) + var(--sc-out-x)), calc(var(--sc-in-y) + var(--sc-out-y))) scale(calc(var(--sc-in-s) * var(--sc-out-s))); }
-          /* The enter's equivalent of sc-out-stay: present the whole time. For a
-             layer whose own keys say when it is visible. */
-          @keyframes sc-in-stay  { from { --sc-in-o:1; } to { --sc-in-o:1; } }
+          /*
+           * A hard in and a hard out, for a layer whose own keys shape it.
+           *
+           * Not "present the whole time": a layer is only ever on screen inside
+           * its own at/for window, and that must not depend on somebody having
+           * keyed op to zero at both ends. Before these existed, the enter and
+           * exit FADES were what took an old layer away -- so letting keys own
+           * opacity quietly removed the thing that hid it, and every beat piled
+           * up on the ones before it.
+           *
+           * Both sit at the very edge of their span so they cut rather than
+           * fade, and fill:both holds 0 outside the window in each direction.
+           */
+          @keyframes sc-in-stay  { 0% { --sc-in-o:0; } 0.01% { --sc-in-o:1; } 100% { --sc-in-o:1; } }
+          @keyframes sc-out-stay-cut { 0% { --sc-out-o:1; } 99.99% { --sc-out-o:1; } 100% { --sc-out-o:0; } }
           @keyframes sc-in-none  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-fade  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-rise  { from { --sc-in-o:0; --sc-in-y:8%; } to { --sc-in-o:1; --sc-in-y:0%; } }
@@ -3577,7 +3589,7 @@ class RMShowcase extends RMElement {
      */
     const keysOwnOpacity = keys.some((k) => k.op !== undefined)
     place.style.animationName = keysOwnOpacity
-      ? "sc-in-stay, sc-out-stay"
+      ? "sc-in-stay, sc-out-stay-cut"
       : keys.length
         ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}`
         : `sc-in-${s.enter}, sc-out-${s.exit}`
