@@ -88,6 +88,38 @@ failures unrelated to us; run the suite against `upstream/main` before assuming
 you caused one, which is two minutes and has already saved me from reporting
 someone else's bug as mine.
 
+### Releasing
+
+Merging to main already bumps the version and pushes a tag. It does not publish:
+GitHub will not start a workflow from a push made with the default `GITHUB_TOKEN`,
+and `push.yml` tags as the bot using exactly that, so `release.yml` never fires.
+Every release this repo has published was started by hand.
+
+```sh
+pnpm run release            # bump the patch, tag, publish, then read the tap back
+pnpm run release --minor    # or --major
+pnpm run release --dry-run  # say what would happen, change nothing
+pnpm run release:verify     # did the last one actually ship?
+pnpm run release:finish     # publish a tag the bot cut and nothing released
+```
+
+`release:verify` is the one to reach for first, and it answers the only question
+that matters: does the version the tap serves match the version on main? It costs
+a few seconds and it is the check nobody had. When it disagrees, `release:finish`
+publishes the stranded tag rather than bumping past it — bumping is how the tap
+ended up forty-three versions behind once already.
+
+Two things the script knows that are easy to get wrong by hand. Its version commit
+carries `[skip release]`, the same marker the bot uses; without it, pushing the
+bump starts `push.yml`, which finds the tag taken and bumps again, so one release
+burns two version numbers. And it never offers to publish the 121 older tags that
+have no release — those were all superseded long before anyone could install them,
+and pointing the tap at one would ship ancient code.
+
+It does not try to fix the root cause. That needs a PAT with `contents: write` on
+`push.yml`'s tag step, stored as a secret; until someone adds it, a release is a
+thing a person runs.
+
 ---
 
 ## Running each piece
@@ -143,7 +175,7 @@ These are all environment, and all of them cost someone an hour already.
 | Every speaker's name printed over every other | A cue-less element — a speaker's name is simply on while its clip is on — left visible by anything that does not step clip visibility per frame. State the envelope in the timeline instead of trusting the runtime. |
 | The composition looks right when scrubbed and wrong at its first frame | A paused GSAP timeline sitting at 0 has applied nothing, and `seek(0)` is not a change, so nothing renders. Anything that asks for exactly the first frame — a thumbnail — sees the document as authored, every clip at once. Seek a hair past zero once after building. |
 | A lower third names one speaker over another's face | A clip asked for more footage than its file has. `-t` states a length and a file that runs out just returns less, with no error, so every later segment slid earlier in the concat. `-shortest` made it worse by trimming any padding back off at the audio's length. Each segment is now padded to exactly what it was asked for, the over-running clips are named, and a footage layer whose length does not match the composition refuses to render. Every individual frame looked normal, which is how it survived being watched. |
-| Tags keep appearing and no release ever ships | `push.yml` tags as `github-actions[bot]` with the default `GITHUB_TOKEN`, and GitHub deliberately does not start workflows from a `GITHUB_TOKEN` push — so `release.yml` never fired for a bot-cut tag. Sixty-two tags between v0.1.4 and v0.1.66 produced no release and no DMGs, and `brew install` kept serving the last build a person happened to cut. Nothing reported it, because nothing was watching for a tag with no release behind it. The fix is a PAT with `contents: write` on that push step; `release.yml` also takes a `workflow_dispatch` against a tag now, so it is recoverable without re-cutting one. |
+| Tags keep appearing and no release ever ships | `push.yml` tags as `github-actions[bot]` with the default `GITHUB_TOKEN`, and GitHub deliberately does not start workflows from a `GITHUB_TOKEN` push — so `release.yml` never fired for a bot-cut tag. Sixty-two tags between v0.1.4 and v0.1.66 produced no release and no DMGs, and `brew install` kept serving the last build a person happened to cut. Nothing reported it, because nothing was watching for a tag with no release behind it. The fix is a PAT with `contents: write` on that push step; `release.yml` also takes a `workflow_dispatch` against a tag now, so it is recoverable without re-cutting one. `pnpm run release:verify` is the thing that was not watching — it compares the tap against main — and `pnpm run release:finish` publishes a stranded tag. |
 | A finished render becomes a two-second clip | `rm-render-pip --from/--to` used to write the same path as the full cut, so checking one transition replaced the deliverable. It writes `<folder>-preview.mp4` now. |
 
 ### One clock, three copies of it
