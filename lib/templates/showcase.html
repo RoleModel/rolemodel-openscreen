@@ -98,7 +98,22 @@
          <option value="1920x1080">1080p · high quality</option>
          <option value="3840x2160">4K · high quality</option>
       </select>
+      <!--
+         How hard to paint each frame. It is almost the whole cost of a render:
+         the same 85-second scene is roughly 18 minutes at Draft, 33 at Faster
+         and an hour at Best, because the screenshot is about 90% of a frame and
+         2x is four times the pixels. Best stays the default; this is here so a
+         look at the cut does not cost an afternoon.
+      -->
+      <select data-el="renderQuality" class="form-control" aria-label="Render quality">
+         <option value="2">Best · supersampled</option>
+         <option value="1.5">Faster · about half the time</option>
+         <option value="1">Draft · quickest, softer edges</option>
+      </select>
       <button data-el="render" class="btn btn--primary" type="button"><rm-icon name="video-01"></rm-icon>Render video</button>
+      <!-- Progress, a Stop, and where it went. Hidden until there is one. -->
+      <span data-el="renderProgress" class="showcase__progress" hidden></span>
+      <button data-el="renderStop" class="btn ghost" type="button" hidden><rm-icon name="stop"></rm-icon>Stop</button>
       <a data-el="renderSave" class="btn" download hidden><rm-icon name="download-04"></rm-icon><span data-el="renderSaveText">Save video</span></a>
    </div>
    </template>

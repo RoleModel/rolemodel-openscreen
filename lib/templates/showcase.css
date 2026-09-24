@@ -526,3 +526,29 @@
   inset-inline-end: var(--op-space-x-small);
   pointer-events: none;
 }
+
+/*
+ * What a render is doing, beside the button that started it.
+ *
+ * A scene render is minutes, not seconds — the better part of an hour for a
+ * long one — and it used to be a single fetch with nothing to look at. That is
+ * why people stopped them half way, which is how the black videos were made.
+ * Tabular numbers so a percent ticking up does not shift the words after it.
+ */
+.showcase__progress {
+  /*
+   * Its own row, the full width of the bar.
+   *
+   * The footer is a grid, so as one more cell this landed in a button-width
+   * column and the line was cut mid-word — "about 46s lef". A percent that has
+   * to be guessed at is worse than no percent, and the sentence is the whole
+   * point of it.
+   */
+  grid-column: 1 / -1;
+  font: 500 12px/1 var(--font-mono, ui-monospace, monospace);
+  /* Tabular, so a ticking percent does not shift the words after it. */
+  font-variant-numeric: tabular-nums;
+  color: var(--op-color-neutral-on-plus-max, var(--meta));
+  align-self: center;
+  padding-block: 2px;
+}
