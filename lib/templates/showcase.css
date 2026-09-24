@@ -77,11 +77,109 @@
   font-weight: var(--op-font-weight-semi-bold);
 }
 
-/* The stage's selection: an outline with four corner handles, over the scene. */
-.showcase__stage {
-  position: relative;
-  user-select: none;
+/*
+ * The stage's selection: an outline with four corner handles, over the scene.
+ *
+ * And it sticks. The panel is one scrolling column -- stage, transport,
+ * timeline, layer list, saved scenes -- so reaching the timeline scrolled the
+ * picture off the top, and you were editing a film you could not see. The one
+ * thing that must never leave the screen is the thing being edited.
+ *
+ * Sticky rather than fixed: it still sits in the flow, still scrolls away at
+ * the very bottom where the scene list has nothing to do with the frame, and
+ * needs no height reserved for it. The transport rides along underneath, since
+ * a picture you cannot scrub is only half of watching it.
+ */
+/*
+ * The deck sticks, and the deck holds everything you drive the film with.
+ *
+ * Sticking the frame alone left Play and the scrubber behind on the way down:
+ * you could watch the film and not drive it. Sticking those too left the
+ * LAYERS behind -- and a 566px block pinned over a 4800px page covers
+ * whatever scrolls under it. 22 of the 30 rows on screen ended up beneath it:
+ * still painted, still hit-tested, and answering to the Play button instead of
+ * to themselves. That reads as the editor ignoring you.
+ *
+ * The rule that stops it coming back: nothing you edit with may live outside
+ * the block that is pinned over the page. The rows scroll inside their own
+ * box, so a scene with thirty-six layers still fits on the deck.
+ */
+.showcase__deck {
+  position: sticky;
+  /* Below the pinned header, not under it. */
+  top: var(--showcase-head, 0px);
+  z-index: 4;
+  background: var(--op-color-neutral-plus-max);
+  padding-block-end: var(--op-space-2x-small);
+  /*
+   * As tall as the window, less the action bar that is pinned to its foot.
+   *
+   * The deck ran past the bottom of the screen, so its last rows sat under
+   * that bar -- painted, and answering to Add layer instead of to themselves.
+   * Rather than guess how tall the stage plus the transport plus the waveform
+   * come to, the deck takes what the window has and the rows take what is
+   * left: add a control to the transport and the list gives up a row for it,
+   * with nothing here to keep in step.
+   */
+  display: flex;
+  flex-direction: column;
+  /*
+   * The fallback is not decoration. A var() naming a property that does not
+   * exist is invalid at computed-value time and the WHOLE declaration is
+   * dropped -- silently. The first go asked for --op-space-6x-large, which is
+   * not a token, so the deck simply had no ceiling and grew to 1838px in an
+   * 1100px window. A fallback means a typo costs a wrong number, not the rule.
+   */
+  max-block-size: calc(100dvh - var(--showcase-bar, 11rem) - var(--showcase-head, 0px));
 }
+
+/* min-block-size:0 twice over: a flex child will not shrink below its content
+   without it, and the scrollbar the rows need is the thing being shrunk to. */
+.showcase__tl {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.showcase__viewer {
+  padding-block-end: var(--op-space-2x-small);
+}
+
+.showcase__transport {
+  margin-block: var(--op-space-2x-small) 0;
+}
+
+/* Full width, so it and the waveform below it measure the same span. */
+.showcase__scrub {
+  display: block;
+  inline-size: 100%;
+  margin-block-start: var(--op-space-2x-small);
+}
+
+.showcase__stage {
+  user-select: none;
+  background: var(--op-color-neutral-plus-max);
+  /*
+   * Capped by WIDTH, not height.
+   *
+   * The frame has no shape of its own: rm-scene inside it is width:100% with
+   * the aspect ratio, and the stage takes whatever height that comes to. So a
+   * capping its height did not make the picture smaller, it CUT it: the stage
+   * clips its overflow, and the bottom of every frame went under the fold.
+   *
+   * Capping the width lets the height follow at the right shape and land under
+   * the same ceiling. 38vh of height is 38vh * 16/9 of width.
+   *
+   * 46vh was too much to be sticky with. The viewer -- stage, transport,
+   * scrubber, waveform -- came to 694px of an 1100px window, which left the
+   * layer list a 250px slot for 36 rows, and 22 of the 30 rows on screen were
+   * underneath the sticky block: visible, and dead to a click. A picture you
+   * can see while you work is worth less than room to work.
+   */
+  max-inline-size: calc(38vh * 16 / 9);
+  margin-inline: auto;
+}
+
 
 .showcase__gizmo {
   position: absolute;
@@ -128,6 +226,25 @@
   background: var(--sunk);
   overflow: hidden;
   user-select: none;
+}
+
+/*
+ * The rows scroll inside the timeline, not with the page.
+ *
+ * A list of 36 layers made the page taller than the window, so the rows slid
+ * under the sticky viewer: on screen, and dead to a click, which reads as the
+ * editor ignoring you rather than as one box sitting over another. The list
+ * keeps its own scrollbar now, so the page has nothing left to scroll and
+ * nothing ends up underneath anything.
+ *
+ * The ruler and the playhead stay outside it, because a ruler that scrolls
+ * away from what it measures is not a ruler.
+ */
+.showcase__rows {
+  flex: 1 1 auto;
+  min-block-size: 4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .showcase__tlhead,
@@ -363,4 +480,49 @@
 .showcase__keyinfo {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+
+/*
+ * The shape of the sound, under the transport and inside the sticky viewer.
+ *
+ * Its width is the scrubber's width because both are the viewer's full width,
+ * not because anything here worked it out. The first try put the scrubber in a
+ * row between Play and the clock, and the two rulers came out 104px apart at
+ * the left and 58px at the right -- a strip that says a different time from
+ * the control above it is a ruler that lies, and nothing about it looks wrong.
+ */
+.showcase__wave {
+  position: relative;
+  margin-block-start: var(--op-space-2x-small);
+  /*
+   * Declared on the BOX, not on the canvas.
+   *
+   * A 2D context takes a colour string, so the theme has to be handed over
+   * through properties and resolved by putting them on a real element. That
+   * element has to inherit them, and nothing inherits from a canvas -- put
+   * here they reach both the canvas and the hidden span that resolves them.
+   */
+  --wave-ink: var(--op-color-primary-base);
+  --wave-dim: var(--op-color-neutral-plus-four);
+  /* The timeline's playhead is the brand green, which is the one colour that
+     cannot be a playhead HERE: the sound is drawn in it. Ink it is. */
+  --wave-head: var(--op-color-neutral-on-plus-max);
+}
+
+.showcase__waveform {
+  display: block;
+  inline-size: 100%;
+  block-size: var(--op-space-3x-large);
+  cursor: pointer;
+  touch-action: none;
+  border-radius: var(--op-radius-small);
+  background: var(--op-color-neutral-plus-seven);
+}
+
+.showcase__wave-clock {
+  position: absolute;
+  inset-block-start: var(--op-space-2x-small);
+  inset-inline-end: var(--op-space-x-small);
+  pointer-events: none;
 }

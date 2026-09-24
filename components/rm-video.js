@@ -519,6 +519,239 @@ class RMTitle extends RMElement {
 }
 define('rm-title', RMTitle)
 
+/* -- rm-text ------------------------------------------------------------- */
+
+/**
+ * A free-placed line of type.
+ *
+ * rm-title is a CARD: it owns the whole frame and centres itself in it. That is
+ * the right shape for an opening and the wrong one for a headline that has to
+ * sit beside a device, lean with it, and leave before the camera pushes in.
+ * Every scene that needed one ended up hand-writing a div and its keyframes --
+ * which is how a scene stops being made of components and starts being a file
+ * only its author can edit.
+ *
+ * So: x and y place it, w measures it, the type dials set it, and the same
+ * paused enter/exit every other component runs carries it on the scene clock.
+ * Words or characters arrive in order by giving each its own --lead, which is
+ * the stagger the brand already uses between an eyebrow and its title -- one
+ * clock, staggered, rather than one animation per word on clocks that drift.
+ */
+class RMText extends RMElement {
+  static fields = ['text', 'sub', 'x', 'y', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'at', 'for']
+
+  render() {
+    const pick = (key, list, def) => (list.includes(this.attr(key, def)) ? this.attr(key, def) : def)
+    const num = (key, def) => {
+      const n = Number(this.attr(key, String(def)))
+      return Number.isFinite(n) ? n : def
+    }
+    const anchor = pick('anchor', ['left', 'center', 'right'], 'left')
+    const mode = pick('stagger', ['none', 'word', 'char'], 'word')
+    const x = num('x', 8)
+    const y = num('y', 50)
+    const w = num('w', 34)
+    const size = num('size', 4.6)
+    const subsize = num('subsize', 1.6)
+    const weight = num('weight', 700)
+    const subweight = num('subweight', 400)
+    const track = num('track', -0.03)
+    const lead = num('lead', 1.05)
+    const gap = num('gap', 1.1)
+    const step = num('step', 60)
+    const rise = num('rise', 26)
+    const tx = num('tx', 0)
+    const ty = num('ty', 0)
+    const tz = num('tz', 0)
+    const persp = num('persp', 180)
+    const shadow = this.attr('shadow', '1') !== '0'
+
+    /* A role name resolves to the brand's token; anything else is passed
+       through, so a one-off accent does not need a token to exist first. */
+    const roles = { fg: 'var(--fg)', muted: 'var(--muted)', brand: 'var(--brand-text)', 'on-brand': 'var(--on-brand)' }
+    const ink = (v, def) => roles[v] ?? (v || def)
+    const color = ink(this.attr('color', 'fg'), 'var(--fg)')
+    const subcolor = ink(this.attr('subcolor', 'muted'), 'var(--muted)')
+
+    /* Returns [markup, partCount] so the caption can start its own stagger
+       after the headline has finished, not on top of it. */
+    const split = (raw, base) => {
+      const text = String(raw)
+      if (mode === 'none') return [`<span class="anim" style="--lead:${base}ms">${this.esc(text)}</span>`, 1]
+      const bits = mode === 'char' ? [...text] : text.split(/(\s+)/)
+      let i = 0
+      const out = bits
+        .map((b) => {
+          if (b === '' || /^\s+$/.test(b)) return this.esc(b)
+          const at = base + i * step
+          i += 1
+          return `<span class="anim" style="--lead:${at}ms">${this.esc(b)}</span>`
+        })
+        .join('')
+      return [out, i]
+    }
+
+    const [head, headParts] = split(this.attr('text', 'Text'), 0)
+    const subText = this.attr('sub')
+    const subBase = Math.round(headParts * step * 0.5) + 180
+    const sub = subText ? split(subText, subBase)[0] : ''
+
+    const shift = anchor === 'center' ? '-50%' : anchor === 'right' ? '-100%' : '0%'
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        /* The layer covers the frame and paints nothing: only the block at
+           x/y is real, so two of these can sit over each other without one
+           swallowing the other's clicks in the Studio. */
+        :host { position:absolute; display:block; inset:0; width:100%; height:100%;
+                container-type:size; pointer-events:none; --rise:${rise}px; }
+        /*
+         * pre-wrap belongs on the words, not on the box that holds them.
+         *
+         * On the box it also preserved the TEMPLATE's own indentation: the
+         * newline and eight spaces between </p> and the caption became a real
+         * blank line. The space after a headline measured 53px of which the
+         * Gap dial owned 10, so turning Gap down did almost nothing and the
+         * layer looked as though it had a mind of its own.
+         *
+         * On the paragraphs it still does the job it was added for -- a line
+         * break typed into a headline is kept -- and the markup's own shape
+         * stops being content.
+         */
+        .at { position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
+              transform: perspective(${persp}cqw) translate(${shift}, -50%)
+                         rotateX(${tx}deg) rotateY(${ty}deg) rotateZ(${tz}deg);
+              text-align:${anchor}; }
+        /* inline-block, because the rise is a transform and a transform does
+           nothing to an inline box. */
+        .anim { display:inline-block; }
+        .head { margin:0; white-space:pre-wrap; font-size:${size}cqw; font-weight:${weight}; line-height:${lead};
+                letter-spacing:${track}em; color:${color};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+        .sub { margin:${gap}cqw 0 0 0; white-space:pre-wrap; font-size:${subsize}cqw; font-weight:${subweight}; line-height:1.4;
+               letter-spacing:0; color:${subcolor};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+      </style>
+      <div class="at"><p class="head">${head}</p>${sub ? `<p class="sub">${sub}</p>` : ''}</div>`
+  }
+}
+define('rm-text', RMText)
+
+/*
+ * The same shape the showcase has, so the editor can build a rail for text
+ * without knowing anything about text.
+ *
+ * The Studio paints its dials by walking a schema: a list of keys with a type,
+ * a range and a group. That is why a showcase is editable and everything else
+ * is not — the showcase is the only thing that ever had one. Giving text the
+ * same table is what makes "Add text" possible at all, and it means a dial
+ * added here appears in the editor with no change there.
+ */
+const TEXT_GROUPS = [
+  ['words', 'Words'],
+  ['place', 'Place'],
+  ['type', 'Type'],
+  ['motion', 'Motion'],
+  ['lean', 'Lean'],
+]
+
+const TEXT_SCHEMA = [
+  { key: 'text', label: 'Headline', type: 'text', def: 'Text', group: 'words' },
+  { key: 'sub', label: 'Caption', type: 'text', def: '', group: 'words', note: 'Optional. A second, quieter line under the headline.' },
+  /* Beside the caption it measures, not buried under Type: the space after a
+     headline is noticed while looking at the caption, and that is where the
+     hand goes to fix it. */
+  { key: 'gap', label: 'Space below the headline', type: 'range', min: 0, max: 6, step: 0.1, def: 1.1, group: 'words', note: 'How far the caption sits under the headline.' },
+
+  { key: 'x', label: 'Across (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 8, group: 'place' },
+  { key: 'y', label: 'Down (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 50, group: 'place' },
+  { key: 'anchor', label: 'Align', type: 'select', options: ['left', 'center', 'right'], def: 'left', group: 'place', note: 'Which edge Across measures from, and how the lines align.' },
+  { key: 'w', label: 'Measure', type: 'range', min: 8, max: 90, step: 1, def: 34, group: 'place', note: 'How wide the block may run before it wraps.' },
+
+  { key: 'size', label: 'Headline size', type: 'range', min: 1, max: 12, step: 0.1, def: 4.6, group: 'type' },
+  { key: 'subsize', label: 'Caption size', type: 'range', min: 0.8, max: 5, step: 0.1, def: 1.6, group: 'type' },
+  { key: 'weight', label: 'Weight', type: 'range', min: 300, max: 800, step: 100, def: 700, group: 'type' },
+  { key: 'subweight', label: 'Caption weight', type: 'range', min: 300, max: 800, step: 100, def: 400, group: 'type' },
+  { key: 'color', label: 'Ink', type: 'select', options: ['fg', 'muted', 'brand', 'on-brand'], def: 'fg', group: 'type' },
+  { key: 'subcolor', label: 'Caption ink', type: 'select', options: ['fg', 'muted', 'brand', 'on-brand'], def: 'muted', group: 'type' },
+  { key: 'track', label: 'Letter spacing', type: 'range', min: -0.08, max: 0.2, step: 0.005, def: -0.03, group: 'type' },
+  { key: 'lead', label: 'Line height', type: 'range', min: 0.9, max: 1.8, step: 0.01, def: 1.05, group: 'type' },
+
+
+  { key: 'stagger', label: 'Arrives', type: 'select', options: ['none', 'word', 'char'], def: 'word', group: 'motion', note: 'All at once, a word at a time, or a letter at a time.' },
+  { key: 'step', label: 'Apart (ms)', type: 'range', min: 0, max: 200, step: 5, def: 60, group: 'motion' },
+  { key: 'rise', label: 'Rise (px)', type: 'range', min: 0, max: 80, step: 1, def: 26, group: 'motion' },
+  { key: 'shadow', label: 'Ink shadow', type: 'select', options: ['1', '0'], def: '1', group: 'motion', note: 'On, because type is not always over a controlled ground.' },
+
+  { key: 'tx', label: 'Lean X', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
+  { key: 'ty', label: 'Lean Y', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
+  { key: 'tz', label: 'Roll', type: 'range', min: -30, max: 30, step: 0.5, def: 0, group: 'lean' },
+  { key: 'persp', label: 'Perspective', type: 'range', min: 40, max: 400, step: 1, def: 180, group: 'lean' },
+]
+
+const textDefaults = () => Object.fromEntries(TEXT_SCHEMA.map((f) => [f.key, f.def]))
+
+/** A text layer as an attribute string: only what differs from the defaults. */
+function encodeText(state) {
+  const parts = []
+  for (const f of TEXT_SCHEMA) {
+    if (String(state[f.key] ?? f.def) === String(f.def)) continue
+    parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  }
+  return parts.join(' ')
+}
+
+/* -- rm-audio ------------------------------------------------------------ */
+
+/**
+ * A sound layer.
+ *
+ * Narration used to live beside a scene rather than inside it: a flag on the
+ * compose command and a dropdown in the editor that no file remembered. So a
+ * scene could not say how long it was meant to be, reopening it lost the
+ * voice, and the only way to see whether the words fitted the pictures was to
+ * render it and listen.
+ *
+ * A scene is a list of layers on one clock. Sound is one of those layers. It
+ * paints nothing, which is why this renders nothing -- a frame is painted and
+ * audio is muxed, and the two only ever meet at the clock. What it does carry
+ * is `src` and its own `at`, so the scene states where the words start, the
+ * editor can draw them, and the render can find them without being told twice.
+ *
+ * It is deliberately silent in the browser. A component that played itself
+ * would fight the editor's own scrubbing, and it would sing during a render,
+ * where every frame is a still and the clock does not run in real time.
+ */
+class RMAudio extends RMElement {
+  static fields = ['src', 'gain', 'at', 'for']
+
+  render() {
+    /* Nothing to draw, and nothing to lay out: a sound layer must not take a
+       box in the stage or it would push the pictures around. */
+    this.shadowRoot.innerHTML = '<style>:host { display:none; }</style>'
+  }
+}
+define('rm-audio', RMAudio)
+
+const AUDIO_GROUPS = [['sound', 'Sound']]
+
+const AUDIO_SCHEMA = [
+  { key: 'src', label: 'File', type: 'text', def: '', group: 'sound', note: 'A file in this project, named the way the project names it.' },
+  { key: 'gain', label: 'Level', type: 'range', min: 0, max: 2, step: 0.05, def: 1, group: 'sound', note: '1 is the file as recorded.' },
+]
+
+const audioDefaults = () => Object.fromEntries(AUDIO_SCHEMA.map((f) => [f.key, f.def]))
+
+/** A sound layer as an attribute string: only what differs from the defaults. */
+function encodeAudio(state) {
+  const parts = []
+  for (const f of AUDIO_SCHEMA) {
+    if (String(state[f.key] ?? f.def) === String(f.def)) continue
+    parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
+  }
+  return parts.join(' ')
+}
+
+
 /* ── rm-lower-third ──────────────────────────────────────────────────────── */
 
 class RMLowerThird extends RMElement {
@@ -2559,12 +2792,30 @@ function lookProgram(canvas, look, { assets = null } = {}) {
  * `image` is a picture name or URL, resolved the way every other component
  * resolves one, so a saved scene and a render both find it.
  */
+/*
+ * How many looks may hold a WebGL context at once.
+ *
+ * The cap is the browser's, not ours -- around sixteen per document, and when
+ * you ask for the seventeenth it does not refuse, it silently takes the oldest
+ * one away. That is the worst possible failure: every look drawn before this
+ * one goes black or stops updating, and nothing says why. Fourteen leaves room
+ * for the shaders, hazes and pixel reveals that take contexts of their own.
+ *
+ * Past the budget a look paints its first stop as a flat background instead.
+ * A page of thirty looks is then thirty correct-coloured panels rather than
+ * sixteen shaders and fourteen corpses.
+ */
+const LOOK_CONTEXT_BUDGET = 14
+const liveLooks = new Set()
+
 class RMLook extends RMElement {
   static fields = ['look', 'image', 'at', 'for']
 
   disconnectedCallback() {
+    liveLooks.delete(this)
     this._dispose?.()
     this._dispose = null
+    this._prog = null
   }
 
   render() {
@@ -2592,8 +2843,18 @@ class RMLook extends RMElement {
     this._dispose?.()
     this.shadowRoot.innerHTML = `<style>:host{position:absolute;display:block;inset:0;width:100%;height:100%;}.asset{position:absolute;inset:0;overflow:hidden;background:${look.stops[0].c};}.asset canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}</style><div class="asset"><canvas aria-hidden="true"></canvas></div>`
     const canvas = this.shadowRoot.querySelector('canvas')
+    /*
+     * Over budget: keep the flat first stop the markup already painted and do
+     * not ask for a context we would only lose -- taking it would cost some
+     * earlier look its own.
+     */
+    if (!liveLooks.has(this) && liveLooks.size >= LOOK_CONTEXT_BUDGET) {
+      canvas.remove()
+      return
+    }
     const prog = lookProgram(canvas, look)
     if (!prog) return
+    liveLooks.add(this)
     this._prog = prog
     /*
      * Full resolution when the clock rests, half while it runs. A seek every
@@ -2934,7 +3195,7 @@ class RMShowcase extends RMElement {
         ? isVideo
           ? `<video src="${this.esc(media)}" muted playsinline preload="auto" crossorigin="anonymous"></video>`
           : `<img src="${this.esc(media)}" alt="" />`
-        : '<div class="empty">Choose a picture or a clip</div>'
+        : '' /* no picture: an empty screen, never a sentence -- see .screen--bare */
       /*
        * Depth is a stack of slices behind the shell, each a step further back in
        * Z and a shade darker, so a tilted device shows an edge rather than a
@@ -2993,6 +3254,21 @@ class RMShowcase extends RMElement {
                     * combines them with its own.
                     */
                    transform: perspective(120cqw) rotateX(var(--sc-in-r)) translate(calc(var(--sc-in-x) + var(--sc-out-x)), calc(var(--sc-in-y) + var(--sc-out-y))) scale(calc(var(--sc-in-s) * var(--sc-out-s))); }
+          /*
+           * A hard in and a hard out, for a layer whose own keys shape it.
+           *
+           * Not "present the whole time": a layer is only ever on screen inside
+           * its own at/for window, and that must not depend on somebody having
+           * keyed op to zero at both ends. Before these existed, the enter and
+           * exit FADES were what took an old layer away -- so letting keys own
+           * opacity quietly removed the thing that hid it, and every beat piled
+           * up on the ones before it.
+           *
+           * Both sit at the very edge of their span so they cut rather than
+           * fade, and fill:both holds 0 outside the window in each direction.
+           */
+          @keyframes sc-in-stay  { 0% { --sc-in-o:0; } 0.01% { --sc-in-o:1; } 100% { --sc-in-o:1; } }
+          @keyframes sc-out-stay-cut { 0% { --sc-out-o:1; } 99.99% { --sc-out-o:1; } 100% { --sc-out-o:0; } }
           @keyframes sc-in-none  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-fade  { from { --sc-in-o:0; } to { --sc-in-o:1; } }
           @keyframes sc-in-rise  { from { --sc-in-o:0; --sc-in-y:8%; } to { --sc-in-o:1; --sc-in-y:0%; } }
@@ -3018,7 +3294,27 @@ class RMShowcase extends RMElement {
           .side { position:absolute; inset:0; transform: translateZ(calc(var(--u) * var(--step, -0.28) * var(--i))); background: var(--edge); }
           .screen { position:absolute; overflow:hidden; background:rgba(0,0,0,0.4); }
           .screen > img, .screen > video { position:absolute; inset:0; width:100%; height:100%; display:block; }
-          .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,0.7); font: 500 3cqw var(--rm-font, "DM Sans"), system-ui, sans-serif; }
+          /*
+           * A showcase with no picture is still a device.
+           *
+           * It used to render an instruction to go and pick one INTO the
+           * screen. That is an editor hint, and an editor hint has no business
+           * in a frame: a board whose media 404s stopped being a row of phones
+           * and became a row of sentences, and any render made while a picture
+           * was still loading baked the instruction into the video.
+           *
+           * So an empty screen is drawn, not written -- a faint hatch, which
+           * reads as "nothing here yet" in any language and exports as part of
+           * the device rather than as copy.
+           */
+          /* Hidden, not removed: no torn page, but the element is still there to
+             be inspected and its src still readable in the console warning. */
+          .screen > img[data-missing] { visibility:hidden; }
+          .screen:empty, .screen[data-missing] { background:
+            repeating-linear-gradient(45deg,
+              rgba(255,255,255,0.028) 0 calc(var(--u) * 1.2),
+              rgba(255,255,255,0) calc(var(--u) * 1.2) calc(var(--u) * 2.4)),
+            var(--op-color-neutral-plus-max, #0b0b0c); }
           /* none: the screen is the card */
           .none .screen { inset:0; background:transparent; }
           /* browser: a drawn chrome bar over the page, on a slab */
@@ -3120,6 +3416,52 @@ class RMShowcase extends RMElement {
       this._media = media
       this._isVideo = isVideo
       this._device = device
+      /*
+       * The shadow tree was just replaced, so the keyframe animation went with
+       * it -- and the block that writes it only runs when the KEYS change.
+       *
+       * Set the media after the layer is in the document, which is exactly what
+       * the Studio does attribute by attribute, and the order was: keys arrive
+       * and the animation is written; media arrives and the tree is rebuilt;
+       * the keys have not changed so nothing rewrites it. What survives is the
+       * inline pose from the FIRST key, and a first key at op=0 is a layer
+       * stuck invisible forever. Seventeen phones, all transparent, with the
+       * screens loaded and correct underneath.
+       *
+       * Forgetting the keys here forces them to be written onto the new tree.
+       */
+      this._keysText = null
+      /*
+       * A picture that 404s must not become a broken-image glyph.
+       *
+       * The browser draws its own torn-page icon inside the screen, which is
+       * the same problem as the placeholder copy one line up: a device stops
+       * being a device and becomes an error report, in a frame that may be
+       * rendered. Dropping the <img> lets .screen:empty take over, so a missing
+       * picture and no picture look the same -- a phone with nothing on it.
+       */
+      /*
+       * A picture that never arrives must not become a broken-image glyph --
+       * and must not vanish without trace either.
+       *
+       * Removing the <img> made the frame clean and the failure INVISIBLE: a
+       * screen that would not load looked exactly like a screen nobody had
+       * chosen yet, which is a transparent phone and no way to tell why. The
+       * element stays, hidden by CSS so no torn-page icon is drawn, marked so
+       * the screen reads as missing rather than empty, and the URL goes to the
+       * console -- because the one question worth answering here is WHICH file.
+       */
+      const shot = this.shadowRoot.querySelector('img')
+      if (shot)
+        shot.addEventListener(
+          'error',
+          () => {
+            shot.dataset.missing = ''
+            this.shadowRoot.querySelector('.screen')?.setAttribute('data-missing', '')
+            console.warn('[rm-showcase] picture did not load:', shot.currentSrc || shot.src)
+          },
+          { once: true }
+        )
       if (isVideo) {
         const video = this.shadowRoot.querySelector('video')
         /*
@@ -3181,16 +3523,29 @@ class RMShowcase extends RMElement {
       }
     }
     /*
-     * No look means no backdrop at all. Hidden by display, not by the hidden
-     * attribute: the look's own :host sets display, and in its tree that beat
-     * the attribute — every layer in a scene drew the default look over the
-     * layers before it.
+     * No look means no backdrop AND no context.
+     *
+     * This used to hide the look with display:none and leave it in the tree.
+     * Hidden is not gone: the element still connects, still compiles, and
+     * still holds a WebGL context. A browser caps how many of those a document
+     * may have at around sixteen, so a board of seventeen device showcases --
+     * the ordinary way anyone shows a whole app -- blew the cap, the oldest
+     * contexts were dropped under it, and the page glitched. "none" made it
+     * worse rather than better: it is a non-empty string, so it was TRUTHY,
+     * and a showcase asking for no backdrop drew one.
+     *
+     * So: 'none' and '' both mean none, and none means the element leaves the
+     * DOM, which runs its disconnectedCallback and gives the context back.
      */
-    const lookEl = this.shadowRoot.querySelector('rm-look')
-    if (look) {
+    const wantsLook = Boolean(look) && look !== 'none'
+    let lookEl = this.shadowRoot.querySelector('rm-look')
+    if (wantsLook) {
+      if (!lookEl) {
+        lookEl = document.createElement('rm-look')
+        this.shadowRoot.querySelector('.stage').prepend(lookEl)
+      }
       if (lookEl.getAttribute('look') !== look) lookEl.setAttribute('look', look)
-      lookEl.style.display = ''
-    } else lookEl.style.display = 'none'
+    } else if (lookEl) lookEl.remove()
 
     const frame = {
       none: 'border: 0;',
@@ -3284,7 +3639,26 @@ class RMShowcase extends RMElement {
      * reads as the keys being ignored. With keys the enter and exit fade and
      * nothing more; without them they are what they always were.
      */
-    place.style.animationName = keys.length ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}` : `sc-in-${s.enter}, sc-out-${s.exit}`
+    /*
+     * Whoever names opacity owns it.
+     *
+     * A keyed layer was always given sc-in-fade, on the assumption that keys
+     * move things and the component still handles appearing. But a key can say
+     * op, and then there are two fades multiplying: the keys ramping up over
+     * their own first span and a 640ms enter climbing underneath them. The
+     * layer arrives late and soft, after its own move has finished and after
+     * the cut has already happened -- which reads as the phone lagging the
+     * frame rather than as a fade.
+     *
+     * So: keys that name op get a hold at both ends and decide it themselves.
+     * Keys that do not still get the fade, because something has to.
+     */
+    const keysOwnOpacity = keys.some((k) => k.op !== undefined)
+    place.style.animationName = keysOwnOpacity
+      ? "sc-in-stay, sc-out-stay-cut"
+      : keys.length
+        ? `sc-in-fade, sc-out-${s.exit === "stay" ? "stay" : "fade"}`
+        : `sc-in-${s.enter}, sc-out-${s.exit}`
     /* How long each takes is the layer's own. "none" still hides the layer
        outside its window, it just does not move; "stay" never leaves at all. */
     place.style.setProperty('--in-dur', s.enter === 'none' ? '1ms' : `${s.ein}s`)
@@ -3613,7 +3987,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, RMAudio, AUDIO_SCHEMA, AUDIO_GROUPS, audioDefaults, encodeAudio, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 

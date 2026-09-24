@@ -30,6 +30,7 @@ Components, each timed by `at` (ms it appears) and `for` (ms it stays):
 | `rm-title` | `eyebrow`, `title`, `sub`, `align` |
 | `rm-lower-third` | `name`, `sub`, `side` |
 | `rm-browser` | `url`, `image`, `src`, `w`, `dark` |
+| `rm-text` | `text`, `sub`, `x`, `y`, `anchor`, `w`, `size`, `subsize`, `weight`, `color`, `subcolor`, `stagger`, `step`, `tx`, `ty`, `tz` |
 | `rm-callout` | `text`, `x`, `y`, `side` |
 | `rm-stat` | `value`, `label`, `unit`, `count` |
 | `rm-bullets` | `heading`, `stagger` |
