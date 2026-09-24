@@ -55,7 +55,7 @@ import {
 	toCutlist,
 } from "../lib/storyboard.mjs";
 import { TRUTH_KINDS, TRUTH_SECTIONS, addEntry, readTruth, truthDigest } from "../lib/brand-truth.mjs";
-import { SCENE_FORMATS, renderScene, sceneRenderProblem } from "../lib/render-scene.mjs";
+import { SCENE_FORMATS, sceneRenderProblem, SHOT_SCALES } from "../lib/render-scene.mjs";
 import { writeTrace, digest as traceDigest } from "../lib/trace.mjs";
 import { hasAlpha, renderStill } from "../lib/render-still.mjs";
 import { homedir } from "node:os";
@@ -11967,11 +11967,19 @@ async function fetchVoiceList() {
         await mkdir(dir, { recursive: true });
         const out = join(dir, `${name}${fmt.ext}`);
         /*
-         * A scene can show the project's own footage, which lives in the
-         * library rather than in the repo — so a path the repo does not have is
-         * looked for there before it is refused.
+         * Started, not awaited.
+         *
+         * This used to `await renderScene(...)` right here. An 85-second
+         * Showcase scene is about 2,500 frames and the better part of an hour,
+         * and a request that long could not be shown, stopped, or survived: the
+         * Studio restarts itself when its own code changes and took ffmpeg with
+         * it, leaving a file with every frame in it and no index — which plays
+         * black, and looked finished.
+         *
+         * As a job it is a child process with a log the panel streams, a Stop
+         * button, and a life of its own. See lib/render-scene-job.mjs.
          */
-        const made = await renderScene({
+        const spec = {
           body,
           out,
           format: fmt.id,
@@ -11980,6 +11988,9 @@ async function fetchVoiceList() {
           width: Math.min(3840, Math.max(320, Number(b.width) || 1920)),
           height: Math.min(2160, Math.max(240, Number(b.height) || 1080)),
           transparent: Boolean(b.transparent),
+          /* The dial, not a constant: 2x is the master and about four times the
+             wall clock of 1x. The library decides what is a valid value. */
+          shotScale: Number(b.shotScale) || undefined,
           brand: await loadPreset(String(b.brand ?? "rolemodel")).catch(() => undefined),
           /* Same ground and same take as the preview, or the render is a
              different picture from the one that was approved. Footage, like the
@@ -11989,41 +12000,56 @@ async function fetchVoiceList() {
             typeof b.footage?.src === "string" && b.footage.src.startsWith("/media/")
               ? { src: b.footage.src, inSec: Math.max(0, Number(b.footage.inSec) || 0), outSec: Math.max(0, Number(b.footage.outSec) || 0) }
               : null,
-          resolveFile: (pathname) => {
-            const rel = decodeURIComponent(pathname).replace(/^\/media\/[^/]+\//, "");
-            const guess = join(mediaDir(id), rel);
-            return guess.startsWith(mediaDir(id)) && existsSync(guess) ? guess : null;
+          /* A scene can show the project's own footage, which lives in the
+             library rather than in the repo. The job resolves those itself, with
+             the same containment check this route used to make. */
+          mediaRoot: mediaDir(id),
+          /*
+           * The record of what made it, written by the job once the file is
+           * whole. It used to be written here, after the await — which a render
+           * that outlives this process never reaches. The body is hashed rather
+           * than copied: the trace answers "is this still the thing that made
+           * it" without becoming a second copy of the work.
+           */
+          trace: {
+            tool: "rm-studio scenes/render",
+            version: await currentVersion(TOOLKIT).catch(() => null),
+            project: id,
+            brand: String(b.brand ?? "rolemodel"),
+            inputs: {
+              scene: name,
+              body: `sha256:${traceDigest(body)}`,
+              wallpaper: b.wallpaper || null,
+              footage: b.footage?.src ?? null,
+              format: fmt.id,
+              transparent: Boolean(b.transparent),
+            },
+          },
+        };
+        /*
+         * The spec is a file because a scene body is markup — ten kilobytes of
+         * it, full of quotes — and argv is the wrong place for that. A dotfile,
+         * so the Studio's own watcher reads it as scratch rather than code, and
+         * kept rather than deleted so `rerun` on the job still has it.
+         */
+        const specDir = join(projectDir(id), ".renders");
+        await mkdir(specDir, { recursive: true });
+        const specFile = join(specDir, `${name}.json`);
+        await writeFile(specFile, `${JSON.stringify(spec, null, 2)}\n`, "utf8");
+
+        const job = jobs.run({
+          bin: process.execPath,
+          args: [join(TOOLKIT, "lib", "render-scene-job.mjs"), specFile],
+          label: `Render ${name} · ${spec.height}p`,
+          project: id,
+          /* Spared when the Studio restarts itself — see `restart` at the foot
+             of this file. An hour of work is not worth a reload. */
+          keep: true,
+          onDone: (j) => {
+            if (j.code === 0) void reindex(id, { force: true }).catch(() => {});
           },
         });
-        /*
-         * The render, and the record of what made it.
-         *
-         * A file in Renders/ used to be evidence of nothing: six weeks later
-         * nobody could say which scene, which ground or which version drew it.
-         * The body is hashed rather than copied — the trace answers "is this
-         * still the thing that made it" without becoming a second copy of the
-         * work.
-         */
-        await writeTrace(out, {
-          tool: "rm-studio scenes/render",
-          version: await currentVersion(TOOLKIT).catch(() => null),
-          project: id,
-          brand: String(b.brand ?? "rolemodel"),
-          inputs: {
-            scene: name,
-            body: `sha256:${traceDigest(body)}`,
-            wallpaper: b.wallpaper || null,
-            footage: b.footage?.src ?? null,
-            format: fmt.id,
-            fps: made.fps,
-            width: made.width,
-            height: made.height,
-            durationMs: made.durationMs,
-            transparent: made.transparent,
-          },
-        }).catch(() => {});
-        await reindex(id, { force: true }).catch(() => {});
-        return json(res, 200, { ...made, rel: relative(mediaDir(id), out) });
+        return json(res, 200, { job: jobs.summary(job), rel: relative(mediaDir(id), out), name });
       } catch (err) {
         return json(res, 400, { error: String(err.message) });
       }
@@ -12973,7 +12999,14 @@ if (WATCH) {
     /* Never mid-publish: a lost upload is worse than a slow reload. */
     for (let i = 0; i < 600 && inFlight > 0; i++) await new Promise((r) => setTimeout(r, 100));
     console.log("  studio: the code changed — starting again on the same port");
-    jobs.stopAll("Studio restarted itself because its own code changed");
+    /*
+     * A render is spared. It is a separate process, so leaving it alone lets it
+     * be reparented and finish the file — and it writes its own trace, so the
+     * record survives too. Killing it used to cost the better part of an hour
+     * and leave a black video behind, for a reload nobody asked it about.
+     */
+    const spared = jobs.stopAll("Studio restarted itself because its own code changed", { spare: true });
+    if (spared.length) console.log(`  studio: ${spared.length} render(s) left running through the restart`);
     stopAllPreviews();
     stopAllCutWatches();
     await new Promise((r) => server.close(r));
