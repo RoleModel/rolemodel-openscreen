@@ -1,34 +1,76 @@
 <!-- Showcase: footage or a still, presented — on a look, in a frame, in 3D. -->
 <template data-panel="showcase">
-   <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Keyframe any placement dial: put the playhead somewhere, change a dial, and the change is a key. Drag a layer&rsquo;s name up or down to restack it &mdash; a lower layer is drawn on top. Save a PNG, or send it into a composition.</p>
-   <div class="wpprev showcase__stage" data-region="main">
-      <!-- Layers are appended after the look, as its siblings: the scene gives
-           slotted children their stacking, and a wrapper would keep them out. -->
-      <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
-      <!-- The selection, drawn over the stage: an outline on the selected layer
-           with corner handles. Drag the box to move it, a corner to size it, and
-           click any layer to select it. -->
-      <div data-el="gizmo" class="showcase__gizmo" hidden>
-         <i class="showcase__handle showcase__handle--nw" data-corner="nw"></i><i class="showcase__handle showcase__handle--ne" data-corner="ne"></i>
-         <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
+   <!--
+      The deck: the frame, the transport, and the layers it drives, together.
+      Sticking the frame alone left Play and the scrubber behind on the way
+      down. Sticking those too left the LAYERS behind, and a 566px block pinned
+      over a 4800px page covers whatever scrolls beneath it -- 22 of the 30
+      rows on screen were under it: visible, and dead to a click, which reads
+      as the editor ignoring you rather than as one box sitting over another.
+      Nothing can hide under the deck if the thing it would hide is inside it.
+   -->
+   <div class="showcase__deck" data-region="main">
+      <div class="showcase__viewer">
+      <div class="wpprev showcase__stage">
+         <!-- Layers are appended after the look, as its siblings: the scene gives
+              slotted children their stacking, and a wrapper would keep them out. -->
+         <rm-scene data-el="stage" assets="/brand/imagery"><rm-look data-el="look" at="0" for="8000"></rm-look></rm-scene>
+         <!-- The selection, drawn over the stage: an outline on the selected layer
+              with corner handles. Drag the box to move it, a corner to size it, and
+              click any layer to select it. -->
+         <div data-el="gizmo" class="showcase__gizmo" hidden>
+            <i class="showcase__handle showcase__handle--nw" data-corner="nw"></i><i class="showcase__handle showcase__handle--ne" data-corner="ne"></i>
+            <i class="showcase__handle showcase__handle--sw" data-corner="sw"></i><i class="showcase__handle showcase__handle--se" data-corner="se"></i>
+         </div>
+      </div>
+      <!--
+         Play and the clock on one row, the ruler on the next.
+         The scrubber used to sit BETWEEN them, which made it a different width
+         from the waveform under it: the same moment was 104px apart in the two
+         places that claim to show time. On its own row it spans what the
+         waveform spans, so a column of sound and a position on the scrubber
+         are the same place.
+      -->
+      <div class="ctl showcase__transport">
+         <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
+         <span data-el="clock" class="v">0 ms</span>
+      </div>
+      <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control showcase__scrub" />
+      <!--
+         The voice, drawn on the same clock as the picture.
+         Cutting to narration you cannot see is guesswork: you are placing a
+         beat against words you have to remember. The sound layer's shape is
+         drawn here at the scene's own scale, so a pause in the speech is a gap
+         you can put a cut in. Click or drag it to seek. It plays with Play,
+         and scrubbing drags it with you.
+      -->
+      <div class="showcase__wave" data-el="waveBox" hidden>
+            <canvas data-el="wave" class="showcase__waveform"></canvas>
+            <span data-el="voiceClock" class="v showcase__soft showcase__wave-clock"></span>
+         </div>
+      </div>
+      <!-- The layers, in time order. One is selected; the rail and the footage
+           cards work on that one. -->
+      <!-- The timeline: a row per layer, a bar for when it is on screen. Drag
+           the bar to move it in time, drag an end to trim it, click to select.
+           The ruler seeks. The rows scroll inside their own box, so a long
+           scene does not push them off the deck. -->
+      <div class="client">Layers <span data-el="layerCount" class="showcase__soft"></span></div>
+      <div data-el="tl" class="showcase__tl">
+         <div class="showcase__tlhead"><span class="showcase__tllabel"></span><div data-el="ruler" class="showcase__ruler"></div></div>
+         <div data-el="rows" class="showcase__rows"></div>
+         <div data-el="playhead" class="showcase__playhead"></div>
       </div>
    </div>
-   <div class="ctl" data-region="main">
-      <button data-el="play" class="btn ghost" type="button"><rm-icon name="play"></rm-icon>Play</button>
-      <input data-el="scrub" type="range" aria-label="Time" min="0" max="8000" step="20" value="0" class="form-control" />
-      <span data-el="clock" class="v">0 ms</span>
-   </div>
-   <!-- The layers, in time order. One is selected; the rail and the footage
-        cards work on that one. -->
-   <!-- The timeline: a row per layer, a bar for when it is on screen. Drag the
-        bar to move it in time, drag an end to trim it, click to select. The
-        ruler seeks. -->
-   <div class="client" data-region="main">Layers <span data-el="layerCount" class="showcase__soft"></span></div>
-   <div data-el="tl" class="showcase__tl" data-region="main">
-      <div class="showcase__tlhead"><span class="showcase__tllabel"></span><div data-el="ruler" class="showcase__ruler"></div></div>
-      <div data-el="rows" class="showcase__rows"></div>
-      <div data-el="playhead" class="showcase__playhead"></div>
-   </div>
+   <!--
+      The lede sits under the deck, not over it.
+      Above it, 150px of prose pushed a 931px deck past the bottom of an
+      1100px window, so the last five rows of the timeline started the session
+      underneath the action bar. The help is read once; the frame is looked at
+      all day, and it should have the top of the screen.
+   -->
+   <p class="lede" data-region="main">Put a clip or a picture on a look, give it a frame and a shadow, and tilt it in 3D. Scrub to pick the frame; the clip follows the clock, so a render is the same frame every time. Keyframe any placement dial: put the playhead somewhere, change a dial, and the change is a key. Drag a layer&rsquo;s name up or down to restack it &mdash; a lower layer is drawn on top. Save a PNG, or send it into a composition.</p>
+
    <!-- Scenes saved from this page, reopened for editing. Save scene in the
         rail with the same name writes over the one you opened. -->
    <div class="client" data-region="main">Saved scenes <span data-el="sceneCount" class="showcase__soft"></span></div>
@@ -43,34 +85,44 @@
    <!-- Buttons only. The dials are the rail's. -->
    <div class="grid" data-region="footer">
       <button data-el="addLayer" class="btn ghost" type="button"><rm-icon name="plus-sign"></rm-icon>Add layer</button>
+      <!-- Words are a layer, not a property of a device: a headline beside a
+           phone has its own place, its own timing and its own exit. -->
+      <button data-el="addText" class="btn ghost" type="button"><rm-icon name="text"></rm-icon>Add text</button>
+      <button data-el="addSound" class="btn ghost" type="button"><rm-icon name="audio-wave-01"></rm-icon>Add sound</button>
       <!-- A picture or clip from this machine, straight onto the selected layer. -->
       <button data-el="addImage" class="btn ghost" type="button"><rm-icon name="upload-04"></rm-icon>Add image</button>
       <input data-el="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
       <button data-el="copyTag" class="btn ghost" type="button"><rm-icon name="copy-01"></rm-icon>Copy tag</button>
       <button data-el="png" class="btn btn--primary" type="button"><rm-icon name="image-download"></rm-icon>Save PNG</button>
+      <select data-el="renderSize" class="form-control" aria-label="Video resolution">
+         <option value="1920x1080">1080p · high quality</option>
+         <option value="3840x2160">4K · high quality</option>
+      </select>
+      <button data-el="render" class="btn btn--primary" type="button"><rm-icon name="video-01"></rm-icon>Render video</button>
+      <a data-el="renderSave" class="btn" download hidden><rm-icon name="download-04"></rm-icon><span data-el="renderSaveText">Save video</span></a>
    </div>
-</template>
+   </template>
 
-<!-- One clip or still from the project. -->
-<template data-row="showcase-card">
+   <!-- One clip or still from the project. -->
+   <template data-row="showcase-card">
    <button class="card card--media showcase__card" type="button">
       <div class="thumbwrap"><div data-el="art" class="thumb showcase__thumb"></div></div>
       <div class="card__body"><div data-el="name" class="path showcase__name"></div><span data-el="kind" class="kind"></span></div>
    </button>
-</template>
+   </template>
 
-<!-- A picture from this machine, kept with the added brand assets. -->
-<template data-row="showcase-picture">
+   <!-- A picture from this machine, kept with the added brand assets. -->
+   <template data-row="showcase-picture">
    <label data-el="label" class="form-label">Picture</label>
    <div class="showcase__picture">
       <button data-el="pick" class="btn ghost btn--small" type="button"><rm-icon name="upload-04"></rm-icon>Upload</button>
       <span data-el="name" class="path showcase__picturename"></span>
       <input data-el="file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden />
    </div>
-</template>
+   </template>
 
-<!-- A template: a device, a backdrop and a camera, named. -->
-<template data-row="showcase-template">
+   <!-- A template: a device, a backdrop and a camera, named. -->
+   <template data-row="showcase-template">
    <button class="card showcase__template" type="button">
       <div class="card__body">
          <div data-el="name" class="showcase__templatename"></div>
@@ -78,10 +130,10 @@
          <span data-el="device" class="kind"></span>
       </div>
    </button>
-</template>
+   </template>
 
-<!-- One row of the timeline: the layer's name, and its bar. -->
-<template data-row="showcase-track">
+   <!-- One row of the timeline: the layer's name, and its bar. -->
+   <template data-row="showcase-track">
    <div class="showcase__track">
       <button data-el="pick" class="showcase__tllabel showcase__tlname" type="button"><span data-el="name"></span><span data-el="remove" class="showcase__tlremove" role="button" aria-label="Remove layer" title="Remove layer">×</span></button>
       <div data-el="lane" class="showcase__lane">
@@ -90,10 +142,10 @@
          <div data-el="keys" class="showcase__keys"></div>
       </div>
    </div>
-</template>
+   </template>
 
-<!-- The keyframe controls for the selected layer, in the rail's Motion group. -->
-<template data-row="showcase-keys">
+   <!-- The keyframe controls for the selected layer, in the rail's Motion group. -->
+   <template data-row="showcase-keys">
    <div class="showcase__keyrow">
       <button data-el="add" class="btn ghost btn--small" type="button"><rm-icon name="plus-sign"></rm-icon>Add key here</button>
       <button data-el="del" class="btn ghost btn--small" type="button" hidden>Delete key</button>
@@ -101,4 +153,4 @@
    </div>
    <p data-el="info" class="hint showcase__keyinfo"></p>
    <div data-el="easeRow" class="showcase__keyrow" hidden><label data-el="easeLabel" class="form-label">Ease to next</label><select data-el="ease" class="wide form-control"></select></div>
-</template>
+   </template>

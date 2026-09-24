@@ -17,11 +17,12 @@
  */
 
 import { execFile } from "node:child_process";
+import { writeSync } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { composeDocument, FPS, SCENE_H, SCENE_W, sceneDurationMs, sceneHtml } from "../lib/compose.mjs";
+import { composeDocument, FPS, markupDurationMs, SCENE_H, SCENE_W, sceneDurationMs, sceneHtml } from "../lib/compose.mjs";
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +34,15 @@ const flag = (n, d) => {
 	return i !== -1 && argv[i + 1] ? argv[i + 1] : d;
 };
 const die = (m) => {
-	console.error(`rm-compose: ${m}`);
+	/*
+	 * Written straight to the file descriptor, not through console.error.
+	 *
+	 * When stderr is a pipe — which it always is under Studio — console.error
+	 * queues the write and process.exit throws the queue away. The reason for
+	 * dying is exactly the text that went missing, so the job showed an exit
+	 * and no explanation. writeSync is on the page before the exit happens.
+	 */
+	writeSync(2, `rm-compose: ${m}\n`);
 	process.exit(1);
 };
 
@@ -46,6 +55,17 @@ if (!segments.length) die("the composition has no segments");
 
 const outDir = resolve(flag("out", dirname(resolve(file))));
 const fps = Number(flag("fps", FPS));
+/*
+ * The master's size and how finely it is painted.
+ *
+ * 1920 at one sample a pixel was the old fixed answer, and it showed: every
+ * edge in the frame got whatever a single sample could tell it, which reads as
+ * pixellation and which no bitrate repairs. 2560 painted at 2x is four times
+ * the samples going into a frame half again as wide.
+ */
+const outWidth = Number(flag("width", 2560)) || 2560;
+const ss = Number(flag("ss", 2)) || 2;
+const crf = Number(flag("crf", 16)) || 16;
 await mkdir(outDir, { recursive: true });
 
 /**
@@ -133,13 +153,16 @@ for (const [i, seg] of segments.entries()) {
 	else if (typeof seg.body === "string") authored = seg.body;
 
 	/*
-	 * An authored scene must say how long it runs.
+	 * How long the scene runs.
 	 *
-	 * Duration is read off `at`/`for` when the elements are structured data; in
-	 * free markup there is nothing to read, and guessing produces a card that cuts
-	 * mid-sentence. The default is the same floor sceneDurationMs uses.
+	 * Structured elements carry `at` and `for` as fields; authored markup carries
+	 * them as attributes on the same tags, which is how the runtime times them.
+	 * This used to read only the first and give the second a flat four seconds,
+	 * so a seventeen-beat walkthrough composed as a four-second card -- the first
+	 * beat, and nothing after it. An explicit `ms` still wins, and markup with no
+	 * timing at all still falls back rather than measuring an empty scan.
 	 */
-	const ms = seg.ms ?? (authored ? 4000 : sceneDurationMs(seg.elements ?? []));
+	const ms = seg.ms ?? (authored ? (markupDurationMs(authored) ?? 4000) : sceneDurationMs(seg.elements ?? []));
 	const name = seg.name || `scene-${n}`;
 	const html = join(ROOT, "components", `.compose-${n}.html`);
 	const mp4 = join(outDir, `${name}.mp4`);
@@ -153,7 +176,12 @@ for (const [i, seg] of segments.entries()) {
 
 	console.log(`  ${n}  scene    ${(ms / 1000).toFixed(1)}s  ${name} (${authored ? "authored" : `${(seg.elements ?? []).length} elements`})`);
 	try {
-		await run("node", [join(ROOT, "components", "render-scene.mjs"), html, "-o", mp4, "--fps", String(fps), "--ms", String(ms)], {
+		/*
+		 * Quality passes through, so a composition is not stuck at whatever the
+		 * scene renderer happens to default to. --width sets the master, --ss how
+		 * many samples go into each of its pixels, --crf how hard it is squeezed.
+		 */
+		await run("node", [join(ROOT, "components", "render-scene.mjs"), html, "-o", mp4, "--fps", String(fps), "--ms", String(ms), "--width", String(outWidth), "--ss", String(ss), "--crf", String(crf)], {
 			cwd: ROOT,
 			maxBuffer: 1 << 24,
 		});
@@ -218,13 +246,24 @@ const silentIdx = pieces.length;
 
 const graph = [];
 const labels = [];
+/*
+ * The cut is as big as the master, not as big as the old default.
+ *
+ * Every input was scaled to a hard-coded 1920x1080 here. A scene rendered at
+ * 2560 was therefore painted at 5120, downsampled to 2560, and then thrown back
+ * down to 1920 by the step that glues the pieces together -- an hour of extra
+ * sampling spent and discarded in the last thirty seconds of the job, with
+ * nothing in the output to say it had happened.
+ */
+const cutW = Math.floor(outWidth / 2) * 2;
+const cutH = Math.floor(Math.round((outWidth * SCENE_H) / SCENE_W) / 2) * 2;
 pieces.forEach((p, i) => {
 	// force_original_aspect_ratio + pad rather than a bare scale: footage that is
 	// not 16:9 would otherwise be stretched, and a stretched face is worse than
 	// bars.
 	graph.push(
-		`[${i}:v]scale=${SCENE_W}:${SCENE_H}:force_original_aspect_ratio=decrease,` +
-			`pad=${SCENE_W}:${SCENE_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p[v${i}]`,
+		`[${i}:v]scale=${cutW}:${cutH}:force_original_aspect_ratio=decrease:flags=lanczos,` +
+			`pad=${cutW}:${cutH}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p[v${i}]`,
 	);
 	if (p.hasAudio) {
 		graph.push(`[${i}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`);

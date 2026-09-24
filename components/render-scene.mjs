@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +26,7 @@ const arg = (n, d) => {
 };
 const input = argv.find((a) => !a.startsWith("-") && a.endsWith(".html"));
 if (!input) {
-	console.error("usage: render-scene.mjs <scene.html> [-o out.mp4] [--fps 30] [--width 1920] [--ms <duration>]");
+	console.error("usage: render-scene.mjs <scene.html> [-o out.mp4] [--fps 30] [--width 1920] [--ss 2] [--crf 16] [--ms <duration>]");
 	process.exit(1);
 }
 
@@ -33,6 +34,22 @@ const out = argv.includes("-o") ? argv[argv.indexOf("-o") + 1] : "scene.mp4";
 const fps = Number(arg("fps", 30));
 const width = Number(arg("width", 1920));
 const height = Math.round((width * 9) / 16);
+/*
+ * Supersampling. The reason the type was soft.
+ *
+ * The page was painted at exactly one device pixel per CSS pixel and handed
+ * straight to the encoder, so every edge in the frame -- the rail of a phone,
+ * a 1.5cqw caption, the hairline where cover glass meets metal -- got whatever
+ * one sample could tell it. That is not a compression artefact and no bitrate
+ * fixes it; the detail was never drawn.
+ *
+ * Painting at 2x and letting a lanczos downscale average four samples into each
+ * pixel is what a renderer is supposed to do. It costs about four times the
+ * pixels and roughly twice the wall clock, which is the right trade for a
+ * master. --ss 1 gets the old speed for a rough look.
+ */
+const ss = Math.max(1, Number(arg("ss", 2)) || 2);
+const crf = String(Math.max(0, Number(arg("crf", 16)) || 16));
 
 /**
  * Serve the repo over HTTP rather than opening the file directly.
@@ -57,11 +74,31 @@ const TYPES = {
 	".webp": "image/webp",
 	".woff2": "font/woff2",
 };
+/*
+ * The library, for /media/<project>/… — the paths a Studio scene is written in.
+ *
+ * A scene saved in the Studio names its pictures by their place in the project:
+ * /media/c12-c12/Stills/S01.png. This server only knew the repo, so every one of
+ * them 404d and the render came out with black screens inside correct phones --
+ * the shell, the tilt, the keyframes and the type all right, and nothing on the
+ * glass. Silently, because a 404 during a render is not a crash.
+ *
+ * Two roots, each with its own containment check, rather than one root and a
+ * hole in it.
+ */
+const LIBRARY = process.env.RM_LIBRARY_ROOT ?? join(homedir(), "RoleModel Library");
+const mediaFile = (rel) => {
+	const [, id, ...rest] = rel.split("/");
+	return id && rest.length ? resolve(LIBRARY, id, "media", rest.join("/")) : null;
+};
+
 const srv = createServer(async (req, res) => {
 	const rel = decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/+/, "");
-	const file = resolve(ROOT, rel);
-	// Never serve outside the repo, even if a scene asks for ../../etc/passwd.
-	if (!file.startsWith(ROOT) || !(await stat(file).then((s2) => s2.isFile()).catch(() => false))) {
+	const fromLibrary = rel.startsWith("media/") ? mediaFile(rel) : null;
+	const file = fromLibrary ?? resolve(ROOT, rel);
+	// Never serve outside the repo or the library, even if a scene asks for ../../etc/passwd.
+	const root = fromLibrary ? LIBRARY : ROOT;
+	if (!file.startsWith(root) || !(await stat(file).then((s2) => s2.isFile()).catch(() => false))) {
 		res.writeHead(404);
 		return res.end();
 	}
@@ -76,7 +113,7 @@ const { chromium } = await import("playwright");
 const browser = await chromium.launch(
 	process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
 );
-const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: ss });
 // Tell the scene a renderer is driving, so it does not start its own preview loop.
 await page.addInitScript(() => {
 	window.__hyperframes = true;
@@ -87,7 +124,7 @@ await page.evaluate(() => window.RM.ready());
 const durationMs = Number(arg("ms", 0)) || (await page.evaluate(() => window.RM.duration()));
 const frames = Math.max(1, Math.round((durationMs / 1000) * fps));
 console.log(`  ${input}  ->  ${out}`);
-console.log(`  ${(durationMs / 1000).toFixed(2)}s · ${fps}fps · ${frames} frames · ${width}×${height}\n`);
+console.log(`  ${(durationMs / 1000).toFixed(2)}s · ${fps}fps · ${frames} frames · ${width}×${height}${ss > 1 ? ` · painted ${width * ss}×${height * ss}` : ""} · crf ${crf}\n`);
 
 const ff = spawn("ffmpeg", [
 	"-y",
@@ -96,10 +133,14 @@ const ff = spawn("ffmpeg", [
 	"-i", "-",
 	"-c:v", "libx264",
 	"-pix_fmt", "yuv420p",
-	"-crf", "18",
-	"-preset", "medium",
-	// Even dimensions, or libx264 refuses at odd widths.
-	"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+	"-crf", crf,
+	"-preset", "slow",
+	/*
+	 * Down to size with lanczos, which is where the supersampling is actually
+	 * spent -- and even dimensions, or libx264 refuses at odd widths.
+	 */
+	"-vf", `scale=${Math.floor(width / 2) * 2}:${Math.floor(height / 2) * 2}:flags=lanczos`,
+	"-movflags", "+faststart",
 	out,
 ]);
 ff.stderr.on("data", () => {});

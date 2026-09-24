@@ -922,6 +922,20 @@ button.btn:disabled {
   /* The kebab is absolutely positioned inside this, so the card has to be the
      thing it positions against — without this it escapes to the page. */
   position: relative;
+  /*
+   * And the card's own layering stays inside the card.
+   *
+   * position:relative with z-index:auto makes no stacking context, so the
+   * body's z-index: 50 was measured against the PAGE. A sticky editing block
+   * pinned over the cards was at 4, and a card scrolled underneath punched its
+   * body straight through it -- a scrim and a filename floating over a
+   * timeline six hundred pixels away, appearing only while scrolling.
+   *
+   * isolate makes 50 mean "above the picture in this card" rather than "above
+   * most of the application", which is the only thing it was ever supposed to
+   * mean. Nothing inside a card can reach out now.
+   */
+  isolation: isolate;
   background: var(--panel);
   border-radius: var(--op-radius-large);
   box-shadow: none;

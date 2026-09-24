@@ -144,3 +144,29 @@
   flex: 1;
   min-inline-size: 0;
 }
+
+
+/*
+ * A foldable rail section. The chevron is the heading's own marker rather than
+ * an element, so nothing in the row's grid has to move to make room for it.
+ */
+.railfold {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-2x-small);
+}
+.railfold::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: 0.55;
+  transition: transform 120ms ease;
+}
+.railfold[data-open='on']::before { transform: rotate(90deg); }
+.railfold:hover::before { opacity: 1; }
+.railfold:focus-visible { outline: var(--op-border-width) solid var(--accent); outline-offset: 2px; }

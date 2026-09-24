@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>C12 — the native walkthrough</title>
+<link rel="stylesheet" href="../../brand/fonts/fonts.css" />
+<link rel="stylesheet" href="../../brand/optics/optics.css" />
+<link rel="stylesheet" href="../../brand/optics/rolemodel-scales.css" />
+<style>
+  :root{color-scheme:dark}
+  html,body{margin:0;background:var(--op-color-neutral-plus-max)}
+  body{display:grid;place-items:center;min-height:100vh}
+  #stage{width:100vw;max-width:calc(100vh * 16 / 9)}
+</style>
+</head>
+<body>
+<!--
+  Seventeen beats, cut to the voice-over.
+
+  Every start and length here is measured, not guessed: the narration was
+  transcribed to word level and each beat runs from the first word of its
+  sentence to the first word of the next one. That is why the numbers are odd
+  -- 3380, 4850, 4190 -- and why they must stay odd. Re-record the voice and
+  they are all wrong together; re-measure, do not nudge.
+
+  Each beat is two layers and nothing else: a phone, and the words beside it.
+  The screens are CHROMELESS on purpose -- rm-showcase draws the device, so a
+  picture that already has one is a phone in a phone.
+
+  The words leave 1.6s before the cut, which is the room the move needs.
+
+  Every phone is keyframed rather than dialled: four keys -- arrive, settle,
+  hold, leave -- and five different moves cycled so no two neighbours repeat.
+  A departure never reverses its arrival; the phone carries on THROUGH, which
+  is what makes a cut read as a cut rather than as a rubber band. The rest pose
+  is stated on every middle key because keys OVERRIDE the dials: a pose left
+  out is not inherited, it is interpolated from whatever was nearest.
+
+  Every phone states exit="fade". The dial defaults to "stay", which is right
+  for a single shot and wrong for seventeen: a layer that never leaves is still
+  there under the next one, so by the end the film was a stack of seventeen
+  phones with the newest on top, and the closing card was printed over the one
+  before it. In a cut, a layer has to go.
+-->
+<div id="stage">
+  <rm-scene wallpaper="../../brand/wallpapers/rm-dark-dotgrid">
+
+      <!-- 01 · A wall of labels — swings in from the right -->
+      <rm-showcase at="0" for="3380" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S01.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=46.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-62.0 tz=3.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=2.78 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=3.38 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-14.0 tz=-3.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="200" for="1780"
+        x="7" y="47" anchor="left" w="32"
+        text="A wall of labels" sub="the C12 dashboard today"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 02 · Forum day, live — swings in from the left -->
+      <rm-showcase at="3380" for="4380" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S02.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-6.0 tz=-4.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=3.78 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.38 x=48.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-60.0 tz=4.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="3580" for="2780"
+        x="7" y="47" anchor="left" w="32"
+        text="Forum day, live" sub="on the Lock Screen"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 03 · It follows you — rises and settles -->
+      <rm-showcase at="7760" for="4850" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S03.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=26.0 z=0.0 zoom=0.86 tx=26.0 ty=-38.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.25 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.85 x=24.0 y=-22.0 z=0.0 zoom=1.1 tx=-14.0 ty=-38.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="7960" for="3250"
+        x="7" y="47" anchor="left" w="32"
+        text="It follows you" sub="Dynamic Island, in every other app"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 04 · Handled in advance — lays back -->
+      <rm-showcase at="12610" for="4900" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S12.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=-22.0 zoom=1.0 tx=-22.0 ty=-58.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.3 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.9 x=24.0 y=0.0 z=18.0 zoom=1.0 tx=24.0 ty=-20.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="12810" for="3300"
+        x="7" y="47" anchor="left" w="32"
+        text="Handled in advance" sub="a Wallet pass that surfaces itself"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 05 · The 30-second glance — rolls through -->
+      <rm-showcase at="17510" for="5170" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S04.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=0.0 zoom=0.9 tx=6.0 ty=-54.0 tz=11.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.57 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=5.17 x=24.0 y=0.0 z=0.0 zoom=1.16 tx=6.0 ty=-20.0 tz=-9.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="17710" for="3570"
+        x="7" y="47" anchor="left" w="32"
+        text="The 30-second glance" sub="Home Screen widget. No launch, no login."
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 06 · Sized by what matters — swings in from the right -->
+      <rm-showcase at="22680" for="4970" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S05.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=46.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-62.0 tz=3.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.37 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.97 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-14.0 tz=-3.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="22880" for="3370"
+        x="7" y="47" anchor="left" w="32"
+        text="Sized by what matters" sub="the same data, rebuilt"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 07 · Catch me up — swings in from the left -->
+      <rm-showcase at="27650" for="4800" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S06.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-6.0 tz=-4.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.2 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.8 x=48.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-60.0 tz=4.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="27850" for="3200"
+        x="7" y="47" anchor="left" w="32"
+        text="Catch me up" sub="twelve replies, summarised on device"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 08 · One tap, no app — rises and settles -->
+      <rm-showcase at="32450" for="4190" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S07.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=26.0 z=0.0 zoom=0.86 tx=26.0 ty=-38.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=3.59 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.19 x=24.0 y=-22.0 z=0.0 zoom=1.1 tx=-14.0 ty=-38.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="32650" for="2590"
+        x="7" y="47" anchor="left" w="32"
+        text="One tap, no app" sub="peer replies, answered from the notification"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 09 · Captured, not typed — lays back -->
+      <rm-showcase at="36640" for="4960" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S09.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=-22.0 zoom=1.0 tx=-22.0 ty=-58.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.36 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.96 x=24.0 y=0.0 z=18.0 zoom=1.0 tx=24.0 ty=-20.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="36840" for="3360"
+        x="7" y="47" anchor="left" w="32"
+        text="Captured, not typed" sub="point at the statements"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 10 · Say the commitment — rolls through -->
+      <rm-showcase at="41600" for="4920" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S13.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=0.0 zoom=0.9 tx=6.0 ty=-54.0 tz=11.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.32 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.92 x=24.0 y=0.0 z=0.0 zoom=1.16 tx=6.0 ty=-20.0 tz=-9.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="41800" for="3320"
+        x="7" y="47" anchor="left" w="32"
+        text="Say the commitment" sub="nobody types right after they present"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 11 · Commitments that travel — swings in from the right -->
+      <rm-showcase at="46520" for="4750" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S14.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=46.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-62.0 tz=3.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.15 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.75 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-14.0 tz=-3.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="46720" for="3150"
+        x="7" y="47" anchor="left" w="32"
+        text="Commitments that travel" sub="mirrored into the member&rsquo;s own list"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 12 · Pick up where you stopped — swings in from the left -->
+      <rm-showcase at="51270" for="5360" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S10.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-6.0 tz=-4.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.76 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=5.36 x=48.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-60.0 tz=4.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="51470" for="3760"
+        x="7" y="47" anchor="left" w="32"
+        text="Pick up where you stopped" sub="the curriculum, resumable"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 13 · Eleven minutes out — rises and settles -->
+      <rm-showcase at="56630" for="4960" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S11.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=26.0 z=0.0 zoom=0.86 tx=26.0 ty=-38.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.36 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=4.96 x=24.0 y=-22.0 z=0.0 zoom=1.1 tx=-14.0 ty=-38.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="56830" for="3360"
+        x="7" y="47" anchor="left" w="32"
+        text="Eleven minutes out" sub="CarPlay, section two"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 14 · Once a year — lays back -->
+      <rm-showcase at="61590" for="6120" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S17.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=-22.0 zoom=1.0 tx=-22.0 ty=-58.0 tz=0.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=5.52 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=6.12 x=24.0 y=0.0 z=18.0 zoom=1.0 tx=24.0 ty=-20.0 tz=0.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="61790" for="4520"
+        x="7" y="47" anchor="left" w="32"
+        text="Once a year" sub="the CORE Business Presentation"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 15 · Lock the numbers — rolls through -->
+      <rm-showcase at="67710" for="5310" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S08.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=24.0 y=0.0 z=0.0 zoom=0.9 tx=6.0 ty=-54.0 tz=11.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.71 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=5.31 x=24.0 y=0.0 z=0.0 zoom=1.16 tx=6.0 ty=-20.0 tz=-9.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="67910" for="3710"
+        x="7" y="47" anchor="left" w="32"
+        text="Lock the numbers" sub="not the whole app"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 16 · The members you have — swings in from the right -->
+      <rm-showcase at="73020" for="2440" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S15.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=46.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-62.0 tz=3.0 op=0.0 e=out; t=0.732 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=1.84 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=2.44 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-14.0 tz=-3.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="73220" for="1200"
+        x="7" y="47" anchor="left" w="32"
+        text="The members you have" sub="Dynamic Type, all the way up"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- 17 · Where this lands — swings in from the left -->
+      <rm-showcase at="75460" for="5570" device="phone" frame="dark" look="none"
+        media="https://rolemodel.github.io/rolemodel-ux-audit-projects/c12/prototype/shots-screen-3x/S16.png" pad="16" radius="1" shadow="0.8" persp="170"
+        x="24" tx="6" ty="-38" enter="none" exit="none"
+        keys="t=0 x=2.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-6.0 tz=-4.0 op=0.0 e=out; t=0.75 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=snap; t=4.97 x=24.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-38.0 tz=0.0 op=100.0 e=out; t=5.57 x=48.0 y=0.0 z=0.0 zoom=1.0 tx=6.0 ty=-60.0 tz=4.0 op=0.0 e=in-out"></rm-showcase>
+      <rm-text at="75660" for="3970"
+        x="7" y="47" anchor="left" w="32"
+        text="Where this lands" sub="thirteen concepts, one phone"
+        size="4.4" subsize="1.5" weight="700" stagger="word" step="55"></rm-text>
+
+      <!-- and out -->
+      <rm-text at="81230" for="3270"
+        x="50" y="50" anchor="center" w="46"
+        text="RoleModel Software" sub="Let&rsquo;s build it."
+        size="3.6" subsize="1.4" weight="700" stagger="word" step="70"></rm-text>
+  </rm-scene>
+</div>
+
+<script type="module">
+  import { RM } from "../../components/rm-video.js";
+  await RM.ready();
+  /*
+   * ?t=<ms> parks the film on one frame and leaves it there.
+   *
+   * Without it a scene opened by hand runs its own clock off performance.now(),
+   * so a headless screenshot lands wherever the page happened to be when the
+   * shutter went -- every check of "does beat nine read" came back with
+   * whatever beat was passing. A stated time is the same frame every run, which
+   * is the whole point of seeking rather than playing.
+   */
+  const want = Number(new URLSearchParams(location.search).get("t"));
+  if (Number.isFinite(want) && want > 0) {
+    RM.seek(want);
+    window.__parked = want;
+  } else {
+    RM.seek(0);
+    if (!window.__hyperframes) {
+      const total = RM.duration();
+      const t0 = performance.now();
+      const tick = () => { RM.seek((performance.now() - t0) % total); requestAnimationFrame(tick); };
+      tick();
+    }
+  }
+</script>
+</body>
+</html>
