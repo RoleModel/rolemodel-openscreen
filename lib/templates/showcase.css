@@ -16,6 +16,23 @@
    * render only ever shows what is inside the frame, so the editor should too.
    */
   overflow: hidden;
+  /*
+   * That promise needed one more thing. `overflow` alone did not keep it,
+   * because the gizmo is
+   * `position: absolute` and this box was static. An absolutely positioned
+   * element is clipped by an ancestor's overflow only when that ancestor is
+   * inside its containing block, and the nearest positioned ancestor here was
+   * `.showcase__deck` — two levels up and sticky. So the selection box escaped
+   * the frame it was drawn on, and at `z-index: 5` it covered the scrubber, the
+   * waveform and the timeline rows and took every click meant for them. A layer
+   * at zoom 2.8 has a card several times the height of the stage, so the outline
+   * ran the height of the panel.
+   *
+   * It also makes paintGizmo's arithmetic true rather than nearly true: it sets
+   * `left`/`top` as the card's offset from THIS box, which is only where they
+   * land if this box is what they resolve against.
+   */
+  position: relative;
 }
 
 .showcase__media {
