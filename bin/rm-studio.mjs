@@ -68,6 +68,7 @@ import {
 	probe,
 	readManifest,
 	run,
+	walk,
 	writeManifest,
 } from "../lib/library.mjs";
 import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
@@ -3135,6 +3136,9 @@ const MIME = {
   // logo a browser refuses to draw in an <img>, which reads as a missing asset.
   ".svg": "image/svg+xml", ".gif": "image/gif", ".avif": "image/avif",
   ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+  // The captions beside a clip. Served as text so the project page can open
+  // one in a tab and read it, rather than being handed a download of bytes.
+  ".vtt": "text/vtt",
 };
 
 const json = (res, code, body) => {
@@ -3430,6 +3434,50 @@ async function loadScripts(projects) {
   return [...shared, ...owned.flat()];
 }
 
+/*
+ * The transcripts a project holds, as things the project page can list.
+ *
+ * A transcript is written beside its clip as `<clip>.vtt` (see
+ * publishTranscripts), but the catalog only indexes media, so the one page that
+ * says what a project HAS showed the footage and never the words spoken in it.
+ * The only trace was a note on the clip's card that vanished on the next render.
+ *
+ * Listed rather than indexed, for the same reason scripts are: putting .vtt in
+ * the catalog would count it as an asset in every kind filter and in Cut's shelf.
+ * Each entry names the clip it belongs to — a transcript whose clip was deleted
+ * is still listed, with no clip, so the file is not invisible and unexplained.
+ */
+async function transcriptsIn(id, catalog) {
+  const root = mediaDir(id);
+  const clips = new Set((catalog?.files ?? []).map((f) => f.rel));
+  const out = [];
+  for await (const { full, rel } of walk(root)) {
+    if (!rel.endsWith(".vtt") || rel.endsWith(".words.vtt")) continue;
+    const st = await stat(full).catch(() => null);
+    if (!st) continue;
+    const stem = rel.slice(0, -".vtt".length);
+    const clip = [...clips].find((c) => c.replace(/\.[^./]+$/, "") === stem) ?? null;
+    // Cue count and spoken length, from the same reader Assembly uses. A file
+    // that does not parse is still a file the project holds; it is listed bare.
+    let cues = 0;
+    let durationSec = null;
+    try {
+      const t = transcriptFromCaptions(await readFile(full, "utf8"));
+      cues = t.cues.length;
+      durationSec = t.cues.at(-1)?.endSec ?? null;
+    } catch {
+      /* unreadable captions are still listed */
+    }
+    out.push({ project: id, rel, name: basename(rel), clip, mtime: st.mtime.toISOString(), bytes: st.size, cues, durationSec });
+  }
+  return out;
+}
+
+async function loadTranscripts(projects) {
+  const all = await Promise.all(projects.map((p) => transcriptsIn(p.id, p.catalog).catch(() => [])));
+  return all.flat();
+}
+
 async function state() {
   const projects = await listProjects();
   // Index before answering. The catalog used to be whatever was written the last
@@ -3454,9 +3502,10 @@ async function state() {
       p.workflow = await readWorkflow(p.id).catch(() => null);
     }),
   );
-  const [wallpapers, scripts, tokens, motion, logos, imagery, added] = await Promise.all([
+  const [wallpapers, scripts, transcripts, tokens, motion, logos, imagery, added] = await Promise.all([
     readFile(join(TOOLKIT, "brand/wallpapers/index.json"), "utf8").then(JSON.parse).catch(() => []),
     loadScripts(projects),
+    loadTranscripts(projects),
     readFile(join(TOOLKIT, "brand/tokens.json"), "utf8").then(JSON.parse).catch(() => ({})),
     // Motion direction for the Recast panel. Falls back to an empty spec rather
     // than throwing: a missing file should cost the render its motion sentences,
@@ -3510,6 +3559,7 @@ async function state() {
     projects,
     wallpapers,
     scripts,
+    transcripts,
     presets,
     tokens,
     // Label and hint only. The direction sentences stay server-side: the panel's
@@ -3979,7 +4029,10 @@ const server = createServer(async (req, res) => {
       const id = String(url.searchParams.get("project") ?? "");
       const manifest = await readManifest(projectDir(id)).catch(() => null);
       if (!manifest) return json(res, 404, { error: "pick a project" });
-      return json(res, 200, { catalog: await reindex(id) });
+      const catalog = await reindex(id);
+      // The transcripts travel with the catalog here, so a transcription that
+      // finishes while the project page is open appears without a reload.
+      return json(res, 200, { catalog, transcripts: await transcriptsIn(id, catalog).catch(() => []) });
     }
 
     /*

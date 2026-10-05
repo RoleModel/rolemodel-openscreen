@@ -46,6 +46,19 @@
    </div>
 </template>
 
+<!-- A transcript on the project shelf: the words of one clip, with one menu. -->
+<template data-row="transcript-shelf-card">
+   <div class="card card--media">
+      <div class="thumbwrap">
+         <div data-el="thumb" class="thumb" style="display:grid;place-items:center;background:var(--sunk)"></div>
+      </div>
+      <div class="card__body">
+         <div data-el="name" class="nm"></div>
+         <div data-el="meta" class="path"></div>
+      </div>
+   </div>
+</template>
+
 <!-- One file on the project shelf: pickable, playable in place, one menu. -->
 <template data-row="file-card">
    <div class="card card--media" style="cursor:pointer">
