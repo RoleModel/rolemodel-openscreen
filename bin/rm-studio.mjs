@@ -158,6 +158,11 @@ jobs.addPath(join(TOOLKIT, "bin", "shims"));
 // Finder-launched apps do not inherit the interactive shell's Homebrew PATH.
 // Keep these conventional install locations available to helper scripts such as
 // rm-transcribe, which in turn starts ffmpeg and whisper-cli.
+//
+// ~/.local/bin is where the Claude Code and Codex installers put their CLIs, and
+// a Finder-launched Studio never sees it: the agent job died "codex: not found
+// on PATH" with codex right there. Added first so Homebrew still wins a tie.
+jobs.addPath(join(homedir(), ".local", "bin"));
 jobs.addPath("/usr/local/bin");
 jobs.addPath("/opt/homebrew/bin");
 // The Studio process is already running under Node, but Finder/Electron can

@@ -4,9 +4,9 @@
 	"version": "2.6.1",
 	"upstreamFile": "dist/css/optics-oklch+no_icons.css",
 	"vendoredSha256": "ffedfaaad7567b1182ff4fc732fb403ba243744e2f02f14e354bebf9195a813a",
-	"supplementSha256": "2c808798b542f988883b198e854450ae5f5626274e2f31ad58995591a9782212",
+	"supplementSha256": "f9d490438be5c22ae3b3ee924ebbb8f0213ac5e39ae8e5fcd5ff6a94ff90b6a7",
 	"tokens": {
 		"published": 486,
-		"rolemodelOnly": 1392
+		"rolemodelOnly": 1391
 	}
 }

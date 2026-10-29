@@ -15,7 +15,7 @@
  *   3. Published steps the Theme Builder re-tuned for contrast, and the
  *      theme's type, spacing and radius settings.
  *
- * 82 seeds · 1315 RoleModel steps · 27 tuned steps · 7 other settings
+ * 81 seeds · 1315 RoleModel steps · 27 tuned steps · 7 other settings
  * 356 steps left to the package, which computes the same thing.
  */
 :root {
@@ -40,7 +40,6 @@
   --op-color-academy-accent-l: 60.3%;
   --op-color-academy-dark-h: 252.5;
   --op-color-academy-dark-c: 0.057;
-  --op-color-academy-dark-l: 49.5%;
   --op-color-academy-primary-h: 157.3;
   --op-color-academy-primary-c: 0.176;
   --op-color-academy-primary-l: 74.4%;
