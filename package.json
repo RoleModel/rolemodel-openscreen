@@ -78,10 +78,11 @@
     "app": "node lib/launch-app.mjs",
     "bem": "node lib/bem-check.mjs",
     "bem:check": "node lib/bem-check.mjs --check",
-    "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run figma-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify"
+    "check:ci": "pnpm run sync-brand:check && pnpm run optics:check && pnpm run optics-tokens:check && pnpm run figma-tokens:check && pnpm run icons:check && pnpm run imagery:check && pnpm run bem:check && pnpm run verify",
+    "check-contrast": "optics-check-contrast brand/optics/theme.css"
   },
   "devDependencies": {
-    "@rolemodel/optics": "2.4.0",
+    "@rolemodel/optics": "2.6.1",
     "axe-core": "^4.13.0",
     "gsap": "^3.14.2",
     "wavesurfer.js": "^7.12.11"

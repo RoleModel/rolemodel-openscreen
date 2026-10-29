@@ -25,8 +25,8 @@ importers:
         version: 0.19.2
     devDependencies:
       '@rolemodel/optics':
-        specifier: 2.4.0
-        version: 2.4.0(tom-select@2.6.2)
+        specifier: 2.6.1
+        version: 2.6.1(tom-select@2.6.2)
       axe-core:
         specifier: ^4.13.0
         version: 4.13.0
@@ -73,8 +73,9 @@ packages:
   '@orchidjs/unicode-variants@1.1.2':
     resolution: {integrity: sha512-5DobW1CHgnBROOEpFlEXytED5OosEWESFvg/VYmH0143oXcijYTprRYJTs+55HzGM4IqxiLFSuqEzu9mPNwVsA==}
 
-  '@rolemodel/optics@2.4.0':
-    resolution: {integrity: sha512-h6YsNF+/Lry49dEF3PXF1ReUtDw80mDlISR/tQMt61babfjEfT25fKt+403Nkdw7k941i78OAMVp8s0gC1x/bA==, tarball: https://npm.pkg.github.com/download/@rolemodel/optics/2.4.0/18ecea260d8ae88ac34c71abccb318684558fcc3}
+  '@rolemodel/optics@2.6.1':
+    resolution: {integrity: sha512-VYMCcKsAZqxP9AgUSSUnuQhDLHuTAOgk5dEea1E0ntDXLAwpLO2vD5QSOgpQAesXxeGB2iOwucr+GiAe+1k/+A==, tarball: https://npm.pkg.github.com/download/@rolemodel/optics/2.6.1/d63c9da07dda9e8b503707d720db99888181cf6b}
+    hasBin: true
     peerDependencies:
       tom-select: ^2.0.0
 
@@ -627,7 +628,7 @@ snapshots:
 
   '@orchidjs/unicode-variants@1.1.2': {}
 
-  '@rolemodel/optics@2.4.0(tom-select@2.6.2)':
+  '@rolemodel/optics@2.6.1(tom-select@2.6.2)':
     dependencies:
       modern-css-reset: 1.4.0
       tom-select: 2.6.2
