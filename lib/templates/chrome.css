@@ -670,6 +670,27 @@ rm-icon {
   color: var(--accent);
 }
 
+/* A reached step on the workflow rail is a button back to it. It takes the
+   tick's own column so the mark's line still runs the full width. */
+.stepper__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: inherit;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-small);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.stepper__link:hover {
+  text-decoration: underline;
+}
+
 /* The step you are on: the only one that reads at full weight, because it is
    the only one the card is about. */
 .stepper__tick[data-state='now'] {
