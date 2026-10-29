@@ -29,3 +29,76 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 var(--op-border-width) var(--accent);
 }
+
+/* The OKLCH picker the wallpaper colours use. */
+.oklchpicker {
+  display: grid;
+  grid-template-columns: 4.8rem 1fr;
+  gap: var(--op-space-small) var(--op-space-medium);
+  align-items: center;
+  min-width: 0;
+}
+
+.oklchpicker__swatch {
+  grid-row: span 2;
+  block-size: 4.8rem;
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+}
+
+.oklchpicker__axes {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  min-width: 0;
+}
+
+.oklchpicker__axis {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr 4.4rem;
+  gap: var(--op-space-x-small);
+  align-items: center;
+}
+
+.oklchpicker__name {
+  font-family: var(--op-font-family-alt);
+  font-size: var(--op-font-x-small);
+}
+
+/* The track is the input's own background, painted with the axis's range by
+   studio.js; the shared slider rule draws it through these properties. */
+.oklchpicker__range {
+  --range-track-h: 1.2rem;
+  --range-thumb: 1.6rem;
+  --range-track-bg: transparent;
+  --range-track-radius: 999px;
+  --range-thumb-bg: transparent;
+  --range-thumb-border: 2px solid var(--op-color-neutral-on-plus-max);
+  block-size: var(--range-track-h);
+  margin: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.oklchpicker__value {
+  font-family: var(--op-font-family-alt);
+  font-size: var(--op-font-x-small);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.oklchpicker__foot {
+  display: flex;
+  gap: var(--op-space-small);
+  align-items: center;
+  min-width: 0;
+}
+
+.oklchpicker__hex {
+  inline-size: 10rem;
+  font-family: var(--op-font-family-alt);
+}
+
+.oklchpicker__note {
+  color: var(--op-color-neutral-on-plus-max);
+  font-size: var(--op-font-x-small);
+}

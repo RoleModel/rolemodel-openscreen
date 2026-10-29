@@ -14,7 +14,10 @@
 
 <template data-row="wallpaper-card">
    <div class="card">
-      <canvas data-el="cv" style="width:100%;height:100%;display:block"></canvas>
+      <!-- height:auto, from the canvas's own 16:9 shape. height:100% resolved
+           against the grid row, so the row was sized to the picture alone and the
+           name and file line under it were cut off by the next row. -->
+      <canvas data-el="cv" style="width:100%;height:auto;display:block"></canvas>
       <div class="card__body">
          <div data-el="nm" class="nm"></div>
          <div data-el="path" class="path"></div>
@@ -29,4 +32,21 @@
    </div>
    <div data-el="panel" class="panel2"></div>
    <button data-el="save" class="btn" type="button"><rm-icon name="floppy-disk"></rm-icon>Save wallpaper</button>
+</template>
+
+<!-- An OKLCH colour picker for wallpaper colours: lightness, chroma and hue, with
+     the hex a baked JPEG needs. Each track paints its own range. -->
+<template data-row="oklch-picker">
+   <div class="oklchpicker">
+      <span data-el="swatch" class="oklchpicker__swatch"></span>
+      <div class="oklchpicker__axes">
+         <label class="oklchpicker__axis"><span class="oklchpicker__name">L</span><input data-el="l" class="oklchpicker__range" type="range" min="0" max="100" step="0.1" aria-label="Lightness" /><output data-el="lv" class="oklchpicker__value"></output></label>
+         <label class="oklchpicker__axis"><span class="oklchpicker__name">C</span><input data-el="c" class="oklchpicker__range" type="range" min="0" max="0.37" step="0.001" aria-label="Chroma" /><output data-el="cv" class="oklchpicker__value"></output></label>
+         <label class="oklchpicker__axis"><span class="oklchpicker__name">H</span><input data-el="h" class="oklchpicker__range" type="range" min="0" max="360" step="0.1" aria-label="Hue" /><output data-el="hv" class="oklchpicker__value"></output></label>
+      </div>
+      <div class="oklchpicker__foot">
+         <input data-el="hex" class="form-control oklchpicker__hex" type="text" spellcheck="false" autocomplete="off" aria-label="Colour as hex, or any CSS colour" />
+         <span data-el="note" class="oklchpicker__note" aria-live="polite"></span>
+      </div>
+   </div>
 </template>

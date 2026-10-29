@@ -922,14 +922,25 @@ const SHADER_FRAGMENT = [
 const SHADER_HEX = /^#(?:[\da-f]{3}|[\da-f]{6})$/i
 const shaderClamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const shaderColour = (value, fallback) => (SHADER_HEX.test(value) || String(value).startsWith('var(') ? value : fallback)
+/* Resolved through the page, then painted onto one pixel and read back: the
+   computed colour is `oklch(…)` since Optics moved to OKLCH, and its numbers are
+   not red, green and blue. Taking them as such turned a purple ink navy. */
+let shaderProbe = null
 const shaderVector = (root, colour, fallback) => {
   const swatch = document.createElement('i')
   swatch.style.color = colour
   root.append(swatch)
-  const parts = getComputedStyle(swatch).color.match(/\d+(?:\.\d+)?/g)
+  const painted = getComputedStyle(swatch).color
   swatch.remove()
-  if (!parts || parts.length < 3) return fallback
-  return parts.slice(0, 3).map((part) => Number(part) / 255)
+  if (!painted) return fallback
+  shaderProbe ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+  shaderProbe.canvas.width = shaderProbe.canvas.height = 1
+  shaderProbe.clearRect(0, 0, 1, 1)
+  shaderProbe.fillStyle = painted
+  shaderProbe.fillRect(0, 0, 1, 1)
+  const [r, g, b, a] = shaderProbe.getImageData(0, 0, 1, 1).data
+  if (!a) return fallback
+  return [r, g, b].map((v) => v / 255)
 }
 const compileShader = (gl, type, source) => {
   const shader = gl.createShader(type)
