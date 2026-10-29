@@ -1,6 +1,33 @@
 <!-- Brand: swatches, marks, imagery and wallpaper entries. -->
 <template data-panel="brand">
    <p class="lede" data-region="main">Wallpapers and title treatments, generated from the Optics palette. Change the export, re-run sync-brand, and everything here follows.</p>
+   <div class="client" data-region="main">Brands</div>
+   <div class="presetform" data-region="main">
+      <ul data-el="presetList" class="presetform__list"></ul>
+      <form data-el="presetForm" class="presetform__form">
+         <label class="presetform__field">
+            <span class="presetform__label">Name</span>
+            <input data-el="presetName" class="form-control" type="text" placeholder="e.g. Dock Designer" autocomplete="off" required />
+         </label>
+         <label class="presetform__field">
+            <span class="presetform__label">Based on</span>
+            <select data-el="presetBase" class="form-control"></select>
+            <small class="presetform__hint">The new brand starts as a copy of this one: its layout, webcam and export settings.</small>
+         </label>
+         <label class="presetform__field">
+            <span class="presetform__label">Wallpaper</span>
+            <select data-el="presetWallpaper" class="form-control"></select>
+         </label>
+         <label class="presetform__field presetform__field--wide">
+            <span class="presetform__label">Description <span class="presetform__optional">optional</span></span>
+            <input data-el="presetDescription" class="form-control" type="text" placeholder="What this brand is used for" autocomplete="off" />
+         </label>
+         <div class="presetform__actions">
+            <button data-el="presetSave" class="btn" type="submit"><rm-icon name="add-01"></rm-icon>Add brand</button>
+            <span data-el="presetStatus" class="presetform__status" role="status" aria-live="polite"></span>
+         </div>
+      </form>
+   </div>
    <div class="client" data-region="main">Sub-brands</div>
    <div data-el="subBrands" class="grid" data-region="main"></div>
    <div class="client" data-region="main">Marks</div>

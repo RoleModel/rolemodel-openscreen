@@ -71,7 +71,7 @@ import {
 	walk,
 	writeManifest,
 } from "../lib/library.mjs";
-import { ROOT as TOOLKIT, loadPreset, stablePath } from "../lib/theme.mjs";
+import { ROOT as TOOLKIT, USER_PRESETS, addPreset, listPresetIds, loadPreset, stablePath } from "../lib/theme.mjs";
 import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieCutSinglesToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
@@ -3545,9 +3545,12 @@ async function state() {
   ]);
 
   const presets = [];
-  for (const id of ["rolemodel", "academy", "lightning"]) {
+  // Every preset, shipped and added. This was a list of the three shipped ids,
+  // so a fourth brand could not appear here however it was made.
+  for (const id of await listPresetIds()) {
     try {
-      presets.push(await loadPreset(id));
+      const added = !existsSync(join(TOOLKIT, "presets", `${id}.json`)) && existsSync(join(USER_PRESETS, `${id}.json`));
+      presets.push({ ...(await loadPreset(id)), added });
     } catch {
       /* skip */
     }
@@ -12310,6 +12313,16 @@ async function fetchVoiceList() {
         settings: await agentSettings(),
         pi: { ...(await piSettings()), groqDefaultModel: GROQ_DEFAULT_MODEL },
       });
+    }
+
+    if (p === "/api/presets" && req.method === "POST") {
+      const body = JSON.parse(await text(req));
+      try {
+        const id = await addPreset({ label: body.label, extends: body.extends, wallpaperFile: body.wallpaperFile, description: body.description });
+        return json(res, 200, { ok: true, id, preset: await loadPreset(id) });
+      } catch (error) {
+        return json(res, 400, { error: error.message });
+      }
     }
 
     if (p === "/api/view" && req.method === "POST") {

@@ -12,7 +12,6 @@
  *   openscreen export demo.openscreen -o demo.mp4 --auto-zoom --json
  */
 import { spawn } from "node:child_process";
-import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { title, watermark } from "../lib/annotations.mjs";
@@ -24,6 +23,7 @@ import {
 	buildEditorPatch,
 	detectPadding,
 	detectShape,
+	listPresetIds,
 	loadPreset,
 	readProject,
 	writeProject,
@@ -63,10 +63,9 @@ function die(msg) {
 }
 
 async function listPresets() {
-	const files = (await readdir(resolve(ROOT, "presets"))).filter((f) => f.endsWith(".json"));
 	console.log("\nPresets\n");
-	for (const f of files) {
-		const p = await loadPreset(f.replace(/\.json$/, ""));
+	for (const id of await listPresetIds()) {
+		const p = await loadPreset(id);
 		console.log(`  ${p.id.padEnd(12)} ${p.label}`);
 		console.log(`  ${"".padEnd(12)} ${p.description}`);
 		const names = (o) => Object.keys(o ?? {}).filter((k) => !k.startsWith("$"));

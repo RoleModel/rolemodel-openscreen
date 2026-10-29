@@ -72,3 +72,68 @@
   block-size: 82%;
   inline-size: 82%;
 }
+
+/* Adding a brand preset. Saved beside the settings, so an upgrade keeps it. */
+.presetform {
+  display: grid;
+  gap: var(--op-space-medium);
+}
+
+.presetform__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--op-space-x-small);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.presetform__item {
+  padding: var(--op-space-2x-small) var(--op-space-small);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
+.presetform__item--added {
+  border-color: var(--op-color-academy-primary-base);
+}
+
+.presetform__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--op-space-medium);
+  padding: var(--op-space-medium);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-large);
+}
+
+.presetform__field {
+  display: grid;
+  gap: var(--op-space-2x-small);
+  align-content: start;
+}
+
+.presetform__field--wide {
+  grid-column: 1 / -1;
+}
+
+.presetform__label {
+  font-weight: var(--op-font-weight-semi-bold);
+}
+
+.presetform__optional,
+.presetform__hint {
+  color: var(--op-color-neutral-on-plus-max);
+  font-weight: normal;
+}
+
+.presetform__actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: var(--op-space-medium);
+  align-items: center;
+}
+
+.presetform__status--bad {
+  color: var(--op-color-alerts-danger-on-base);
+}
