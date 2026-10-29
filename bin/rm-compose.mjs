@@ -23,6 +23,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { composeDocument, FPS, markupDurationMs, SCENE_H, SCENE_W, sceneDurationMs, sceneHtml } from "../lib/compose.mjs";
+import { loadPreset } from "../lib/theme.mjs";
 
 const run = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -169,7 +170,15 @@ for (const [i, seg] of segments.entries()) {
 
 	await writeFile(
 		html,
-		sceneHtml({ wallpaper: seg.wallpaper, brand: seg.brand, elements: seg.elements ?? [], body: authored, title: name }),
+		sceneHtml({
+			wallpaper: seg.wallpaper,
+			// The loaded preset, not the bare id, so a brand's own scales and fonts
+			// reach the page. An id that is not a preset still names the stage.
+			brand: seg.brand ? await loadPreset(String(seg.brand)).catch(() => seg.brand) : undefined,
+			elements: seg.elements ?? [],
+			body: authored,
+			title: name,
+		}),
 		"utf8",
 	);
 	scratch.push(html);

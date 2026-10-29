@@ -215,3 +215,31 @@
   font-size: var(--op-font-3x-large);
   font-weight: var(--op-font-weight-bold);
 }
+
+/* Each brand colour's Optics scale, lightest to darkest, as Optics builds it. */
+.presetform__ramps {
+  display: grid;
+  gap: var(--op-space-x-small);
+}
+
+.presetform__ramp {
+  display: grid;
+  grid-template-columns: 8rem repeat(19, 1fr);
+  gap: 2px;
+  align-items: stretch;
+}
+
+.presetform__ramp-name {
+  font-family: var(--op-font-family-alt);
+  font-size: var(--op-font-x-small);
+}
+
+.presetform__ramp-step {
+  block-size: 2rem;
+  border-radius: var(--op-radius-small);
+}
+
+.presetform__ramp-step--base {
+  outline: 2px solid var(--op-color-neutral-on-plus-max);
+  outline-offset: 1px;
+}

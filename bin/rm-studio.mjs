@@ -72,6 +72,17 @@ import {
 	writeManifest,
 } from "../lib/library.mjs";
 import { PRESET_COLORS, PRESET_FIELDS, ROOT as TOOLKIT, USER_PRESETS, listPresetIds, loadPreset, savePreset, stablePath } from "../lib/theme.mjs";
+import { brandScalesCss } from "../lib/brand-scale.mjs";
+
+/** The Optics scales of every brand made on the Brand page, as CSS. */
+async function addedBrandScales() {
+	const presets = [];
+	for (const id of await listPresetIds()) {
+		if (existsSync(join(TOOLKIT, "presets", `${id}.json`))) continue;
+		presets.push(await loadPreset(id).catch(() => null));
+	}
+	return brandScalesCss(presets.filter(Boolean));
+}
 import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieCutSinglesToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
@@ -3640,7 +3651,8 @@ async function state() {
           readFile(join(TOOLKIT, "brand/optics/optics.css"), "utf8").catch(() => ""),
           readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => ""),
         ]);
-        return [...new Set([...`${a}\n${b}`.matchAll(/--op-color-([a-z0-9-]+)-original\s*:/g)].map((x) => x[1]))].sort();
+        const c = await addedBrandScales();
+        return [...new Set([...`${a}\n${b}\n${c}`.matchAll(/--op-color-([a-z0-9-]+)-original\s*:/g)].map((x) => x[1]))].sort();
       })(),
     },
   };
@@ -10283,6 +10295,8 @@ async function fetchVoiceList() {
         if (css != null) parts.push(css);
         else parts.push(`/* ${f} missing — run \`pnpm run optics\` */\n`);
       }
+      // Last, so a brand's own families sit beside the shipped ones.
+      parts.push(await addedBrandScales());
       res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": WATCH ? "no-store" : "max-age=60" });
       return res.end(parts.join("\n"));
     }
@@ -10439,7 +10453,10 @@ async function fetchVoiceList() {
       // Title and other entering components are invisible at frame zero. This
       // is a Canvas thumbnail, not a playback start position, so seek a moment
       // into the saved scene where its authored treatment can actually be seen.
-      return res.end(sceneHtml({ body, title: name, base: "", footage, previewAt: 750 }));
+      // In the project's brand, so a brand made on the Brand page shows its own
+      // colour and face in the preview the same as in the render.
+      const brand = man.brand ? await loadPreset(String(man.brand)).catch(() => undefined) : undefined;
+      return res.end(sceneHtml({ body, title: name, base: "", footage, previewAt: 750, brand }));
     }
 
     if (p.startsWith("/api/scene/preview/")) {
@@ -12187,7 +12204,7 @@ async function fetchVoiceList() {
        * being frozen at whatever it resolved to the day it was picked.
        */
       const scaleCss = await readFile(join(TOOLKIT, "brand/optics/rolemodel-scales.css"), "utf8").catch(() => "");
-      const scales = [...new Set([...scaleCss.matchAll(/--op-color-([a-z-]+)-h\s*:/g)].map((x) => x[1]))].sort();
+      const scales = [...new Set([...`${scaleCss}\n${await addedBrandScales()}`.matchAll(/--op-color-([a-z0-9-]+)-h\s*:/g)].map((x) => x[1]))].sort();
 
 
       const [recipes, brandImagery, addedImagery] = await Promise.all([

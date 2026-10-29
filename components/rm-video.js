@@ -206,7 +206,7 @@ const TYPE = `
        component pins DM Sans on its own :host, which wins over anything the stage
        sets — so the sub-brand typeface had nowhere to get in. */
     --font: var(--rm-font, "DM Sans"), ui-sans-serif, system-ui, -apple-system, sans-serif;
-    --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --mono: var(--rm-mono, "Geist Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
     --fg: var(--op-color-neutral-minus-max, #fff);
     /*
      * Secondary text, measured rather than picked by eye.
@@ -225,15 +225,19 @@ const TYPE = `
      * is nothing. Invisible against a dark board, decisive against a bright frame.
      */
     --ink-shadow: 0 0.08cqw 0.5cqw rgb(0 0 0 / 0.55);
-    --brand: var(--op-color-academy-primary-base, #00c278);
+    /* --rm-brand and its two companions are how a brand made on the Brand page
+       reaches every part: the scene sets them on :root from the brand's own
+       Optics scale (lib/brand-scale.mjs), and each part falls back to Academy
+       green when none is set. A part's own picked accent still wins. */
+    --brand: var(--rm-brand, var(--op-color-academy-primary-base, #00c278));
     /* What reads ON --brand. Optics mixes one per family; the Studio sets both
        when an accent is picked, because a fill without its ink is how a pale
        accent ends up carrying text nobody can read. */
-    --on-brand: var(--op-color-academy-primary-on-base, #00472c);
+    --on-brand: var(--rm-on-brand, var(--op-color-academy-primary-on-base, #00472c));
     /* And the family as TEXT on the stage, which is neither of the above: a seed
        can be a deep purple, and an eyebrow set in it on a dark wallpaper is
        invisible. Falls back to --brand so a scene that sets only that still works. */
-    --brand-text: var(--brand);
+    --brand-text: var(--rm-brand-text, var(--brand));
     --surface: var(--op-color-neutral-plus-max, #242424);
     --surface-2: var(--op-color-neutral-plus-six, #333);
     --line: var(--op-color-neutral-plus-four, #424242);
