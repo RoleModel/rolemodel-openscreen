@@ -161,7 +161,9 @@ jobs.addPath(join(TOOLKIT, "bin", "shims"));
 //
 // ~/.local/bin is where the Claude Code and Codex installers put their CLIs, and
 // a Finder-launched Studio never sees it: the agent job died "codex: not found
-// on PATH" with codex right there. Added first so Homebrew still wins a tie.
+// on PATH" with codex right there. Pi's managed installer keeps its launcher in
+// ~/.pi/agent/bin for the same reason. Added first so Homebrew still wins a tie.
+jobs.addPath(join(homedir(), ".pi", "agent", "bin"));
 jobs.addPath(join(homedir(), ".local", "bin"));
 jobs.addPath("/usr/local/bin");
 jobs.addPath("/opt/homebrew/bin");
