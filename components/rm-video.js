@@ -542,7 +542,7 @@ define('rm-title', RMTitle)
  * clock, staggered, rather than one animation per word on clocks that drift.
  */
 class RMText extends RMElement {
-  static fields = ['text', 'sub', 'x', 'y', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'at', 'for']
+  static fields = ['text', 'sub', 'font', 'x', 'y', 'op', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'keys', 'at', 'for']
 
   render() {
     const pick = (key, list, def) => (list.includes(this.attr(key, def)) ? this.attr(key, def) : def)
@@ -568,7 +568,38 @@ class RMText extends RMElement {
     const ty = num('ty', 0)
     const tz = num('tz', 0)
     const persp = num('persp', 180)
+    const op = num('op', 100)
     const shadow = this.attr('shadow', '1') !== '0'
+    /* A family name only: quotes, braces and semicolons would close the
+       declaration and let an attribute write CSS. Empty is the scene's face. */
+    const font = this.attr('font', '').replace(/["'\\;{}<>]/g, '').trim()
+    const family = font ? `"${font}", var(--font)` : 'var(--font)'
+
+    /*
+     * Keyframes, the showcase's own: the placement and the lean as variables
+     * on the block, driven between keys by one paused @keyframes rule on the
+     * layer's clock. Without keys the dials are the values.
+     */
+    const keys = parseKeys(this.attr('keys'))
+    const base = { x, y, tx, ty, tz, op }
+    const still = keysAt(keys, 0, base)
+    const vars = TEXT_KEY_PROPS.map((p) => `${KEY_VAR[p]}:${keyValue(p, keys.length ? still[p] : base[p])};`).join(' ')
+    const named = TEXT_KEY_PROPS.filter((p) => keys.some((k) => k[p] !== undefined))
+    let keyed = ''
+    if (keys.length >= 2 && named.length) {
+      const t0 = keys[0].t
+      const span = Math.max(0.001, keys.at(-1).t - t0)
+      const frames = keys
+        .map((k, i) => {
+          const at = keysAt(keys, k.t, base)
+          const decl = named.map((p) => `${KEY_VAR[p]}: ${keyValue(p, at[p])};`).join(' ')
+          const ease = i < keys.length - 1 ? `animation-timing-function: ${KEY_EASES[k.ease] ?? KEY_EASES.out};` : ''
+          return `${(((k.t - t0) / span) * 100).toFixed(3)}% { ${decl} ${ease} }`
+        })
+        .join('\n')
+      keyed = `@keyframes text-keys { ${frames} }
+        .at { animation: text-keys ${span}s linear both paused; animation-delay: calc(var(--at) + ${t0}s - var(--t)); }`
+    }
 
     /* A role name resolves to the brand's token; anything else is passed
        through, so a one-off accent does not need a token to exist first. */
@@ -623,10 +654,11 @@ class RMText extends RMElement {
          * break typed into a headline is kept -- and the markup's own shape
          * stops being content.
          */
-        .at { position:absolute; left:${x}%; top:${y}%; width:${w}cqw;
+        .at { ${vars} position:absolute; left:var(--k-x); top:var(--k-y); width:${w}cqw;
               transform: perspective(${persp}cqw) translate(${shift}, -50%)
-                         rotateX(${tx}deg) rotateY(${ty}deg) rotateZ(${tz}deg);
-              text-align:${anchor}; }
+                         rotateX(var(--k-rx)) rotateY(var(--k-ry)) rotateZ(var(--k-rz));
+              opacity:var(--k-o); font-family:${family}; text-align:${anchor}; }
+        ${keyed}
         /* inline-block, because the rise is a transform and a transform does
            nothing to an inline box. */
         .anim { display:inline-block; }
@@ -670,7 +702,9 @@ const TEXT_SCHEMA = [
   { key: 'y', label: 'Down (%)', type: 'range', min: 0, max: 100, step: 0.5, def: 50, group: 'place' },
   { key: 'anchor', label: 'Align', type: 'select', options: ['left', 'center', 'right'], def: 'left', group: 'place', note: 'Which edge Across measures from, and how the lines align.' },
   { key: 'w', label: 'Measure', type: 'range', min: 8, max: 90, step: 1, def: 34, group: 'place', note: 'How wide the block may run before it wraps.' },
+  { key: 'op', label: 'Opacity (%)', type: 'range', min: 0, max: 100, step: 1, def: 100, group: 'place', note: 'Key it to fade the block in or out on its own beat.' },
 
+  { key: 'font', label: 'Font', type: 'font', def: '', group: 'type', note: "Any font on this Mac. Empty uses the scene's brand face." },
   { key: 'size', label: 'Headline size', type: 'range', min: 1, max: 12, step: 0.1, def: 4.6, group: 'type' },
   { key: 'subsize', label: 'Caption size', type: 'range', min: 0.8, max: 5, step: 0.1, def: 1.6, group: 'type' },
   { key: 'weight', label: 'Weight', type: 'range', min: 300, max: 800, step: 100, def: 700, group: 'type' },
@@ -701,6 +735,7 @@ function encodeText(state) {
     if (String(state[f.key] ?? f.def) === String(f.def)) continue
     parts.push(`${f.key}="${String(state[f.key]).replace(/"/g, '&quot;')}"`)
   }
+  if (state.keys?.length) parts.push(`keys="${encodeKeys(state.keys)}"`)
   return parts.join(' ')
 }
 
@@ -3066,6 +3101,8 @@ const showcaseDefaults = () => Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.
  * t is seconds from the layer's start; e is the ease out of that key.
  */
 const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
+/* A line of type has no depth, zoom or focus to key: it is placed, leaned and faded. */
+const TEXT_KEY_PROPS = ['x', 'y', 'tx', 'ty', 'tz', 'op']
 const KEY_EASES = {
   linear: 'linear',
   ease: 'ease',
@@ -4002,7 +4039,7 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
-export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, RMAudio, AUDIO_SCHEMA, AUDIO_GROUPS, audioDefaults, encodeAudio, KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
+export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, RMAudio, AUDIO_SCHEMA, AUDIO_GROUPS, audioDefaults, encodeAudio, KEY_PROPS, TEXT_KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
 export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
 

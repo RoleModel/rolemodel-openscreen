@@ -10,6 +10,14 @@
       Nothing can hide under the deck if the thing it would hide is inside it.
    -->
    <div class="showcase__deck" data-region="main">
+      <!-- A layer's right-click menu. A popover, so it sits in the top layer:
+           it closes on a click outside or Escape, and no ancestor clips it. -->
+      <div data-el="layerMenu" class="showcase__menu" role="menu" popover="auto">
+         <button data-el="menuDelete" class="showcase__menuitem showcase__menuitem--danger" type="button" role="menuitem"><rm-icon name="delete-02"></rm-icon>Delete layer</button>
+         <button data-el="menuDeleteAll" class="showcase__menuitem showcase__menuitem--danger" type="button" role="menuitem"><rm-icon name="delete-02"></rm-icon>Delete all layers</button>
+      </div>
+      <!-- Every font on this Mac, for a text layer's Font box. -->
+      <datalist id="showcase-fonts" data-el="fontList"></datalist>
       <div class="showcase__viewer">
       <div class="wpprev showcase__stage">
          <!-- Layers are appended after the look, as its siblings: the scene gives

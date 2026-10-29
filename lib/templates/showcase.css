@@ -569,3 +569,52 @@
   align-self: center;
   padding-block: 2px;
 }
+
+/* A layer's right-click menu. Placed at the pointer by script; a popover, so
+   the top layer holds it and the deck's overflow cannot clip it. */
+.showcase__menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: 180px;
+  padding: var(--op-space-2x-small);
+  border: 1px solid var(--line);
+  border-radius: var(--op-radius-medium);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+
+.showcase__menuitem {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+  width: 100%;
+  padding: var(--op-space-x-small) var(--op-space-small);
+  border: 0;
+  border-radius: var(--op-radius-small);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.showcase__menuitem[hidden] {
+  display: none;
+}
+
+.showcase__menuitem:hover,
+.showcase__menuitem:focus-visible {
+  background: var(--panel2);
+  outline: none;
+}
+
+.showcase__menuitem:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.showcase__menuitem--danger {
+  color: var(--danger);
+}
