@@ -74,6 +74,38 @@ import {
 import { PRESET_COLORS, PRESET_FIELDS, ROOT as TOOLKIT, USER_PRESETS, listPresetIds, loadPreset, savePreset, stablePath } from "../lib/theme.mjs";
 import { brandScalesCss } from "../lib/brand-scale.mjs";
 
+/**
+ * Every font family installed on this Mac, for the Brand page's font boxes.
+ *
+ * Asked of AppKit (NSFontManager) through osascript's JavaScript bridge: it is
+ * the list every Mac app's font menu shows, Adobe Fonts activations included,
+ * and it answers in a fifth of a second. Read once per Studio run — a font
+ * installed later shows after a restart. Not a Mac: an empty list, and the
+ * boxes still take any name typed into them.
+ */
+let macFonts = null;
+function macFontFamilies() {
+	if (macFonts) return macFonts;
+	macFonts = new Promise((done) => {
+		if (process.platform !== "darwin") return done([]);
+		const child = spawn("/usr/bin/osascript", ["-l", "JavaScript", "-e", 'ObjC.import("AppKit"); JSON.stringify(ObjC.deepUnwrap($.NSFontManager.sharedFontManager.availableFontFamilies))'], { env: jobs.childEnv(), stdio: ["ignore", "pipe", "ignore"] });
+		let out = "";
+		child.stdout.on("data", (d) => {
+			out += d;
+		});
+		child.on("error", () => done([]));
+		child.on("close", () => {
+			try {
+				// Dot-prefixed families are system UI faces no app is meant to name.
+				done([...new Set(JSON.parse(out))].filter((f) => typeof f === "string" && !f.startsWith(".")).sort((a, b) => a.localeCompare(b)));
+			} catch {
+				done([]);
+			}
+		});
+	});
+	return macFonts;
+}
+
 /** The Optics scales of every brand made on the Brand page, as CSS. */
 async function addedBrandScales() {
 	const presets = [];
@@ -6317,7 +6349,8 @@ const server = createServer(async (req, res) => {
         return null;
       };
       try {
-        await renderStill({ body: tag, out: dest, atMs: Math.max(0, Number(body.atMs) || 0), width, height, resolveFile });
+        const stillBrand = projectId ? await readManifest(projectDir(projectId)).then((m) => (m?.brand ? loadPreset(String(m.brand)) : undefined)).catch(() => undefined) : undefined;
+        await renderStill({ body: tag, out: dest, atMs: Math.max(0, Number(body.atMs) || 0), width, height, resolveFile, brand: stillBrand });
       } catch (err) {
         return json(res, 500, { error: `could not draw it: ${String(err.message).slice(0, 200)}` });
       }
@@ -10415,7 +10448,11 @@ async function fetchVoiceList() {
             outSec: Math.max(0, Number(b.footage.outSec) || 0),
           }
         : undefined;
-      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand: b.brand || undefined, footage, name: b.name || "Scene preview" });
+      // The loaded preset, as the render gets it, so a brand's own scales and
+      // fonts show in the live preview too. A bare id that is not a preset still
+      // names the stage.
+      const brand = b.brand ? await loadPreset(String(b.brand)).catch(() => String(b.brand)) : undefined;
+      previews.set(id, { body: String(b.body ?? ""), wallpaper: b.wallpaper || undefined, brand, footage, name: b.name || "Scene preview" });
       // Only the last few matter; anything older is a frame nobody is looking at.
       for (const key of previews.keys()) {
         if (previews.size <= PREVIEWS_KEPT) break;
@@ -12336,6 +12373,10 @@ async function fetchVoiceList() {
       });
     }
 
+    if (p === "/api/fonts" && req.method === "GET") {
+      return json(res, 200, { families: await macFontFamilies() });
+    }
+
     if (p === "/api/presets" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
@@ -12357,6 +12398,7 @@ async function fetchVoiceList() {
       const id = body.projectId;
       const man = await readManifest(projectDir(id)).catch(() => null);
       if (!man) return json(res, 404, { error: "pick a project" });
+      const cutBrand = man.brand ? await loadPreset(String(man.brand)).catch(() => undefined) : undefined;
 
       const clips = Array.isArray(body.clips) ? body.clips : [];
       if (!clips.length) return json(res, 400, { error: "add at least one clip" });
@@ -12405,7 +12447,8 @@ async function fetchVoiceList() {
         ].join("");
         const png = join(outDir, `title-${i + 1}.png`);
         try {
-          await renderStill({ body: card, out: png, atMs: Math.round(forSec * 500) });
+          // In the project's brand, or every burned-in title is in the house face.
+          await renderStill({ body: card, out: png, atMs: Math.round(forSec * 500), brand: cutBrand });
         } catch (err) {
           return json(res, 500, { error: `the title would not render: ${String(err.message).slice(0, 200)}` });
         }

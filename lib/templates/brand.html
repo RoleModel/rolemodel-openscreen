@@ -29,7 +29,7 @@
          </fieldset>
 
          <fieldset class="presetform__group">
-            <legend class="presetform__legend">Fonts</legend>
+            <legend class="presetform__legend">Fonts <span data-el="presetFontCount" class="presetform__optional"></span></legend>
             <div class="presetform__grid">
                <label class="presetform__field">
                   <span class="presetform__label">Title font</span>
@@ -42,11 +42,12 @@
                <label class="presetform__field presetform__field--wide">
                   <span class="presetform__label">Google Fonts link <span class="presetform__optional">optional</span></span>
                   <input data-el="presetFontUrl" class="form-control" type="url" placeholder="https://fonts.googleapis.com/css2?family=Inter:wght@400;700" autocomplete="off" />
-                  <small class="presetform__hint">Loads the fonts here. OpenScreen keeps its own font list: add the same link once in OpenScreen's text font menu, or install the font on this Mac, or its titles fall back to a system font.</small>
+                  <small class="presetform__hint">Only for a font that is not installed on this Mac. An installed font needs no link: OpenScreen and the renderer both use it as it is. A linked font shows here and in rendered scenes, but OpenScreen's titles need the font installed on this Mac, or they fall back to a system font.</small>
                </label>
             </div>
             <p data-el="presetSample" class="presetform__sample"><span data-el="presetSampleEyebrow" class="presetform__sample-eyebrow">Product tour</span><span data-el="presetSampleTitle" class="presetform__sample-title">The brand in its own type</span></p>
-            <datalist id="presetform-fonts"><option value="DM Sans"></option><option value="Geist Mono"></option><option value="Inter"></option><option value="Roboto"></option><option value="Montserrat"></option><option value="Poppins"></option><option value="Source Sans 3"></option><option value="IBM Plex Sans"></option><option value="IBM Plex Mono"></option><option value="JetBrains Mono"></option><option value="Helvetica Neue"></option><option value="Georgia"></option></datalist>
+            <!-- Filled from /api/fonts with every family installed on this Mac. -->
+            <datalist id="presetform-fonts" data-el="presetFontList"><option value="DM Sans"></option><option value="Geist Mono"></option></datalist>
          </fieldset>
 
          <div data-el="presetSettings" class="presetform__settings"></div>
