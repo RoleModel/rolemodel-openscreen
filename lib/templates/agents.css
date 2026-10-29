@@ -27,7 +27,7 @@
 }
 
 .agents__status--ok {
-  color: var(--op-color-success-on-plus-max);
+  color: var(--op-color-alerts-notice-on-base);
 }
 
 .agents__form {
