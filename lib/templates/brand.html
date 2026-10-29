@@ -5,14 +5,13 @@
    <div class="presetform" data-region="main">
       <ul data-el="presetList" class="presetform__list"></ul>
       <form data-el="presetForm" class="presetform__form">
+         <div class="presetform__head">
+            <strong data-el="presetMode" class="presetform__mode">New brand</strong>
+            <button data-el="presetNew" class="btn btn--small" type="button">Start a new brand</button>
+         </div>
          <label class="presetform__field">
             <span class="presetform__label">Name</span>
             <input data-el="presetName" class="form-control" type="text" placeholder="e.g. Dock Designer" autocomplete="off" required />
-         </label>
-         <label class="presetform__field">
-            <span class="presetform__label">Based on</span>
-            <select data-el="presetBase" class="form-control"></select>
-            <small class="presetform__hint">The new brand starts as a copy of this one: its layout, webcam and export settings.</small>
          </label>
          <label class="presetform__field">
             <span class="presetform__label">Wallpaper</span>
@@ -22,8 +21,37 @@
             <span class="presetform__label">Description <span class="presetform__optional">optional</span></span>
             <input data-el="presetDescription" class="form-control" type="text" placeholder="What this brand is used for" autocomplete="off" />
          </label>
+
+         <fieldset class="presetform__group">
+            <legend class="presetform__legend">Colours</legend>
+            <div data-el="presetColors" class="presetform__grid"></div>
+         </fieldset>
+
+         <fieldset class="presetform__group">
+            <legend class="presetform__legend">Fonts</legend>
+            <div class="presetform__grid">
+               <label class="presetform__field">
+                  <span class="presetform__label">Title font</span>
+                  <input data-el="presetFontDisplay" class="form-control" type="text" list="presetform-fonts" placeholder="DM Sans" autocomplete="off" />
+               </label>
+               <label class="presetform__field">
+                  <span class="presetform__label">Small-text font</span>
+                  <input data-el="presetFontMono" class="form-control" type="text" list="presetform-fonts" placeholder="Geist Mono" autocomplete="off" />
+               </label>
+               <label class="presetform__field presetform__field--wide">
+                  <span class="presetform__label">Google Fonts link <span class="presetform__optional">optional</span></span>
+                  <input data-el="presetFontUrl" class="form-control" type="url" placeholder="https://fonts.googleapis.com/css2?family=Inter:wght@400;700" autocomplete="off" />
+                  <small class="presetform__hint">Loads the fonts here. OpenScreen keeps its own font list: add the same link once in OpenScreen's text font menu, or install the font on this Mac, or its titles fall back to a system font.</small>
+               </label>
+            </div>
+            <p data-el="presetSample" class="presetform__sample"><span data-el="presetSampleEyebrow" class="presetform__sample-eyebrow">Product tour</span><span data-el="presetSampleTitle" class="presetform__sample-title">The brand in its own type</span></p>
+            <datalist id="presetform-fonts"><option value="DM Sans"></option><option value="Geist Mono"></option><option value="Inter"></option><option value="Roboto"></option><option value="Montserrat"></option><option value="Poppins"></option><option value="Source Sans 3"></option><option value="IBM Plex Sans"></option><option value="IBM Plex Mono"></option><option value="JetBrains Mono"></option><option value="Helvetica Neue"></option><option value="Georgia"></option></datalist>
+         </fieldset>
+
+         <div data-el="presetSettings" class="presetform__settings"></div>
+
          <div class="presetform__actions">
-            <button data-el="presetSave" class="btn" type="submit"><rm-icon name="add-01"></rm-icon>Add brand</button>
+            <button data-el="presetSave" class="btn" type="submit"><rm-icon name="add-01"></rm-icon><span data-el="presetSaveLabel">Add brand</span></button>
             <span data-el="presetStatus" class="presetform__status" role="status" aria-live="polite"></span>
          </div>
       </form>

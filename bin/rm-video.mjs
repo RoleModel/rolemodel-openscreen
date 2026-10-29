@@ -23,6 +23,7 @@ import {
 	buildEditorPatch,
 	detectPadding,
 	detectShape,
+	brandStyle,
 	listPresetIds,
 	loadPreset,
 	readProject,
@@ -142,6 +143,7 @@ async function themeCommand({ alsoBrand }) {
 
 		if (typeof titleText === "string") {
 			const regions = title({
+				...brandStyle(preset),
 				text: titleText,
 				eyebrow: typeof eyebrow === "string" ? eyebrow : undefined,
 				startMs: 0,
@@ -157,7 +159,8 @@ async function themeCommand({ alsoBrand }) {
 					"rm-video: --watermark needs --duration-ms <total video length> to know when to end; skipping.",
 				);
 			} else {
-				list.push(...watermark({ endMs }));
+				// A brand made on the Brand page signs with its own name and colours.
+				list.push(...watermark({ ...brandStyle(preset), ...(preset.colors ? { text: preset.label } : {}), endMs }));
 				added.push(`watermark (0–${endMs}ms)`);
 			}
 		}

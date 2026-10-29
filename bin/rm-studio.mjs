@@ -71,7 +71,7 @@ import {
 	walk,
 	writeManifest,
 } from "../lib/library.mjs";
-import { ROOT as TOOLKIT, USER_PRESETS, addPreset, listPresetIds, loadPreset, stablePath } from "../lib/theme.mjs";
+import { PRESET_COLORS, PRESET_FIELDS, ROOT as TOOLKIT, USER_PRESETS, listPresetIds, loadPreset, savePreset, stablePath } from "../lib/theme.mjs";
 import { DIE_VERSION, SHEET_PAGES, cutSheetPages, cutSheetToCmykPdf, dieCutSinglesToCmykPdf, dieLine, fitStickerMm, printProblem, renderInk, withDieLines } from "../lib/print-sheet.mjs";
 import { PRODUCTS, RUNS, quoteRunsBoth, sheetSizes } from "../lib/vendors.mjs";
 import { listPrompts, removePrompt, savePrompt } from "../lib/prompts.mjs";
@@ -3584,6 +3584,10 @@ async function state() {
     scripts,
     transcripts,
     presets,
+    // What the Brand page's editor offers: every OpenScreen setting a brand can
+    // set, and the four colours the annotations read.
+    presetFields: PRESET_FIELDS,
+    presetColors: PRESET_COLORS,
     tokens,
     // Label and hint only. The direction sentences stay server-side: the panel's
     // job is to name a motion preset, /api/make's job is to turn it into prompt.
@@ -12318,7 +12322,7 @@ async function fetchVoiceList() {
     if (p === "/api/presets" && req.method === "POST") {
       const body = JSON.parse(await text(req));
       try {
-        const id = await addPreset({ label: body.label, extends: body.extends, wallpaperFile: body.wallpaperFile, description: body.description });
+        const id = await savePreset({ id: body.id || undefined, label: body.label, description: body.description, wallpaperFile: body.wallpaperFile, colors: body.colors, fonts: body.fonts, editor: body.editor });
         return json(res, 200, { ok: true, id, preset: await loadPreset(id) });
       } catch (error) {
         return json(res, 400, { error: error.message });
