@@ -12,9 +12,33 @@
         <select data-el="agent" class="form-control">
           <option value="claude">Claude Code</option>
           <option value="codex">Codex CLI</option>
+          <option value="pi">Pi</option>
         </select>
-        <small class="agents__hint">Claude Code remains the default. Codex runs in non-interactive mode and can use your Codex login or an API key.</small>
+        <small class="agents__hint">Claude Code remains the default. Codex runs in non-interactive mode and can use your Codex login or an API key. Pi can run on your local oMLX model or on Groq.</small>
       </label>
+
+      <div data-el="piFields" class="agents__pi-fields" hidden>
+        <label class="agents__field">
+          <span class="agents__label">Model provider</span>
+          <select data-el="piProvider" class="form-control">
+            <option value="default">Pi's own default</option>
+            <option value="omlx">oMLX local model server</option>
+            <option value="groq">Groq (fast, hosted)</option>
+          </select>
+          <small class="agents__hint">oMLX uses the server in <code>~/.pi/agent/models.json</code>. Groq is hosted and much faster, and bills your Groq account.</small>
+        </label>
+        <label class="agents__field">
+          <span class="agents__label">Model ID <span class="agents__optional">optional</span></span>
+          <input data-el="piModel" class="form-control" type="text" placeholder="Use Pi's default model" autocomplete="off" />
+          <small class="agents__hint">For Groq, an ID from console.groq.com/docs/models.</small>
+        </label>
+        <div data-el="groqField" class="agents__field">
+          <label class="agents__label" for="agents-groq-key">Groq API key</label>
+          <input data-el="groqKey" id="agents-groq-key" class="form-control" type="password" placeholder="Leave blank to keep the saved key" autocomplete="new-password" />
+          <small class="agents__hint">Create one at console.groq.com/keys. It is stored on this Mac and never shown again.</small>
+          <label class="agents__clear-key"><input data-el="clearGroqKey" type="checkbox" /> Remove the saved key</label>
+        </div>
+      </div>
 
       <div data-el="codexFields" class="agents__codex-fields" hidden>
         <label class="agents__field">

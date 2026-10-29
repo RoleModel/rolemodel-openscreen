@@ -95,6 +95,8 @@ import {
 	STATE_DIR,
 	agentChoice,
 	agentSettings,
+	piSettings,
+	GROQ_DEFAULT_MODEL,
 	currentProject,
 	reviewerName,
 	setReviewerName,
@@ -111,6 +113,7 @@ import {
 	lastView,
 	setAgentChoice,
 	setAgentSettings,
+	setPiSettings,
 	setCurrentProject,
 	setLastView,
 	setFalSettings,
@@ -1756,11 +1759,14 @@ async function globalSkillDirection() {
 const studioAgentStep = async ({ prompt, cwd, label }) => {
 	const selected = (await agentChoice()) ?? "claude";
 	const settings = await agentSettings();
+	const pi = await piSettings();
 	return agentStep(selected, {
 		prompt,
 		cwd,
 		label,
 		...settings,
+		piProvider: pi.provider,
+		piModel: pi.model || (pi.provider === "groq" ? GROQ_DEFAULT_MODEL : ""),
 		additionalDirectories: [GLOBAL_SKILL_DIR, SHARED_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
 	});
 };
@@ -9892,6 +9898,11 @@ async function fetchVoiceList() {
 			if ((await agentChoice()) !== "codex") return json(res, 409, { error: "The selected agent changed. Reopen the Agents settings and try again." });
 			env = config.apiKeyConfigured ? (config.provider === "omlx" ? { OMLX_API_KEY: config.apiKey } : { CODEX_API_KEY: config.apiKey }) : undefined;
 		}
+		if (b.managedAgent === true && b.agentId === "pi") {
+			const pi = await piSettings({ includeSecret: true });
+			if ((await agentChoice()) !== "pi") return json(res, 409, { error: "The selected agent changed. Reopen the Agents settings and try again." });
+			env = pi.provider === "groq" && pi.groqApiKey ? { GROQ_API_KEY: pi.groqApiKey } : undefined;
+		}
 
         /*
          * A Studio tab can survive a server update. Older tabs held an export
@@ -12282,14 +12293,22 @@ async function fetchVoiceList() {
         const body = JSON.parse(await text(req));
         const want = String(body.agent ?? "");
         if (!AGENTS[want]) return json(res, 400, { error: `no agent called "${want}"` });
-        const saved = body.settings ? await setAgentSettings(body.settings) : await agentSettings();
+        let saved;
+        let pi;
+        try {
+          saved = body.settings ? await setAgentSettings(body.settings) : await agentSettings();
+          pi = body.pi && want === "pi" ? await setPiSettings(body.pi) : await piSettings();
+        } catch (error) {
+          return json(res, 400, { error: error.message });
+        }
         await setAgentChoice(want);
-        return json(res, 200, { ok: true, agent: want, settings: saved });
+        return json(res, 200, { ok: true, agent: want, settings: saved, pi });
       }
       return json(res, 200, {
         chosen: (await agentChoice()) ?? "claude",
         agents: Object.values(AGENTS).map((a) => ({ id: a.id, label: a.label, billing: a.billing, ready: a.ready })),
         settings: await agentSettings(),
+        pi: { ...(await piSettings()), groqDefaultModel: GROQ_DEFAULT_MODEL },
       });
     }
 

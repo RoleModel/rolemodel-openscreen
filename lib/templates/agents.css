@@ -35,7 +35,8 @@
   gap: var(--op-space-medium);
 }
 
-.agents__codex-fields {
+.agents__codex-fields,
+.agents__pi-fields {
   display: grid;
   gap: var(--op-space-medium);
   padding: var(--op-space-medium);
