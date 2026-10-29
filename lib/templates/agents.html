@@ -1,0 +1,65 @@
+<!-- Agent configuration for Studio's script and scene generation steps. -->
+<template data-panel="agents">
+  <section class="agents__panel" data-region="main" aria-labelledby="agents-title">
+    <div class="agents__head">
+      <h2 id="agents-title" class="agents__title">Agents</h2>
+      <p class="agents__lede">Choose the coding agent Studio uses for script and scene work. Provider credentials are stored on this Mac and never shown again.</p>
+    </div>
+    <div data-el="status" class="agents__status" role="status" aria-live="polite"></div>
+    <form data-el="form" class="agents__form">
+      <label class="agents__field">
+        <span class="agents__label">Agent</span>
+        <select data-el="agent" class="form-control">
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex CLI</option>
+        </select>
+        <small class="agents__hint">Claude Code remains the default. Codex runs in non-interactive mode and can use your Codex login or an API key.</small>
+      </label>
+
+      <div data-el="codexFields" class="agents__codex-fields" hidden>
+        <label class="agents__field">
+          <span class="agents__label">Provider</span>
+          <select data-el="provider" class="form-control">
+            <option value="openai">OpenAI / Codex account</option>
+            <option value="omlx">oMLX local model server</option>
+          </select>
+          <small class="agents__hint">oMLX serves a local model; Codex remains the agent that edits the project.</small>
+        </label>
+        <label class="agents__field">
+          <span class="agents__label">Model ID <span class="agents__optional">optional</span></span>
+          <input data-el="model" class="form-control" type="text" placeholder="Use Codex default or enter a model ID" autocomplete="off" />
+          <small class="agents__hint">For oMLX, use the model ID shown in its dashboard.</small>
+        </label>
+        <label data-el="endpointField" class="agents__field">
+          <span class="agents__label">oMLX API URL</span>
+          <input data-el="baseUrl" class="form-control" type="url" placeholder="http://127.0.0.1:8000/v1" autocomplete="url" />
+          <small class="agents__hint">Use the server's OpenAI-compatible API base URL, usually ending in <code>/v1</code>.</small>
+        </label>
+        <div class="agents__field">
+          <label data-el="keyLabel" class="agents__label" for="agents-api-key">API key <span class="agents__optional">optional</span></label>
+          <input data-el="apiKey" id="agents-api-key" class="form-control" type="password" placeholder="Leave blank to keep the saved key" autocomplete="new-password" />
+          <small data-el="keyHint" class="agents__hint">Without a key, Codex uses its existing CLI login. A new key replaces the saved one.</small>
+          <label class="agents__clear-key"><input data-el="clearKey" type="checkbox" /> Remove the saved key</label>
+        </div>
+        <label class="agents__field">
+          <span class="agents__label">Context window <span class="agents__optional">optional</span></span>
+          <input data-el="contextWindow" class="form-control" type="number" min="1024" max="2000000" step="1024" placeholder="Use model default" />
+          <small class="agents__hint">Set this only if the model's advertised context window is incorrect.</small>
+        </label>
+        <label class="agents__field">
+          <span class="agents__label">File access</span>
+          <select data-el="sandbox" class="form-control">
+            <option value="workspace-write">Read and write in the project</option>
+            <option value="read-only">Read only</option>
+          </select>
+          <small class="agents__hint">Studio's generation steps need project write access to save scripts and scenes.</small>
+        </label>
+      </div>
+
+      <div class="agents__actions">
+        <button data-el="save" class="btn" type="submit">Save agent settings</button>
+        <span data-el="keyState" class="agents__key-state"></span>
+      </div>
+    </form>
+  </section>
+</template>

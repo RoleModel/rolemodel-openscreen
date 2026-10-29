@@ -94,6 +94,7 @@ import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
 	agentChoice,
+	agentSettings,
 	currentProject,
 	reviewerName,
 	setReviewerName,
@@ -109,6 +110,7 @@ import {
 	docsUrl,
 	lastView,
 	setAgentChoice,
+	setAgentSettings,
 	setCurrentProject,
 	setLastView,
 	setFalSettings,
@@ -1744,12 +1746,17 @@ async function globalSkillDirection() {
   ].join("\n");
 }
 
-const studioAgentStep = async ({ prompt, cwd, label }) => agentStep(await agentChoice(), {
-  prompt,
-  cwd,
-  label,
-  additionalDirectories: [GLOBAL_SKILL_DIR, SHARED_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
-});
+const studioAgentStep = async ({ prompt, cwd, label }) => {
+	const selected = (await agentChoice()) ?? "claude";
+	const settings = await agentSettings();
+	return agentStep(selected, {
+		prompt,
+		cwd,
+		label,
+		...settings,
+		additionalDirectories: [GLOBAL_SKILL_DIR, SHARED_SKILL_DIR, ...(standardAvailable() ? [STANDARD_ROOT] : [])],
+	});
+};
 
 /*
  * A paper edit belongs to one source recording.  The filename is derived from
@@ -9872,6 +9879,12 @@ async function fetchVoiceList() {
           label: b.label,
           cwd: b.cwd,
         };
+		let env;
+		if (b.managedAgent === true && b.agentId === "codex") {
+			const config = await agentSettings({ includeSecret: true });
+			if ((await agentChoice()) !== "codex") return json(res, 409, { error: "The selected agent changed. Reopen the Agents settings and try again." });
+			env = config.apiKeyConfigured ? (config.provider === "omlx" ? { OMLX_API_KEY: config.apiKey } : { CODEX_API_KEY: config.apiKey }) : undefined;
+		}
 
         /*
          * A Studio tab can survive a server update. Older tabs held an export
@@ -9892,6 +9905,7 @@ async function fetchVoiceList() {
           args: step.args,
           label: step.label,
           cwd: step.cwd,
+          env,
           project,
           onDone: project
             ? async () => {
@@ -12261,12 +12275,14 @@ async function fetchVoiceList() {
         const body = JSON.parse(await text(req));
         const want = String(body.agent ?? "");
         if (!AGENTS[want]) return json(res, 400, { error: `no agent called "${want}"` });
+        const saved = body.settings ? await setAgentSettings(body.settings) : await agentSettings();
         await setAgentChoice(want);
-        return json(res, 200, { ok: true, agent: want });
+        return json(res, 200, { ok: true, agent: want, settings: saved });
       }
       return json(res, 200, {
         chosen: (await agentChoice()) ?? "claude",
         agents: Object.values(AGENTS).map((a) => ({ id: a.id, label: a.label, billing: a.billing, ready: a.ready })),
+        settings: await agentSettings(),
       });
     }
 
