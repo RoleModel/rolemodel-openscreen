@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>RoleModel Studio</title>
+    <item>
+      <title>RoleModel Studio 0.1.240</title>
+      <pubDate>Fri, 30 Oct 2026 00:08:50 -0000</pubDate>
+      <sparkle:version>864</sparkle:version>
+      <sparkle:shortVersionString>0.1.240</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<h3>What's new</h3><ul><li>RoleModel Studio as a signed Mac app</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.240/RoleModelStudio-0.1.240.dmg" length="113940206" type="application/octet-stream" sparkle:edSignature="ZbNhVfvMzAIAdVHTj0UWuenB79pllQ0Ipp2N3+fKXa83hnJCL41ibbbLKa3JdeJ0poS8PtAA9Pan7KHnUcF0Bw=="/>
+    </item>
+  </channel>
+</rss>
