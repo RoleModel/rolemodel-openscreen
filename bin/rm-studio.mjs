@@ -237,6 +237,22 @@ const flag = (n, d) => {
 };
 
 const PORT = Number(flag("port", 4600));
+/*
+ * The Mac app runs this server as its child and stops it on quit. A crash or a
+ * force quit stops nothing, and the server would go on holding its port and the
+ * library with no window left to show it. So the app names itself, and the
+ * server leaves when it goes.
+ */
+const PARENT = Number(process.env.RM_STUDIO_PARENT_PID);
+if (PARENT) {
+	setInterval(() => {
+		try {
+			process.kill(PARENT, 0);
+		} catch {
+			process.exit(0);
+		}
+	}, 2000).unref();
+}
 // Free-text commands are opt-in. See lib/jobs.mjs.
 const SHELL = argv.includes("--shell");
 /*

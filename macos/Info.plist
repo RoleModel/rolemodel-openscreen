@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The keys Xcode cannot generate. Everything else in the app's Info.plist comes
+  from the INFOPLIST_KEY_ build settings.
+
+  Updates: Sparkle reads the feed on the public Pages site, which
+  macos/Scripts/release.sh writes on every published release. It installs only an
+  update signed with the private half of SUPublicEDKey, which lives in the
+  release Mac's keychain under the Sparkle account "rolemodel-studio".
+-->
+<plist version="1.0">
+<dict>
+	<key>SUFeedURL</key>
+	<string>https://rolemodel.github.io/rolemodel-openscreen/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>jfU6AYwMYv0Iigt4q7v2Is9V2MEN6jyuST8cVMu34oM=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+</dict>
+</plist>
