@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.243</title>
-      <pubDate>Fri, 30 Oct 2026 02:04:14 -0000</pubDate>
-      <sparkle:version>877</sparkle:version>
-      <sparkle:shortVersionString>0.1.243</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.244</title>
+      <pubDate>Fri, 30 Oct 2026 02:27:59 -0000</pubDate>
+      <sparkle:version>880</sparkle:version>
+      <sparkle:shortVersionString>0.1.244</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Remove background: a clip over BiRefNet&#x27;s 512 frames goes in parts</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.243/RoleModelStudio-0.1.243.dmg" length="114034672" type="application/octet-stream" sparkle:edSignature="O8x8ITHyasr0uWezX9U63C9odi+ArsYDVciYQSnfSZlqunjK1JdfSLxGmWKQ8vsjrKa2CKFX6Pd6+00BpoPNDQ=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Native panel: a slider drag sticks</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.244/RoleModelStudio-0.1.244.dmg" length="111524747" type="application/octet-stream" sparkle:edSignature="5VczN7s6/0lf7SqVeYj0UlqIA8Kq6vDOMM3T5GVy9XgCssP1C6ZvsqcJMPogeH9blokemTGpGqf5eguwRfuPCQ=="/>
     </item>
   </channel>
 </rss>
