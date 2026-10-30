@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.248</title>
-      <pubDate>Fri, 30 Oct 2026 18:10:47 -0000</pubDate>
-      <sparkle:version>894</sparkle:version>
-      <sparkle:shortVersionString>0.1.248</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.249</title>
+      <pubDate>Fri, 30 Oct 2026 21:41:20 -0000</pubDate>
+      <sparkle:version>897</sparkle:version>
+      <sparkle:shortVersionString>0.1.249</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>A finished task&#x27;s notice clears after 8 seconds</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.248/RoleModelStudio-0.1.248.dmg" length="115311806" type="application/octet-stream" sparkle:edSignature="9C0xyduDx9kB0igZKXGfy4Mh43BBfcmZY0TmtGnirulCdKTvYKEYggHrsltBtMjNMVotclqmHCCQyzDJBb8bAg=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: a look part picks from saved and built-in looks</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.249/RoleModelStudio-0.1.249.dmg" length="114941235" type="application/octet-stream" sparkle:edSignature="Hd6z7XwgkNtznraqWowcTZa0916XA5FBczsaGouhqx3+iYmBWiMiDYcqoClSIyVGolelMhCU8bJYBbHpqVXkBQ=="/>
     </item>
   </channel>
 </rss>
