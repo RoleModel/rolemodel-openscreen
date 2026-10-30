@@ -132,7 +132,7 @@ import { boardPage, boardsDir, emptyBoard, listBoards, readBoard as readMoodBoar
 import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
-import { cacheSource, peaksFor, proxyFor } from "../lib/edit-cache.mjs";
+import { alphaProxyFor, cacheSource, hasAlpha as videoHasAlpha, peaksFor, proxyFor } from "../lib/edit-cache.mjs";
 /* Containers WebKit will not play; it is served the H.264 proxy instead. See /media/. */
 const WEBKIT_UNPLAYABLE = new Set([".webm", ".mkv"]);
 import { slack } from "../lib/slack.mjs";
@@ -10137,7 +10137,9 @@ async function fetchVoiceList() {
       const ua = req.headers["user-agent"] ?? "";
       const webkitOnly = /AppleWebKit/.test(ua) && !/(?:Chrome|Chromium|Edg)\//.test(ua);
       if (webkitOnly && WEBKIT_UNPLAYABLE.has(extname(file).toLowerCase()) && !url.searchParams.has("download")) {
-        const proxy = await proxyFor(file, join(mediaDir(id), ".edit-cache")).catch(() => null);
+        // A cut-out keeps its transparency: HEVC with alpha, not the H.264 proxy, which has none.
+        const cache = join(mediaDir(id), ".edit-cache");
+        const proxy = await ((await videoHasAlpha(file).catch(() => false)) ? alphaProxyFor(file, cache) : proxyFor(file, cache)).catch(() => null);
         const ps = proxy ? await stat(proxy).catch(() => null) : null;
         if (ps) {
           file = proxy;
