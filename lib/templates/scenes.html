@@ -73,18 +73,30 @@
          </section>
       </div>
    </div>
-   <div data-region="footer">
+   <!--
+      Three groups in one row: the scene itself, a video of it, and the way into a
+      composition. Loose, these wrapped one control at a time into a tall stack in
+      the corner, and the composition menus each took a whole line with no label.
+   -->
+   <div data-region="footer" class="panel-actions__groups">
       <pre data-el="status" class="status" hidden></pre>
-      <button data-el="draft" class="btn">Draft it with Claude</button>
-      <button data-el="restore" class="btn ghost" type="button" hidden>Restore previous save</button>
-      <button data-el="save" class="btn ghost">Save scene</button>
+      <div class="panel-actions__group">
+         <button data-el="draft" class="btn">Draft it with Claude</button>
+         <button data-el="restore" class="btn ghost" type="button" hidden>Restore previous save</button>
+         <button data-el="save" class="btn ghost">Save scene</button>
+      </div>
       <!-- The scene as a file you can hand to somebody. -->
-      <select data-el="renderSize" class="form-control" aria-label="Video resolution">
-         <option value="1920x1080">1080p · high quality</option>
-         <option value="3840x2160">4K · high quality</option>
-      </select>
-      <button data-el="render" class="btn ghost" type="button"><rm-icon name="video-01"></rm-icon>Render video</button>
-      <a data-el="renderSave" class="btn" download hidden><rm-icon name="download-04"></rm-icon><span data-el="renderSaveText">Save it</span></a>
+      <div class="panel-actions__group">
+         <select data-el="renderSize" class="form-control panel-actions__field" aria-label="Video resolution">
+            <option value="1920x1080">1080p · high quality</option>
+            <option value="3840x2160">4K · high quality</option>
+         </select>
+         <button data-el="render" class="btn ghost" type="button"><rm-icon name="video-01"></rm-icon>Render video</button>
+         <a data-el="renderSave" class="btn" download hidden><rm-icon name="download-04"></rm-icon><span data-el="renderSaveText">Save it</span></a>
+      </div>
+      <div data-el="outlets" class="panel-actions__group">
+         <span class="panel-actions__label">Add to</span>
+      </div>
    </div>
 </template>
 

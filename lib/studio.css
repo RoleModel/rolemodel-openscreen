@@ -822,6 +822,53 @@ button.btn:disabled {
   border-block-start: var(--op-border-width) solid var(--line);
 }
 
+/*
+ * Actions in groups, for a footer with more than one kind of thing to do.
+ *
+ * The wrapper steps out of the layout so each group is a flex item of the row.
+ * A group never breaks inside itself: when the row is too narrow, a whole group
+ * moves to the next line, rather than one select at a time.
+ */
+.panel-actions__groups {
+  display: contents;
+}
+
+/* `flex: none` so a group is as wide as its controls and is never squeezed
+   under them. */
+.panel-actions__group {
+  display: flex;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+/* Space between groups, not a rule: a rule drew a stray line at the start of
+   the row whenever a group wrapped. The row is right-aligned, so the margin of
+   a group that starts a line is never seen. */
+.panel-actions__group + .panel-actions__group {
+  margin-inline-start: var(--op-space-medium);
+}
+
+/* A form-control is a whole line wide by default; in the row it gets a fixed
+   width instead. Not `auto`: a select's intrinsic width leaves out the room for
+   its chevron, so its group was measured ~20px narrow per select and the last
+   button hung over the edge. 18rem holds "No compositions yet".
+
+   Written as select…:not([multiple]) to reach (0,2,1): Optics sets the width
+   from `.form-control:not([type="radio"], [type="checkbox"])` at (0,2,0), and a
+   bare `.panel-actions__field` at (0,1,0) lost to it. */
+select.panel-actions__field:not([multiple]) {
+  flex: none;
+  inline-size: 18rem;
+}
+
+.panel-actions__label {
+  color: var(--muted);
+  font-size: var(--op-font-small);
+  white-space: nowrap;
+}
+
 .ctl .hint {
   grid-row: 2;
   grid-column: 1 / -1;
