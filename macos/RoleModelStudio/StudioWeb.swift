@@ -118,6 +118,28 @@ final class StudioWeb: NSObject, ObservableObject {
         webView.evaluateJavaScript("window.__studioInspector?.set(\(Self.jsString(id)), \(Self.jsString(value)), \(commit))")
     }
 
+    /// While a native slider is dragged, the page's readings wait: applied
+    /// mid-drag they redraw the row under the pointer. The last one lands on release.
+    private var editingID: String?
+    private var heldReading: [InspectorItem]?
+
+    func inspectorBeginEditing(_ id: String) {
+        editingID = id
+    }
+
+    func inspectorEndEditing() {
+        editingID = nil
+        if let held = heldReading {
+            heldReading = nil
+            if held != inspector { inspector = held }
+        }
+    }
+
+    /// A value to the page without touching the native copy — the dragging slider holds its own.
+    func inspectorSend(_ id: String, value: String) {
+        webView.evaluateJavaScript("window.__studioInspector?.set(\(Self.jsString(id)), \(Self.jsString(value)), false)")
+    }
+
     func inspectorPress(_ id: String) {
         webView.evaluateJavaScript("window.__studioInspector?.press(\(Self.jsString(id)))")
     }
@@ -157,9 +179,12 @@ extension StudioWeb: WKScriptMessageHandler {
         let decoder = JSONDecoder()
         if let items = body["items"],
            let data = try? JSONSerialization.data(withJSONObject: items),
-           let decoded = try? decoder.decode([InspectorItem].self, from: data),
-           decoded != inspector {
-            inspector = decoded
+           let decoded = try? decoder.decode([InspectorItem].self, from: data) {
+            if editingID != nil {
+                heldReading = decoded
+            } else if decoded != inspector {
+                inspector = decoded
+            }
         }
         if palette.isEmpty, let families = body["palette"], !(families is NSNull),
            let data = try? JSONSerialization.data(withJSONObject: families),

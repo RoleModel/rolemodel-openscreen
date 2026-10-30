@@ -86,13 +86,7 @@ private struct InspectorRow: View, Equatable {
             EmptyView()
         case .range:
             LabeledContent(item.label) {
-                HStack {
-                    slider
-                    Text(item.display)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 36, alignment: .trailing)
-                }
+                slider
             }
             .disabled(item.disabled)
         case .number:
@@ -150,25 +144,8 @@ private struct InspectorRow: View, Equatable {
     }
 
     /// A step of "any" is a continuous slider; a stepped one snaps like the page's.
-    @ViewBuilder
     private var slider: some View {
-        let range = item.min...max(item.max, item.min + 1)
-        let finished: (Bool) -> Void = { editing in
-            if !editing { web.inspectorSet(item.id, value: item.value, commit: true) }
-        }
-        // Snapped in the binding, not by Slider(step:), which draws a tick for
-        // every step: a 0–1920 slider would be a solid bar of them.
-        Slider(value: number, in: range, onEditingChanged: finished)
-    }
-
-    private var number: Binding<Double> {
-        Binding(
-            get: { Double(item.value) ?? item.min },
-            set: { raw in
-                let snapped = item.step > 0 ? item.min + ((raw - item.min) / item.step).rounded() * item.step : raw
-                web.inspectorSet(item.id, value: Self.format(snapped, step: item.step), commit: false)
-            }
-        )
+        InspectorSlider(web: web, item: item)
     }
 
     private func text(commitOnChange: Bool) -> Binding<String> {
@@ -179,11 +156,62 @@ private struct InspectorRow: View, Equatable {
     }
 
     /// The page's own precision: a step of 0.05 sends "0.35", not "0.35000000000000003".
-    private static func format(_ value: Double, step: Double) -> String {
+    fileprivate static func format(_ value: Double, step: Double) -> String {
         if step == 0 { return String(format: "%.3f", value) }
         guard step < 1 else { return String(Int(value.rounded())) }
         let places = max(0, Int((-log10(step)).rounded(.up)))
         return String(format: "%.\(places)f", value)
+    }
+}
+
+/*
+ * A slider that owns its value while it is being dragged.
+ *
+ * It used to read and write the shared reading of the page, which broke a drag
+ * two ways: the release committed the value the slider had when the drag began
+ * (the callback held the row as it was then), so every drag snapped back; and the
+ * page's own reports during the drag redrew the row under the pointer. Now the
+ * drag keeps a draft, sends each value straight to the page, holds the page's
+ * reports until it ends, and commits the value it ended on.
+ */
+private struct InspectorSlider: View {
+    let web: StudioWeb
+    let item: InspectorItem
+    @State private var draft: Double?
+
+    var body: some View {
+        HStack {
+            // Snapped in the binding, not by Slider(step:), which draws a tick for
+            // every step: a 0–1920 slider would be a solid bar of them.
+            Slider(value: value, in: item.min...max(item.max, item.min + 1)) { editing in
+                if editing {
+                    web.inspectorBeginEditing(item.id)
+                } else {
+                    if let draft { web.inspectorSet(item.id, value: text(for: draft), commit: true) }
+                    draft = nil
+                    web.inspectorEndEditing()
+                }
+            }
+            Text(draft.map { text(for: $0) } ?? item.display)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 36, alignment: .trailing)
+        }
+    }
+
+    private var value: Binding<Double> {
+        Binding(
+            get: { draft ?? Double(item.value) ?? item.min },
+            set: { raw in
+                let snapped = item.step > 0 ? item.min + ((raw - item.min) / item.step).rounded() * item.step : raw
+                draft = snapped
+                web.inspectorSend(item.id, value: text(for: snapped))
+            }
+        )
+    }
+
+    private func text(for value: Double) -> String {
+        InspectorRow.format(value, step: item.step)
     }
 }
 
