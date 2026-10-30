@@ -132,7 +132,9 @@ import { boardPage, boardsDir, emptyBoard, listBoards, readBoard as readMoodBoar
 import { dataApiFor, listShares, publishShare, removeShare, shareComments } from "../lib/share.mjs";
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
-import { cacheSource, peaksFor } from "../lib/edit-cache.mjs";
+import { cacheSource, peaksFor, proxyFor } from "../lib/edit-cache.mjs";
+/* Containers WebKit will not play; it is served the H.264 proxy instead. See /media/. */
+const WEBKIT_UNPLAYABLE = new Set([".webm", ".mkv"]);
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -10118,11 +10120,29 @@ async function fetchVoiceList() {
 
     if (p.startsWith("/media/")) {
       const [, , id, ...rest] = p.split("/");
-      const file = join(mediaDir(id), rest.join("/"));
-      const s = await stat(file).catch(() => null);
+      let file = join(mediaDir(id), rest.join("/"));
+      let s = await stat(file).catch(() => null);
       if (!s) {
         res.writeHead(404);
         return res.end();
+      }
+      /*
+       * WebM, to Safari's engine, is the H.264 proxy instead.
+       *
+       * The Mac app is a WebKit view, and WebKit will not play the VP9/Opus WebM
+       * a screen recording arrives as: every player showed a black box with no
+       * controls while Chrome played the same URL. The proxy is the timeline's
+       * own cached copy. A download is still the original, byte for byte.
+       */
+      const ua = req.headers["user-agent"] ?? "";
+      const webkitOnly = /AppleWebKit/.test(ua) && !/(?:Chrome|Chromium|Edg)\//.test(ua);
+      if (webkitOnly && WEBKIT_UNPLAYABLE.has(extname(file).toLowerCase()) && !url.searchParams.has("download")) {
+        const proxy = await proxyFor(file, join(mediaDir(id), ".edit-cache")).catch(() => null);
+        const ps = proxy ? await stat(proxy).catch(() => null) : null;
+        if (ps) {
+          file = proxy;
+          s = ps;
+        }
       }
       const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
       // Range support, or <video> seeking is broken.
