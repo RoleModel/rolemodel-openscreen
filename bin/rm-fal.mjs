@@ -113,6 +113,60 @@ const deliver = async (url, out) => {
 	console.log(`  wrote ${out}`);
 };
 
+/* Results made in parts, joined in order into the one file `out` names. Stream
+   copied, so VP9's alpha survives the join untouched. */
+const deliverJoined = async (files, out) => {
+	const target = resolve(mediaDir, out);
+	if (!target.startsWith(`${mediaDir}/`)) die("that output path is outside this project");
+	await mkdir(dirname(target), { recursive: true });
+	console.log(`  joining ${files.length} parts…`);
+	const list = join(dirname(files[0]), "parts.txt");
+	await writeFile(list, files.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join("\n"));
+	const joined = await capture("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy", target]);
+	if (!joined.ok) die("ffmpeg could not join the parts");
+	console.log("");
+	console.log(`  wrote ${out}`);
+};
+
+/* How many frames, and how fast: counted, not read off the header, which an
+   export can leave empty or wrong. */
+const framesOf = async (path) => {
+	const probe = await capture("ffprobe", [
+		"-v", "error", "-select_streams", "v:0", "-count_packets",
+		"-show_entries", "stream=nb_read_packets,r_frame_rate", "-of", "json", path,
+	]);
+	const stream = JSON.parse(probe.out || "{}").streams?.[0] ?? {};
+	const [num, den] = String(stream.r_frame_rate ?? "0/1").split("/").map(Number);
+	return { frames: Number(stream.nb_read_packets) || 0, fps: den ? num / den : 0 };
+};
+
+/* The clip as it is, or cut into equal parts each under `maxFrames`. */
+const partsFor = async (path, maxFrames) => {
+	if (!maxFrames) return [path];
+	const { frames, fps } = await framesOf(path);
+	if (!frames || !fps) die("could not count the frames in that clip");
+	if (frames <= maxFrames) return [path];
+	// A few frames of headroom: a re-encoded cut can land a frame either side.
+	const count = Math.ceil(frames / (maxFrames - 4));
+	const each = frames / count / fps;
+	const dir = await mkdtemp(join(tmpdir(), "rm-fal-split-"));
+	const parts = [];
+	for (let i = 0; i < count; i++) {
+		const part = join(dir, `part-${i}.mp4`);
+		const cut = await capture("ffmpeg", [
+			"-y", "-ss", (i * each).toFixed(3), "-i", path, "-t", each.toFixed(3),
+			"-map", "0:v:0", "-map", "0:a:0?",
+			"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+			"-c:a", "aac", "-movflags", "+faststart", part,
+		]);
+		if (!cut.ok) die(`ffmpeg could not cut part ${i + 1}`);
+		const got = await framesOf(part);
+		if (got.frames > maxFrames) die(`part ${i + 1} came out at ${got.frames} frames, over the model's ${maxFrames}`);
+		parts.push(part);
+	}
+	return parts;
+};
+
 const client = await fal({ key }).catch((error) => die(error.message));
 const send = async (path) => client.upload(path, await readFile(path)).catch((error) => die(error.message));
 
@@ -280,20 +334,51 @@ if (trimming || converting) {
 	if (cutProblem) die(cutProblem);
 }
 
-console.log("  uploading the clip…");
-const videoUrl = await send(sending);
-
 const imageUrls = [];
 for (const image of all("image")) imageUrls.push(await send(inProject(image, "a reference image")));
 
-console.log("  editing — this takes a few minutes…");
-const { url } = await client
-	.edit(
-		{ model, videoUrl, prompt, keepAudio: !args.includes("--no-audio"), imageUrls, resolution: flag("resolution") ?? undefined },
-		{ onLog: (line) => console.log(`  ${line}`) },
-	)
-	.catch((error) => die(error.message));
-
 const stem = basename(file, extname(file));
 /* A model that says what it makes names the file after it: a cutout is a .webm. */
-await deliver(url, flag("output") ?? join("Footage", `${stem}-${spec.output?.suffix ?? "restyled"}${spec.output?.ext ?? ".mp4"}`));
+const out = flag("output") ?? join("Footage", `${stem}-${spec.output?.suffix ?? "restyled"}${spec.output?.ext ?? ".mp4"}`);
+const editOne = async (videoUrl) => {
+	const { url } = await client
+		.edit(
+			{ model, videoUrl, prompt, keepAudio: !args.includes("--no-audio"), imageUrls, resolution: flag("resolution") ?? undefined },
+			{ onLog: (line) => console.log(`  ${line}`) },
+		)
+		.catch((error) => die(error.message));
+	return url;
+};
+
+/*
+ * A model with a frame ceiling gets a long clip in parts.
+ *
+ * BiRefNet's video matte takes 512 frames a job — 21 seconds at 24fps — and a
+ * talking head is twice that, so fal turned the whole clip away. The clip is cut
+ * into equal parts under the ceiling, each part is matted on its own, and the
+ * results are joined back into one file. The cuts are re-encoded, not copied, so
+ * each part starts on its own first frame and none runs over by a keyframe.
+ */
+const parts = await partsFor(sending, spec.limits.maxFrames);
+if (parts.length === 1) {
+	console.log("  uploading the clip…");
+	const videoUrl = await send(sending);
+	console.log("  editing — this takes a few minutes…");
+	await deliver(await editOne(videoUrl), out);
+} else {
+	console.log(`  ${spec.label} takes at most ${spec.limits.maxFrames} frames, so it goes in ${parts.length} parts`);
+	const work = await mkdtemp(join(tmpdir(), "rm-fal-parts-"));
+	const done = [];
+	for (const [i, part] of parts.entries()) {
+		console.log(`  part ${i + 1} of ${parts.length}: uploading…`);
+		const videoUrl = await send(part);
+		console.log(`  part ${i + 1} of ${parts.length}: editing…`);
+		const url = await editOne(videoUrl);
+		const response = await fetch(url);
+		if (!response.ok) die(`could not download part ${i + 1} (${response.status})`);
+		const local = join(work, `out-${i}${spec.output?.ext ?? ".mp4"}`);
+		await writeFile(local, Buffer.from(await response.arrayBuffer()));
+		done.push(local);
+	}
+	await deliverJoined(done, out);
+}
