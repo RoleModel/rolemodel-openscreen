@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.247</title>
-      <pubDate>Fri, 30 Oct 2026 13:53:54 -0000</pubDate>
-      <sparkle:version>891</sparkle:version>
-      <sparkle:shortVersionString>0.1.247</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.248</title>
+      <pubDate>Fri, 30 Oct 2026 18:10:47 -0000</pubDate>
+      <sparkle:version>894</sparkle:version>
+      <sparkle:shortVersionString>0.1.248</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>VEED cut-outs land: read a result&#x27;s video whether fal sends one file or a list</li><li>WebM plays in the Mac app: a playable copy at its own .mov address</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.247/RoleModelStudio-0.1.247.dmg" length="114294219" type="application/octet-stream" sparkle:edSignature="f9v7Tng+qC/gE6BFOFTk0DYAbY/zrKAMeSb2Agp0EthJpGWPcsr7fQ7YhO6/mh0ReSFMem6j7dtfOJoYgE2LBw=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>A finished task&#x27;s notice clears after 8 seconds</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.248/RoleModelStudio-0.1.248.dmg" length="115311806" type="application/octet-stream" sparkle:edSignature="9C0xyduDx9kB0igZKXGfy4Mh43BBfcmZY0TmtGnirulCdKTvYKEYggHrsltBtMjNMVotclqmHCCQyzDJBb8bAg=="/>
     </item>
   </channel>
 </rss>
