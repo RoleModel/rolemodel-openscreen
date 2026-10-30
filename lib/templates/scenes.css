@@ -11,12 +11,14 @@
   gap: var(--op-space-small);
 }
 
-/* As large as the window allows without scrolling: the stage is what you are
+/* As large as the window allows with the timeline still in view: the stage is what you are
    designing, so it is never pushed below the fold. 1rem is 10px here. */
 .scene-frame {
-  inline-size: min(100%, calc((100vh - 26rem) * 16 / 9));
+  position: relative;
+  inline-size: min(100%, calc((100vh - 44rem) * 16 / 9));
   margin-inline: auto;
   aspect-ratio: 16 / 9;
+  overflow: hidden;
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-large);
   background: var(--bg);
@@ -192,4 +194,117 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--op-space-2x-small) var(--op-space-x-small);
   padding-block-end: var(--op-space-small);
+}
+
+/* The iframe fills the 16:9 box; the box, not the iframe, holds the shape. */
+.scene-frame__view {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+}
+
+/*
+ * The clock: play, scrub, then a lane per part. `--at` is the playhead as a
+ * share of the scene, set by seek(), so one line runs down every lane.
+ */
+.scene-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--op-space-x-small);
+}
+
+.scene-timeline__transport {
+  display: flex;
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.scene-timeline__scrub {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.scene-timeline__tracks {
+  --at: 0%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.scene-timeline__row {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--op-space-x-small);
+}
+
+.scene-timeline__name {
+  overflow: hidden;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-small);
+  cursor: pointer;
+}
+
+.scene-timeline__name--on {
+  color: var(--fg);
+  background: var(--op-color-neutral-plus-six);
+}
+
+.scene-timeline__lane {
+  position: relative;
+  block-size: 2.4rem;
+  background: var(--op-color-neutral-plus-seven);
+  border-radius: var(--op-radius-small);
+}
+
+.scene-timeline__lane::after {
+  position: absolute;
+  inset-block: -0.2rem;
+  inset-inline-start: var(--at);
+  inline-size: 0.2rem;
+  content: '';
+  background: var(--op-color-primary-base);
+  pointer-events: none;
+}
+
+.scene-timeline__bar {
+  position: absolute;
+  inset-block: 0.3rem;
+  min-inline-size: 0.8rem;
+  overflow: hidden;
+  padding-inline: 0.6rem;
+  font-size: var(--op-font-2x-small);
+  line-height: 1.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  background: var(--op-color-neutral-plus-four);
+  border-radius: var(--op-radius-small);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scene-timeline__bar--on {
+  background: var(--op-color-primary-minus-two);
+  outline: 0.1rem solid var(--op-color-primary-base);
+}
+
+/* The right edge stretches the part; the rest of the bar moves it. */
+.scene-timeline__edge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: 0.8rem;
+  cursor: ew-resize;
 }

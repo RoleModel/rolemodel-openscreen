@@ -523,6 +523,110 @@ class RMTitle extends RMElement {
 }
 define('rm-title', RMTitle)
 
+/*
+ * Declared before rm-text, the first part that reads them, not beside
+ * rm-showcase where they were.
+ * define() upgrades the tags already on the page at once, so an <rm-text>
+ * written into a scene rendered while these consts were still in their dead
+ * zone, threw, and drew nothing: the text part was in the markup and not on
+ * the stage.
+ */
+/*
+ * Keyframes. A layer may carry `keys`: moments in its own time, each with the
+ * values the card has at that moment, and how it eases to the next. Between
+ * two keys the browser interpolates — the keys become one @keyframes rule on
+ * the layer's clock, so the frame at 2400ms is the same frame every time, in
+ * the Studio and in a render. Without keys the dials are the values, as before.
+ *
+ * Wire form, on the tag: frames apart by `;`, pairs by space —
+ *   keys="t=0 x=0 s=1 e=out; t=2 x=20 s=1.2"
+ * t is seconds from the layer's start; e is the ease out of that key.
+ */
+const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
+/* A line of type has no depth, zoom or focus to key: it is placed, leaned and faded. */
+const TEXT_KEY_PROPS = ['x', 'y', 'tx', 'ty', 'tz', 'op']
+const KEY_EASES = {
+  linear: 'linear',
+  ease: 'ease',
+  in: 'cubic-bezier(0.42, 0, 1, 1)',
+  out: 'cubic-bezier(0, 0, 0.58, 1)',
+  'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)',
+  snap: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  hold: 'steps(1, end)',
+}
+const KEY_UNIT = { x: '%', y: '%', z: 'cqw', zoom: '', tx: 'deg', ty: 'deg', tz: 'deg', op: '', blur: 'cqw' }
+const KEY_VAR = { x: '--k-x', y: '--k-y', z: '--k-z', zoom: '--k-s', tx: '--k-rx', ty: '--k-ry', tz: '--k-rz', op: '--k-o', blur: '--k-b' }
+const keyValue = (k, v) => (k === 'op' ? String(v / 100) : `${v}${KEY_UNIT[k]}`)
+
+function parseKeys(text) {
+  if (!text) return []
+  const keys = []
+  for (const part of String(text).split(';')) {
+    const k = { t: 0, ease: 'out' }
+    let any = false
+    for (const pair of part.trim().split(/\s+/)) {
+      const [name, raw] = pair.split('=')
+      if (raw === undefined) continue
+      if (name === 't') k.t = Math.max(0, Number(raw) || 0)
+      else if (name === 'e') k.ease = raw in KEY_EASES ? raw : 'out'
+      else if (KEY_PROPS.includes(name) && Number.isFinite(Number(raw))) k[name] = Number(raw)
+      else continue
+      any = true
+    }
+    if (any) keys.push(k)
+  }
+  return keys.sort((a, b) => a.t - b.t)
+}
+function encodeKeys(keys) {
+  return (keys ?? [])
+    .map((k) => [`t=${+k.t.toFixed(3)}`, ...KEY_PROPS.filter((p) => k[p] !== undefined).map((p) => `${p}=${+Number(k[p]).toFixed(3)}`), `e=${k.ease ?? 'out'}`].join(' '))
+    .join('; ')
+}
+
+/* One cubic bezier, solved for y at x — the browser's curve, in JS, so the
+   Studio can show the value under the playhead between two keys. */
+function bezierAt(spec, x) {
+  if (spec === 'linear') return x
+  if (spec.startsWith('steps')) return x >= 1 ? 1 : 0
+  const m = spec === 'ease' ? [0.25, 0.1, 0.25, 1] : spec.slice(spec.indexOf('(') + 1).match(/[-\d.]+/g).map(Number)
+  const [p1x, p1y, p2x, p2y] = m
+  const bx = (t) => 3 * (1 - t) * (1 - t) * t * p1x + 3 * (1 - t) * t * t * p2x + t * t * t
+  const by = (t) => 3 * (1 - t) * (1 - t) * t * p1y + 3 * (1 - t) * t * t * p2y + t * t * t
+  let lo = 0
+  let hi = 1
+  let t = x
+  for (let i = 0; i < 24; i++) {
+    const v = bx(t)
+    if (Math.abs(v - x) < 1e-4) break
+    if (v < x) lo = t
+    else hi = t
+    t = (lo + hi) / 2
+  }
+  return by(t)
+}
+/* The values a layer has at `t` seconds into its window, from its keys and its dials. */
+function keysAt(keys, t, base) {
+  const out = {}
+  for (const p of KEY_PROPS) {
+    const have = keys.filter((k) => k[p] !== undefined)
+    if (!have.length) {
+      out[p] = base[p]
+      continue
+    }
+    if (t <= have[0].t) out[p] = have[0][p]
+    else if (t >= have.at(-1).t) out[p] = have.at(-1)[p]
+    else {
+      const i = have.findIndex((k) => k.t > t)
+      const a = have[i - 1]
+      const b = have[i]
+      const f = bezierAt(KEY_EASES[a.ease] ?? KEY_EASES.out, (t - a.t) / (b.t - a.t))
+      out[p] = a[p] + (b[p] - a[p]) * f
+    }
+  }
+  return out
+}
+
 /* -- rm-text ------------------------------------------------------------- */
 
 /**
@@ -3089,101 +3193,6 @@ const SHOWCASE_GROUPS = [
 ]
 const showcaseDefaults = () => Object.fromEntries(SHOWCASE_SCHEMA.map((f) => [f.key, f.def]))
 
-/*
- * Keyframes. A layer may carry `keys`: moments in its own time, each with the
- * values the card has at that moment, and how it eases to the next. Between
- * two keys the browser interpolates — the keys become one @keyframes rule on
- * the layer's clock, so the frame at 2400ms is the same frame every time, in
- * the Studio and in a render. Without keys the dials are the values, as before.
- *
- * Wire form, on the tag: frames apart by `;`, pairs by space —
- *   keys="t=0 x=0 s=1 e=out; t=2 x=20 s=1.2"
- * t is seconds from the layer's start; e is the ease out of that key.
- */
-const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
-/* A line of type has no depth, zoom or focus to key: it is placed, leaned and faded. */
-const TEXT_KEY_PROPS = ['x', 'y', 'tx', 'ty', 'tz', 'op']
-const KEY_EASES = {
-  linear: 'linear',
-  ease: 'ease',
-  in: 'cubic-bezier(0.42, 0, 1, 1)',
-  out: 'cubic-bezier(0, 0, 0.58, 1)',
-  'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)',
-  snap: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-  hold: 'steps(1, end)',
-}
-const KEY_UNIT = { x: '%', y: '%', z: 'cqw', zoom: '', tx: 'deg', ty: 'deg', tz: 'deg', op: '', blur: 'cqw' }
-const KEY_VAR = { x: '--k-x', y: '--k-y', z: '--k-z', zoom: '--k-s', tx: '--k-rx', ty: '--k-ry', tz: '--k-rz', op: '--k-o', blur: '--k-b' }
-const keyValue = (k, v) => (k === 'op' ? String(v / 100) : `${v}${KEY_UNIT[k]}`)
-
-function parseKeys(text) {
-  if (!text) return []
-  const keys = []
-  for (const part of String(text).split(';')) {
-    const k = { t: 0, ease: 'out' }
-    let any = false
-    for (const pair of part.trim().split(/\s+/)) {
-      const [name, raw] = pair.split('=')
-      if (raw === undefined) continue
-      if (name === 't') k.t = Math.max(0, Number(raw) || 0)
-      else if (name === 'e') k.ease = raw in KEY_EASES ? raw : 'out'
-      else if (KEY_PROPS.includes(name) && Number.isFinite(Number(raw))) k[name] = Number(raw)
-      else continue
-      any = true
-    }
-    if (any) keys.push(k)
-  }
-  return keys.sort((a, b) => a.t - b.t)
-}
-function encodeKeys(keys) {
-  return (keys ?? [])
-    .map((k) => [`t=${+k.t.toFixed(3)}`, ...KEY_PROPS.filter((p) => k[p] !== undefined).map((p) => `${p}=${+Number(k[p]).toFixed(3)}`), `e=${k.ease ?? 'out'}`].join(' '))
-    .join('; ')
-}
-
-/* One cubic bezier, solved for y at x — the browser's curve, in JS, so the
-   Studio can show the value under the playhead between two keys. */
-function bezierAt(spec, x) {
-  if (spec === 'linear') return x
-  if (spec.startsWith('steps')) return x >= 1 ? 1 : 0
-  const m = spec === 'ease' ? [0.25, 0.1, 0.25, 1] : spec.slice(spec.indexOf('(') + 1).match(/[-\d.]+/g).map(Number)
-  const [p1x, p1y, p2x, p2y] = m
-  const bx = (t) => 3 * (1 - t) * (1 - t) * t * p1x + 3 * (1 - t) * t * t * p2x + t * t * t
-  const by = (t) => 3 * (1 - t) * (1 - t) * t * p1y + 3 * (1 - t) * t * t * p2y + t * t * t
-  let lo = 0
-  let hi = 1
-  let t = x
-  for (let i = 0; i < 24; i++) {
-    const v = bx(t)
-    if (Math.abs(v - x) < 1e-4) break
-    if (v < x) lo = t
-    else hi = t
-    t = (lo + hi) / 2
-  }
-  return by(t)
-}
-/* The values a layer has at `t` seconds into its window, from its keys and its dials. */
-function keysAt(keys, t, base) {
-  const out = {}
-  for (const p of KEY_PROPS) {
-    const have = keys.filter((k) => k[p] !== undefined)
-    if (!have.length) {
-      out[p] = base[p]
-      continue
-    }
-    if (t <= have[0].t) out[p] = have[0][p]
-    else if (t >= have.at(-1).t) out[p] = have.at(-1)[p]
-    else {
-      const i = have.findIndex((k) => k.t > t)
-      const a = have[i - 1]
-      const b = have[i]
-      const f = bezierAt(KEY_EASES[a.ease] ?? KEY_EASES.out, (t - a.t) / (b.t - a.t))
-      out[p] = a[p] + (b[p] - a[p]) * f
-    }
-  }
-  return out
-}
 
 const SHOWCASE_VIDEO = /\.(mp4|mov|webm|m4v)(\?|#|$)/i
 

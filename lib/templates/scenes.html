@@ -11,11 +11,22 @@
       float over it in the Parts bar below, the way Figma's panels do.
    -->
    <div data-region="main" class="panel-card panel-stage">
-      <iframe data-el="frame" class="scene-frame" title="Scene preview"></iframe>
-      <div class="row">
-         <input data-el="scrub" class="form-control" type="range" min="0" max="8000" step="16" value="0"
-            aria-label="Scrub the scene" />
-         <span data-el="time" class="path">0 ms</span>
+      <!-- A box that keeps 16:9, with the iframe filling it. The Mac app's WebKit
+           ignored aspect-ratio on the iframe itself and drew it at the default
+           150px, a strip with the parts cut off below it. -->
+      <div class="scene-frame">
+         <iframe data-el="frame" class="scene-frame__view" title="Scene preview"></iframe>
+      </div>
+      <!-- The clock and every part on it: play, scrub, and one bar per part
+           that moves and stretches with the pointer. -->
+      <div class="scene-timeline">
+         <div class="scene-timeline__transport">
+            <button data-el="play" class="btn btn--icon ghost scene-timeline__play" type="button" aria-label="Play" title="Play"></button>
+            <input data-el="scrub" class="form-control scene-timeline__scrub" type="range" min="0" max="8000" step="16" value="0"
+               aria-label="Scrub the scene" />
+            <span data-el="time" class="path">0 ms</span>
+         </div>
+         <div data-el="timeline" class="scene-timeline__tracks"></div>
       </div>
       <!-- On the canvas, not in the rail: a video and a transcript of clickable
            words are content to read, and the Mac app's native rail turned every
