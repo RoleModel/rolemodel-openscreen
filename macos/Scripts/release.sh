@@ -188,10 +188,28 @@ open(path, "w").write(f'''<?xml version="1.0" encoding="utf-8"?>
 </rss>
 ''')
 PY
+  # The download page's button, version and size, so it always offers this DMG.
+  # A "latest release" link would break: most releases are cut by a push and
+  # carry no DMG.
+  python3 - "$REPO/site/index.html" "$URL" "$VERSION" "$(stat -f %z "$DMG")" <<'PY'
+import re, sys
+path, url, version, size = sys.argv[1:]
+page = open(path).read()
+replacements = [
+    (r'(<a [^>]*id="dmg" href=")[^"]*(")', rf'\g<1>{url}\g<2>'),
+    (r'(<span id="dmg-version">)[^<]*(</span>)', rf'\g<1>{version}\g<2>'),
+    (r'(<span id="dmg-size">)[^<]*(</span>)', rf'\g<1>{round(int(size) / 1e6)} MB\g<2>'),
+]
+for pattern, replacement in replacements:
+    page, count = re.subn(pattern, replacement, page)
+    if count != 1:
+        sys.exit(f"site/index.html: expected one match for {pattern}, found {count}")
+open(path, "w").write(page)
+PY
   # Pages publishes site/ on a push to main. [skip release] keeps push.yml from
   # cutting a version for a feed.
-  git -C "$REPO" add site/appcast.xml
-  git -C "$REPO" commit -q -m "Point the Mac app's update feed at v$VERSION [skip release]"
+  git -C "$REPO" add site/appcast.xml site/index.html
+  git -C "$REPO" commit -q -m "Point the Mac app's update feed and download at v$VERSION [skip release]"
   git -C "$REPO" push -q origin HEAD:main
   echo "    site/appcast.xml → https://rolemodel.github.io/rolemodel-openscreen/appcast.xml"
 fi

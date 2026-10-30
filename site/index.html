@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Install RoleModel Studio — One command, free for macOS</title>
-<meta name="description" content="Run one command in your terminal. You'll be making videos in a couple of minutes." />
+<title>Install RoleModel Studio — Free for macOS</title>
+<meta name="description" content="Download the Mac app, or run one command in your terminal. You'll be making videos in a couple of minutes." />
 <link rel="icon" href="mark.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,10 +29,6 @@
   .lede { max-width: 400px; margin: 24px auto 0; font-size: 18px; line-height: 28px; color: var(--muted); }
   .wrap { width: min(672px, 100% - 48px); margin: 0 auto; }
   .wide { width: min(920px, 100% - 48px); margin: 0 auto; }
-  .chips { display: flex; justify-content: center; gap: 8px; margin: 56px 0 16px; }
-  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 500 13px/16px var(--sans); box-shadow: rgba(0, 0, 0, 0.75) 0 1px 2px, inset rgba(255, 255, 255, 0.15) 0 1px 0; }
-  .chip[aria-pressed="true"] { border-color: var(--green); background: var(--green-10); }
-  .chip svg { width: 13px; height: 13px; }
   .cmd { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 8px; border: 1px solid var(--line); background: var(--well); text-align: left; }
   .cmd__dollar { color: var(--green); font: 400 16px/24px var(--mono); }
   .cmd code { flex: 1; font: 400 14px/22px var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-all; }
@@ -40,6 +36,11 @@
   .copy:hover { color: var(--ink); }
   .copy svg { width: 12px; height: 12px; }
   .note { margin: 16px 0 0; font-size: 13px; line-height: 20px; color: var(--muted); text-align: center; }
+  .get { display: flex; flex-direction: column; align-items: center; margin: 40px 0 0; }
+  .btn--big { padding: 16px 28px; font-size: 16px; line-height: 20px; box-shadow: 0 0 40px rgba(70, 231, 111, 0.25); }
+  .btn--big svg { width: 18px; height: 18px; }
+  .or { display: flex; align-items: center; gap: 16px; margin: 48px 0 16px; font-size: 13px; line-height: 20px; color: var(--muted); }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .shot { margin: 56px auto 0; border-radius: 12px; border: 1px solid var(--line); background: var(--card); padding: 8px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03) inset; }
   .shot__bar { display: flex; gap: 6px; padding: 6px 8px 12px; }
   .shot__bar i { width: 10px; height: 10px; border-radius: 50%; background: #2a2a2a; display: block; }
@@ -89,14 +90,19 @@
   <section class="hero">
     <div class="wrap">
       <h1>Install RoleModel Studio</h1>
-      <p class="lede">Run one command in your terminal. You’ll be making videos in a couple of minutes.</p>
+      <p class="lede">Download the Mac app, or run one command in your terminal. You’ll be making videos in a couple of minutes.</p>
 
-      <div class="chips" aria-label="Platform">
-        <span class="chip" aria-pressed="true">
+      <!-- macos/Scripts/release.sh --publish rewrites the link, version and size
+           below for each new DMG. Keep the ids. -->
+      <div class="get">
+        <a class="btn btn--big" id="dmg" href="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.240/RoleModelStudio-0.1.240.dmg">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.8 0-1.9-.8-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.2.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.8-1-2.8-4.1zM14.2 5.8c.6-.8 1.1-1.8.9-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1.1.1 2.1-.5 2.8-1.3z"/></svg>
-          macOS
-        </span>
+          Download for Mac
+        </a>
+        <p class="note">Version <span id="dmg-version">0.1.240</span> · <span id="dmg-size">114 MB</span> · Apple&nbsp;Silicon · macOS&nbsp;15&nbsp;or&nbsp;later<br />Open it, drag RoleModel Studio to Applications. It updates itself.</p>
       </div>
+
+      <p class="or">or install with one command, which also adds the command-line tools</p>
 
       <div class="cmd">
         <span class="cmd__dollar" aria-hidden="true">$</span>
@@ -141,14 +147,14 @@
     <div class="wrap">
       <h2>Installation questions</h2>
       <dl>
-        <dt>Why a command instead of a normal installer?</dt>
-        <dd>Installing from the command line means you always get the latest build, the install stays small, and you skip the “unidentified developer” warnings that come with downloaded apps. One command, no dragging icons into folders.</dd>
+        <dt>Should I download the app or use the command?</dt>
+        <dd>Download the app if you just want to make videos. It is signed and notarized by Apple, so it opens without warnings, and it updates itself. Use the command if you also want the <code>rm-</code> command-line tools, or if your Mac has an Intel chip.</dd>
         <dt>How do I open a terminal?</dt>
         <dd>On a Mac, press ⌘ + Space, type “Terminal”, and hit enter. Paste the command in, press enter, and follow the prompts. That’s the only terminal step.</dd>
         <dt>Is it safe to paste a command into my terminal?</dt>
         <dd>Yes. The command downloads the installer and runs it — nothing is hidden. You can <a href="https://github.com/RoleModel/rolemodel-openscreen/blob/main/install.sh">read the script</a> before running it, and the whole source is public on GitHub. It checks before every step, so running it twice only does what the first run could not.</dd>
         <dt>Which computers does it work on?</dt>
-        <dd>macOS on both Apple Silicon and Intel. There is no Windows version.</dd>
+        <dd>The downloaded app needs a Mac with Apple Silicon and macOS 15 or later. The command works on Apple Silicon and Intel. There is no Windows version.</dd>
         <dt>Do I need to know how to code?</dt>
         <dd>No. The command is the only terminal step. After that the Studio is a normal app in your browser: record, cut, add scenes, and export.</dd>
         <dt>What do I need before I start?</dt>
