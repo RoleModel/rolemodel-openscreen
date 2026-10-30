@@ -54,6 +54,36 @@ final class StudioWeb: NSObject, ObservableObject {
     })()
     """
 
+    /// WebKit cannot play WebM, and it picks its player from a video address's
+    /// extension before it reads a byte. So a .webm or .mkv video address from the
+    /// Studio is rewritten to "<clip>.webm.mov", where the server answers with a copy
+    /// WebKit plays (HEVC with alpha for a cut-out). A download keeps its address.
+    private static let playableVideoJS = """
+    (() => {
+      const fix = (url) => typeof url === 'string' && url.includes('/media/') && !/[?&]download/.test(url)
+        ? url.replace(/\\.(webm|mkv)(?=$|[?#])/i, '.$1.mov') : url
+      for (const proto of [HTMLMediaElement.prototype, HTMLSourceElement.prototype]) {
+        const d = Object.getOwnPropertyDescriptor(proto, 'src')
+        Object.defineProperty(proto, 'src', { ...d, set(v) { d.set.call(this, fix(v)) } })
+      }
+      const setAttribute = Element.prototype.setAttribute
+      Element.prototype.setAttribute = function (name, value) {
+        if (name === 'src' && (this instanceof HTMLMediaElement || this instanceof HTMLSourceElement)) value = fix(value)
+        return setAttribute.call(this, name, value)
+      }
+      // Video written as markup (a template, innerHTML) never passes the setters above.
+      const sweep = (root) => root.querySelectorAll?.('video[src], source[src]').forEach((el) => {
+        const fixed = fix(el.getAttribute('src'))
+        if (fixed !== el.getAttribute('src')) el.src = fixed
+      })
+      new MutationObserver((records) => records.forEach((r) => r.addedNodes.forEach((n) => {
+        if (n.nodeType !== 1) return
+        if (n.matches?.('video[src], source[src]')) sweep(n.parentNode ?? n)
+        sweep(n)
+      }))).observe(document, { childList: true, subtree: true })
+    })()
+    """
+
     override init() {
         let configuration = WKWebViewConfiguration()
         configuration.applicationNameForUserAgent = "RoleModelStudioMac/\(Bundle.main.shortVersion)"
@@ -63,6 +93,7 @@ final class StudioWeb: NSObject, ObservableObject {
         let controller = configuration.userContentController
         let style = "const s = document.createElement('style'); s.textContent = \(Self.jsString(Self.chromeCSS)); document.documentElement.appendChild(s);"
         controller.addUserScript(WKUserScript(source: style, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        controller.addUserScript(WKUserScript(source: Self.playableVideoJS, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         controller.addUserScript(WKUserScript(source: Self.bridgeJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(source: InspectorBridge.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 

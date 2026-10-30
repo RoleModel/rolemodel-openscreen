@@ -133,8 +133,6 @@ import { dataApiFor, listShares, publishShare, removeShare, shareComments } from
 import { emptyCut, readCut, writeCut } from "../lib/cut.mjs";
 import { seedCut } from "../lib/cut-seed.mjs";
 import { alphaProxyFor, cacheSource, hasAlpha as videoHasAlpha, peaksFor, proxyFor } from "../lib/edit-cache.mjs";
-/* Containers WebKit will not play; it is served the H.264 proxy instead. See /media/. */
-const WEBKIT_UNPLAYABLE = new Set([".webm", ".mkv"]);
 import { slack } from "../lib/slack.mjs";
 import {
 	STATE_DIR,
@@ -10122,29 +10120,33 @@ async function fetchVoiceList() {
       const [, , id, ...rest] = p.split("/");
       let file = join(mediaDir(id), rest.join("/"));
       let s = await stat(file).catch(() => null);
-      if (!s) {
+      if (!s && !/\.(webm|mkv)\.mov$/i.test(file)) {
         res.writeHead(404);
         return res.end();
       }
       /*
-       * WebM, to Safari's engine, is the H.264 proxy instead.
-       *
-       * The Mac app is a WebKit view, and WebKit will not play the VP9/Opus WebM
-       * a screen recording arrives as: every player showed a black box with no
-       * controls while Chrome played the same URL. The proxy is the timeline's
-       * own cached copy. A download is still the original, byte for byte.
+       * "<clip>.webm.mov" is the clip WebKit can play: the H.264 proxy, or HEVC with
+       * alpha for a cut-out. WebKit chooses its player from the address's extension
+       * before it reads a byte, so a ".webm" address went to its WebM reader whatever
+       * was sent back, a redirect included. The Mac app rewrites a .webm or .mkv
+       * video address to this form; Chrome keeps asking for the original.
        */
-      const ua = req.headers["user-agent"] ?? "";
-      const webkitOnly = /AppleWebKit/.test(ua) && !/(?:Chrome|Chromium|Edg)\//.test(ua);
-      if (webkitOnly && WEBKIT_UNPLAYABLE.has(extname(file).toLowerCase()) && !url.searchParams.has("download")) {
-        // A cut-out keeps its transparency: HEVC with alpha, not the H.264 proxy, which has none.
-        const cache = join(mediaDir(id), ".edit-cache");
-        const proxy = await ((await videoHasAlpha(file).catch(() => false)) ? alphaProxyFor(file, cache) : proxyFor(file, cache)).catch(() => null);
-        const ps = proxy ? await stat(proxy).catch(() => null) : null;
-        if (ps) {
-          file = proxy;
-          s = ps;
+      const playable = /\.(webm|mkv)\.mov$/i.test(file) ? file.slice(0, -".mov".length) : null;
+      if (playable) {
+        const orig = await stat(playable).catch(() => null);
+        if (!orig) {
+          res.writeHead(404);
+          return res.end();
         }
+        const cache = join(mediaDir(id), ".edit-cache");
+        const proxy = await ((await videoHasAlpha(playable).catch(() => false)) ? alphaProxyFor(playable, cache) : proxyFor(playable, cache)).catch(() => null);
+        const ps = proxy ? await stat(proxy).catch(() => null) : null;
+        if (!ps) {
+          res.writeHead(500);
+          return res.end();
+        }
+        file = proxy;
+        s = ps;
       }
       const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
       // Range support, or <video> seeking is broken.
