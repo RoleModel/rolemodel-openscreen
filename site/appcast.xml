@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.250</title>
-      <pubDate>Fri, 30 Oct 2026 22:22:55 -0000</pubDate>
-      <sparkle:version>900</sparkle:version>
-      <sparkle:shortVersionString>0.1.250</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.251</title>
+      <pubDate>Fri, 30 Oct 2026 23:11:25 -0000</pubDate>
+      <sparkle:version>903</sparkle:version>
+      <sparkle:shortVersionString>0.1.251</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: a floating Parts bar, and a readable native sidebar</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.250/RoleModelStudio-0.1.250.dmg" length="114395906" type="application/octet-stream" sparkle:edSignature="uuMrlN8AbFHctfkM4DmNR/qTnrOGULzawL06g55t1lURGuiDMXP/Oml7OTfWRvy9E6I3QGtgb8gM4mGES7dmDg=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: text parts draw, the stage keeps its shape, and a timeline</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.251/RoleModelStudio-0.1.251.dmg" length="113031489" type="application/octet-stream" sparkle:edSignature="xOaKyAP4ZN5Jz5oF0onFqENl0viWqB3X/9e7XZR/I100/A1Hz67f9y/ihUuxyJsa5YO3bQIoimTjpRWWhQxTDg=="/>
     </item>
   </channel>
 </rss>
