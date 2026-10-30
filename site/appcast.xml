@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.251</title>
-      <pubDate>Fri, 30 Oct 2026 23:11:25 -0000</pubDate>
-      <sparkle:version>903</sparkle:version>
-      <sparkle:shortVersionString>0.1.251</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.252</title>
+      <pubDate>Fri, 30 Oct 2026 23:45:52 -0000</pubDate>
+      <sparkle:version>906</sparkle:version>
+      <sparkle:shortVersionString>0.1.252</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: text parts draw, the stage keeps its shape, and a timeline</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.251/RoleModelStudio-0.1.251.dmg" length="113031489" type="application/octet-stream" sparkle:edSignature="xOaKyAP4ZN5Jz5oF0onFqENl0viWqB3X/9e7XZR/I100/A1Hz67f9y/ihUuxyJsa5YO3bQIoimTjpRWWhQxTDg=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: a text part&#x27;s font is picked from every font on this Mac</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.252/RoleModelStudio-0.1.252.dmg" length="116156926" type="application/octet-stream" sparkle:edSignature="1lu0IBqy39LX2H8GOpnSkrYFJ/0CYLkOi8Dy+11wloUSWQrtqw1pTl7g2RweZW2uVrqP5EJeY9c/r+AYk0RBDg=="/>
     </item>
   </channel>
 </rss>
