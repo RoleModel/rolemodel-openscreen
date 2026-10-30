@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.246</title>
-      <pubDate>Fri, 30 Oct 2026 04:41:04 -0000</pubDate>
-      <sparkle:version>887</sparkle:version>
-      <sparkle:shortVersionString>0.1.246</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.247</title>
+      <pubDate>Fri, 30 Oct 2026 13:53:54 -0000</pubDate>
+      <sparkle:version>891</sparkle:version>
+      <sparkle:shortVersionString>0.1.247</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Native panel: a control is known by itself, not by its label</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.246/RoleModelStudio-0.1.246.dmg" length="117273572" type="application/octet-stream" sparkle:edSignature="VJLFgTruipznWWrdm8V58NB6jxs+zVThc9uYEztIsZziY87xLvEufCKfoMzZe+Ar/+7M4OjiuEL97ix3uj0PAw=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>VEED cut-outs land: read a result&#x27;s video whether fal sends one file or a list</li><li>WebM plays in the Mac app: a playable copy at its own .mov address</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.247/RoleModelStudio-0.1.247.dmg" length="114294219" type="application/octet-stream" sparkle:edSignature="f9v7Tng+qC/gE6BFOFTk0DYAbY/zrKAMeSb2Agp0EthJpGWPcsr7fQ7YhO6/mh0ReSFMem6j7dtfOJoYgE2LBw=="/>
     </item>
   </channel>
 </rss>
