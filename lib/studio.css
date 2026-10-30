@@ -2470,9 +2470,13 @@ textarea.fills.form-control {
   text-align: start;
 }
 
+/* Clickable only while it is on screen: a click dismisses it early. Hidden, it
+   must not catch a click meant for the header under it. */
 .toast--shown {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 /* A failure is worth the accent; a success is not. Same token the inline
