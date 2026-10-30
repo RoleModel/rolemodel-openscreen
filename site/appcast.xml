@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.241</title>
-      <pubDate>Fri, 30 Oct 2026 01:06:25 -0000</pubDate>
-      <sparkle:version>870</sparkle:version>
-      <sparkle:shortVersionString>0.1.241</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.242</title>
+      <pubDate>Fri, 30 Oct 2026 01:38:17 -0000</pubDate>
+      <sparkle:version>874</sparkle:version>
+      <sparkle:shortVersionString>0.1.242</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>WebM plays in the Mac app: WebKit is served the H.264 proxy</li><li>Scenes: the footer is two rows of grouped actions, not a tall stack</li><li>The Mac app carries the team database, and installs read keys from the config</li><li>Offer the Mac app on the download page</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.241/RoleModelStudio-0.1.241.dmg" length="115495409" type="application/octet-stream" sparkle:edSignature="7hZ4/4gQdzCSp8qyy/EUCJM3RBHTOhXnmkhGFzk8j4OhgL+kqIjT86sDHQDpwvdaQvRB8RYRJbQhVm1gDKUlAA=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Restyle: four background removers, saved side by side</li><li>Restyle lists every clip, and can remove a background</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.242/RoleModelStudio-0.1.242.dmg" length="114832908" type="application/octet-stream" sparkle:edSignature="49g/AhfCTpmqoZC39vUsy0QMa+pcOJ9PDIARk+j4aeLIKMNwGHJkuS94DUG6xoTqMefmfAK/2FJ9pRpmVl1tBQ=="/>
     </item>
   </channel>
 </rss>
