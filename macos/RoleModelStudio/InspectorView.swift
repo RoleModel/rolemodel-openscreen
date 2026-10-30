@@ -8,9 +8,20 @@ struct InspectorView: View {
         Form {
             ForEach(sections) { section in
                 Section {
-                    ForEach(section.items) { item in
-                        InspectorRow(web: web, palette: web.palette, item: item)
-                            .equatable()
+                    ForEach(section.rows) { row in
+                        if row.items.count == 1, let item = row.items.first {
+                            InspectorRow(web: web, palette: web.palette, item: item)
+                                .equatable()
+                        } else {
+                            // A run of buttons, two to a row: one per row made a
+                            // panel of five actions as tall as the window.
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                                ForEach(row.items) { item in
+                                    InspectorRow(web: web, palette: web.palette, item: item)
+                                        .equatable()
+                                }
+                            }
+                        }
                     }
                 } header: {
                     if let heading = section.heading {
@@ -23,12 +34,36 @@ struct InspectorView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(Color("StudioPanel"))
+        // The bright brand green, not the window's AccentColor: that one is dark
+        // enough for a selected sidebar row, and as the colour of every button
+        // label and menu value on this panel it could not be read.
+        .tint(Color("BrandGreen"))
     }
 
     private struct InspectorGroup: Identifiable {
         let id: String
         let heading: InspectorItem?
         var items: [InspectorItem]
+
+        /// One control per row, except that buttons in a run share rows.
+        var rows: [InspectorLine] {
+            var lines: [InspectorLine] = []
+            for item in items {
+                let isButton = item.kind == .button && !item.prominent
+                if isButton, let last = lines.last, last.buttons {
+                    lines[lines.count - 1].items.append(item)
+                } else {
+                    lines.append(InspectorLine(items: [item], buttons: isButton))
+                }
+            }
+            return lines
+        }
+    }
+
+    private struct InspectorLine: Identifiable {
+        var items: [InspectorItem]
+        let buttons: Bool
+        var id: String { items.first?.id ?? "" }
     }
 
     /// Controls under the heading before them; anything ahead of the first
@@ -120,6 +155,8 @@ private struct InspectorRow: View, Equatable {
                     Text(option.label).tag(option.value)
                 }
             }
+            // The chosen value in the label colour: tinted, it was green on grey.
+            .tint(.primary)
             .disabled(item.disabled)
         case .checkbox:
             Toggle(item.label, isOn: Binding(
@@ -136,7 +173,9 @@ private struct InspectorRow: View, Equatable {
             if item.prominent {
                 button.buttonStyle(.borderedProminent)
             } else {
-                button
+                // A plain bordered button with a label you can read; tinted, its
+                // text was the panel's green on the panel's grey.
+                button.buttonStyle(.bordered).tint(.primary)
             }
         case .color:
             ColorMenuRow(web: web, palette: palette, item: item)
@@ -232,9 +271,12 @@ private struct ColorMenuRow: View {
                         .fill(Color(hex: item.chip))
                         .frame(width: 18, height: 18)
                         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.2)))
-                    Text(item.value).monospaced()
+                    Text(item.value)
+                        .foregroundStyle(.primary)
                 }
             }
+            .buttonStyle(.bordered)
+            .tint(.primary)
             .popover(isPresented: $open, arrowEdge: .leading) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {

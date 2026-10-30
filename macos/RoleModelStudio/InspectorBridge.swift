@@ -121,7 +121,9 @@ enum InspectorBridge {
           if (el.closest('.sec') && !el.matches('.sec')) continue
           const kind = kindOf(el)
           if (kind !== 'file' && !shown(el)) continue
-          if (kind === 'file' && !shown(el.parentElement)) continue
+          // A file input the page hid on purpose is opened by a button beside it;
+          // listing it as well put a second "Choose File…" in the panel.
+          if (kind === 'file' && (el.hidden || !shown(el.parentElement))) continue
           const label = kind === 'section' ? text(el.querySelector('span') ?? el) : kind === 'button' ? (text(el).length > 1 ? text(el) : el.getAttribute('aria-label') || el.title || text(el)) : labelFor(el)
           // Identity is the element, not its words: a label that changes with its value
           // (or two that read the same) must not hand a drag to a different control.

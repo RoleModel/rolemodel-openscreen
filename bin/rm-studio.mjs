@@ -162,6 +162,8 @@ import {
 	setFalSettings,
 	setSidebarRail,
 	sidebarRail,
+	sceneInspector,
+	setSceneInspector,
 	setSlackSettings,
 	setStoragePublicBase,
 	storagePublicBases,
@@ -3671,6 +3673,7 @@ async function state() {
     // the work was rather than back at the Library.
     lastView: await lastView(),
     sidebarRail: await sidebarRail(),
+    sceneInspector: await sceneInspector(),
     /*
      * The project you are working in, verified against the library.
      *
@@ -4786,6 +4789,13 @@ const server = createServer(async (req, res) => {
       const b = JSON.parse(await text(req));
       await setSidebarRail(Boolean(b.rail));
       return json(res, 200, { ok: true, rail: Boolean(b.rail) });
+    }
+
+    /* The Scenes Parts bar's place and fold, for the same reason. */
+    if (p === "/api/scene-inspector" && req.method === "POST") {
+      const b = JSON.parse(await text(req));
+      await setSceneInspector(b);
+      return json(res, 200, { ok: true });
     }
 
     if (p === "/api/fal/settings" && req.method === "GET") {

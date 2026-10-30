@@ -5,6 +5,11 @@
       Everything is seeked rather than played, so what you scrub to is what
       gets encoded.
    </p>
+   <!--
+      The canvas: the stage, its clock, and the footage under review. Nothing
+      else, so what you are designing is the thing on screen. The part controls
+      float over it in the Parts bar below, the way Figma's panels do.
+   -->
    <div data-region="main" class="panel-card panel-stage">
       <iframe data-el="frame" class="scene-frame" title="Scene preview"></iframe>
       <div class="row">
@@ -12,17 +17,39 @@
             aria-label="Scrub the scene" />
          <span data-el="time" class="path">0 ms</span>
       </div>
-      <div data-el="palette" class="row">
-         <span class="path">Add a part</span>
-      </div>
-      <div data-el="cards" class="panel-cards"></div>
-      <!-- Visible because an editor that cannot show its output is one nobody
-           can debug; collapsed because it is no longer the thing you work in. -->
-      <details data-el="raw">
-         <summary>Markup</summary>
-         <textarea data-el="rawText" class="form-control" rows="6" spellcheck="false"></textarea>
-      </details>
+      <!-- On the canvas, not in the rail: a video and a transcript of clickable
+           words are content to read, and the Mac app's native rail turned every
+           word into a row of its own. -->
+      <section data-el="footageReview" class="scene-footage-review" hidden>
+         <video data-el="footagePlayer" class="scene-footage-review__player" controls playsinline preload="metadata"></video>
+         <div data-el="footageReviewStatus" class="form-hint"></div>
+         <div data-el="footageTranscript" class="scene-footage-review__transcript"></div>
+      </section>
    </div>
+   <!--
+      The Parts bar: every part control, floating over the canvas. Dragged by
+      its header, folded by its button, and it remembers both.
+   -->
+   <aside data-region="main" data-el="inspector" class="scene-inspector" aria-label="Parts">
+      <header data-el="inspectorBar" class="scene-inspector__bar">
+         <rm-icon name="drag-drop-vertical" class="scene-inspector__grip" aria-hidden="true"></rm-icon>
+         <h2 class="scene-inspector__title">Parts</h2>
+         <button data-el="inspectorFold" class="btn btn--no-border btn--icon scene-inspector__fold" type="button"
+            aria-expanded="true" aria-label="Fold the Parts bar" title="Fold the Parts bar"></button>
+      </header>
+      <div data-el="inspectorBody" class="scene-inspector__body">
+         <div data-el="palette" class="scene-inspector__palette">
+            <span class="scene-inspector__label">Add a part</span>
+         </div>
+         <div data-el="cards" class="panel-cards"></div>
+         <!-- Visible because an editor that cannot show its output is one nobody
+              can debug; collapsed because it is no longer the thing you work in. -->
+         <details data-el="raw">
+            <summary>Markup</summary>
+            <textarea data-el="rawText" class="form-control" rows="6" spellcheck="false"></textarea>
+         </details>
+      </div>
+   </aside>
    <div data-region="side">
       <div class="form-group">
          <label class="form-label" for="scene-pick">Scene</label>
@@ -66,11 +93,6 @@
             <input data-el="footagePicker" type="file" accept="video/*" hidden />
          </div>
          <div data-el="footageHint" class="form-hint"></div>
-         <section data-el="footageReview" class="scene-footage-review" hidden>
-            <video data-el="footagePlayer" class="scene-footage-review__player" controls playsinline preload="metadata"></video>
-            <div data-el="footageReviewStatus" class="form-hint"></div>
-            <div data-el="footageTranscript" class="scene-footage-review__transcript"></div>
-         </section>
       </div>
    </div>
    <!--
@@ -124,7 +146,7 @@
 <template data-row="scene-part">
    <details class="card">
       <summary style="cursor:pointer;display:flex;gap:var(--op-space-x-small);align-items:baseline;padding:var(--op-space-small);">
-         <span data-el="tag" class="nm"></span><span data-el="when" class="path"></span><span data-el="first" class="path" style="color:var(--fg)"></span>
+         <span data-el="tag" class="nm" style="flex:none"></span><span data-el="when" class="path" style="flex:none"></span><span data-el="first" class="path" style="color:var(--fg);min-inline-size:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       </summary>
       <div class="card__body">
          <!-- What this part IS, changeable. A part was whichever component the
@@ -135,7 +157,7 @@
             <span class="form-label">Component</span>
             <select data-el="swap" class="form-control form-control--small"></select>
          </label>
-         <div data-el="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--op-space-2x-small)"></div>
+         <div data-el="grid" class="scene-inspector__groups"></div>
          <!-- After the fields: reordering and removing are things you do to a
               part you have already read. -->
          <div class="row" style="margin-top:var(--op-space-x-small)">
@@ -144,6 +166,14 @@
             <button data-el="kill" class="btn btn--icon ghost del kill" type="button" aria-label="Remove this part" title="Remove this part"></button>
          </div>
       </div>
+   </details>
+</template>
+
+<!-- One group of a part's fields: Content, Position, Type… folded by name. -->
+<template data-row="scene-field-group">
+   <details class="scene-inspector__group">
+      <summary data-el="title" class="scene-inspector__group-title"></summary>
+      <div data-el="grid" class="scene-inspector__fields"></div>
    </details>
 </template>
 
@@ -166,7 +196,7 @@
 
 <!-- A position is dragged, not typed; two columns so there is room to aim. -->
 <template data-row="scene-range-field">
-   <div class="form-group" style="grid-column:span 2">
+   <div class="form-group" style="grid-column:1 / -1">
       <label data-el="label" class="form-label"></label>
       <div class="range-row">
          <input data-el="slider" class="form-control form-control--small" type="range" />
