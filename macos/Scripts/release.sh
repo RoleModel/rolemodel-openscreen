@@ -91,6 +91,25 @@ git -C "$REPO" ls-files -z --cached --others --exclude-standard -- . ':!macos' \
 # dependency lives in a private registry this install never needs.
 (cd "$TOOLKIT" && pnpm install --prod --frozen-lockfile --trust-lockfile --config.node-linker=hoisted --silent)
 rm -rf "$TOOLKIT/node_modules/.bin" "$TOOLKIT/node_modules/.pnpm" "$TOOLKIT/node_modules/.modules.yaml"
+
+# Where the team's database is. git ignores lib/deployment.json because it holds
+# a credential, so the copy above left it out — and without it every shared thing
+# (pictures, looks, skills, storyboards, notes) is silently missing. Take the one
+# this version's release carries, which is what Homebrew installs; a checkout's
+# own copy is the fallback. No database, no build.
+DEPLOYMENT="$TOOLKIT/lib/deployment.json"
+TARBALL_URL="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v$VERSION/rolemodel-openscreen-v$VERSION.tar.gz"
+if curl -fsSL "$TARBALL_URL" -o "$OUT/release.tar.gz" 2>/dev/null \
+  && tar -xzf "$OUT/release.tar.gz" -C "$OUT" --strip-components=2 "rolemodel-openscreen-v$VERSION/lib/deployment.json" 2>/dev/null; then
+  mv "$OUT/deployment.json" "$DEPLOYMENT"
+  echo "    database settings from the v$VERSION release"
+elif [ -f "$REPO/lib/deployment.json" ]; then
+  cp "$REPO/lib/deployment.json" "$DEPLOYMENT"
+  echo "    database settings from this checkout (no v$VERSION release to take them from)"
+fi
+rm -f "$OUT/release.tar.gz"
+node -e "const d=require('$DEPLOYMENT'); if (!d.databaseUrl || !d.githubClientId) process.exit(1)" 2>/dev/null \
+  || { echo "No lib/deployment.json with a database and a GitHub app. The app would open with none of the team's work."; exit 1; }
 echo "    $(du -sh "$TOOLKIT" | awk '{print $1}') toolkit"
 
 echo "==> Signing with $DEV_ID"

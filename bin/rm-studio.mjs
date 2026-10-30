@@ -192,8 +192,15 @@ let updateSeen = null;
 let updateChecked = 0;
 const UPDATE_MAX_AGE = UPDATE_TTL;
 
-/* Keys kept in the toolkit's .env, before anything asks for one. */
+/*
+ * Keys kept in a .env, before anything asks for one: the toolkit's own, for a
+ * checkout, then the one beside the config. An installed copy — Homebrew's or the
+ * Mac app's — is replaced on every upgrade and must not carry anybody's keys, so
+ * the config folder is where an install finds them. The first file to name a key
+ * wins, and the environment beats both.
+ */
 await loadEnvFile(TOOLKIT);
+await loadEnvFile(STATE_DIR);
 
 jobs.setTrustedRoot(TOOLKIT);
 jobs.setNodeExecutable(process.execPath);
