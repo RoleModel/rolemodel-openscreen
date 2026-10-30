@@ -4,9 +4,10 @@ import Foundation
 ///
 /// The page stays the owner: these are a reading of its controls, and every
 /// change goes back to the element it came from as the same input, change or
-/// click a person would have made. `id` is structural (kind, label, how many
-/// came before it), not the element itself, so a panel that redraws its DOM
-/// keeps the same ids and a focused native field keeps its focus.
+/// click a person would have made. `id` names the element itself (kind and a
+/// number the page keeps per element), not its label: the colour pickers label a
+/// slider with its own value, so an id built from the label changed on every step
+/// of a drag and the next step went to no control at all.
 struct InspectorItem: Decodable, Identifiable, Equatable {
     enum Kind: String, Decodable {
         case section, range, number, text, textarea, password, select, checkbox, button, color, file
@@ -72,14 +73,23 @@ enum InspectorBridge {
       }
       const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
       const shown = (el) => el.checkVisibility ? el.checkVisibility() : el.offsetParent !== null
+      // A label's own words, without a live readout inside it: the colour pickers
+      // label a slider "L22.7%", and that text changes on every step of a drag.
+      const labelText = (label) => {
+        const copy = label.cloneNode(true)
+        copy.querySelectorAll('[class*="value"], .v, output').forEach((n) => n.remove())
+        return text(copy)
+      }
       const labelFor = (el) => {
         const own = el.labels?.[0] ?? null
-        if (own && text(own)) return text(own)
+        if (own && labelText(own)) return labelText(own)
         const aria = el.getAttribute('aria-label') || el.title || el.placeholder
         if (aria) return aria
         let prev = el.previousElementSibling
         while (prev && !prev.matches('label, .form-label')) prev = prev.previousElementSibling
-        return prev ? text(prev) : ''
+        const found = prev ? labelText(prev) : ''
+        // A gradient stop's slider is labelled only by its colour's readout; what it sets is where the stop sits.
+        return found || (el.type === 'range' ? 'Position' : '')
       }
       const kindOf = (el) => {
         if (el.matches('.colormenu')) return 'color'
@@ -95,9 +105,15 @@ enum InspectorBridge {
         swatches: [...row.querySelectorAll('.colormenu__swatch')].map((b) => ({ title: b.title, hex: hex(getComputedStyle(b).backgroundColor) })),
       }))
 
+      const ids = new WeakMap()
+      let nextID = 0
+      const idOf = (el) => {
+        if (!ids.has(el)) ids.set(el, ++nextID)
+        return ids.get(el)
+      }
+
       const snapshot = () => {
         byID.clear()
-        const counts = new Map()
         const items = []
         const nodes = panel.querySelectorAll('.sec, .colormenu, input, select, textarea, button')
         for (const el of nodes) {
@@ -107,10 +123,9 @@ enum InspectorBridge {
           if (kind !== 'file' && !shown(el)) continue
           if (kind === 'file' && !shown(el.parentElement)) continue
           const label = kind === 'section' ? text(el.querySelector('span') ?? el) : kind === 'button' ? (text(el).length > 1 ? text(el) : el.getAttribute('aria-label') || el.title || text(el)) : labelFor(el)
-          const key = `${kind}:${label}`
-          const n = (counts.get(key) ?? 0) + 1
-          counts.set(key, n)
-          const id = `${key}#${n}`
+          // Identity is the element, not its words: a label that changes with its value
+          // (or two that read the same) must not hand a drag to a different control.
+          const id = `${kind}:${idOf(el)}`
           byID.set(id, el)
           const item = {
             id, kind, label, value: '', checked: false, disabled: !!el.disabled, prominent: false,
