@@ -38,7 +38,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot } from "../lib/library.mjs";
 import { falSettings } from "../lib/settings.mjs";
-import { fal, avatarProblem, clipProblem, modelById, takesOf, DEFAULT_MODEL } from "../lib/fal.mjs";
+import { fal, avatarProblem, clipProblem, modelById, takesOf, DEFAULT_MODEL, SENDABLE } from "../lib/fal.mjs";
 import { capture, durationOf } from "../lib/narration.mjs";
 
 const args = process.argv.slice(2);
@@ -72,7 +72,9 @@ const takes = takesOf(spec);
    shot outright. Only the first needs a clip on the way in. */
 const generating = takes === "text" || takes === "image+text" || takes === "video+text";
 const avatar = takes !== "video" && !generating;
-if (takes === "video" && (!file || !prompt)) die("--file and --prompt are required");
+if (takes === "video" && !file) die("--file is required");
+/* Background removal takes no instruction; every other clip edit does. */
+if (takes === "video" && spec.controls.includes("prompt") && !prompt) die("--prompt is required — say what to change");
 if (generating && !prompt) die("--prompt is required — it is the shot");
 
 /*
@@ -256,16 +258,24 @@ console.log(`  clip      ${file}  (${seconds.toFixed(1)}s)`);
 console.log(`  audio     ${args.includes("--no-audio") ? "replaced by the model" : "kept from the original"}`);
 console.log("");
 
+/*
+ * What goes up is an H.264 MP4 whenever it has to be made: for a range, and for
+ * a clip fal will not take as it is (.m4v, .webm, .mkv). The first video and
+ * audio streams are named, because an .m4v export often carries its cover art as
+ * a second, same-sized video stream, and ffmpeg's own pick could be the picture.
+ */
 let sending = source;
-if (trimming) {
-	console.log(`  trimming ${inSec.toFixed(2)}s → ${outSec.toFixed(2)}s…`);
+const converting = !SENDABLE.has(extname(source).toLowerCase());
+if (trimming || converting) {
+	console.log(trimming ? `  trimming ${inSec.toFixed(2)}s → ${outSec.toFixed(2)}s…` : `  converting ${extname(source)} to .mp4 for fal…`);
 	sending = join(await mkdtemp(join(tmpdir(), "rm-fal-")), "clip.mp4");
 	const cut = await capture("ffmpeg", [
-		"-y", "-ss", String(inSec), "-to", String(outSec), "-i", source,
+		"-y", ...(trimming ? ["-ss", String(inSec), "-to", String(outSec)] : []), "-i", source,
+		"-map", "0:v:0", "-map", "0:a:0?",
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
 		"-c:a", "aac", "-movflags", "+faststart", sending,
 	]);
-	if (!cut.ok) die("ffmpeg could not cut that range");
+	if (!cut.ok) die(trimming ? "ffmpeg could not cut that range" : "ffmpeg could not convert that clip");
 	const cutProblem = await clipProblem(sending, { seconds, model });
 	if (cutProblem) die(cutProblem);
 }
@@ -285,4 +295,5 @@ const { url } = await client
 	.catch((error) => die(error.message));
 
 const stem = basename(file, extname(file));
-await deliver(url, flag("output") ?? join("Footage", `${stem}-restyled.mp4`));
+/* A model that says what it makes names the file after it: a cutout is a .webm. */
+await deliver(url, flag("output") ?? join("Footage", `${stem}-${spec.output?.suffix ?? "restyled"}${spec.output?.ext ?? ".mp4"}`));

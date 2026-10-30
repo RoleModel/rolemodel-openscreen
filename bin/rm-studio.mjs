@@ -177,7 +177,7 @@ import { css as wpCSS, normalize as normalizeRecipe, slug as wpSlug } from "../l
 import * as jobs from "../lib/jobs.mjs";
 import { isReady as voiceReady, venvDir } from "../lib/voice-setup.mjs";
 import { stageRenderAssets, stagedRuntime } from "../lib/render-assets.mjs";
-import { MODELS, DEFAULT_MODEL, modelById, clipProblem, avatarProblem, takesOf } from "../lib/fal.mjs";
+import { MODELS, DEFAULT_MODEL, CLIP_EXT, modelById, clipProblem, avatarProblem, takesOf } from "../lib/fal.mjs";
 import { trimToSpeech, leadingFiller } from "../lib/speech-trim.mjs";
 import { clockFile, ensureClock } from "../lib/assembly-clock.mjs";
 import { transcriptFromCaptions } from "../lib/captions.mjs";
@@ -4837,7 +4837,7 @@ const server = createServer(async (req, res) => {
       const clips = [];
       for (const item of catalog?.files ?? []) {
         const rel = String(item.path ?? item.rel ?? "");
-        if (![".mp4", ".mov"].includes(extname(rel).toLowerCase())) continue;
+        if (!CLIP_EXT.has(extname(rel).toLowerCase())) continue;
         const file = join(mediaDir(id), rel);
         const { durationOf } = await import("../lib/narration.mjs");
         const seconds = Number(item.durationSec ?? item.seconds) || (await durationOf(file));
