@@ -300,6 +300,76 @@ const ADDED_DIR = join(LIB, "Brand");
 const STYLE_DIR = join(LIB, "Style");
 /* The Creator's previews and exported PNGs that belong to no project. */
 const LOOKS_DIR = join(LIB, "Looks");
+
+/*
+ * Wallpapers you made, kept in the library.
+ *
+ * Saving wrote only into the toolkit's brand/wallpapers — which, in the Mac
+ * app, is inside the app, and in Homebrew is the versioned Cellar folder. Every
+ * update replaces both, so each release took every wallpaper made since the
+ * last one with it. The library is the user's and no update touches it: each
+ * save lands here too (the picture and its recipe), and at start-up anything
+ * here that the toolkit is missing is put back, so every reader of
+ * brand/wallpapers keeps working unchanged.
+ */
+const USER_WALLPAPERS = join(LIB, "Wallpapers");
+
+async function readUserWallpapers() {
+  const raw = await readFile(join(USER_WALLPAPERS, "wallpapers.json"), "utf8").catch(() => "[]");
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+/* What the editor and the Studio read: one entry per recipe, with its CSS. */
+async function writeWallpaperIndex(recipes, dir) {
+  await writeFile(
+    join(dir, "index.json"),
+    `${JSON.stringify(recipes.map((r) => ({ name: r.name, label: r.label, file: `${r.name}.jpg`, css: wpCSS(r) })), null, 2)}\n`,
+    "utf8",
+  );
+}
+
+async function keepUserWallpaper(recipe, jpeg) {
+  await mkdir(USER_WALLPAPERS, { recursive: true });
+  if (jpeg) await writeFile(join(USER_WALLPAPERS, `${recipe.name}.jpg`), jpeg);
+  const mine = await readUserWallpapers();
+  const i = mine.findIndex((r) => r.name === recipe.name);
+  if (i === -1) mine.push(recipe);
+  else mine[i] = recipe;
+  await writeFile(join(USER_WALLPAPERS, "wallpapers.json"), `${JSON.stringify(mine, null, 2)}\n`, "utf8");
+}
+
+/* Put back, into the toolkit, every kept wallpaper an update took away. */
+async function restoreUserWallpapers() {
+  const mine = await readUserWallpapers();
+  if (!mine.length) return 0;
+  const dir = join(TOOLKIT, "brand/wallpapers");
+  await mkdir(dir, { recursive: true });
+  const all = await loadRecipes(TOOLKIT);
+  const restored = new Set();
+  for (const recipe of mine) {
+    const from = join(USER_WALLPAPERS, `${recipe.name}.jpg`);
+    const to = join(dir, `${recipe.name}.jpg`);
+    if ((await stat(from).catch(() => null)) && !(await stat(to).catch(() => null))) {
+      await copyFile(from, to);
+      restored.add(recipe.name);
+    }
+    const i = all.findIndex((r) => r.name === recipe.name);
+    if (i === -1) {
+      all.push(recipe);
+      restored.add(recipe.name);
+    } else all[i] = recipe;
+  }
+  if (restored.size) {
+    await saveRecipes(all, TOOLKIT);
+    await writeWallpaperIndex(all, dir);
+  }
+  return restored.size;
+}
 const SHOWCASE_DIR = join(LIB, "Showcase");
 /** Neon's Data API address for a database URL: the endpoint, minus its pooler, under the apirest host. */
 /* dataApiFor lives in lib/share.mjs now, shared with the CLI. */
@@ -483,6 +553,21 @@ const sceneRevisionDir = (id, name) => join(projectDir(id), "scenes", ".history"
  * on Canvas but the save endpoint correctly rejected it because no slot backed
  * it any more. Keep real standalone nodes (notes, titles, scene components),
  * but remove retired shots and wires that lead to them at the same time. */
+/*
+ * A shot's links survive a new shot list.
+ *
+ * The slots are rebuilt from the brief, and a brief has names, intents and
+ * lengths — not the scene a shot was linked to in Scenes, which lives on the
+ * slot. So "Set the shot list" quietly cut every shot loose from its scene.
+ * Carried across by id (the same shot) or, when a shot moved, by name.
+ */
+function keepSlotLinks(before, next) {
+  return next.map((slot) => {
+    const old = (before ?? []).find((o) => o.id === slot.id) ?? (before ?? []).find((o) => o.name === slot.name);
+    return old?.scene ? { ...slot, scene: old.scene } : slot;
+  });
+}
+
 function pruneRetiredShotNodes(graph, slots) {
   if (!graph || !Array.isArray(graph.nodes)) return graph;
   const slotIds = new Set((slots ?? []).map((slot) => slot.id));
@@ -10864,7 +10949,7 @@ async function fetchVoiceList() {
             { type: "slots", at: new Date().toISOString(), by: await reviewerName(), count: state.plan.shots.length, source: "interview" },
             (nextBoard) => {
               nextBoard.brief = state.plan;
-              nextBoard.slots = slotsFromBrief(id, state.plan);
+              nextBoard.slots = keepSlotLinks(nextBoard.slots, slotsFromBrief(id, state.plan));
               return nextBoard;
             },
           );
@@ -11577,7 +11662,7 @@ async function fetchVoiceList() {
         { type: "slots", at: new Date().toISOString(), by: await reviewerName(), count: brief.shots.length },
         (b) => {
           b.brief = brief;
-          b.slots = slotsFromBrief(id, brief);
+          b.slots = keepSlotLinks(b.slots, slotsFromBrief(id, brief));
 		  b.graph = pruneRetiredShotNodes(b.graph, b.slots);
           return b;
         },
@@ -12667,21 +12752,20 @@ async function fetchVoiceList() {
       const dir = join(TOOLKIT, "brand/wallpapers");
       await mkdir(dir, { recursive: true });
 
+      let jpeg = null;
       if (typeof body.jpeg === "string" && body.jpeg.length > 1000) {
-        const b64 = body.jpeg.slice(body.jpeg.indexOf(",") + 1);
-        await writeFile(join(dir, `${recipe.name}.jpg`), Buffer.from(b64, "base64"));
+        jpeg = Buffer.from(body.jpeg.slice(body.jpeg.indexOf(",") + 1), "base64");
+        await writeFile(join(dir, `${recipe.name}.jpg`), jpeg);
       }
+      // Kept in the library as well, where an update cannot take it.
+      await keepUserWallpaper(recipe, jpeg ?? (await readFile(join(dir, `${recipe.name}.jpg`)).catch(() => null)));
 
       const all = await loadRecipes(TOOLKIT);
       const i = all.findIndex((r) => r.name === recipe.name);
       if (i === -1) all.push(recipe);
       else all[i] = recipe;
       await saveRecipes(all, TOOLKIT);
-      await writeFile(
-        join(dir, "index.json"),
-        `${JSON.stringify(all.map((r) => ({ name: r.name, label: r.label, file: `${r.name}.jpg`, css: wpCSS(r) })), null, 2)}\n`,
-        "utf8",
-      );
+      await writeWallpaperIndex(all, dir);
       /*
        * Install it where the editor looks, in the same request.
        *
@@ -13150,6 +13234,9 @@ server.listen(PORT, async () => {
   const at = `http://localhost:${PORT}`;
   console.log(`\n  RoleModel Studio  ${at}`);
   console.log(`  library           ${LIB}`);
+  // Wallpapers you made, back after an update replaced the toolkit.
+  const restoredWallpapers = await restoreUserWallpapers().catch(() => 0);
+  if (restoredWallpapers) console.log(`  wallpapers        ${restoredWallpapers} of yours put back from ${USER_WALLPAPERS}`);
   // Whatever a force-quit left listening. Says so rather than doing it quietly,
   // because a preview holding a gigabyte is worth knowing about.
   const reaped = await reapOrphanedPreviews().catch(() => ({ reaped: 0 }));

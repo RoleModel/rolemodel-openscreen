@@ -34,6 +34,12 @@
             <div class="scene-timeline__transport">
                <button data-el="play" class="btn btn--icon ghost scene-timeline__play" type="button" aria-label="Play" title="Play (space)"></button>
                <span data-el="time" class="path scene-timeline__time">0 ms</span>
+               <!-- The scene's length. Empty: as long as its last part. -->
+               <label class="scene-timeline__length" title="How long the scene runs. Empty is as long as its last part.">
+                  <span class="scene-timeline__length-label">Length</span>
+                  <input data-el="length" class="scene-timeline__length-input" type="number" min="0.5" step="0.1" placeholder="auto" aria-label="Scene length in seconds" />
+                  <span class="scene-timeline__length-label">s</span>
+               </label>
             </div>
             <div data-el="ruler" class="scene-timeline__ruler" role="slider" tabindex="0" aria-label="Playhead"></div>
          </div>
@@ -54,7 +60,9 @@
       its header, folded by its button, and it remembers both.
    -->
    <!-- A part's right-click menu, on the stage and on the timeline. -->
-   <div data-region="main" data-el="menu" class="scene-menu" role="menu" hidden></div>
+   <!-- A popover, so it is in the top layer: the footer is a sticky layer of
+        its own and drew over a z-indexed menu opened near it. -->
+   <div data-region="main" data-el="menu" class="scene-menu" role="menu" popover="manual"></div>
    <aside data-region="main" data-el="inspector" class="scene-inspector" aria-label="Parts">
       <header data-el="inspectorBar" class="scene-inspector__bar">
          <rm-icon name="drag-drop-vertical" class="scene-inspector__grip" aria-hidden="true"></rm-icon>

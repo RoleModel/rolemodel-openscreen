@@ -228,16 +228,32 @@ body.op-page {
   background-color: var(--bg);
   color: var(--fg);
   font-family: var(--d);
-  /* dvh, as Optics' page grid is. In the Mac app the toolbar covers the top
-     of the web view, so vh counts the hidden strip and dvh does not: a body
-     in vh ran past a page in dvh, and the footer sat above an empty band. */
-  min-height: 100dvh;
+  /* The window's measured height (--app-h, set in studio.js), not vh or dvh:
+     in the Mac app those disagreed with the window, and the footer floated. */
+  min-height: var(--app-h, 100vh);
   background-size: var(--grid) var(--grid);
   background-image: linear-gradient(to right, var(--grid-line) var(--op-border-width), transparent var(--op-border-width)), linear-gradient(to bottom, var(--grid-line) var(--op-border-width), transparent var(--op-border-width));
   place-items: stretch;
 }
 
+/*
+ * The page fills the window whatever it holds.
+ *
+ * Optics sets `:root:has(.op-page) body { block-size: 100% }`, and <html> has
+ * no height of its own, so 100% of it is the content: a view shorter than the
+ * window ended the page early, the sticky footer sat on that end, and the
+ * window showed an empty band below it — there or not depending on how much
+ * the view held. Optics' selector outranks a plain body rule, so this one
+ * names the same root to win, and fills the measured window (--app-h).
+ */
+:root:has(.op-page) body.op-page {
+  min-block-size: var(--app-h, 100vh);
+}
+
 .op-page {
+  /* Optics says 100dvh; the measured window wins, for the reason body gives. */
+  min-block-size: var(--app-h, 100dvh);
+
   & .op-page__main {
     .op-page__main-content {
       /* Optics sets --op-breakpoint-medium here; see `main` above. */
@@ -390,7 +406,7 @@ main {
        * measure is right for a form and wrong for a timeline.
        */
 body.has-editor {
-  height: 100dvh;
+  height: var(--app-h, 100vh);
   overflow: hidden;
 }
 

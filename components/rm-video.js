@@ -87,6 +87,9 @@ export const RM = {
   },
   /** Total runtime implied by the scene, so the render length isn't guesswork. */
   duration(tailMs = 800) {
+    /* A length set in the editor is the length, exactly: no tail. */
+    const set = Number(document.querySelector('rm-length')?.getAttribute('for'))
+    if (set > 0) return set
     return RM.beats().reduce((n, b) => Math.max(n, b.at + (b.for ?? 2500)), 0) + tailMs
   },
 }
@@ -703,6 +706,21 @@ class RMScene extends RMElement {
   }
 }
 define('rm-scene', RMScene)
+
+/*
+ * A scene's length, when somebody set one.
+ *
+ * Otherwise a scene is as long as its last part, plus a beat. It draws nothing
+ * and is not a part (no `static fields`, so not in the catalogue); it is
+ * `<rm-length at="0" for="8000">`, so RM.duration and every reader that takes
+ * a scene's length from the latest `at` + `for` in its markup see it as is.
+ */
+class RMLength extends HTMLElement {
+  connectedCallback() {
+    this.style.display = 'none'
+  }
+}
+define('rm-length', RMLength)
 
 /* ── rm-browser ──────────────────────────────────────────────────────────── */
 

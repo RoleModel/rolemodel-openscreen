@@ -19,7 +19,7 @@
 .scene-frame {
   position: relative;
   flex: none;
-  inline-size: min(100%, calc((100dvh - 30rem) * 16 / 9));
+  inline-size: min(100%, calc((var(--app-h, 100vh) - 30rem) * 16 / 9));
   margin-inline: auto;
   overflow: hidden;
   border: var(--op-border-width) solid var(--line);
@@ -118,7 +118,7 @@
   inset-block-start: 9rem;
   inset-inline-end: 40rem;
   inline-size: min(34rem, calc(100vw - 3.2rem));
-  max-block-size: calc(100dvh - 20rem);
+  max-block-size: calc(var(--app-h, 100vh) - 20rem);
   display: flex;
   flex-direction: column;
   color: var(--fg);
@@ -275,6 +275,33 @@
   min-inline-size: 0;
 }
 
+.scene-timeline__length {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+}
+
+.scene-timeline__length-label {
+  flex: none;
+}
+
+.scene-timeline__length-input {
+  inline-size: 5.6rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  color: var(--fg);
+  background: var(--op-color-neutral-plus-seven);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-small);
+}
+
+/* A bar past the scene's set length runs off the end, not over the next column. */
+.scene-timeline__lane {
+  overflow: hidden;
+}
+
 .scene-timeline__time {
   flex: none;
   min-inline-size: 7rem;
@@ -291,7 +318,7 @@
 
 .scene-timeline__row {
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr);
+  grid-template-columns: 22rem minmax(0, 1fr);
   align-items: center;
   gap: var(--op-space-x-small);
 }
@@ -429,7 +456,8 @@
 /* A part's right-click menu. Fixed, placed at the pointer by openMenu(). */
 .scene-menu {
   position: fixed;
-  z-index: 60;
+  inset: auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
   min-inline-size: 24rem;
@@ -440,6 +468,10 @@
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-medium);
   box-shadow: 0 1.2rem 3.2rem rgb(0 0 0 / 0.5);
+}
+
+.scene-menu:not(:popover-open) {
+  display: none;
 }
 
 .scene-menu__item {
@@ -547,4 +579,18 @@
   font-size: var(--op-font-x-small);
   line-height: 1.4;
   color: var(--muted);
+}
+
+/* An audio part's sound: the project's files, a way to add one, and a player. */
+.scene-inspector__sound {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  inline-size: 100%;
+}
+
+.scene-inspector__player {
+  inline-size: 100%;
+  block-size: 3.2rem;
 }
