@@ -18,13 +18,27 @@
    designing, so it is never pushed below the fold. 1rem is 10px here. */
 .scene-frame {
   position: relative;
-  inline-size: min(100%, calc((100vh - 38rem) * 16 / 9));
+  flex: none;
+  inline-size: min(100%, calc((100dvh - 30rem) * 16 / 9));
   margin-inline: auto;
-  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: var(--op-border-width) solid var(--line);
   border-radius: var(--op-radius-large);
   background: var(--bg);
+}
+
+/*
+ * The 16:9 shape, from padding rather than aspect-ratio.
+ *
+ * The Mac app's WebKit ignored aspect-ratio twice — on the iframe, and then on
+ * this box — and drew the stage as a strip with the parts cut off below it.
+ * Padding in % is a share of the box's own width in every engine there is, so
+ * this spacer is the height and the iframe fills it.
+ */
+.scene-frame::before {
+  display: block;
+  padding-block-start: 56.25%;
+  content: '';
 }
 
 /* The bin on a part card. Bigger than the reorder arrows beside it, because it is
@@ -104,7 +118,7 @@
   inset-block-start: 9rem;
   inset-inline-end: 40rem;
   inline-size: min(34rem, calc(100vw - 3.2rem));
-  max-block-size: calc(100vh - 20rem);
+  max-block-size: calc(100dvh - 20rem);
   display: flex;
   flex-direction: column;
   color: var(--fg);
@@ -213,15 +227,47 @@
  * share of the scene, set by seek(), so one line runs down every lane.
  */
 .scene-timeline {
+  --head: 0%;
   display: flex;
   flex-direction: column;
-  gap: var(--op-space-x-small);
+  gap: 0.3rem;
 }
 
 .scene-timeline__transport {
   display: flex;
   align-items: center;
   gap: var(--op-space-x-small);
+}
+
+/* The time ruler, over the bars: seconds marked, and the playhead's handle. */
+.scene-timeline__ruler {
+  position: relative;
+  block-size: 3.2rem;
+  background: var(--op-color-neutral-plus-seven);
+  border-radius: var(--op-radius-small);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.scene-timeline__ruler::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--head);
+  inline-size: 0.2rem;
+  content: '';
+  background: var(--op-color-primary-base);
+  pointer-events: none;
+}
+
+.scene-timeline__tick {
+  position: absolute;
+  inset-block: 0;
+  padding-inline-start: 0.3rem;
+  font-size: var(--op-font-2x-small);
+  line-height: 1.6rem;
+  color: var(--muted);
+  border-inline-start: var(--op-border-width) solid var(--line);
+  pointer-events: none;
 }
 
 .scene-timeline__scrub {
@@ -238,7 +284,6 @@
 }
 
 .scene-timeline__tracks {
-  --at: 0%;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -281,7 +326,7 @@
 .scene-timeline__lane::after {
   position: absolute;
   inset-block: -0.2rem;
-  inset-inline-start: var(--at);
+  inset-inline-start: var(--head);
   inline-size: 0.2rem;
   content: '';
   background: var(--op-color-primary-base);
@@ -496,4 +541,10 @@
   background: var(--op-color-neutral-minus-max);
   border: 0.1rem solid var(--op-color-neutral-plus-max);
   cursor: pointer;
+}
+
+.scene-inspector__note {
+  font-size: var(--op-font-x-small);
+  line-height: 1.4;
+  color: var(--muted);
 }

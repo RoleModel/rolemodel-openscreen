@@ -859,7 +859,7 @@ define('rm-title', RMTitle)
  * clock, staggered, rather than one animation per word on clocks that drift.
  */
 class RMText extends RMElement {
-  static fields = ['text', 'sub', 'font', 'x', 'y', 'op', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'keys', 'at', 'for']
+  static fields = ['text', 'sub', 'font', 'x', 'y', 'op', 'anchor', 'w', 'size', 'subsize', 'weight', 'subweight', 'color', 'subcolor', 'track', 'lead', 'gap', 'stagger', 'step', 'rise', 'tx', 'ty', 'tz', 'persp', 'shadow', 'shadow-x', 'shadow-y', 'shadow-blur', 'shadow-color', 'shadow-opacity', 'keys', 'at', 'for']
 
   render() {
     const pick = (key, list, def) => (list.includes(this.attr(key, def)) ? this.attr(key, def) : def)
@@ -887,6 +887,19 @@ class RMText extends RMElement {
     const persp = num('persp', 180)
     const op = num('op', 100)
     const shadow = this.attr('shadow', '1') !== '0'
+    /*
+     * The shadow, dialled. Untouched it is the house --ink-shadow, so a scene
+     * written before these existed renders as it did; set any of them and the
+     * rest default to that same shadow's values (px at 1920, so cqw / 19.2):
+     * x 0, y 1.5, blur 9.6, black at 55%. A colour is hex, with or without #.
+     */
+    const shadowDialled = ['shadow-x', 'shadow-y', 'shadow-blur', 'shadow-color', 'shadow-opacity'].some((a) => this.hasAttribute(a))
+    const shadowHex = /^#?[0-9a-f]{3}([0-9a-f]{3})?$/i.test(this.attr('shadow-color')) ? `#${this.attr('shadow-color').replace('#', '')}` : 'rgb(0 0 0)'
+    const inkShadow = !shadow
+      ? ''
+      : shadowDialled
+        ? `${num('shadow-x', 0) / 19.2}cqw ${num('shadow-y', 1.5) / 19.2}cqw ${Math.max(0, num('shadow-blur', 9.6)) / 19.2}cqw color-mix(in srgb, ${shadowHex} ${Math.min(100, Math.max(0, num('shadow-opacity', 55)))}%, transparent)`
+        : 'var(--ink-shadow)'
     /* A family name only: quotes, braces and semicolons would close the
        declaration and let an attribute write CSS. Empty is the scene's face. */
     const font = this.attr('font', '').replace(/["'\\;{}<>]/g, '').trim()
@@ -980,9 +993,9 @@ class RMText extends RMElement {
            nothing to an inline box. */
         .anim { display:inline-block; }
         .head { margin:0; white-space:pre-wrap; font-size:${size}cqw; font-weight:${weight}; line-height:${lead};
-                letter-spacing:${track}em; color:${color};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+                letter-spacing:${track}em; color:${color};${inkShadow ? ` text-shadow:${inkShadow};` : ''} }
         .sub { margin:${gap}cqw 0 0 0; white-space:pre-wrap; font-size:${subsize}cqw; font-weight:${subweight}; line-height:1.4;
-               letter-spacing:0; color:${subcolor};${shadow ? ' text-shadow:var(--ink-shadow);' : ''} }
+               letter-spacing:0; color:${subcolor};${inkShadow ? ` text-shadow:${inkShadow};` : ''} }
       </style>
       <div class="at"><p class="head">${head}</p>${sub ? `<p class="sub">${sub}</p>` : ''}</div>`
   }
@@ -1036,6 +1049,11 @@ const TEXT_SCHEMA = [
   { key: 'step', label: 'Apart (ms)', type: 'range', min: 0, max: 200, step: 5, def: 60, group: 'motion' },
   { key: 'rise', label: 'Rise (px)', type: 'range', min: 0, max: 80, step: 1, def: 26, group: 'motion' },
   { key: 'shadow', label: 'Ink shadow', type: 'select', options: ['1', '0'], def: '1', group: 'motion', note: 'On, because type is not always over a controlled ground.' },
+  { key: 'shadow-x', label: 'Shadow X', type: 'range', min: -40, max: 40, step: 0.5, def: 0, group: 'motion' },
+  { key: 'shadow-y', label: 'Shadow Y', type: 'range', min: -40, max: 40, step: 0.5, def: 1.5, group: 'motion' },
+  { key: 'shadow-blur', label: 'Shadow blur', type: 'range', min: 0, max: 80, step: 0.5, def: 9.6, group: 'motion' },
+  { key: 'shadow-color', label: 'Shadow colour', type: 'color', def: '000000', group: 'motion' },
+  { key: 'shadow-opacity', label: 'Shadow strength', type: 'range', min: 0, max: 100, step: 1, def: 55, group: 'motion' },
 
   { key: 'tx', label: 'Lean X', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
   { key: 'ty', label: 'Lean Y', type: 'range', min: -45, max: 45, step: 0.5, def: 0, group: 'lean' },
@@ -4261,9 +4279,1109 @@ addPropertyControls(RoleModelLook, {
 `
 }
 
+
+/* ── rm-systems-flow ─────────────────────────────────────────────────────── */
+
+/*
+ * SystemsFlow, from framer-components (src/components/AIParticles/SystemsFlow.tsx),
+ * as a part: the grid-particle field in its three modes — Flow, Zones, Mosaic —
+ * with Progress taking it from chaos to order.
+ *
+ * In Framer it runs on requestAnimationFrame with Math.random and the pointer.
+ * A scene cannot: frame N has to be the same frame however you got to it. So
+ * the field below is the original drawing code with three changes —
+ * randomness from a seed, time in fixed 1/30s steps, and no pointer — and the
+ * part replays it to the playhead: forward from where it is, or from the
+ * start when you seek back. Its colours are hex without the #, the way the
+ * look schema keeps them, and get the # when the options are built.
+ */
+function systemsFlowCore(cv, ctx, opts, rand) {
+  const rnd = (a, b) => a + rand() * (b - a);
+  let W = 1;
+  let H = 1;
+  let CELL = opts.current.cellSize;
+  let parts = [];
+  let clock = 0;
+  let evProgress = null;
+  let shownProgress = opts.current.progress;
+  let lastPropProgress = opts.current.progress;
+  const targetProgress = () => {
+    const o = opts.current;
+    if (o.progress !== lastPropProgress) {
+      lastPropProgress = o.progress;
+      evProgress = null;
+    }
+    return evProgress ?? o.progress;
+  };
+  const makeParticle = (t) => ({
+    t,
+    lane: rnd(-1, 1),
+    wob: rnd(0, Math.PI * 2),
+    wobAmp: rnd(opts.current.tune.wobMin, opts.current.tune.wobMax),
+    spd: rnd(opts.current.tune.spdMin, opts.current.tune.spdMax),
+    jit: rnd(-opts.current.tune.jit, opts.current.tune.jit),
+    stray: rand() < opts.current.strayRate,
+    drop: rnd(0.35, 1.1),
+    // independent dice for zone density, alpha, colour picks and chaos
+    s1: rand(),
+    s2: rand(),
+    s3: rand(),
+    s4: rand(),
+    scat: rnd(-1, 1),
+    // displacement from the pointer, and its velocity
+    ox: 0,
+    oy: 0,
+    vx: 0,
+    vy: 0,
+    // last grid cell drawn, for sticky snapping (NaN = not drawn yet)
+    cx: NaN,
+    cy: NaN,
+    // lighter particles get shoved further — the stream ripples
+    mass: rnd(opts.current.tune.massMin, opts.current.tune.massMax)
+  });
+  const build = () => {
+    const n = Math.max(100, Math.round(opts.current.density));
+    parts = new Array(n);
+    for (let i = 0; i < n; i++) parts[i] = makeParticle(rnd(-0.4, 1.05));
+  };
+  // A fixed logical size (the part's share of a 1920x1080 frame), so a
+  // preview and a 4K render lay out the same field; CSS scales the canvas.
+  const setSize = (w, h) => {
+    W = Math.max(1, Math.round(w));
+    H = Math.max(1, Math.round(h));
+    cv.width = W;
+    cv.height = H;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    CELL = opts.current.cellSize;
+  };
+  const spreadAt = (t) => {
+    const T = opts.current.tune;
+    const k = Math.max(0, Math.min(1, t));
+    if (k < T.pinch) {
+      const a = k / T.pinch;
+      return T.sysStart - (T.sysStart - T.sysPinch) * (a * a * (3 - 2 * a));
+    }
+    const b = (k - T.pinch) / (1 - T.pinch);
+    return T.sysPinch + (T.sysEnd - T.sysPinch) * (b * b * (3 - 2 * b));
+  };
+  const alphaAt = (t) => {
+    if (t < 0) return 0;
+    if (opts.current.pattern !== "systems") return 1;
+    const fi = opts.current.tune.fadeIn;
+    if (fi > 0 && t < fi) return t / fi;
+    if (t > 0.99) return Math.max(0, (1.09 - t) / 0.1);
+    return 1;
+  };
+  const colorAt = (t, jit) => {
+    const c = opts.current.colors;
+    const T = opts.current.tune;
+    const k = t + jit;
+    if (k < T.stop1) return c.scatter;
+    if (k < T.stop2) return c.system;
+    if (k < T.stop3) return c.output;
+    return c.bright;
+  };
+  const geom = () => {
+    const o = opts.current;
+    const bleed = o.mode !== "flow" || o.pattern !== "systems";
+    const padL = bleed ? 0 : Math.round(W * 0.055);
+    const padR = bleed ? 0 : Math.round(W * 0.03);
+    return {
+      padL,
+      usable: W - padL - padR,
+      midY: H * 0.5,
+      halfH: H * o.tune.halfH
+    };
+  };
+  const flowXY = (p, g) => {
+    const T = opts.current.tune;
+    const x = g.padL + p.t * g.usable;
+    const wobble = Math.sin(p.t * T.wobFreq + p.wob) * p.wobAmp * T.wobSize;
+    const pat = opts.current.pattern;
+    if (pat === "stream") {
+      return { x, y: g.midY + p.lane * g.halfH + wobble * 4 };
+    }
+    if (pat === "diagonal") {
+      const k = p.t < 0 ? 0 : p.t > 1 ? 1 : p.t;
+      const spread = T.diagStart + (1 - T.diagStart) * k;
+      const tilt = (0.5 - p.t) * g.halfH * T.diagTilt;
+      const y2 = g.midY + tilt + p.lane * spread * g.halfH + wobble * 5;
+      return { x, y: y2 };
+    }
+    if (pat === "wave") {
+      const env = Math.sin(p.t * Math.PI * T.waves + 0.6) * g.halfH * T.waveH;
+      const y2 = g.midY + env + p.lane * g.halfH * T.waveBand + wobble * 4;
+      return { x, y: y2 };
+    }
+    if (pat === "taper") {
+      const k = p.t < 0 ? 0 : p.t > 1 ? 1 : p.t;
+      const sp2 = 1 - (1 - T.taperEnd) * k;
+      return {
+        x,
+        y: g.midY + p.lane * sp2 * g.halfH + wobble * 7 * sp2
+      };
+    }
+    const sp = spreadAt(p.t);
+    let y = g.midY + p.lane * sp * g.halfH + wobble * 7 * sp;
+    if (opts.current.showStrays && p.stray && p.t > T.strayAt) {
+      const d = (p.t - T.strayAt) / (1 - T.strayAt);
+      y += d * d * p.drop * g.halfH * T.strayFall;
+    }
+    return { x, y };
+  };
+  const zoneSample = (z, u, p, g) => {
+    const mid = g.midY - z.offset * g.halfH;
+    const T = opts.current.tune;
+    const wob = Math.sin(p.t * T.zWobFreq + p.wob + clock * T.zWobSpd) * p.wobAmp;
+    const uu = sfClamp01(u);
+    if (z.shape === "scatter") {
+      const y2 = mid + p.lane * z.spread * g.halfH + p.scat * 0.18 * g.halfH + wob * 6;
+      return {
+        y: y2,
+        a: 0.25 + 0.6 * p.s2,
+        c: p.s3 < 0.45 ? z.colorAlt : z.color,
+        on: p.s1 < z.density * (0.55 + 0.45 * uu)
+      };
+    }
+    if (z.shape === "burst") {
+      const env = Math.pow(Math.max(0, Math.sin(Math.PI * uu)), 0.55);
+      const pulse = 1 + T.zPulse * Math.sin(clock * T.zPulseSpd + p.wob);
+      const r = Math.abs(p.lane);
+      const y2 = mid + p.lane * z.spread * g.halfH * env * pulse;
+      const rim = r > T.zRim;
+      return {
+        y: y2,
+        a: rim ? 0.55 + 0.4 * p.s2 : 1,
+        c: rim && p.s3 < 0.5 ? z.colorAlt : z.color,
+        on: p.s1 < z.density && (!rim || p.s4 < 0.7)
+      };
+    }
+    if (z.shape === "diffuse") {
+      const open = 0.45 + 0.75 * uu;
+      const y2 = mid + p.lane * z.spread * g.halfH * open - z.drift * uu * uu * g.halfH + wob * 5 * uu;
+      const k = sfClamp01(uu * 1.15 + (p.s3 - 0.5) * 0.4);
+      return {
+        y: y2,
+        a: (1 - uu * 0.75) * (0.3 + 0.7 * p.s2),
+        c: k > 0.5 ? z.colorAlt : z.color,
+        on: p.s1 < z.density * (1 - uu * 0.35)
+      };
+    }
+    const sp = z.spread * (1 - z.taper * uu);
+    const y = mid + p.lane * sp * g.halfH + wob * 2;
+    return {
+      y,
+      a: 0.4 + 0.6 * p.s2,
+      c: p.lane < 0 ? z.color : z.colorAlt,
+      on: p.s1 < z.density
+    };
+  };
+  const zonesPoint = (p, g) => {
+    const o = opts.current;
+    const Z = o.zones;
+    const k = p.t;
+    let i = 0;
+    while (i < Z.length - 1 && k >= Z[i + 1].start) i++;
+    const z = Z[i];
+    const end = i < Z.length - 1 ? Z[i + 1].start : 1;
+    const width = Math.max(1e-3, end - z.start);
+    const u = (k - z.start) / width;
+    let s = zoneSample(z, u, p, g);
+    const bw = width * o.zoneBlend;
+    if (i < Z.length - 1 && bw > 0 && k > end - bw) {
+      const f = sfSmooth((k - (end - bw)) / bw);
+      const nz = Z[i + 1];
+      const nw = Math.max(
+        1e-3,
+        (i + 2 < Z.length ? Z[i + 2].start : 1) - nz.start
+      );
+      const n = zoneSample(nz, (k - nz.start) / nw, p, g);
+      s = {
+        y: s.y + (n.y - s.y) * f,
+        a: s.a + (n.a - s.a) * f,
+        c: p.s4 < f ? n.c : s.c,
+        on: p.s4 < f ? n.on : s.on
+      };
+    }
+    let y = s.y;
+    let c = s.c;
+    let a = s.a;
+    const T = o.tune;
+    if (T.zFadeIn > 0 && k < T.zFadeIn) a *= Math.max(0, k / T.zFadeIn);
+    if (T.zFadeOut > 0 && k > 1 - T.zFadeOut)
+      a *= Math.max(0, (1 + T.zFadeOut - k) / (2 * T.zFadeOut));
+    if (o.showStrays && p.stray && k > T.zStrayAt) {
+      const d = (k - T.zStrayAt) / (1 - T.zStrayAt);
+      y += d * d * p.drop * g.halfH * T.zStrayFall;
+      c = o.zoneStray;
+      a *= Math.max(0.15, 1 - d * 0.6);
+      return { x: k * W, y, a, c, on: true };
+    }
+    return { x: k * W, y, a, c, on: s.on };
+  };
+  const applyChaos = (pt, p, g, chaos) => {
+    if (chaos <= 1e-3) return pt;
+    const T = opts.current.tune;
+    const noisyY = g.midY + p.lane * T.chH * g.halfH + p.scat * T.chScat * g.halfH + Math.sin(clock * T.chJitSpd + p.wob * 3) * T.chJit * chaos;
+    const e = sfSmooth(chaos);
+    return {
+      ...pt,
+      y: pt.y + (noisyY - pt.y) * e,
+      c: p.s4 < chaos * T.chGrey ? opts.current.chaosColor : pt.c,
+      a: pt.a * (1 - T.chFade * chaos),
+      on: pt.on || p.s1 < chaos * T.chExtra
+    };
+  };
+  const drawMosaic = (prog) => {
+    const o = opts.current;
+    const m = o.mosaic;
+    const pal = o.palette;
+    const s = CELL;
+    const cols = Math.ceil(W / s) + 1;
+    const rows = Math.ceil(H / s) + 1;
+    const mid = H * 0.5;
+    const bandH = H * sfClamp01(m.bandHeight / 100);
+    const flow = clock * m.flow;
+    const order = sfSmooth(prog);
+    const riverOpen = order;
+    const riverHalf = bandH * 0.5 * m.riverWidth / 100;
+    const shoreW = m.shore * s;
+    const scale = m.scale / 100;
+    const repel = false; // no pointer in a rendered scene
+    const R = o.repelRadius;
+    const chaosBucket = Math.floor(clock * m.staticSpeed);
+    const gap = o.tune.gap;
+    for (let cx = 0; cx < cols; cx++) {
+      const x = cx * s;
+      const topEdge = mid - bandH / 2 + (sfVnoise(cx * 0.18, 3.1, 11) - 0.5) * s * m.ragged;
+      const botEdge = mid + bandH / 2 + (sfVnoise(cx * 0.18, 7.7, 12) - 0.5) * s * m.ragged;
+      const ry = mid + (sfVnoise(cx * 0.025 + clock * m.meander * 0.05, 1.3, 21) - 0.5) * bandH * (m.riverWander / 100);
+      const rw = riverHalf * riverOpen * (0.35 + 1.1 * sfVnoise(cx * 0.07 + clock * 0.03, 5.5, 22));
+      for (let cy = 0; cy < rows; cy++) {
+        const y = cy * s;
+        if (y < topEdge || y > botEdge) continue;
+        const h = sfHash(cx, cy, 31);
+        let col = null;
+        if (m.river && rw > s * 0.6) {
+          const d = Math.abs(y + s / 2 - ry) + (h - 0.5) * s * 1.6;
+          if (d < rw) continue;
+          if (m.shore > 0 && d < rw + shoreW) col = m.shoreColor;
+        }
+        if (repel) {
+          const dx = x + s / 2 - mx;
+          const dy = y + s / 2 - my;
+          if (dx * dx + dy * dy < R * R * (0.75 + 0.5 * h)) continue;
+        }
+        if (!col) {
+          let v = sfFbm(cx * scale + flow, cy * scale * 1.25, 41);
+          v = sfClamp01((v - 0.5) * m.contrast + 0.5);
+          if (order < 1) {
+            const salt = sfHash(cx, cy, 51 + chaosBucket);
+            v = salt + (v - salt) * order;
+          }
+          col = sfPickPalette(pal, v);
+          if (m.sparkRate > 0) {
+            const warm = v > 0.55 ? 1 : 0.25;
+            if (h < m.sparkRate * warm) {
+              const on = Math.sin(clock * m.sparkSpeed + h * 977) > -0.2;
+              if (on)
+                col = sfHash(cx, cy, 61) < 0.55 ? m.sparkA : m.sparkB;
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = col;
+        ctx.fillRect(x, y, s - gap, s - gap);
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+  const drawZoneFill = (g, order) => {
+    const o = opts.current;
+    const Z = o.zones;
+    const s = CELL;
+    const T = o.tune;
+    const slide = Math.floor(clock * T.zFill * W / s);
+    const bucket = Math.floor(clock * T.zShimmer);
+    for (let i = 0; i < Z.length; i++) {
+      const z = Z[i];
+      if (z.fill <= 0) continue;
+      const end = i < Z.length - 1 ? Z[i + 1].start : 1;
+      const x0 = Math.floor(z.start * W / s);
+      const x1 = Math.ceil(end * W / s);
+      const mid = g.midY - z.offset * g.halfH;
+      for (let cx = x0; cx < x1; cx++) {
+        const u = sfClamp01((cx * s - z.start * W) / Math.max(1, (end - z.start) * W));
+        let half;
+        let lift = 0;
+        if (z.shape === "burst") {
+          half = z.spread * g.halfH * Math.pow(Math.max(0, Math.sin(Math.PI * u)), 0.55) * (1 + T.zPulse * Math.sin(clock * T.zPulseSpd));
+        } else if (z.shape === "diffuse") {
+          half = z.spread * g.halfH * (0.45 + 0.75 * u);
+          lift = z.drift * u * u * g.halfH;
+        } else if (z.shape === "band") {
+          half = z.spread * g.halfH * (1 - z.taper * u);
+        } else {
+          half = z.spread * g.halfH;
+        }
+        const edge = Math.min(1, u / 0.12, (1 - u) / 0.12);
+        const amount = z.fill * order * (z.shape === "burst" ? 1 : Math.max(0.2, edge));
+        const top = Math.round((mid - lift - half) / s);
+        const bot = Math.round((mid - lift + half) / s);
+        const hx = cx - slide;
+        for (let cy = top; cy <= bot; cy++) {
+          const r = Math.abs((cy * s - (mid - lift)) / Math.max(1, half));
+          const h = sfHash(hx, cy, 71);
+          const rimAt = T.zRim - 0.04;
+          const rim = r > rimAt;
+          const keep = rim ? amount * 0.55 * (1 - (r - rimAt) * 2) : amount;
+          const hv = rim ? sfHash(hx, cy, 72 + bucket) : h;
+          if (hv > keep) continue;
+          let col = z.color;
+          let a = 1;
+          if (z.shape === "band") {
+            col = cy * s < mid ? z.color : z.colorAlt;
+            a = 0.35 + 0.65 * sfHash(hx, cy, 73);
+          } else if (z.shape === "diffuse") {
+            col = sfHash(hx, cy, 74) < u ? z.colorAlt : z.color;
+            a = (1 - u * 0.7) * (0.3 + 0.7 * sfHash(hx, cy, 73));
+          } else if (z.shape === "scatter") {
+            col = h < 0.4 ? z.colorAlt : z.color;
+            a = 0.25 + 0.6 * sfHash(hx, cy, 73);
+          } else if (rim && sfHash(hx, cy, 75) < 0.4) {
+            col = z.colorAlt;
+          }
+          ctx.globalAlpha = a;
+          ctx.fillStyle = col;
+          ctx.fillRect(cx * s, cy * s, s - T.gap, s - T.gap);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+  const draw = () => {
+    const o = opts.current;
+    const c = o.colors;
+    ctx.clearRect(0, 0, W, H);
+    const chaos = 1 - shownProgress;
+    if (o.mode === "mosaic") {
+      drawMosaic(shownProgress);
+      return;
+    }
+    const g = geom();
+    const { padL, midY } = g;
+    const s = o.gridSnap ? CELL : 0;
+    if (o.mode === "flow" && o.showSource && o.pattern === "systems") {
+      const T = o.tune;
+      const R = Math.round(T.srcSize);
+      const reach = Math.max(0, R - 1);
+      const sx = padL - CELL * T.srcGap;
+      for (let gx = -reach; gx <= reach; gx++) {
+        for (let gy = -reach; gy <= reach; gy++) {
+          if (Math.abs(gx) + Math.abs(gy) > R) continue;
+          const on = (gx + gy) % 2 === 0;
+          ctx.fillStyle = on ? c.output : c.scatter;
+          ctx.globalAlpha = on ? 0.95 : 0.85;
+          ctx.fillRect(
+            sx + gx * CELL,
+            midY + gy * CELL,
+            CELL - T.gap,
+            CELL - T.gap
+          );
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (o.mode === "zones") drawZoneFill(g, sfSmooth(shownProgress));
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p.t < 0) continue;
+      let pt;
+      if (o.mode === "zones") {
+        pt = zonesPoint(p, g);
+      } else {
+        const b = flowXY(p, g);
+        let col = colorAt(p.t, p.jit);
+        let a2 = alphaAt(p.t);
+        if (o.showStrays && p.stray && p.t > o.tune.strayAt) {
+          const d = (p.t - o.tune.strayAt) / (1 - o.tune.strayAt);
+          col = c.stray;
+          a2 *= Math.max(0, 1 - d * o.tune.strayFade);
+        }
+        pt = { x: b.x, y: b.y, a: a2, c: col, on: true };
+      }
+      pt = applyChaos(pt, p, g, chaos);
+      if (!pt.on) continue;
+      const x = pt.x + p.ox;
+      const y = pt.y + p.oy;
+      const a = pt.a;
+      if (a <= 0.01) continue;
+      if (y < -CELL || y > H + CELL) continue;
+      let px = x;
+      let py = y;
+      if (s) {
+        p.cx = sfStickyCell(x / s, p.cx, o.tune.stickX);
+        p.cy = sfStickyCell(y / s, p.cy, o.tune.stickY);
+        px = p.cx * s;
+        py = p.cy * s;
+      }
+      const w = (s ? s : o.tune.dot) - o.tune.gap;
+      ctx.globalAlpha = Math.min(1, a);
+      ctx.fillStyle = pt.c;
+      ctx.fillRect(px, py, w, w);
+    }
+    ctx.globalAlpha = 1;
+  };
+  /* One fixed step of the field: progress eases, particles travel, the ones
+     off the right edge come back on the left. No pointer, no wall clock. */
+  const step = (dt, target) => {
+    const o = opts.current;
+    const ease = Math.max(0.05, o.progressEase);
+    shownProgress += (target - shownProgress) * (1 - Math.exp(-dt / ease));
+    const sp = o.speed;
+    clock += dt * sp;
+    if (o.mode === "mosaic") return;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      p.t += p.spd * sp * dt;
+      if (p.t > 1.12) parts[i] = makeParticle(rnd(-0.3, -0.02));
+    }
+  };
+  const reset = (progress) => {
+    clock = 0;
+    shownProgress = progress;
+    build();
+  };
+  return { setSize, reset, step, draw };
+}
+function sfStickyCell(pos, prev, slack) {
+  // Ported: no hysteresis. A rendered frame cannot depend on which frames were
+  // drawn before it, so every cell is just the nearest one.
+  return Math.round(pos);
+  if (Number.isNaN(prev) || Math.abs(pos - prev) > 0.5 + slack) {
+    return Math.round(pos);
+  }
+  return prev;
+}
+function sfClamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+function sfSmooth(v) {
+  const k = sfClamp01(v);
+  return k * k * (3 - 2 * k);
+}
+function sfHash(x, y, s) {
+  let h = x * 374761393 + y * 668265263 + s * 982451653 | 0;
+  h = Math.imul(h ^ h >>> 13, 1274126177);
+  h = h ^ h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function sfVnoise(x, y, s) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = sfHash(xi, yi, s);
+  const b = sfHash(xi + 1, yi, s);
+  const c = sfHash(xi, yi + 1, s);
+  const d = sfHash(xi + 1, yi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function sfFbm(x, y, s) {
+  return sfVnoise(x, y, s) * 0.55 + sfVnoise(x * 2.1, y * 2.1, s + 1) * 0.3 + sfVnoise(x * 4.3, y * 4.3, s + 2) * 0.15;
+}
+const SF_DEFAULT_LAYOUT = {
+  streamHeight: 88,
+  // % of the layer height the stream can fill
+  pixelGap: 1.5,
+  // px of empty space between squares
+  dotSize: 8,
+  // px, square size when Grid Snap is off
+  maxFps: 60
+  // frames per second cap
+};
+const SF_DEFAULT_FLOW_SHAPE = {
+  wiggleCount: 6.5,
+  // waves of wobble along the strip
+  wiggleSize: 100,
+  // % of the built-in wobble height
+  pinchAt: 42,
+  // Systems: % across where the stream is narrowest
+  startWidth: 90,
+  // Systems: % of height used at the left edge
+  pinchWidth: 18,
+  // Systems: % of height at the pinch
+  endWidth: 104,
+  // Systems: % of height at the right edge
+  diagonalStart: 35,
+  // Diagonal: starting width, % of full
+  diagonalTilt: 170,
+  // Diagonal: how steep the slope is
+  waves: 2.2,
+  // Wave: half-waves across the strip (2.2 ≈ 1.1 full waves)
+  waveHeight: 70,
+  // Wave: how far the centre swings, % of half-height
+  waveBand: 50,
+  // Wave: band thickness, % of half-height
+  taperEnd: 10,
+  // Taper: width at the right edge, % of the start
+  fadeIn: 8,
+  // Systems: % of the strip used to fade particles in
+  stop1: 30,
+  // where Scatter colour hands over to System (% across)
+  stop2: 56,
+  // System → Output
+  stop3: 83,
+  // Output → Bright
+  colorJitter: 3.5,
+  // ±% each particle's colour border wanders
+  strayStart: 70,
+  // % across where strays start falling
+  strayFall: 115,
+  // how far strays fall, % of half-height
+  strayFade: 55,
+  // % strays fade by the right edge
+  sourceSize: 4,
+  // Systems source node radius, in cells
+  sourceGap: 5
+  // cells between the node and the stream
+};
+const SF_DEFAULT_MOTION = {
+  speedMin: 5.5,
+  // slowest particle, % of the width per second (Speed 1)
+  speedMax: 11.5,
+  // fastest particle
+  wobbleMin: 15,
+  // weakest per-particle wobble, %
+  wobbleMax: 100,
+  // strongest per-particle wobble, %
+  massMin: 65,
+  // lightest particle (pushed furthest by the cursor), %
+  massMax: 135,
+  // heaviest particle, %
+  stiffness: 26,
+  // spring pull back to place after a cursor push
+  stickX: 20,
+  // grid snap stickiness sideways, % of a cell
+  stickY: 45
+  // grid snap stickiness up/down, % of a cell
+};
+const SF_DEFAULT_CHAOS = {
+  height: 95,
+  // how tall the messy band is, % of half-height
+  scatter: 35,
+  // extra random up/down scatter, % of half-height
+  jitter: 10,
+  // px of shake at full chaos
+  jitterSpeed: 1.7,
+  // shakes per second-ish
+  grey: 90,
+  // % of particles that turn Chaos tint at full chaos
+  fade: 35,
+  // % opacity lost at full chaos
+  extra: 60
+  // % of hidden particles that appear at full chaos
+};
+const SF_DEFAULT_ZONE_SHAPE = {
+  wiggleCount: 9,
+  // waves of wobble along the strip
+  wiggleSpeed: 0.6,
+  // how fast the wobble moves on its own
+  fadeIn: 4,
+  // % of the strip used to fade in at the left
+  fadeOut: 3,
+  // % of the strip used to fade out at the right
+  strayStart: 62,
+  // % across where strays start falling
+  strayFall: 120,
+  // how far strays fall, % of half-height
+  pulse: 6,
+  // Burst: how much it breathes, % of its height
+  pulseSpeed: 2.2,
+  // Burst: breathing speed
+  rim: 82,
+  // Burst: where the ragged rim starts, % from the centre
+  fillSpeed: 8.5,
+  // Solid fill slide speed, % of width per second
+  shimmer: 5
+  // rim shimmer changes per second
+};
+function sfNormalizeTune(p) {
+  const L = { ...SF_DEFAULT_LAYOUT, ...p.layout || {} };
+  const F = { ...SF_DEFAULT_FLOW_SHAPE, ...p.flowShape || {} };
+  const M = { ...SF_DEFAULT_MOTION, ...p.motion || {} };
+  const C = { ...SF_DEFAULT_CHAOS, ...p.chaosShape || {} };
+  const Z = { ...SF_DEFAULT_ZONE_SHAPE, ...p.zoneShape || {} };
+  const pct = (v) => v / 100;
+  const s1 = sfClamp01(pct(F.stop1));
+  const s2 = Math.max(s1, sfClamp01(pct(F.stop2)));
+  const s3 = Math.max(s2, sfClamp01(pct(F.stop3)));
+  return {
+    // layout
+    halfH: pct(L.streamHeight) / 2,
+    gap: Math.max(0, L.pixelGap),
+    dot: Math.max(1, L.dotSize),
+    maxFps: Math.max(1, L.maxFps),
+    // flow shape
+    wobFreq: F.wiggleCount,
+    wobSize: pct(F.wiggleSize),
+    pinch: Math.min(0.95, Math.max(0.05, pct(F.pinchAt))),
+    sysStart: pct(F.startWidth),
+    sysPinch: pct(F.pinchWidth),
+    sysEnd: pct(F.endWidth),
+    diagStart: pct(F.diagonalStart),
+    diagTilt: pct(F.diagonalTilt),
+    waves: F.waves,
+    waveH: pct(F.waveHeight),
+    waveBand: pct(F.waveBand),
+    taperEnd: pct(F.taperEnd),
+    fadeIn: sfClamp01(pct(F.fadeIn)),
+    stop1: s1,
+    stop2: s2,
+    stop3: s3,
+    jit: pct(F.colorJitter),
+    strayAt: Math.min(0.98, sfClamp01(pct(F.strayStart))),
+    strayFall: pct(F.strayFall),
+    strayFade: sfClamp01(pct(F.strayFade)),
+    srcSize: Math.max(0, F.sourceSize),
+    srcGap: F.sourceGap,
+    // motion
+    spdMin: pct(Math.min(M.speedMin, M.speedMax)),
+    spdMax: pct(Math.max(M.speedMin, M.speedMax)),
+    wobMin: pct(Math.min(M.wobbleMin, M.wobbleMax)),
+    wobMax: pct(Math.max(M.wobbleMin, M.wobbleMax)),
+    massMin: Math.max(0.05, pct(Math.min(M.massMin, M.massMax))),
+    massMax: Math.max(0.05, pct(Math.max(M.massMin, M.massMax))),
+    K: Math.max(1, M.stiffness),
+    stickX: pct(M.stickX),
+    stickY: pct(M.stickY),
+    // chaos
+    chH: pct(C.height),
+    chScat: pct(C.scatter),
+    chJit: C.jitter,
+    chJitSpd: C.jitterSpeed,
+    chGrey: sfClamp01(pct(C.grey)),
+    chFade: sfClamp01(pct(C.fade)),
+    chExtra: sfClamp01(pct(C.extra)),
+    // zones
+    zWobFreq: Z.wiggleCount,
+    zWobSpd: Z.wiggleSpeed,
+    zFadeIn: sfClamp01(pct(Z.fadeIn)),
+    zFadeOut: sfClamp01(pct(Z.fadeOut)),
+    zStrayAt: Math.min(0.98, sfClamp01(pct(Z.strayStart))),
+    zStrayFall: pct(Z.strayFall),
+    zPulse: pct(Z.pulse),
+    zPulseSpd: Z.pulseSpeed,
+    zRim: sfClamp01(pct(Z.rim)),
+    zFill: pct(Z.fillSpeed),
+    zShimmer: Math.max(0.1, Z.shimmer)
+  };
+}
+const SF_SHAPES = ["scatter", "band", "burst", "diffuse"];
+function sfNormalizeZones(zones) {
+  const list = (Array.isArray(zones) && zones.length ? zones : SF_DEFAULT_ZONES).map((z) => ({
+    shape: SF_SHAPES.includes(z?.shape) ? z.shape : "band",
+    start: sfClamp01((z?.start ?? 0) / 100),
+    color: z?.color || "4478c0",
+    colorAlt: z?.colorAlt || z?.color || "4478c0",
+    spread: sfClamp01((z?.spread ?? 60) / 100) * 1.1,
+    density: sfClamp01((z?.density ?? 100) / 100),
+    taper: sfClamp01((z?.taper ?? 0) / 100),
+    drift: (z?.drift ?? 0) / 100 * 1.2,
+    offset: (z?.offset ?? 0) / 100 * 0.9,
+    fill: sfClamp01((z?.fill ?? 0) / 100)
+  })).sort((a, b) => a.start - b.start);
+  list[0].start = 0;
+  return list;
+}
+function sfNormalizePalette(palette) {
+  const list = (Array.isArray(palette) && palette.length ? palette : SF_DEFAULT_PALETTE).map((p) => ({
+    color: p?.color || "4060d8",
+    weight: Math.max(0, p?.weight ?? 1)
+  })).filter((p) => p.weight > 0);
+  const total = list.reduce((s, p) => s + p.weight, 0) || 1;
+  let acc = 0;
+  return list.map((p) => {
+    acc += p.weight / total;
+    return { color: p.color, edge: acc };
+  });
+}
+function sfPickPalette(pal, v) {
+  for (let i = 0; i < pal.length; i++) if (v <= pal[i].edge) return pal[i].color;
+  return pal[pal.length - 1]?.color || "rgb(0 0 0)";
+}
+const SF_DEFAULT_ZONES = [
+  {
+    shape: "scatter",
+    fill: 0,
+    start: 0,
+    color: "8f93a3",
+    colorAlt: "c9cbd4",
+    spread: 85,
+    density: 60,
+    taper: 0,
+    drift: 0,
+    offset: 0
+  },
+  {
+    shape: "band",
+    fill: 30,
+    start: 26,
+    color: "6e7fe4",
+    colorAlt: "5b6075",
+    spread: 50,
+    density: 92,
+    taper: 70,
+    drift: 0,
+    offset: 0
+  },
+  {
+    shape: "burst",
+    fill: 92,
+    start: 52,
+    color: "f2c014",
+    colorAlt: "e8a63b",
+    spread: 78,
+    density: 100,
+    taper: 0,
+    drift: 0,
+    offset: 0
+  },
+  {
+    shape: "diffuse",
+    fill: 12,
+    start: 68,
+    color: "f3dc72",
+    colorAlt: "d8f21b",
+    spread: 70,
+    density: 75,
+    taper: 0,
+    drift: 85,
+    offset: 0
+  }
+];
+const SF_DEFAULT_PALETTE = [
+  { color: "222a42", weight: 30 },
+  { color: "4362da", weight: 34 },
+  { color: "f5c518", weight: 30 },
+  { color: "e8503a", weight: 6 }
+];
+const SF_DEFAULT_MOSAIC = {
+  bandHeight: 80,
+  scale: 6,
+  contrast: 1.6,
+  flow: 0.6,
+  ragged: 3,
+  river: true,
+  riverWidth: 38,
+  meander: 1,
+  shore: 2,
+  shoreColor: "222a42",
+  sparkRate: 0.05,
+  sparkA: "e8503a",
+  sparkB: "d8f21b",
+  riverWander: 35,
+  // how far the river swings up/down, % of the band
+  sparkSpeed: 3.2,
+  // how fast sparks blink
+  staticSpeed: 6
+  // low-progress static changes per second
+};
+const SF_DEFAULTS = {
+  mode: "flow",
+  density: 2400,
+  speed: 1,
+  cellSize: 6,
+  strayRate: 0.1,
+  showStrays: true,
+  pattern: "systems",
+  gridSnap: true,
+  showGrid: true,
+  showSource: true,
+  pointerRepel: true,
+  repelRadius: 130,
+  repelStrength: 2600,
+  springBack: 1,
+  minHeight: 240,
+  fullBleed: false,
+  background: "fbfbfc",
+  gridColor: "e6e9ec",
+  colors: {
+    scatter: "2b3948",
+    system: "4478c0",
+    output: "e8a63b",
+    bright: "f2c94c",
+    stray: "d9533a"
+  },
+  zones: SF_DEFAULT_ZONES,
+  zoneBlend: 0.35,
+  zoneStray: "f0a08f",
+  mosaic: SF_DEFAULT_MOSAIC,
+  palette: SF_DEFAULT_PALETTE,
+  progress: 100,
+  channel: "",
+  progressEase: 0.8,
+  chaosColor: "b9bcc6",
+  layout: SF_DEFAULT_LAYOUT,
+  flowShape: SF_DEFAULT_FLOW_SHAPE,
+  motion: SF_DEFAULT_MOTION,
+  chaosShape: SF_DEFAULT_CHAOS,
+  zoneShape: SF_DEFAULT_ZONE_SHAPE
+};
+
+const SF_STEP = 1 / 30
+/* mulberry32: small, fast, and the same sequence for the same seed everywhere. */
+const sfSeeded = (seed) => {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+/* Hex without the # (the defaults, and what the Studio stores) becomes a colour. */
+const sfHashed = (v) => {
+  if (typeof v === 'string') return /^[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v) ? `#${v}` : v
+  if (Array.isArray(v)) return v.map(sfHashed)
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sfHashed(x)]))
+  return v
+}
+
+class RMSystemsFlow extends RMElement {
+  static fields = ['field', 'shape', 'progress', 'progress-end', 'particles', 'speed', 'cell', 'strays', 'source', 'panel', 'bg', 'grid-color', 'scatter', 'system', 'output', 'bright', 'stray', 'x', 'y', 'w', 'h', 'seed', 'at', 'for']
+  render() {
+    const num = (key, def) => {
+      const n = Number(this.attr(key, String(def)))
+      return Number.isFinite(n) ? n : def
+    }
+    const hex = (key, def) => sfHashed(String(this.attr(key, def)).replace('#', ''))
+    const x = num('x', 50)
+    const y = num('y', 50)
+    const w = Math.min(100, Math.max(5, num('w', 100)))
+    const h = Math.min(100, Math.max(5, num('h', 40)))
+    const cell = Math.min(40, Math.max(2, num('cell', 6)))
+    const panel = this.attr('panel', 'off') === 'on'
+    const grid = hex('grid-color', SF_DEFAULTS.gridColor)
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}${TIMING}
+        :host { position:absolute; display:block; inset:0; width:100%; height:100%; pointer-events:none; }
+        .box { position:absolute; left:${x}%; top:${y}%; width:${w}%; height:${h}%; translate:-50% -50%; overflow:hidden;
+               ${panel ? `background-color:${hex('bg', SF_DEFAULTS.background)}; background-image:linear-gradient(${grid} 1px, transparent 1px), linear-gradient(90deg, ${grid} 1px, transparent 1px); background-size:${cell / 19.2}cqw ${cell / 19.2}cqw;` : ''} }
+        canvas { position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; }
+      </style>
+      <div class="box anim"><canvas></canvas></div>`
+    const scene = this.closest('rm-scene')
+    const sw = Number(scene?.getAttribute('width') || 1920)
+    const sh = Number(scene?.getAttribute('height') || 1080)
+    const mode = ['flow', 'zones', 'mosaic'].includes(this.attr('field')) ? this.attr('field') : 'flow'
+    const pattern = ['systems', 'stream', 'diagonal', 'wave', 'taper'].includes(this.attr('shape')) ? this.attr('shape') : 'systems'
+    const d = SF_DEFAULTS
+    this._opts = {
+      current: {
+        ...d,
+        mode,
+        pattern,
+        density: Math.min(8000, Math.max(100, num('particles', d.density))),
+        speed: Math.max(0, num('speed', d.speed)),
+        cellSize: cell,
+        showStrays: this.attr('strays', 'on') !== 'off',
+        showSource: this.attr('source', 'on') !== 'off',
+        gridSnap: true,
+        pointerRepel: false,
+        colors: {
+          scatter: hex('scatter', d.colors.scatter),
+          system: hex('system', d.colors.system),
+          output: hex('output', d.colors.output),
+          bright: hex('bright', d.colors.bright),
+          stray: hex('stray', d.colors.stray),
+        },
+        zones: sfNormalizeZones(sfHashed(SF_DEFAULT_ZONES)),
+        zoneStray: sfHashed(d.zoneStray),
+        mosaic: sfHashed({ ...SF_DEFAULT_MOSAIC }),
+        palette: sfNormalizePalette(sfHashed(SF_DEFAULT_PALETTE)),
+        chaosColor: sfHashed(d.chaosColor),
+        progress: this._progressAt(0),
+        // Keyed progress is the target; this is only how fast the field follows it.
+        progressEase: 0.35,
+        tune: sfNormalizeTune({}),
+      },
+    }
+    const canvas = this.shadowRoot.querySelector('canvas')
+    this._core = systemsFlowCore(canvas, canvas.getContext('2d'), this._opts, () => this._rand())
+    this._core.setSize((sw * w) / 100, (sh * h) / 100)
+    this._dirty = true
+    if (!this._onSeek) {
+      this._onSeek = () => this.paint(RM.t)
+      root.addEventListener('rmseek', this._onSeek)
+    }
+    this.paint(RM.t)
+  }
+
+  /* Progress at a moment in the part, % → 0..1: from progress to progress-end across its window. */
+  _progressAt(sec) {
+    const pct = (key, def) => {
+      const n = Number(this.attr(key, String(def)))
+      return Number.isFinite(n) ? Math.min(1, Math.max(0, n / 100)) : def / 100
+    }
+    const from = pct('progress', 100)
+    const to = this.hasAttribute('progress-end') ? pct('progress-end', 100) : from
+    const hold = (this._timed('duration') ?? Number(this.attr('for', '4000'))) / 1000
+    const u = Math.min(1, Math.max(0, sec / Math.max(0.1, hold)))
+    return from + (to - from) * (u * u * (3 - 2 * u))
+  }
+
+  /* Replay to the playhead: on from the last step, or from the start after a seek back. */
+  paint(ms) {
+    if (!this._core) return
+    const local = Math.max(0, (Number(ms) - this.startMs()) / 1000)
+    const want = Math.floor(local / SF_STEP + 1e-6)
+    if (this._dirty || want < this._steps) {
+      this._rand = sfSeeded(Number(this.attr('seed', '7')) || 7)
+      this._core.reset(this._progressAt(0))
+      this._steps = 0
+      this._dirty = false
+    }
+    while (this._steps < want) {
+      this._steps += 1
+      this._opts.current.progress = this._progressAt(this._steps * SF_STEP)
+      this._core.step(SF_STEP, this._opts.current.progress)
+    }
+    this._core.draw()
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback()
+    if (this._onSeek) root.removeEventListener('rmseek', this._onSeek)
+    this._onSeek = null
+  }
+}
+define('rm-systems-flow', RMSystemsFlow)
+
+/* ── rm-blocks ───────────────────────────────────────────────────────────── */
+
+/*
+ * A grid of square blocks that arrive and leave one after another — the
+ * stacked tiles of the Foreman film, as a part. Rows, columns, block size and
+ * spacing in cqw; the order they come in (by row, by column, on the diagonal,
+ * out from the centre, or shuffled); how each arrives and leaves; and a step
+ * between them. Each block runs its own paused enter and exit on the scene
+ * clock, so the cascade is seeked like everything else.
+ */
+const BLOCK_MOVES = {
+  pop: { o: 0, s: 0.2 },
+  fade: { o: 0 },
+  rise: { o: 0, y: 3 },
+  drop: { o: 0, y: -3 },
+  'slide-left': { o: 0, x: -4 },
+  'slide-right': { o: 0, x: 4 },
+  flip: { o: 0, r: 90 },
+  none: {},
+}
+for (const set of ['bi', 'bo']) {
+  for (const [name, syntax, initial] of [
+    [`--${set}-o`, '<number>', '1'],
+    [`--${set}-s`, '<number>', '1'],
+    [`--${set}-x`, '<length>', '0px'],
+    [`--${set}-y`, '<length>', '0px'],
+    [`--${set}-r`, '<angle>', '0deg'],
+  ]) {
+    try {
+      CSS.registerProperty({ name, syntax, initialValue: initial, inherits: false })
+    } catch {
+      /* already registered */
+    }
+  }
+}
+const blockFrame = (set, v) => `--${set}-o:${v.o ?? 1}; --${set}-s:${v.s ?? 1}; --${set}-x:${v.x ?? 0}cqw; --${set}-y:${v.y ?? 0}cqw; --${set}-r:${v.r ?? 0}deg;`
+
+class RMBlocks extends RMElement {
+  static fields = ['rows', 'cols', 'block', 'spacing', 'radius', 'x', 'y', 'order', 'arrive', 'leave', 'step', 'each', 'tone', 'color', 'color2', 'seed', 'at', 'for']
+  render() {
+    const num = (key, def, lo, hi) => {
+      const n = Number(this.attr(key, String(def)))
+      return Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : def))
+    }
+    const rows = Math.round(num('rows', 3, 1, 24))
+    const cols = Math.round(num('cols', 6, 1, 40))
+    const block = num('block', 6, 0.5, 40)
+    const spacing = num('spacing', 0.8, 0, 20)
+    const radius = num('radius', 8, 0, 50)
+    const x = num('x', 50, -50, 150)
+    const y = num('y', 50, -50, 150)
+    const step = num('step', 60, 0, 1000)
+    const each = num('each', 450, 50, 4000)
+    const arrive = BLOCK_MOVES[this.attr('arrive', 'pop')] ? this.attr('arrive', 'pop') : 'pop'
+    const leave = this.attr('leave', 'stay')
+    const order = this.attr('order', 'row')
+    const tone = this.attr('tone', 'solid')
+    const ink = (key, def) => {
+      const v = this.attr(key).replace('#', '').trim()
+      return /^[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v) ? `#${v}` : def
+    }
+    const c1 = ink('color', 'var(--brand)')
+    const c2 = ink('color2', 'var(--fg)')
+    const rand = sfSeeded(Number(this.attr('seed', '3')) || 3)
+    const n = rows * cols
+    /* Each block's place in the cascade. */
+    const cr = (rows - 1) / 2
+    const cc = (cols - 1) / 2
+    const rank = Array.from({ length: n }, (_, i) => {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      if (order === 'column') return c * rows + r
+      if (order === 'diagonal') return r + c
+      if (order === 'center') return Math.round(Math.hypot(r - cr, c - cc) * 2)
+      if (order === 'random') return rand()
+      return i
+    })
+    const sorted = [...new Set(rank)].sort((a, b) => a - b)
+    const slot = rank.map((v) => sorted.indexOf(v))
+    const last = Math.max(...slot)
+    const hold = this._timed('duration') ?? (this.hasAttribute('for') ? Number(this.getAttribute('for')) : null)
+    const leaves = hold != null && leave !== 'stay' && BLOCK_MOVES[leave]
+    const shades = Array.from({ length: n }, (_, i) => {
+      if (tone === 'checker') return (Math.floor(i / cols) + (i % cols)) % 2 ? c2 : c1
+      if (tone === 'random') return rand() < 0.5 ? c2 : c1
+      return c1
+    })
+    const cells = slot
+      .map((s, i) => {
+        const inAt = s * step
+        const outAt = leaves ? hold - each - (last - s) * step : 0
+        return `<i style="background:${shades[i]}; animation-delay:calc(var(--at) + ${inAt}ms - var(--t)), calc(var(--at) + ${outAt}ms - var(--t));"></i>`
+      })
+      .join('')
+    this.shadowRoot.innerHTML = `
+      <style>
+        ${TYPE}
+        :host { position:absolute; display:block; inset:0; width:100%; height:100%; pointer-events:none; --at:0ms; }
+        .grid { position:absolute; left:${x}%; top:${y}%; translate:-50% -50%; display:grid;
+                grid-template-columns:repeat(${cols}, ${block}cqw); grid-auto-rows:${block}cqw; gap:${spacing}cqw; }
+        i { display:block; border-radius:${radius}%;
+            animation-name:block-in, ${leaves ? 'block-out' : 'block-hold'};
+            animation-duration:${each}ms, ${leaves ? each : 1}ms;
+            animation-timing-function:var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)), var(--ease-exit, cubic-bezier(0.55, 0, 1, 0.45));
+            animation-fill-mode:both, both; animation-play-state:paused, paused;
+            opacity:calc(var(--bi-o) * var(--bo-o));
+            translate:calc(var(--bi-x) + var(--bo-x)) calc(var(--bi-y) + var(--bo-y));
+            scale:calc(var(--bi-s) * var(--bo-s));
+            rotate:calc(var(--bi-r) + var(--bo-r)); }
+        @keyframes block-in { from { ${blockFrame('bi', BLOCK_MOVES[arrive])} } to { ${blockFrame('bi', {})} } }
+        @keyframes block-out { from { ${blockFrame('bo', {})} } to { ${blockFrame('bo', leaves ? BLOCK_MOVES[leave] : {})} } }
+        @keyframes block-hold { from { ${blockFrame('bo', {})} } to { ${blockFrame('bo', {})} } }
+      </style>
+      <div class="grid">${cells}</div>`
+  }
+}
+define('rm-blocks', RMBlocks)
+
 export { RMShowcase, SHOWCASE_SCHEMA, SHOWCASE_GROUPS, SHOWCASE_TEMPLATES, showcaseDefaults, encodeShowcase, RMText, TEXT_SCHEMA, TEXT_GROUPS, textDefaults, encodeText, RMAudio, AUDIO_SCHEMA, AUDIO_GROUPS, audioDefaults, encodeAudio, KEY_PROPS, TEXT_KEY_PROPS, KEY_EASES, parseKeys, encodeKeys, keysAt }
 export { RMLook, LOOK_SCHEMA, LOOK_GROUPS, LOOK_PRESETS, LOOK_DEFAULT_STOPS, LOOK_MAX_STOPS, LOOK_FRAGMENT, decodeLook, encodeLook, renderLook, lookFramerSource }
-export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets }
+export { RMScene, RMBrowser, RMTitle, RMLowerThird, RMCallout, RMShader, RMStat, RMBullets, RMSystemsFlow, RMBlocks }
 
 /* ── rm-pip ──────────────────────────────────────────────────────────────── */
 

@@ -812,3 +812,96 @@ rm-icon {
 }
 
 .notes__empty { padding: var(--op-space-small); }
+
+/*
+ * The font picker: a trigger in the chosen face, and a popover with a search
+ * box over the families, each drawn in itself.
+ */
+.fontmenu {
+  position: relative;
+  inline-size: 100%;
+}
+
+.fontmenu__trigger {
+  display: block;
+  inline-size: 100%;
+  overflow: hidden;
+  padding: 0.6rem 0.8rem;
+  font-size: var(--op-font-small);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  background: var(--op-color-neutral-plus-seven);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  cursor: pointer;
+}
+
+.fontmenu__panel {
+  position: fixed;
+  z-index: 2147483000;
+  inset: auto;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  inline-size: 30rem;
+  max-block-size: 40rem;
+  padding: 0.6rem;
+  color: var(--fg);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  box-shadow: 0 1.2rem 3.2rem rgb(0 0 0 / 0.5);
+}
+
+.fontmenu__panel:not(:popover-open) {
+  display: none;
+}
+
+.fontmenu__search {
+  flex: none;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  font-size: var(--op-font-small);
+  color: var(--fg);
+  background: var(--op-color-neutral-plus-seven);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-small);
+}
+
+.fontmenu__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fontmenu__option {
+  display: block;
+  inline-size: 100%;
+  overflow: hidden;
+  padding: 0.5rem 0.8rem;
+  font-size: 1.6rem;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-small);
+  cursor: pointer;
+}
+
+.fontmenu__option--active {
+  background: var(--op-color-neutral-plus-six);
+}
+
+.fontmenu__option--on {
+  color: var(--op-color-primary-base);
+}
+
+.fontmenu__empty {
+  padding: 0.6rem 0.8rem;
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+}

@@ -26,13 +26,18 @@
       </div>
       <!-- The clock and every part on it: play, scrub, and one bar per part
            that moves and stretches with the pointer. -->
-      <div class="scene-timeline">
-         <div class="scene-timeline__transport">
-            <button data-el="play" class="btn btn--icon ghost scene-timeline__play" type="button" aria-label="Play" title="Play"></button>
-            <input data-el="scrub" class="form-control scene-timeline__scrub" type="range" min="0" max="8000" step="16" value="0"
-               aria-label="Scrub the scene" />
-            <span data-el="time" class="path scene-timeline__time">0 ms</span>
+      <!-- One timeline: the ruler is in the same column, at the same scale, as
+           the part bars, and one playhead runs down all of them. The range
+           input is kept, hidden, as the playhead's value. -->
+      <div data-el="clock" class="scene-timeline">
+         <div class="scene-timeline__row">
+            <div class="scene-timeline__transport">
+               <button data-el="play" class="btn btn--icon ghost scene-timeline__play" type="button" aria-label="Play" title="Play (space)"></button>
+               <span data-el="time" class="path scene-timeline__time">0 ms</span>
+            </div>
+            <div data-el="ruler" class="scene-timeline__ruler" role="slider" tabindex="0" aria-label="Playhead"></div>
          </div>
+         <input data-el="scrub" class="scene-timeline__scrub" type="range" min="0" max="8000" step="16" value="0" hidden />
          <div data-el="timeline" class="scene-timeline__tracks"></div>
       </div>
       <!-- On the canvas, not in the rail: a video and a transcript of clickable

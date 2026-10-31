@@ -228,7 +228,10 @@ body.op-page {
   background-color: var(--bg);
   color: var(--fg);
   font-family: var(--d);
-  min-height: 100vh;
+  /* dvh, as Optics' page grid is. In the Mac app the toolbar covers the top
+     of the web view, so vh counts the hidden strip and dvh does not: a body
+     in vh ran past a page in dvh, and the footer sat above an empty band. */
+  min-height: 100dvh;
   background-size: var(--grid) var(--grid);
   background-image: linear-gradient(to right, var(--grid-line) var(--op-border-width), transparent var(--op-border-width)), linear-gradient(to bottom, var(--grid-line) var(--op-border-width), transparent var(--op-border-width));
   place-items: stretch;
@@ -387,7 +390,7 @@ main {
        * measure is right for a form and wrong for a timeline.
        */
 body.has-editor {
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 

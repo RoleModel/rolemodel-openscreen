@@ -161,6 +161,19 @@
    </div>
 </template>
 
+<!-- A font picker you can type into: every family on this Mac is too many to
+     scroll. Popover for the reason the colour menu gives — the Parts bar it
+     sits in scrolls and would clip it. -->
+<template data-row="fontmenu">
+   <div class="fontmenu">
+      <button data-el="trigger" class="fontmenu__trigger" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
+      <div data-el="panel" class="fontmenu__panel" popover="manual">
+         <input data-el="search" class="fontmenu__search" type="search" placeholder="Search fonts" aria-label="Search fonts" autocomplete="off" spellcheck="false" />
+         <div data-el="list" class="fontmenu__list" role="listbox" aria-label="Fonts"></div>
+      </div>
+   </div>
+</template>
+
 <template data-row="colormenu-row">
    <div class="colormenu__row"><span data-el="family" class="colormenu__family"></span><div data-el="ramp" class="colormenu__ramp"></div></div>
 </template>
