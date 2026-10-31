@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.256</title>
-      <pubDate>Sat, 31 Oct 2026 03:49:00 -0000</pubDate>
-      <sparkle:version>919</sparkle:version>
-      <sparkle:shortVersionString>0.1.256</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.257</title>
+      <pubDate>Sat, 31 Oct 2026 04:52:21 -0000</pubDate>
+      <sparkle:version>923</sparkle:version>
+      <sparkle:shortVersionString>0.1.257</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Canvas shots are a title and a script; Scripts can start a new one</li><li>Mac release: notarize once, and skip the gate on the feed commit</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.256/RoleModelStudio-0.1.256.dmg" length="114308860" type="application/octet-stream" sparkle:edSignature="JYr4RzxpfW11qAnpn14hDi9S23kNuEiJLldGfhx8sBjiYyE9VX9+LRezb3RgsG1z5dYIXDmkkv85nWrGZ6RWDg=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: every project sound, real colour controls, flow background</li><li>Canvas: a slot made from a script carries the line as its script</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.257/RoleModelStudio-0.1.257.dmg" length="116218831" type="application/octet-stream" sparkle:edSignature="KvK5EyBuCfD5uncHwZwdPn5RBFqAAfDWLNCQD05e27lzeNsfVQPy7LkkoBq6X3IbcBNe5pl7lFsOmEIJlVSyCQ=="/>
     </item>
   </channel>
 </rss>
