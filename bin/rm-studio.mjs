@@ -564,7 +564,9 @@ const sceneRevisionDir = (id, name) => join(projectDir(id), "scenes", ".history"
 function keepSlotLinks(before, next) {
   return next.map((slot) => {
     const old = (before ?? []).find((o) => o.id === slot.id) ?? (before ?? []).find((o) => o.name === slot.name);
-    return old?.scene ? { ...slot, scene: old.scene } : slot;
+    if (!old) return slot;
+    // The scene, and the script when the new list did not bring one of its own.
+    return { ...slot, ...(old.scene ? { scene: old.scene } : {}), ...(!slot.script && old.script ? { script: old.script } : {}) };
   });
 }
 
@@ -11667,7 +11669,9 @@ async function fetchVoiceList() {
           return b;
         },
       );
-      return json(res, 200, { board: next, progress: boardProgress(next) });
+      // The graph too: the canvas draws the nodes from it, and without it the
+      // page kept drawing the old shots over a board that had new ones.
+      return json(res, 200, { board: next, graph: graphFor(next), progress: boardProgress(next) });
     }
 
     /*
@@ -11955,7 +11959,7 @@ async function fetchVoiceList() {
         // where you would look for it rather than under one already there.
         const rightmost = graph.nodes.reduce((m, n) => Math.max(m, n.x), 0);
         const row = graph.nodes.length ? Math.min(...graph.nodes.map((n) => n.y)) : 400;
-        b.slots = [...(b.slots ?? []), { id: nodeId, order: (b.slots ?? []).length, name, intent: "", seconds: null, notes: "" }];
+        b.slots = [...(b.slots ?? []), { id: nodeId, order: (b.slots ?? []).length, name, intent: "", seconds: null, notes: "", script: "" }];
         b.graph = {
           ...graph,
           nodes: [...graph.nodes, { id: nodeId, kind: "shot", name, intent: "", seconds: null, x: graph.nodes.length ? rightmost + NODE_WIDTH + NODE_GAP_X : 400, y: row }],
@@ -11993,6 +11997,8 @@ async function fetchVoiceList() {
                 // Keep the filename on the slot, rather than inferring it from a
                 // mutable shot name every time someone opens the canvas.
                 scene: typeof body.scene === "string" && body.scene.trim() ? body.scene.trim() : sl.scene,
+                // What is said over the shot. Kept as typed: line breaks are part of a script.
+                script: typeof body.script === "string" ? body.script : (sl.script ?? ""),
               },
         );
         if (takeId) {

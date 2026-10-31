@@ -57,6 +57,10 @@
             <button class="btn btn--no-border" data-v="library" aria-current="true">Library</button>
             <h2 class="navgroup" data-group="make">Make a video</h2>
             <button class="btn btn--no-border" data-group="make" data-v="workflow">Video</button>
+            <!-- Scripts had a view and no way in: only a project step or the
+                 Video page's "continue" reached it, so a fresh script could not
+                 be started at all. -->
+            <button class="btn btn--no-border" data-group="make" data-v="scripts">Scripts</button>
             <button class="btn btn--no-border" data-group="make" data-v="voice">Voice</button>
             <button class="btn btn--no-border" data-group="make" data-v="hyperframes">Motion editor</button>
             <!-- Scenes had a label and a glyph but no way in: the only route was

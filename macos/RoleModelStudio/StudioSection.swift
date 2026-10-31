@@ -21,6 +21,7 @@ struct StudioSection: Identifiable {
         ]),
         StudioSection(id: "make", title: "Make a Video", destinations: [
             StudioDestination(id: "workflow", title: "Video", symbol: "video"),
+            StudioDestination(id: "scripts", title: "Scripts", symbol: "doc.text"),
             StudioDestination(id: "voice", title: "Voice", symbol: "mic"),
             StudioDestination(id: "hyperframes", title: "Motion Editor", symbol: "wand.and.stars"),
             StudioDestination(id: "storyboard", title: "Canvas", symbol: "square.grid.3x2"),

@@ -753,3 +753,16 @@ textarea.form-control.board__brief {
 .board__node-actions button > .hgi-stroke {
   margin-inline-end: var(--op-space-3x-small);
 }
+
+/* A shot's script on its card: a few lines, then cut. The rail has the rest. */
+.board__node-script {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-block-start: var(--op-space-2x-small);
+  font-size: var(--op-font-x-small);
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
