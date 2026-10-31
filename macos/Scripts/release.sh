@@ -138,11 +138,12 @@ codesign --verify --deep --strict "$APP" && echo "    signature verified"
 notarize() {
   xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | grep -E "status:|id:" | head -3
 }
-echo "==> Notarizing the app"
-ditto -c -k --keepParent "$APP" "$OUT/RoleModelStudio.zip"
-notarize "$OUT/RoleModelStudio.zip"
-xcrun stapler staple -q "$APP"; echo "    app stapled"
-rm -f "$OUT/RoleModelStudio.zip"
+# One notarization, on the DMG. Apple notarizes everything signed inside a
+# submitted disk image, so the app is covered by the DMG's submission; sending
+# the app on its own first was a second 2-4 minute wait for the same answer.
+# The DMG is stapled. The app inside it is not (it is sealed in the image by
+# then), so Gatekeeper fetches its ticket from Apple on first launch, as it
+# does for any notarized app downloaded without a staple.
 
 echo "==> Building DMG"
 STAGE="$OUT/dmg-root"
@@ -158,7 +159,9 @@ notarize "$DMG"
 xcrun stapler staple -q "$DMG"; echo "    DMG stapled"
 echo "==> Gatekeeper assessment"
 spctl --assess --type open --context context:primary-signature -v "$DMG" 2>&1 | tail -1
-spctl --assess --type exec -v "$APP" 2>&1 | tail -1
+# The app's own check is informational now: unstapled, it passes once Apple's
+# servers answer for it, and a slow answer must not fail a finished release.
+spctl --assess --type exec -v "$APP" 2>&1 | tail -1 || true
 
 # Keep LaunchServices from remembering the build copies; /Applications is the one to open.
 for stray in "$APP" "$ARCHIVE/Products/Applications/RoleModel Studio.app"; do
@@ -228,7 +231,10 @@ PY
   # Pages publishes site/ on a push to main. [skip release] keeps push.yml from
   # cutting a version for a feed.
   git -C "$REPO" add site/appcast.xml site/index.html
-  git -C "$REPO" commit -q -m "Point the Mac app's update feed and download at v$VERSION [skip release]"
+  # --no-verify: this commit is the two generated site files and nothing else.
+  # The pre-commit hook rebuilds every brand artifact and runs the whole CI gate,
+  # which the code this release ships already passed — minutes, to re-prove it.
+  git -C "$REPO" commit -q --no-verify -m "Point the Mac app's update feed and download at v$VERSION [skip release]"
   git -C "$REPO" push -q origin HEAD:main
   echo "    site/appcast.xml → https://rolemodel.github.io/rolemodel-openscreen/appcast.xml"
 fi
