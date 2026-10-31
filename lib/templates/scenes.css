@@ -594,3 +594,11 @@
   inline-size: 100%;
   block-size: 3.2rem;
 }
+
+/* A text part's ink: the role menu, and the colour well beside it for Custom. */
+.scene-inspector__ink {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  inline-size: 100%;
+}

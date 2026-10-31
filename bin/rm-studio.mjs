@@ -313,6 +313,8 @@ const LOOKS_DIR = join(LIB, "Looks");
  * brand/wallpapers keeps working unchanged.
  */
 const USER_WALLPAPERS = join(LIB, "Wallpapers");
+/* What the scene sound picker lists: the catalog's own audio extensions. */
+const SOUND_EXTS = new Set([".wav", ".aif", ".aiff", ".mp3", ".m4a", ".flac"]);
 
 async function readUserWallpapers() {
   const raw = await readFile(join(USER_WALLPAPERS, "wallpapers.json"), "utf8").catch(() => "[]");
@@ -10211,6 +10213,36 @@ async function fetchVoiceList() {
       }
       res.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-cache" });
       return pipeUntilClosed(createReadStream(file), res);
+    }
+
+    /*
+     * Every sound file in a project, read from the folder as it is now.
+     *
+     * The catalog skips what renders stage for themselves (Renders/<name>/assets,
+     * marked .rmignore) and is only as fresh as its last index, so a scene's sound
+     * picker offered three files while the project held a voice track, a music
+     * bed and a dozen more. Picking a sound for a scene wants all of them.
+     */
+    if (p === "/api/project/audio" && req.method === "GET") {
+      const id = url.searchParams.get("project") ?? "";
+      if (!id || id.includes("/") || id.includes("..")) return json(res, 400, { error: "which project?" });
+      const root = mediaDir(id);
+      const files = [];
+      const walkAll = async (dir) => {
+        const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+        for (const e of entries) {
+          if (e.name.startsWith(".") || e.name === "node_modules" || files.length >= 2000) continue;
+          const full = join(dir, e.name);
+          if (e.isDirectory()) await walkAll(full);
+          else if (e.isFile() && SOUND_EXTS.has(extname(e.name).toLowerCase())) {
+            const st = await stat(full).catch(() => null);
+            files.push({ rel: relative(root, full).split(sep).join("/"), bytes: st?.size ?? 0, mtime: st?.mtime?.toISOString() ?? null });
+          }
+        }
+      };
+      await walkAll(root);
+      files.sort((a, b) => a.rel.localeCompare(b.rel));
+      return json(res, 200, { files });
     }
 
     if (p.startsWith("/media/")) {

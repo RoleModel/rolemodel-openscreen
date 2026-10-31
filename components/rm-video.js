@@ -5181,14 +5181,19 @@ class RMSystemsFlow extends RMElement {
     const w = Math.min(100, Math.max(5, num('w', 100)))
     const h = Math.min(100, Math.max(5, num('h', 40)))
     const cell = Math.min(40, Math.max(2, num('cell', 6)))
+    /* The background is its own colour, set or not; Grid lines (`panel`) draws
+       the grid over it. A scene made before `bg` stood alone keeps its look:
+       grid on and no colour is the light panel it always was. */
     const panel = this.attr('panel', 'off') === 'on'
     const grid = hex('grid-color', SF_DEFAULTS.gridColor)
+    const bg = this.attr('bg') ? hex('bg', SF_DEFAULTS.background) : panel ? sfHashed(SF_DEFAULTS.background) : ''
     this.shadowRoot.innerHTML = `
       <style>
         ${TYPE}${TIMING}
         :host { position:absolute; display:block; inset:0; width:100%; height:100%; pointer-events:none; }
         .box { position:absolute; left:${x}%; top:${y}%; width:${w}%; height:${h}%; translate:-50% -50%; overflow:hidden;
-               ${panel ? `background-color:${hex('bg', SF_DEFAULTS.background)}; background-image:linear-gradient(${grid} 1px, transparent 1px), linear-gradient(90deg, ${grid} 1px, transparent 1px); background-size:${cell / 19.2}cqw ${cell / 19.2}cqw;` : ''} }
+               ${bg ? `background-color:${bg};` : ''}
+               ${panel ? `background-image:linear-gradient(${grid} 1px, transparent 1px), linear-gradient(90deg, ${grid} 1px, transparent 1px); background-size:${cell / 19.2}cqw ${cell / 19.2}cqw;` : ''} }
         canvas { position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; }
       </style>
       <div class="box anim"><canvas></canvas></div>`
