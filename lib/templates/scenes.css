@@ -4,6 +4,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--op-space-small);
+  /* Room for the Parts bar when it sits over the right of the card, set by
+     floatInspector(), so the stage and the timeline are never under it. */
+  padding-inline-end: var(--room, var(--op-space-large));
 }
 
 .panel-cards {
@@ -15,7 +18,7 @@
    designing, so it is never pushed below the fold. 1rem is 10px here. */
 .scene-frame {
   position: relative;
-  inline-size: min(100%, calc((100vh - 44rem) * 16 / 9));
+  inline-size: min(100%, calc((100vh - 38rem) * 16 / 9));
   margin-inline: auto;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -100,8 +103,8 @@
   z-index: 40;
   inset-block-start: 9rem;
   inset-inline-end: 40rem;
-  inline-size: min(36rem, calc(100vw - 3.2rem));
-  max-block-size: calc(100vh - 12rem);
+  inline-size: min(34rem, calc(100vw - 3.2rem));
+  max-block-size: calc(100vh - 20rem);
   display: flex;
   flex-direction: column;
   color: var(--fg);
@@ -226,6 +229,14 @@
   min-inline-size: 0;
 }
 
+.scene-timeline__time {
+  flex: none;
+  min-inline-size: 7rem;
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .scene-timeline__tracks {
   --at: 0%;
   display: flex;
@@ -307,4 +318,182 @@
   inset-inline-end: 0;
   inline-size: 0.8rem;
   cursor: ew-resize;
+}
+
+/* Over the stage: catches the pointer, so a click picks a part rather than
+   reaching into the preview. */
+.scene-frame__overlay {
+  position: absolute;
+  inset: 0;
+  cursor: default;
+  touch-action: none;
+}
+
+/* The picked part's box. Its body lets the press through to the overlay, which
+   moves the part; the handles take their own. */
+.scene-frame__box {
+  position: absolute;
+  outline: 0.15rem solid var(--op-color-primary-base);
+  outline-offset: 0.2rem;
+  pointer-events: none;
+  cursor: move;
+}
+
+.scene-frame__handle,
+.scene-frame__spin {
+  position: absolute;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  background: var(--op-color-neutral-plus-max);
+  border: 0.15rem solid var(--op-color-primary-base);
+  pointer-events: auto;
+}
+
+.scene-frame__handle--nw {
+  inset-block-start: -0.8rem;
+  inset-inline-start: -0.8rem;
+  cursor: nwse-resize;
+}
+
+.scene-frame__handle--ne {
+  inset-block-start: -0.8rem;
+  inset-inline-end: -0.8rem;
+  cursor: nesw-resize;
+}
+
+.scene-frame__handle--sw {
+  inset-block-end: -0.8rem;
+  inset-inline-start: -0.8rem;
+  cursor: nesw-resize;
+}
+
+.scene-frame__handle--se {
+  inset-block-end: -0.8rem;
+  inset-inline-end: -0.8rem;
+  cursor: nwse-resize;
+}
+
+/* The turning handle, round, above the box's middle. */
+.scene-frame__spin {
+  inset-block-start: -3.2rem;
+  inset-inline-start: calc(50% - 0.6rem);
+  border-radius: 50%;
+  cursor: grab;
+}
+
+/* A part's right-click menu. Fixed, placed at the pointer by openMenu(). */
+.scene-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 24rem;
+  max-inline-size: 34rem;
+  padding: var(--op-space-2x-small);
+  color: var(--fg);
+  background: var(--panel);
+  border: var(--op-border-width) solid var(--line);
+  border-radius: var(--op-radius-medium);
+  box-shadow: 0 1.2rem 3.2rem rgb(0 0 0 / 0.5);
+}
+
+.scene-menu__item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  font-size: var(--op-font-small);
+  text-align: start;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--op-radius-small);
+  cursor: pointer;
+}
+
+.scene-menu__item::after {
+  content: attr(data-hint);
+  color: var(--muted);
+}
+
+.scene-menu__item:hover,
+.scene-menu__item:focus-visible {
+  background: var(--op-color-neutral-plus-six);
+}
+
+.scene-menu__label {
+  padding: 0.4rem 0.8rem 0.2rem;
+  font-size: var(--op-font-x-small);
+  color: var(--muted);
+}
+
+.scene-menu__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.2rem 0.8rem 0.6rem;
+}
+
+.scene-menu__chip {
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: var(--op-font-x-small);
+  color: inherit;
+  background: var(--op-color-neutral-plus-six);
+  border: 0;
+  border-radius: var(--op-radius-small);
+  cursor: pointer;
+}
+
+.scene-menu__chip--on {
+  color: var(--op-color-primary-on-base);
+  background: var(--op-color-primary-base);
+}
+
+.scene-menu__rule {
+  margin-block: 0.3rem;
+  border-block-start: var(--op-border-width) solid var(--line);
+}
+
+/* Undo and redo, beside the fold, in the bar's header. */
+.scene-inspector__tool {
+  flex: none;
+}
+
+/* A part's keyframes: one row each, then Key here and Clear. */
+.scene-inspector__keys {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  grid-column: 1 / -1;
+}
+
+.scene-inspector__key {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--op-radius-small);
+}
+
+.scene-inspector__key--here {
+  background: var(--op-color-neutral-plus-six);
+}
+
+.scene-inspector__key-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* A keyframe on a timeline bar: a diamond at its moment. */
+.scene-timeline__key {
+  position: absolute;
+  inset-block-start: 50%;
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+  translate: -50% -50%;
+  rotate: 45deg;
+  background: var(--op-color-neutral-minus-max);
+  border: 0.1rem solid var(--op-color-neutral-plus-max);
+  cursor: pointer;
 }

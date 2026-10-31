@@ -246,9 +246,286 @@ const TYPE = `
   * { box-sizing: border-box; }
 `
 
+/*
+ * Declared before RMElement, not beside rm-showcase where they were: the
+ * motion layer every part carries reads them, and so does rm-text.
+ * define() upgrades the tags already on the page at once, so an <rm-text>
+ * written into a scene rendered while these consts were still in their dead
+ * zone, threw, and drew nothing: the text part was in the markup and not on
+ * the stage.
+ */
+/*
+ * Keyframes. A layer may carry `keys`: moments in its own time, each with the
+ * values the card has at that moment, and how it eases to the next. Between
+ * two keys the browser interpolates — the keys become one @keyframes rule on
+ * the layer's clock, so the frame at 2400ms is the same frame every time, in
+ * the Studio and in a render. Without keys the dials are the values, as before.
+ *
+ * Wire form, on the tag: frames apart by `;`, pairs by space —
+ *   keys="t=0 x=0 s=1 e=out; t=2 x=20 s=1.2"
+ * t is seconds from the layer's start; e is the ease out of that key.
+ */
+const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
+/* A line of type has no depth, zoom or focus to key: it is placed, leaned and faded. */
+const TEXT_KEY_PROPS = ['x', 'y', 'tx', 'ty', 'tz', 'op']
+const KEY_EASES = {
+  linear: 'linear',
+  ease: 'ease',
+  in: 'cubic-bezier(0.42, 0, 1, 1)',
+  out: 'cubic-bezier(0, 0, 0.58, 1)',
+  'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)',
+  snap: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  hold: 'steps(1, end)',
+}
+const KEY_UNIT = { x: '%', y: '%', z: 'cqw', zoom: '', tx: 'deg', ty: 'deg', tz: 'deg', op: '', blur: 'cqw' }
+const KEY_VAR = { x: '--k-x', y: '--k-y', z: '--k-z', zoom: '--k-s', tx: '--k-rx', ty: '--k-ry', tz: '--k-rz', op: '--k-o', blur: '--k-b' }
+const keyValue = (k, v) => (k === 'op' ? String(v / 100) : `${v}${KEY_UNIT[k]}`)
+
+function parseKeys(text) {
+  if (!text) return []
+  const keys = []
+  for (const part of String(text).split(';')) {
+    const k = { t: 0, ease: 'out' }
+    let any = false
+    for (const pair of part.trim().split(/\s+/)) {
+      const [name, raw] = pair.split('=')
+      if (raw === undefined) continue
+      if (name === 't') k.t = Math.max(0, Number(raw) || 0)
+      else if (name === 'e') k.ease = raw in KEY_EASES ? raw : 'out'
+      else if (KEY_PROPS.includes(name) && Number.isFinite(Number(raw))) k[name] = Number(raw)
+      else continue
+      any = true
+    }
+    if (any) keys.push(k)
+  }
+  return keys.sort((a, b) => a.t - b.t)
+}
+function encodeKeys(keys) {
+  return (keys ?? [])
+    .map((k) => [`t=${+k.t.toFixed(3)}`, ...KEY_PROPS.filter((p) => k[p] !== undefined).map((p) => `${p}=${+Number(k[p]).toFixed(3)}`), `e=${k.ease ?? 'out'}`].join(' '))
+    .join('; ')
+}
+
+/* One cubic bezier, solved for y at x — the browser's curve, in JS, so the
+   Studio can show the value under the playhead between two keys. */
+function bezierAt(spec, x) {
+  if (spec === 'linear') return x
+  if (spec.startsWith('steps')) return x >= 1 ? 1 : 0
+  const m = spec === 'ease' ? [0.25, 0.1, 0.25, 1] : spec.slice(spec.indexOf('(') + 1).match(/[-\d.]+/g).map(Number)
+  const [p1x, p1y, p2x, p2y] = m
+  const bx = (t) => 3 * (1 - t) * (1 - t) * t * p1x + 3 * (1 - t) * t * t * p2x + t * t * t
+  const by = (t) => 3 * (1 - t) * (1 - t) * t * p1y + 3 * (1 - t) * t * t * p2y + t * t * t
+  let lo = 0
+  let hi = 1
+  let t = x
+  for (let i = 0; i < 24; i++) {
+    const v = bx(t)
+    if (Math.abs(v - x) < 1e-4) break
+    if (v < x) lo = t
+    else hi = t
+    t = (lo + hi) / 2
+  }
+  return by(t)
+}
+/* The values a layer has at `t` seconds into its window, from its keys and its dials. */
+function keysAt(keys, t, base) {
+  const out = {}
+  for (const p of KEY_PROPS) {
+    const have = keys.filter((k) => k[p] !== undefined)
+    if (!have.length) {
+      out[p] = base[p]
+      continue
+    }
+    if (t <= have[0].t) out[p] = have[0][p]
+    else if (t >= have.at(-1).t) out[p] = have.at(-1)[p]
+    else {
+      const i = have.findIndex((k) => k.t > t)
+      const a = have[i - 1]
+      const b = have[i]
+      const f = bezierAt(KEY_EASES[a.ease] ?? KEY_EASES.out, (t - a.t) / (b.t - a.t))
+      out[p] = a[p] + (b[p] - a[p]) * f
+    }
+  }
+  return out
+}
+
+/* ── motion: every part's enter, exit, transform and keys ─────────────────── */
+
+/*
+ * One motion model for every part.
+ *
+ * Each part had its own idea of movement: most ran the same fixed fade-and-rise,
+ * the showcase alone had an enter and an exit to choose, and only text and the
+ * showcase could be keyed. So a scene could not do what a motion designer
+ * reaches for first — slide this in, scale that up, turn it, fade it on a key.
+ *
+ * This layer sits on the part's host element, outside its shadow root, so it
+ * applies to every part without touching what any part draws:
+ *
+ *   m-enter / m-exit   a preset in or out ("" keeps the part's own)
+ *   m-in / m-out       how long each takes, ms
+ *   m-ease             the ease into the part (a KEY_EASES name)
+ *   m-x / m-y          an offset, % of the stage's width and height
+ *   m-scale            %, m-rotate degrees, m-opacity %, m-blur px at 1920
+ *   m-keys             keyframes of those, in the wire form parseKeys reads:
+ *                      x y (offset %), zoom (factor), tz (deg), op (%), blur (px)
+ *
+ * It uses the individual `translate` / `rotate` / `scale` properties, not
+ * `transform`, so it composes with whatever a part does inside, and three
+ * groups of registered properties — static or keyed, enter, exit — so no two
+ * animations ever write one property (see the note above rm-in).
+ */
+const MOTION_ATTRS = ['m-enter', 'm-exit', 'm-in', 'm-out', 'm-ease', 'm-x', 'm-y', 'm-scale', 'm-rotate', 'm-opacity', 'm-blur', 'm-keys']
+const MOTION_PROPS = ['x', 'y', 'zoom', 'tz', 'op', 'blur']
+const MOTION_ENTERS = {
+  none: {},
+  fade: { op: 0 },
+  rise: { op: 0, y: 6 },
+  drop: { op: 0, y: -6 },
+  'slide-left': { op: 0, x: -8 },
+  'slide-right': { op: 0, x: 8 },
+  zoom: { op: 0, zoom: 0.8 },
+  pop: { op: 0, zoom: 0.5 },
+  blur: { op: 0, blur: 24 },
+  tilt: { op: 0, tz: -8, y: 4 },
+}
+const MOTION_EXITS = {
+  none: {},
+  fade: { op: 0 },
+  sink: { op: 0, y: 6 },
+  rise: { op: 0, y: -6 },
+  'slide-left': { op: 0, x: -8 },
+  'slide-right': { op: 0, x: 8 },
+  zoom: { op: 0, zoom: 1.15 },
+  shrink: { op: 0, zoom: 0.8 },
+  blur: { op: 0, blur: 24 },
+}
+const MOTION_IDENTITY = { x: 0, y: 0, zoom: 1, tz: 0, op: 100, blur: 0 }
+for (const set of ['m', 'mi', 'mo']) {
+  for (const [name, syntax, initial] of [
+    [`--${set}-x`, '<length>', '0px'],
+    [`--${set}-y`, '<length>', '0px'],
+    [`--${set}-s`, '<number>', '1'],
+    [`--${set}-r`, '<angle>', '0deg'],
+    [`--${set}-o`, '<number>', '1'],
+    [`--${set}-b`, '<length>', '0px'],
+  ]) {
+    try {
+      CSS.registerProperty({ name, syntax, initialValue: initial, inherits: false })
+    } catch {
+      /* already registered */
+    }
+  }
+}
+
+/* One stylesheet in the document for every part's motion rules, rebuilt from this map. */
+const motionRules = new Map()
+let motionSheet = null
+let motionSeq = 0
+const paintMotionRules = () => {
+  if (!motionSheet) {
+    motionSheet = document.createElement('style')
+    motionSheet.id = 'rm-motion'
+    document.head.append(motionSheet)
+  }
+  motionSheet.textContent = [...motionRules.values()].join('\n')
+}
+
+/* The values as declarations on one set of registered properties. */
+const motionDecl = (set, v, yRatio) =>
+  [
+    `--${set}-x:${(v.x ?? 0).toFixed(3)}cqw`,
+    `--${set}-y:${((v.y ?? 0) * yRatio).toFixed(3)}cqw`,
+    `--${set}-s:${v.zoom ?? 1}`,
+    `--${set}-r:${v.tz ?? 0}deg`,
+    `--${set}-o:${(v.op ?? 100) / 100}`,
+    `--${set}-b:${((v.blur ?? 0) / 19.2).toFixed(3)}cqw`,
+  ].join(';')
+
+const hasMotion = (el) => MOTION_ATTRS.some((a) => el.hasAttribute(a))
+
+/** The motion rule for one part, or null when it carries none of the m- attributes. */
+function motionRule(el) {
+  if (!hasMotion(el)) return null
+  const id = el.dataset.rmM
+  const sel = `[data-rm-m="${id}"]`
+  const scene = el.closest('rm-scene')
+  const yRatio = Number(scene?.getAttribute('height') || 1080) / Number(scene?.getAttribute('width') || 1920)
+  const num = (name, def) => {
+    const v = Number(el.getAttribute(name))
+    return el.hasAttribute(name) && el.getAttribute(name) !== '' && Number.isFinite(v) ? v : def
+  }
+  const base = {
+    x: num('m-x', 0),
+    y: num('m-y', 0),
+    zoom: num('m-scale', 100) / 100,
+    tz: num('m-rotate', 0),
+    op: num('m-opacity', 100),
+    blur: num('m-blur', 0),
+  }
+  const keys = parseKeys(el.getAttribute('m-keys')).filter((k) => MOTION_PROPS.some((p) => k[p] !== undefined))
+  const still = keys.length ? keysAt(keys, keys[0].t, base) : base
+  const at = el.startMs()
+  const holdRaw = el._timed('duration') ?? (el.hasAttribute('for') ? Number(el.getAttribute('for')) : null)
+  const ease = KEY_EASES[el.getAttribute('m-ease')] ?? KEY_EASES.out
+  const enter = MOTION_ENTERS[el.getAttribute('m-enter')]
+  const exit = holdRaw == null ? null : MOTION_EXITS[el.getAttribute('m-exit')]
+  const inMs = Math.max(1, num('m-in', 500))
+  const outMs = Math.max(1, Math.min(num('m-out', 400), holdRaw ?? Infinity))
+
+  const names = []
+  const durs = []
+  const delays = []
+  const eases = []
+  const frames = []
+  if (enter && Object.keys(enter).length) {
+    frames.push(`@keyframes rm-mi-${id} { from { ${motionDecl('mi', { ...MOTION_IDENTITY, ...enter }, yRatio)} } to { ${motionDecl('mi', MOTION_IDENTITY, yRatio)} } }`)
+    names.push(`rm-mi-${id}`)
+    durs.push(`${inMs}ms`)
+    delays.push(at)
+    eases.push(ease)
+  }
+  if (exit && Object.keys(exit).length) {
+    frames.push(`@keyframes rm-mo-${id} { from { ${motionDecl('mo', MOTION_IDENTITY, yRatio)} } to { ${motionDecl('mo', { ...MOTION_IDENTITY, ...exit }, yRatio)} } }`)
+    names.push(`rm-mo-${id}`)
+    durs.push(`${outMs}ms`)
+    delays.push(at + holdRaw - outMs)
+    eases.push(KEY_EASES['in-out'])
+  }
+  if (keys.length >= 2) {
+    const t0 = keys[0].t
+    const span = Math.max(0.001, keys.at(-1).t - t0)
+    const steps = keys
+      .map((k, i) => {
+        const v = keysAt(keys, k.t, base)
+        const timing = i < keys.length - 1 ? ` animation-timing-function: ${KEY_EASES[k.ease] ?? KEY_EASES.out};` : ''
+        return `${(((k.t - t0) / span) * 100).toFixed(3)}% { ${motionDecl('m', v, yRatio)};${timing} }`
+      })
+      .join(' ')
+    frames.push(`@keyframes rm-mk-${id} { ${steps} }`)
+    names.push(`rm-mk-${id}`)
+    durs.push(`${span * 1000}ms`)
+    delays.push(at + t0 * 1000)
+    eases.push('linear')
+  }
+  const blurs = [still.blur, enter?.blur, exit?.blur, ...keys.map((k) => k.blur)].some((b) => Number(b) > 0)
+  const anim = names.length
+    ? `animation-name:${names.join(',')}; animation-duration:${durs.join(',')}; animation-delay:${delays.map((ms) => `calc(${ms}ms - var(--t))`).join(',')}; animation-timing-function:${eases.join(',')}; animation-fill-mode:both; animation-play-state:paused;`
+    : ''
+  return `${frames.join('\n')}
+${sel} { ${motionDecl('m', still, yRatio)}; ${anim}
+  transform-origin:${el._motionOrigin()};
+  translate:calc(var(--m-x) + var(--mi-x) + var(--mo-x)) calc(var(--m-y) + var(--mi-y) + var(--mo-y));
+  rotate:calc(var(--m-r) + var(--mi-r) + var(--mo-r));
+  scale:calc(var(--m-s) * var(--mi-s) * var(--mo-s));
+  opacity:calc(var(--m-o) * var(--mi-o) * var(--mo-o));
+  ${blurs ? 'filter:blur(calc(var(--m-b) + var(--mi-b) + var(--mo-b)));' : ''} }`
+}
+
 /** Base class: attribute plumbing every component shares, and nothing else. */
 class RMElement extends HTMLElement {
-  static observed = ['at', 'for']
+  static observed = ['at', 'for', ...MOTION_ATTRS]
   static get observedAttributes() {
     return [...new Set([...RMElement.observed, ...(this.fields ?? [])])]
   }
@@ -297,6 +574,46 @@ class RMElement extends HTMLElement {
     this.style.setProperty('--at', `${this.startMs()}ms`)
     const hold = this._timed('duration') ?? (this.hasAttribute('for') ? Number(this.getAttribute('for')) : null)
     if (hold != null) this.style.setProperty('--hold', `${hold}ms`)
+    this.syncMotion()
+  }
+
+  /*
+   * The shared motion layer (see motionRule). A part with a chosen enter or
+   * exit stops running its own: its built-in fade-and-rise is cut to a frame,
+   * so it still appears and leaves on cue, and the chosen one is what you see.
+   */
+  syncMotion() {
+    if (this.localName === 'rm-scene' || this.localName === 'rm-audio') return
+    if (!hasMotion(this)) {
+      if (this.dataset.rmM && motionRules.delete(this.dataset.rmM)) paintMotionRules()
+      return
+    }
+    this.dataset.rmM ||= String(++motionSeq)
+    const own = (name) => this.getAttribute(name) && this.getAttribute(name) !== 'default'
+    if (own('m-enter')) this.style.setProperty('--dur', '1ms')
+    else this.style.removeProperty('--dur')
+    if (own('m-exit')) this.style.setProperty('--out-dur', '1ms')
+    else this.style.removeProperty('--out-dur')
+    motionRules.set(this.dataset.rmM, motionRule(this))
+    paintMotionRules()
+  }
+
+  disconnectedCallback() {
+    if (this.dataset.rmM && motionRules.delete(this.dataset.rmM)) paintMotionRules()
+  }
+
+  /*
+   * Where a part turns and scales from: the point it is placed at. A part that
+   * fills the stage and places its content at x/y turns about that point; one
+   * pinned at x/y (and centred on it inside) turns about its own corner, which
+   * is that point; anything else about its middle.
+   */
+  _motionOrigin() {
+    const fills = getComputedStyle(this).right === '0px' && getComputedStyle(this).bottom === '0px'
+    const x = this.getAttribute('x')
+    const y = this.getAttribute('y')
+    if (fills) return x != null && y != null ? `${Number(x)}% ${Number(y)}%` : '50% 50%'
+    return x != null && y != null ? '0 0' : '50% 50%'
   }
 
   attr(name, fallback = '') {
@@ -522,110 +839,6 @@ class RMTitle extends RMElement {
   }
 }
 define('rm-title', RMTitle)
-
-/*
- * Declared before rm-text, the first part that reads them, not beside
- * rm-showcase where they were.
- * define() upgrades the tags already on the page at once, so an <rm-text>
- * written into a scene rendered while these consts were still in their dead
- * zone, threw, and drew nothing: the text part was in the markup and not on
- * the stage.
- */
-/*
- * Keyframes. A layer may carry `keys`: moments in its own time, each with the
- * values the card has at that moment, and how it eases to the next. Between
- * two keys the browser interpolates — the keys become one @keyframes rule on
- * the layer's clock, so the frame at 2400ms is the same frame every time, in
- * the Studio and in a render. Without keys the dials are the values, as before.
- *
- * Wire form, on the tag: frames apart by `;`, pairs by space —
- *   keys="t=0 x=0 s=1 e=out; t=2 x=20 s=1.2"
- * t is seconds from the layer's start; e is the ease out of that key.
- */
-const KEY_PROPS = ['x', 'y', 'z', 'zoom', 'tx', 'ty', 'tz', 'op', 'blur']
-/* A line of type has no depth, zoom or focus to key: it is placed, leaned and faded. */
-const TEXT_KEY_PROPS = ['x', 'y', 'tx', 'ty', 'tz', 'op']
-const KEY_EASES = {
-  linear: 'linear',
-  ease: 'ease',
-  in: 'cubic-bezier(0.42, 0, 1, 1)',
-  out: 'cubic-bezier(0, 0, 0.58, 1)',
-  'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)',
-  snap: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-  hold: 'steps(1, end)',
-}
-const KEY_UNIT = { x: '%', y: '%', z: 'cqw', zoom: '', tx: 'deg', ty: 'deg', tz: 'deg', op: '', blur: 'cqw' }
-const KEY_VAR = { x: '--k-x', y: '--k-y', z: '--k-z', zoom: '--k-s', tx: '--k-rx', ty: '--k-ry', tz: '--k-rz', op: '--k-o', blur: '--k-b' }
-const keyValue = (k, v) => (k === 'op' ? String(v / 100) : `${v}${KEY_UNIT[k]}`)
-
-function parseKeys(text) {
-  if (!text) return []
-  const keys = []
-  for (const part of String(text).split(';')) {
-    const k = { t: 0, ease: 'out' }
-    let any = false
-    for (const pair of part.trim().split(/\s+/)) {
-      const [name, raw] = pair.split('=')
-      if (raw === undefined) continue
-      if (name === 't') k.t = Math.max(0, Number(raw) || 0)
-      else if (name === 'e') k.ease = raw in KEY_EASES ? raw : 'out'
-      else if (KEY_PROPS.includes(name) && Number.isFinite(Number(raw))) k[name] = Number(raw)
-      else continue
-      any = true
-    }
-    if (any) keys.push(k)
-  }
-  return keys.sort((a, b) => a.t - b.t)
-}
-function encodeKeys(keys) {
-  return (keys ?? [])
-    .map((k) => [`t=${+k.t.toFixed(3)}`, ...KEY_PROPS.filter((p) => k[p] !== undefined).map((p) => `${p}=${+Number(k[p]).toFixed(3)}`), `e=${k.ease ?? 'out'}`].join(' '))
-    .join('; ')
-}
-
-/* One cubic bezier, solved for y at x — the browser's curve, in JS, so the
-   Studio can show the value under the playhead between two keys. */
-function bezierAt(spec, x) {
-  if (spec === 'linear') return x
-  if (spec.startsWith('steps')) return x >= 1 ? 1 : 0
-  const m = spec === 'ease' ? [0.25, 0.1, 0.25, 1] : spec.slice(spec.indexOf('(') + 1).match(/[-\d.]+/g).map(Number)
-  const [p1x, p1y, p2x, p2y] = m
-  const bx = (t) => 3 * (1 - t) * (1 - t) * t * p1x + 3 * (1 - t) * t * t * p2x + t * t * t
-  const by = (t) => 3 * (1 - t) * (1 - t) * t * p1y + 3 * (1 - t) * t * t * p2y + t * t * t
-  let lo = 0
-  let hi = 1
-  let t = x
-  for (let i = 0; i < 24; i++) {
-    const v = bx(t)
-    if (Math.abs(v - x) < 1e-4) break
-    if (v < x) lo = t
-    else hi = t
-    t = (lo + hi) / 2
-  }
-  return by(t)
-}
-/* The values a layer has at `t` seconds into its window, from its keys and its dials. */
-function keysAt(keys, t, base) {
-  const out = {}
-  for (const p of KEY_PROPS) {
-    const have = keys.filter((k) => k[p] !== undefined)
-    if (!have.length) {
-      out[p] = base[p]
-      continue
-    }
-    if (t <= have[0].t) out[p] = have[0][p]
-    else if (t >= have.at(-1).t) out[p] = have.at(-1)[p]
-    else {
-      const i = have.findIndex((k) => k.t > t)
-      const a = have[i - 1]
-      const b = have[i]
-      const f = bezierAt(KEY_EASES[a.ease] ?? KEY_EASES.out, (t - a.t) / (b.t - a.t))
-      out[p] = a[p] + (b[p] - a[p]) * f
-    }
-  }
-  return out
-}
 
 /* -- rm-text ------------------------------------------------------------- */
 
