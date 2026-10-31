@@ -3,13 +3,13 @@
   <channel>
     <title>RoleModel Studio</title>
     <item>
-      <title>RoleModel Studio 0.1.254</title>
-      <pubDate>Sat, 31 Oct 2026 02:15:33 -0000</pubDate>
-      <sparkle:version>912</sparkle:version>
-      <sparkle:shortVersionString>0.1.254</sparkle:shortVersionString>
+      <title>RoleModel Studio 0.1.255</title>
+      <pubDate>Sat, 31 Oct 2026 03:14:43 -0000</pubDate>
+      <sparkle:version>915</sparkle:version>
+      <sparkle:shortVersionString>0.1.255</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<h3>What's new</h3><ul><li>Scenes: SystemsFlow and block grids as parts, one timeline, and fixes</li></ul>]]></description>
-      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.254/RoleModelStudio-0.1.254.dmg" length="117166816" type="application/octet-stream" sparkle:edSignature="ESlfILvexLSs/Uaxcwe5qlU7QbmHTXO/rwhYBZXPTkpVmw8Nd0KO6HdEn6PPwJDiTPIHOt4nMzJgxieVmG2gAQ=="/>
+      <description><![CDATA[<h3>What's new</h3><ul><li>Keep saved wallpapers and shot scenes; fix the Scenes page height</li></ul>]]></description>
+      <enclosure url="https://github.com/RoleModel/rolemodel-openscreen/releases/download/v0.1.255/RoleModelStudio-0.1.255.dmg" length="114551634" type="application/octet-stream" sparkle:edSignature="Npu6UeISjbXUMSne4RYIf6RQxDDmv61cSDGLORPetyT2gQaYZeI1Mzr0XruAylui+16yLHMqzSWXykyK+I/8AA=="/>
     </item>
   </channel>
 </rss>
